@@ -1,5 +1,5 @@
 /*
-	Rastapopoul OS 0.09
+	Rastapopoul OS
 	Second-stage bootloader
  	Loads kernel into 0x100000 from boot drive
 	Setup protected mode
@@ -27,6 +27,11 @@ void cstart() {
 		}
 	}
 	write_string("A20 enabled\r\n");
+	
+	/* Open fat volume */
+	
+	
+	
 	_halt();
 }
 

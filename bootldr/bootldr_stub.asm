@@ -1,4 +1,4 @@
-; Rastapopoulos 0.09
+; Rastapopoulos
 ; Assembly stub for 16-bit bootloader
 ;
 use16

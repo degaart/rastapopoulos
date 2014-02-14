@@ -4,5 +4,8 @@
 void write_char(int ch, int page, int color);
 void write_string(const char* str);
 
+//jkiki
+
+
 #endif //_BOOTLDR_STR_H_
 
