@@ -6,7 +6,8 @@ objects := $(patsubst %.c,%.o,$(wildcard *.c))
 bootldr.bin: bootldr.ld $(wildcard *.c) bootldr_stub.bin
 	@./makeobjects.sh
 	@i586-elf-gcc \
-		-T bootldr.ld -o bootldr.bin -nostdlib \
+		-T bootldr.ld -o bootldr.bin \
+		-nostdlib \
 		bootldr_stub.bin $(objects)
 
 bootldr_stub.bin: bootldr_stub.asm

@@ -1,5 +1,6 @@
 kernel.bin: kernel.asm string.inc
-	nasm -f bin -o kernel.bin kernel.asm
+	@echo "[ASM] kernel.asm"
+	@nasm -f bin -o kernel.bin kernel.asm > /dev/null
 
 clean:
 	@rm -vf *.o *.bin *.tmp

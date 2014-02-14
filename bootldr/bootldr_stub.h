@@ -10,6 +10,9 @@ struct REG16 {
 	uint16_t di;
 } __attribute__((packed));
 
+#define MAKEWORD(lo,hi) (((lo) & 0xFF) | (((hi) & 0xFF) << 8))
+#define MAKEDWORD(lo,hi) (((lo) & 0xFFFF)|(((hi) & 0xFFFF) << 16))
+
 extern void _write_char(uint32_t ch, uint32_t page, uint32_t col);
 extern void _halt();
 extern void _breakpoint();
