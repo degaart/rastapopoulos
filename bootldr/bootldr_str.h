@@ -5,6 +5,8 @@ void write_char(int ch, int page, int color);
 void write_string(const char* str);
 void write_uint16(uint16_t i);
 void write_uint32(uint32_t i);
+void dump_mem(const void* buffer, uint32_t siz);
+
 int memcmp(const void* s0, const void* s1, uint16_t siz);
 void memcpy(void* dst, const void* src, uint32_t siz);
 
@@ -16,6 +18,11 @@ void memcpy(void* dst, const void* src, uint32_t siz);
 #define DUMP32(s) \
 	write_string(#s ": "); \
 	write_uint32(s); \
+	write_string("\r\n")
+	
+#define DUMP_MEM(b,s) \
+	write_string(#b ": "); \
+	dump_mem(b, s); \
 	write_string("\r\n")
 
 #endif //_BOOTLDR_STR_H_

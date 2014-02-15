@@ -13,9 +13,11 @@ global _int13
 global _check_a20
 global _enable_a20
 global _memcpyl
+global _enter_pmode
 
 extern isr0
 extern cstart
+extern write_string
 
 _start:
 	; setup registers
@@ -39,9 +41,8 @@ _start:
 	sti
 	
 	; Setup big unreal mode
-	breakpoint
 	call setup_unreal
-
+	
 	; Call C startup
 	call cstart
 
@@ -190,37 +191,6 @@ _enable_a20:
 		mov ax, 0x2401
 		int 0x15
 		retf
-		
-		
-_memcpyl:
-		; Copy memory using long pointers
-		; Args:
-		; 	Dest address (DWORD) (EBP+8)
-		;	Source address (DWORD) (EBP+12)
-		; 	Size (WORD) (EBP+16)
-		push ebp
-		mov ebp, esp
-		pushad
-		push es
-		push gs
-		
-		mov ax, [bp+10]
-		shl ax, 4			; Multiply by 16
-		
-		
-		
-		
-		
-		
-		
-		
-		
-	.return:
-		pop gs
-		pop es
-		popad
-		pop ebp
-		retf
 
 _isr0:
 		pusha
@@ -273,3 +243,54 @@ setup_unreal:
 	.flatdesc: db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
 	.gdt_end:
 
+_enter_pmode:
+		; Enters pmode and calls a pmode code
+		; Params:
+		;	EBP+8	GDT pointer (linear address) (DWORD)
+		;	EBP+12	GDT size (DWORD)
+		;	EBP+16	Pmode entry (DWORD)
+		;
+		breakpoint
+		push ebp
+		mov ebp, esp
+		
+		mov ax, [ebp+12]				; size
+		dec ax							; size - 1
+		shl ax, 3						; ( size - 1 ) * 8
+		mov [.gdt_desc_size], ax
+		
+		mov eax, [ebp+8]
+		mov [.gdt_desc_offset], eax
+		
+		; Store kernel entry point in conventional memory
+		; so we can access it again in protected mode
+		mov eax, [ebp+16]
+		mov dword [0x504], eax
+		
+		cli
+		lgdt [.gdt_desc]
+		mov eax, cr0
+		or al, 1
+		mov cr0, eax
+
+		jmp dword 0x08:entry32
+		jmp _halt
+
+	.gdt_desc:
+	.gdt_desc_size: dw 2*8
+	.gdt_desc_offset: dd 0
+	.gdt_desc_end:
+
+align 64, db 90
+entry32:
+		; 32-bit entry point
+		use32
+		
+		call dword [0x504]
+		mov byte [0xB8000], '*'
+		jmp halt32
+
+halt32:
+		cli
+		hlt
+		jmp halt32

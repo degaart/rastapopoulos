@@ -23,6 +23,8 @@ uint16_t boot_device;
 uint8_t workmem[512];
 uint8_t* kernel_load_area = (uint8_t*)0x100000;
 
+struct GDT_ENTRY gdt[3];
+
 /*
 	Interrupt 0 handler
 */
@@ -31,9 +33,43 @@ void isr0() {
 	_halt();
 }
 
+struct GDT_ENTRY encode_gdt(uint32_t base, uint32_t limit, uint32_t type) {
+	struct GDT_ENTRY entry;
+	
+    // Check the limit to make sure that it can be encoded
+    if ((limit > 65536) && ((limit & 0xFFF) != 0xFFF)) {
+    	write_string("Invalid GDT limit: ");
+    	write_uint32(limit);
+    	_halt();
+    }
+    if (limit > 65536) {
+        // Adjust granularity if required
+        limit = limit >> 12;
+        entry.v[6] = 0xC0;
+    } else {
+        entry.v[6] = 0x40;
+    }
+ 
+    // Encode the limit
+    entry.v[0] = limit & 0xFF;
+    entry.v[1] = (limit >> 8) & 0xFF;
+    entry.v[6] |= (limit >> 16) & 0xF;
+ 
+    // Encode the base 
+    entry.v[2] = base & 0xFF;
+    entry.v[3] = (base >> 8) & 0xFF;
+    entry.v[4] = (base >> 16) & 0xFF;
+    entry.v[7] = (base >> 24) & 0xFF;
+ 
+    // And... Type
+    entry.v[5] = type;
+    
+    return(entry);
+}
+
 void cstart() {
 	boot_device = *pboot_device;
-
+	
 	/* Check and enable A20 gate */
 	write_string("Checking A20 gate\r\n");
 	if(!_check_a20()) {
@@ -97,9 +133,16 @@ void cstart() {
 		Setup protected mode and call kernel
 	*/
 	write_string("Entering all-glorious 32-bit flat address-space protected mode\r\n");
+	gdt[0] = encode_gdt(0, 0, 0);
+	gdt[1] = encode_gdt(0, 0xFFFFFFFF, 0x9A);
+	gdt[2] = encode_gdt(0, 0xFFFFFFFF, 0x92);
 	
+	//DUMP_MEM(&gdt[0], sizeof(gdt[0]));
+	//DUMP_MEM(&gdt[1], sizeof(gdt[0]));
+	//DUMP_MEM(&gdt[2], sizeof(gdt[0]));
+	//_halt();
 	
-	
+	_enter_pmode(gdt, sizeof(gdt)/sizeof(*gdt), kernel_load_area);
 	_halt();
 }
 

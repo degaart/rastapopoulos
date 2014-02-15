@@ -22,8 +22,12 @@ extern uint32_t _check_a20();
 extern void _enable_a20();
 extern void _memcpyl(void* dst, void* src, uint16_t siz);
 
-#define breakpoint() asm __volatile__("xchgw %%bx,%%bx;"::)
+struct GDT_ENTRY {
+	uint8_t v[8];
+} __attribute__((packed));
+extern void _enter_pmode(const struct GDT_ENTRY* gdt, uint32_t gdt_size, void* pmode_entry);
 
+#define breakpoint() asm __volatile__("xchgw %%bx,%%bx;"::)
 
 #endif //_BOOTLDR_STUB_H_
 

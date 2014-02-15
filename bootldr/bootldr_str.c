@@ -40,6 +40,17 @@ void write_uint32(uint32_t value) {
 	write_char( HEX_CHAR((value & 0x0000000F)), 0, 0 );
 }
 
+void dump_mem(const void* buffer, uint32_t siz) {
+	const uint8_t *cbuf = (const uint8_t*)buffer;
+	while(siz--) {
+		uint32_t c = *cbuf;
+		write_char( HEX_CHAR( (c & 0xF0) >> 4 ), 0, 0 );
+		write_char( HEX_CHAR( c & 0xF ), 0, 0 );
+		write_char(' ', 0, 0);
+		cbuf++;
+	}
+}
+
 int memcmp(const void* s0, const void* s1, uint16_t siz) {
 	const uint8_t* esi = (const uint8_t*)s0;
 	const uint8_t* edi = (const uint8_t*)s1;
