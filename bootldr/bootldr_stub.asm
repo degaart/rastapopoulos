@@ -13,15 +13,31 @@ global _int13
 global _check_a20
 global _enable_a20
 
+extern isr0
 extern cstart
 
 _start:
+	; setup registers
+	cli
 	mov ax, 0
 	mov ds, ax
 	mov es, ax
 	mov ss, ax
-
 	and esp, 0xFFFF
+	
+	; install interrupt handlers
+	push es
+	mov ax, 0
+	mov es, ax
+	
+	mov word [es:0], _isr0
+	mov ax, cs
+	mov word [es:2], ax
+	
+	pop es
+	sti
+
+	; Call C startup
 	call cstart
 
 _halt:
@@ -47,6 +63,27 @@ _write_char:
 		
 		pop ebx
 		pop ebp
+		retf
+		
+		
+_write_string:
+		; write_string for assembly functions
+		; ds:si string pointer
+		push bx
+	.loop:
+		mov al, [si]
+		
+		test al, al
+		jz .return
+		xor bh, bh
+		xor dl, dl
+		mov ah, 0x0E
+		int 0x10
+		
+		inc si
+		jmp .loop
+	.return:
+		pop bx
 		ret
 
 _breakpoint:
@@ -78,7 +115,7 @@ _int10:
 
 		popad
 		pop ebp
-		ret
+		retf
 
 _int13:
 		push ebp
@@ -105,7 +142,7 @@ _int13:
 
 		popad
 		pop ebp
-		ret
+		retf
 
 _check_a20:
 		; check 2 bytes at 0000:7DFE with FFFF:7E0E
@@ -141,15 +178,34 @@ _check_a20:
 	.return:
 		pop ds
 		pop es
-		ret
+		retf
 
 _enable_a20:
 		; enable the A20 gate
 		mov ax, 0x2401
 		int 0x15
-		ret
+		retf
+		
+_isr0:
+		pusha
+		push gs
+		push fs
+		push ds
+		push es
+		
+		mov ax, 0
+		mov ds, ax
 
-nop
-nop
-nop
-nop
+		call dword isr0
+	.return:
+		pop es
+		pop ds
+		pop fs
+		pop gs
+		popa
+		iret
+
+
+
+
+

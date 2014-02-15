@@ -54,6 +54,18 @@ const char* fat_error(uint16_t code) {
 	}
 }
 
+void fat_dump_bpb(struct FAT_BPB* bpb) {
+	DUMP16(bpb->bps);
+	DUMP16(bpb->spc);
+	DUMP16(bpb->rsc);
+	DUMP16(bpb->fats);
+	DUMP16(bpb->rentcnt);
+	DUMP16(bpb->sec16);
+	DUMP16(bpb->spt);
+	DUMP16(bpb->fatsz16);
+	DUMP16(bpb->nheads);
+}
+
 uint16_t fat_open(struct FAT* hfat, uint16_t device) {
 	/* Read first sector of device */
 	uint16_t ret = disk_read_chs(fat_workmem, device, 0, 0, 1);
@@ -92,6 +104,9 @@ uint16_t fat_open(struct FAT* hfat, uint16_t device) {
 		hfat->cyl = fat_bpb->sec32/(fat_bpb->spt * fat_bpb->nheads);
 	else
 		hfat->cyl = fat_bpb->sec16/(fat_bpb->spt * fat_bpb->nheads);
+	hfat->head = fat_bpb->nheads;
+	hfat->spt = fat_bpb->spt;
+	hfat->sect = fat_bpb->bps;
 	
 	hfat->rsect = fat_bpb->rsc;
 	hfat->spc = fat_bpb->spc;
@@ -106,7 +121,6 @@ uint16_t fat_open(struct FAT* hfat, uint16_t device) {
 	} else {
 		hfat->rsector = fat_bpb->rsc + (fat_bpb->fats * fat_bpb->fatsz16);
 	}
-	
 	if(hfat->type == FAT_TYPE_FAT12)
 		return(FAT_OK);
 	else
@@ -119,6 +133,12 @@ uint16_t fat_read_lsect(void* buffer, struct FAT* hfat, uint32_t lsect) {
 	uint16_t cyl;
 	
 	fat_lsect_to_chs(hfat, lsect, &cyl, &head, &sector);
+	/*write_string("fat_read_lsect: ");
+	DUMP16(lsect);
+	DUMP16(cyl);
+	DUMP16(head);
+	DUMP16(sector);*/
+	
 	uint16_t read = disk_read_chs(buffer, hfat->device, cyl, head, sector);
 	if(read)
 		return(FAT_OK);
@@ -133,16 +153,20 @@ void fat_lsect_to_chs(struct FAT* hfat, uint32_t lsect, uint16_t* cyl, uint16_t*
 		;	h = temp % heads
 		;	c = temp / heads
 	*/
-	breakpoint();
+	//write_string("fat_lsect_to_chs: ");
+	//DUMP16(lsect);
+	
 	uint16_t temp = lsect / hfat->spt;
-	
-	breakpoint();
-	write_string(".");
-	
+	//DUMP16(temp);
 	
 	*sector = (lsect % hfat->spt) + 1;
+	//DUMP16(*sector);
+	
 	*head = temp % hfat->head;
+	//DUMP16(*head);
+	
 	*cyl = temp / hfat->head;
+	//DUMP16(*cyl);
 }
 
 uint16_t fat_fopen(struct FAT_FILE* hfile, struct FAT* hfat, const char* filename) {

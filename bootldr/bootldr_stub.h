@@ -21,7 +21,7 @@ extern void _int13(struct REG16* regs);
 extern uint32_t _check_a20();
 extern void _enable_a20();
 
-#define breakpoint() asm("xchgw %%bx,%%bx;"::)
+#define breakpoint() asm __volatile__("xchgw %%bx,%%bx;"::)
 
 
 #endif //_BOOTLDR_STUB_H_
