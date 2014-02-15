@@ -49,6 +49,8 @@ const char* fat_error(uint16_t code) {
 		return("IOERROR");
 	case FAT_NOTFOUND:
 		return("NOTFOUND");
+	case FAT_EOF:
+		return("EOF");
 	default:
 		return("UNKNOWN");
 	}
@@ -121,6 +123,10 @@ uint16_t fat_open(struct FAT* hfat, uint16_t device) {
 	} else {
 		hfat->rsector = fat_bpb->rsc + (fat_bpb->fats * fat_bpb->fatsz16);
 	}
+	
+	/* Get first data sector */
+	hfat->dsect_start =  fat_bpb->rsc + (fat_bpb->fats * fat_bpb->fatsz16) + root_dir_sectors;
+
 	if(hfat->type == FAT_TYPE_FAT12)
 		return(FAT_OK);
 	else
@@ -133,12 +139,6 @@ uint16_t fat_read_lsect(void* buffer, struct FAT* hfat, uint32_t lsect) {
 	uint16_t cyl;
 	
 	fat_lsect_to_chs(hfat, lsect, &cyl, &head, &sector);
-	/*write_string("fat_read_lsect: ");
-	DUMP16(lsect);
-	DUMP16(cyl);
-	DUMP16(head);
-	DUMP16(sector);*/
-	
 	uint16_t read = disk_read_chs(buffer, hfat->device, cyl, head, sector);
 	if(read)
 		return(FAT_OK);
@@ -153,20 +153,10 @@ void fat_lsect_to_chs(struct FAT* hfat, uint32_t lsect, uint16_t* cyl, uint16_t*
 		;	h = temp % heads
 		;	c = temp / heads
 	*/
-	//write_string("fat_lsect_to_chs: ");
-	//DUMP16(lsect);
-	
 	uint16_t temp = lsect / hfat->spt;
-	//DUMP16(temp);
-	
 	*sector = (lsect % hfat->spt) + 1;
-	//DUMP16(*sector);
-	
 	*head = temp % hfat->head;
-	//DUMP16(*head);
-	
 	*cyl = temp / hfat->head;
-	//DUMP16(*cyl);
 }
 
 uint16_t fat_fopen(struct FAT_FILE* hfile, struct FAT* hfat, const char* filename) {
@@ -216,4 +206,54 @@ uint16_t fat_fopen(struct FAT_FILE* hfile, struct FAT* hfat, const char* filenam
 	hfile->size = file_size;
 	return(FAT_OK);
 }
+
+uint32_t fat_next_cluster12(struct FAT* hfat, uint32_t cluster) {
+	/* Determine offset and sector of fat entry */
+	uint32_t offset = cluster + (cluster / 2);
+	uint32_t sector = hfat->rsc + (offset / hfat->sect);
+	uint32_t entry_offset = offset % hfat->sect;
+
+	/* Load this sector and the subsequent sector */
+	uint16_t ret = fat_read_lsect(fat_workmem, hfat, sector);
+	if(ret != FAT_OK)
+		return(ret);
+	ret = fat_read_lsect(fat_workmem+512, hfat, sector+1);
+	
+	/* Get value */
+	uint16_t entry = *((uint16_t*)(&fat_workmem[offset]));
+	if(cluster & 0x0001)
+		entry = entry >> 4;			/* odd cluster number */
+	else
+		entry = entry & 0x0FFF; 	/* even cluster number */
+	return(entry);
+}
+
+uint16_t fat_fread(void* buffer, struct FAT* hfat, struct FAT_FILE* hfile) {
+	if(hfat->type != FAT_TYPE_FAT12)
+		return(FAT_UNSUPPORTED);
+	if(hfat->spc != 1)
+		return(FAT_UNSUPPORTED);
+		
+	/* If starting cluster is 0, then it's an empty file */
+	if(!hfile->first_cluster)
+		return(FAT_EOF);
+	
+	/* Determine if we're at end of file */
+	if(hfile->current_cluster >= 0x0FF8)
+		return(FAT_EOF);
+	
+	/* Map current cluster into a disk sector */
+	uint32_t cluster_sector = ((hfile->current_cluster - 2) * hfat->spc) + hfat->dsect_start;
+	
+	/* Read sector */
+	uint16_t ret = fat_read_lsect(buffer, hfat, cluster_sector);
+	if(ret != FAT_OK)
+		return(ret);
+	
+	/* Determine next cluster */
+	if(hfat->type == FAT_TYPE_FAT12)
+		hfile->current_cluster = fat_next_cluster12(hfat, hfile->current_cluster);
+	return(FAT_OK);
+}
+
 

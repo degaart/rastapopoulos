@@ -20,6 +20,7 @@ extern void _int10(struct REG16* regs);
 extern void _int13(struct REG16* regs);
 extern uint32_t _check_a20();
 extern void _enable_a20();
+extern void _memcpyl(void* dst, void* src, uint16_t siz);
 
 #define breakpoint() asm __volatile__("xchgw %%bx,%%bx;"::)
 

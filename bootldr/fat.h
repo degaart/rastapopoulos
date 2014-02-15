@@ -5,6 +5,7 @@
 	#define FAT_UNSUPPORTED 1
 	#define FAT_NOTFOUND 2
 	#define FAT_IOERROR 3
+	#define FAT_EOF 4
 	
 	#define FAT_TYPE_FAT12 0
 	#define FAT_TYPE_FAT16 1
@@ -28,6 +29,7 @@
 		uint16_t rentries;		/* Entries in root directory */
 		uint16_t hsc;
 		uint32_t rsector;		/* Root directory sector number */
+		uint32_t dsect_start;	/* First data sector */
 	} __attribute__((packed));
 	
 	struct FAT_FILE {
@@ -41,6 +43,7 @@
 	uint16_t fat_fopen(struct FAT_FILE* hfile, struct FAT* hfat, const char* filename);
 	void fat_lsect_to_chs(struct FAT* hfat, uint32_t lsect, uint16_t* cyl, uint16_t* head, uint16_t* sector);	
 	uint16_t fat_read_lsect(void* buffer, struct FAT* hfat, uint32_t lsect);
-	
+	uint32_t fat_next_cluster12(struct FAT* hfat, uint32_t cluster);
+	uint16_t fat_fread(void* buffer, struct FAT* hfat, struct FAT_FILE* hfile);
 	
 #endif //_FAT_H_

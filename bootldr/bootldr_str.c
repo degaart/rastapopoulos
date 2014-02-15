@@ -27,6 +27,19 @@ void write_uint16(uint16_t value) {
 	write_char( HEX_CHAR((value & 0x000F)), 0, 0 );
 }
 
+void write_uint32(uint32_t value) {
+	write_char('0', 0, 0);
+	write_char('x', 0, 0);
+	write_char( HEX_CHAR((value & 0xF0000000)>>28), 0, 0 );
+	write_char( HEX_CHAR((value & 0x0F000000)>>24), 0, 0 );
+	write_char( HEX_CHAR((value & 0x00F00000)>>20), 0, 0 );
+	write_char( HEX_CHAR((value & 0x000F0000)>>16), 0, 0 );
+	write_char( HEX_CHAR((value & 0x0000F000)>>12), 0, 0 );
+	write_char( HEX_CHAR((value & 0x00000F00)>>8), 0, 0 );
+	write_char( HEX_CHAR((value & 0x000000F0)>>4), 0, 0 );
+	write_char( HEX_CHAR((value & 0x0000000F)), 0, 0 );
+}
+
 int memcmp(const void* s0, const void* s1, uint16_t siz) {
 	const uint8_t* esi = (const uint8_t*)s0;
 	const uint8_t* edi = (const uint8_t*)s1;
@@ -38,3 +51,10 @@ int memcmp(const void* s0, const void* s1, uint16_t siz) {
 	return(0);
 }
 
+void memcpy(void* dst, const void* src, uint32_t siz) {
+	while(siz--) {
+		*((uint8_t*)dst) = *((const uint8_t*)src);
+		dst++;
+		src++;
+	}
+}

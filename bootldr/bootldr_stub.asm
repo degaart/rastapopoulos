@@ -12,6 +12,7 @@ global _int10
 global _int13
 global _check_a20
 global _enable_a20
+global _memcpyl
 
 extern isr0
 extern cstart
@@ -36,6 +37,10 @@ _start:
 	
 	pop es
 	sti
+	
+	; Setup big unreal mode
+	breakpoint
+	call setup_unreal
 
 	; Call C startup
 	call cstart
@@ -186,6 +191,37 @@ _enable_a20:
 		int 0x15
 		retf
 		
+		
+_memcpyl:
+		; Copy memory using long pointers
+		; Args:
+		; 	Dest address (DWORD) (EBP+8)
+		;	Source address (DWORD) (EBP+12)
+		; 	Size (WORD) (EBP+16)
+		push ebp
+		mov ebp, esp
+		pushad
+		push es
+		push gs
+		
+		mov ax, [bp+10]
+		shl ax, 4			; Multiply by 16
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	.return:
+		pop gs
+		pop es
+		popad
+		pop ebp
+		retf
+
 _isr0:
 		pusha
 		push gs
@@ -206,6 +242,34 @@ _isr0:
 		iret
 
 
-
-
+setup_unreal:
+		cli                    ; no interrupts
+		push ds                ; save real mode
+		
+		lgdt [.gdtinfo]         ; load gdt register
+		
+		mov  eax, cr0          ; switch to pmode by
+		or al,1                ; set pmode bit
+		mov  cr0, eax
+		
+		jmp .no_crash          ; tell 386/486 to not crash
+		
+	.no_crash:
+		mov  bx, 0x08          ; select descriptor 1
+		mov  ds, bx            ; 8h = 1000b
+		
+		and al,0xFE            ; back to realmode
+		mov  cr0, eax          ; by toggling bit again
+		
+		pop ds                 ; get back old segment
+		sti
+		
+		ret
+	.gdtinfo:
+		dw .gdt_end - .gdt - 1   ;last byte in table
+		dd .gdt                 ;start of table
+ 
+	.gdt: dd 0,0        ; entry 0 is always unused
+	.flatdesc: db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
+	.gdt_end:
 

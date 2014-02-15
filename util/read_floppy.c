@@ -18,7 +18,8 @@ uint16_t* spt = (uint16_t*)(bpb+0x0018);
 uint16_t* headcount = (uint16_t*)(bpb+0x001A);
 uint16_t* hsectcount = (uint16_t*)(bpb+0x001C);
 
-#define FILENAME "KERNEL     "
+//#define FILENAME "KERNEL     "
+#define FILENAME "BOOTLDR    "
 
 void read_lsect(void* buffer, unsigned lsect) {
 	if(fseek(data, (lsect-1)*512, SEEK_SET)) {
@@ -79,7 +80,7 @@ int read_file(void* buffer, unsigned starting_sector,uint32_t size) {
 }
 
 int main() {
-	data = fopen("/Volumes/Kratos/Projets/RastapopoulOS/src/0.09/floppy.img","rb");
+	data = fopen("floppy.img","rb");
 	if(!data)
 		return(1);
     
