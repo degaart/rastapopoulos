@@ -137,11 +137,6 @@ void cstart() {
 	gdt[1] = encode_gdt(0, 0xFFFFFFFF, 0x9A);
 	gdt[2] = encode_gdt(0, 0xFFFFFFFF, 0x92);
 	
-	//DUMP_MEM(&gdt[0], sizeof(gdt[0]));
-	//DUMP_MEM(&gdt[1], sizeof(gdt[0]));
-	//DUMP_MEM(&gdt[2], sizeof(gdt[0]));
-	//_halt();
-	
 	_enter_pmode(gdt, sizeof(gdt)/sizeof(*gdt), kernel_load_area);
 	_halt();
 }

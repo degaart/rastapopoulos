@@ -250,13 +250,15 @@ _enter_pmode:
 		;	EBP+12	GDT size (DWORD)
 		;	EBP+16	Pmode entry (DWORD)
 		;
-		breakpoint
 		push ebp
 		mov ebp, esp
 		
+		; GDT size
+		; Pay attention!
+		; We substract 1 to the gdt size in bytes!!!
 		mov ax, [ebp+12]				; size
-		dec ax							; size - 1
-		shl ax, 3						; ( size - 1 ) * 8
+		shl ax, 3						; size * 8
+		dec ax							; (size * 8) - 1
 		mov [.gdt_desc_size], ax
 		
 		mov eax, [ebp+8]
@@ -277,7 +279,7 @@ _enter_pmode:
 		jmp _halt
 
 	.gdt_desc:
-	.gdt_desc_size: dw 2*8
+	.gdt_desc_size: dw 0
 	.gdt_desc_offset: dd 0
 	.gdt_desc_end:
 
@@ -287,9 +289,7 @@ entry32:
 		use32
 		
 		call dword [0x504]
-		mov byte [0xB8000], '*'
 		jmp halt32
-
 halt32:
 		cli
 		hlt

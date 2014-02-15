@@ -7,6 +7,8 @@ bits 32
 
 extern _kmain
 
+%define bkpt xchg bx,bx
+
 global _kstart
 global _khalt
 global outb
@@ -16,6 +18,17 @@ global delay
 
 ; Entry-point to the kernel
 _kstart:
+		; setup registers
+		bkpt
+		cli
+		mov ax, 0x10			; data segment selector
+		mov ds, ax
+		mov ss, ax
+		mov es, ax
+		mov fs, ax
+		mov gs, ax
+		mov esp, 0x7FFFF			; 492031 bytes of stack (480kb)
+
 		call _kmain
 
 ; halt processor
@@ -57,5 +70,6 @@ delay:
 		cmp ecx,0
 		jne .loop
 		ret
-		
-		
+
+
+
