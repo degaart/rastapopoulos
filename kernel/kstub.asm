@@ -1,25 +1,24 @@
-; RastaPopoul 0S 0.08
+; RastaPopoul 0S 0.09
 ;
 ; Assembly stub for kernel
 ;
 
 bits 32
 
-extern _kmain
+extern kmain
 
 %define bkpt xchg bx,bx
 
 global _kstart
 global _khalt
-global outb
-global inb
-global breakpoint
-global delay
+global _outb
+global _inb
+global _breakpoint
+global _delay
 
 ; Entry-point to the kernel
 _kstart:
 		; setup registers
-		bkpt
 		cli
 		mov ax, 0x10			; data segment selector
 		mov ds, ax
@@ -29,7 +28,8 @@ _kstart:
 		mov gs, ax
 		mov esp, 0x7FFFF			; 492031 bytes of stack (480kb)
 
-		call _kmain
+		call kmain
+		jmp _khalt
 
 ; halt processor
 _khalt:
@@ -38,7 +38,7 @@ _khalt:
 		jmp _khalt
 	
 ; emit byte at port
-outb:
+_outb:
 		; esp+8: value to emit (uint32_t)
 		; esp+4: port (uint32_t)
 		mov al,[esp+8]
@@ -47,7 +47,7 @@ outb:
 		ret
 
 ; read byte from port
-inb:
+_inb:
 		; esp+4: port (uint32_t)
 		; returns: uint8_t
 		mov dx,[esp+4]
@@ -56,16 +56,16 @@ inb:
 		ret
 
 ; breakpoint for bochs
-breakpoint:
+_breakpoint:
 		xchg bx,bx
 		ret
 
 ; Attempt to delay using some tricks
-delay:
+_delay:
 		mov ecx, 0x1FFFFF
 	.loop:
 		mov word [esp+4], 0x3D5
-		call inb
+		call _inb
 		dec ecx
 		cmp ecx,0
 		jne .loop
