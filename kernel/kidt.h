@@ -1,17 +1,11 @@
 #ifndef _KIDT_H_
 #define _KIDT_H_
-
-	struct IDTR {
-		uint16_t limit; 	/* IDT length in bytes, - 1 */
-		uint32_t base;		/* Linear address of IDT */
-	} __attribute__((packed));
 	
+	typedef void (*ISR_PROC)(uint32_t, uint32_t, const void* esp);
 	struct IDT_ENTRY {
-		uint16_t offset_lo;		/* Offset, low-order word */
-		uint16_t selector;		/* Code segment selector */
-		uint8_t reserved;		/* Always 0 */
-		uint8_t attributes;		/* Attributes & type */
-		uint16_t offset_hi;		/* Offset, high-order word */
+		ISR_PROC handler;
+		uint16_t attributes;
+		uint16_t selector;
 	} __attribute__((packed));
 	
 	#define IDT_ATTR_PRESENT(x)		(((x) & 0x1) << 7)

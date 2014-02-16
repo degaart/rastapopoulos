@@ -25,14 +25,14 @@ _kstart:
 		mov esp, 0x7FFFF			; 492031 bytes of stack (480kb)
 
 		call kmain
-		jmp _khalt
+		jmp _halt
 
 ; halt processor
 global _halt
 _halt:
 		cli
 		hlt
-		jmp _khalt
+		jmp _halt
 	
 ; emit byte at port
 global _outb
@@ -72,240 +72,112 @@ _delay:
 		jne .loop
 		ret
 
-; 
-; Load IDT
-;
-global _idt_load
-_idt_load_00:
-		push ebp
-		mov ebp, esp
-		push ebx
-		
-		mov ebx, [ebp+4]
-		
-		mov ax, [ebx]
-		mov [.idtr_limit], ax
-		
-		mov eax, [ebx+2]
-		mov [.idtr_offset], eax
-		
-		lidt [.idtr]
-
-		pop ebx
-		pop ebp
-		ret
-	
-	.idtr:
-	.idtr_limit: dw 0
-	.idtr_offset: dd 0
-
 ;
 ; Load IDT
 ; Debug version
 ;
+global _idt_load
 _idt_load:
+		push ebp
+		mov ebp, esp
 		pusha
-
-		; create entry for INT80
-		;mov ebx, .idt+(0x0*8)				; ebx: base pointer to IDT entry (64 bits is 8 bytes)
+		
+		; clear isr table (cleaner this way)
+		mov edi , __isr_table
+	.clear_isr_table:
+		mov dword [edi], 0
+		add edi, 4
+		cmp edi, __isr_table+(256*4)
+		jb .clear_isr_table
+		
+		; clear idt
 		mov ebx, .idt
-		
-		%assign isrc 0
-		%rep 32
-			mov eax, __isr_%[isrc]
-			mov word [ebx+0], ax				; offset_lo
-			mov word [ebx+2], KERN_CODE_SEL		; kernel code selector
-			mov byte [ebx+4], 0					; reserved
-			mov byte [ebx+5], 0x8E				; present|priv_0|seg_0|gate_int32
-			and eax, 0xFFFF0000
-			shr eax, 16
-			mov word [ebx+6], ax				; offset_hi
-			add ebx, 8
+	.clear_idt:
+		mov dword [ebx], 0
+		add ebx, 4
+		cmp ebx, .idt_end
+		jb .clear_idt
 
-			%assign isrc isrc+1
-		%endrep
+		; move each entry into __isr_table
+		mov edi, __isr_table
+		mov esi, [ebp+8]					; struct IDT_ENTRY*
+		mov ecx, [ebp+12]					; count
+	.move_entries:
+		cmp ecx, 0
+		jz .load_idt
 		
-		;mov eax, __isr_0
-		;mov word [ebx+0], ax				; offset_lo
-		;mov word [ebx+2], KERN_CODE_SEL		; kernel code selector
-		;mov byte [ebx+4], 0					; reserved
-		;mov byte [ebx+5], 0x8E				; present|priv_0|seg_0|gate_int32
-		;and eax, 0xFFFF0000
-		;shr eax, 16
-		;mov word [ebx+6], ax				; offset_hi
+		mov eax, [esi]						; handler address
+		mov [edi], eax
+		
+		add esi, 8
+		add edi, 4
+		dec ecx
+		jmp .move_entries
+	.load_idt:
+		breakpoint
+		mov ebx, .idt						; IDT entry base
+		mov esi, [ebp+8]					; entries
+		mov edx, [ebp+12]					; count
+		mov ecx, 0							; current entry
+		
+		; We can lookup the thunk in the
+		; __isr_thunk_table
+	.load_idt_loop:
+		cmp ecx, edx
+		je  .load_idtr
 
+		; if entry in __isr_thunk is NULL, we don't bother
+		; adding it to idt
+		cmp dword [esi], 0
+		jz .next_idt_entry
+
+		mov eax, ecx						; eax=index
+		shl eax, 2							; eax=index*4
+		add eax, __isr_thunk_table			; eax=__isr_thunk_table+(index*4)
+		
+		mov eax, [eax]
+		mov word [ebx+0], ax				; offset_lo
+		mov word [ebx+2], KERN_CODE_SEL		; kernel code selector
+		mov byte [ebx+4], 0					; reserved
+		and eax, 0xFFFF0000
+		shr eax, 16
+		mov word [ebx+6], ax				; offset_hi
+		mov ax, [esi+4]						; attributes
+		mov byte [ebx+5], al				; 
+
+	.next_idt_entry:
+		inc ecx
+		add esi, 8
+		add ebx, 8
+		jmp .load_idt_loop
+
+	.load_idtr:
 		; fill idtr
 		mov eax, ebx
 		sub eax, .idt						; eax=ebx-.idt
 		dec eax								; eax--
 		
-		mov [.idtr_limit],  eax ;word (32*8)-1 ; word (32*8)		; They say we need at least 32 ints, and that we should not substract 1
-		mov [.idtr_offset], dword .idt
+		mov [.idtr_limit],  ax				; idt size
+		mov [.idtr_offset], dword .idt		; idt address
 
 		; load idtr
 		lidt [.idtr]
 		
-		;  do not enable interrupts just yet, dumbass!
-
-		; try a divide by zero to test
-		;mov cx, 0
-		;breakpoint
-		;div cx
-
 		popa
-		;breakpoint
-		ret				; GPF here, motherfucker!
+		pop ebp
+		ret
 
 	.idtr:
 	.idtr_limit: dw 0
 	.idtr_offset: dd 0
 
+	align 8
 	.idt: times 256 dq 0
 	.idt_end:
 
-;
-; isr for INT80
-;
-global _isr80
-_isr80:
-		pusha
-		push ds
-		push es
-		push fs
-		push gs
-		
-		;mov ax, KERN_DATA_SEL
-		;mov ds, ax
-		;mov es, ax
-		;mov fs, ax
-		;mov gs, ax
-		
-		;mov [VGA_BASE], byte '*'
-		mov ecx, 0
-		mov dl, 0
-		jmp _bsod
-		
-		pop gs
-		pop fs
-		pop es
-		pop ds
-		popa
-		
-		iret
-		
-; 
-; ISR entry point
-; Problem: how do we know which C ISR to call?
-; Fucking solution: Generate 256 ISRs
-; Use a fucking static table to which the ISRs will
-; look for the corresponding C function to call
-; Note: the _idt_load should know when an ISR is not
-; present, and instead of providing lidt with the thunk,
-; should just put a zero IDT entry there
-;
+align 4
 __isr_table: times 256 dd 0
-; Param for this macro: offset into __isr_table
-%macro __isr_thunk 1
-	
-
-%endmacro
-
-		
-; Macro for defining generic ISRs
-; Params:
-;  0: isr number
-;  1: isr has error code?
-%macro generic_isr 1
-__isr_%1:
-		mov dl, %1
-		jmp _bsod
-%endmacro
-
-%assign isrc 0
-%rep 32
-	generic_isr isrc
-	%assign isrc isrc+1
-%endrep
-
-;
-; Blue screen of death
-;
-%define BSOD_COL (12|0x10)
-_bsod:
-		; Params
-		;  dh: error code
-		;  dl: int number (byte)
-		breakpoint
-		mov ebp, esp				; Stack of calling code
-
-		mov ax, KERN_DATA_SEL
-		mov ss, ax
-		mov ds, ax
-		mov ss, eax
-		mov esp, .bsod_stack_end
-
-	.write_error:
-		mov ebx, VGA_BASE
-		mov esi, .err_str1
-		call .write_str
-		
-		mov eax, edx
-		and eax, 0xF0
-		shr eax, 4
-		call .write_uint4
-		
-		mov eax, edx
-		and eax, 0xF
-		call .write_uint4
-		
-		mov esi, .err_str2
-		call .write_str
-		
-		; Display error code
-		mov eax, dword [ebp]
-		and eax, 0xF000
-		shr eax, 4
-		call .write_uint4
-		
-		movzx eax, byte [ebp]
-		and eax, 0xF
-		call .write_uint4
-		
-	.halt:
-		cli
-		hlt
-		jmp .halt
-	.write_str:
-		mov al, byte [esi]
-		test al, al
-		je .write_str_end
-		mov byte [ebx], al
-		mov byte [ebx+1], BSOD_COL 				; White text, blue background
-		add ebx, 2
-		inc esi
-		jmp short .write_str
-	.write_str_end:
-		ret
-	.write_uint4:
-		mov al, [.hex_chars+eax]
-		mov byte [ebx], al
-		mov byte [ebx+1], BSOD_COL
-		add ebx, 2
-		ret
-
-	.hex_chars: db '0123456789ABCDEF'
-	.bsod_stack: times 256 db 0
-	.bsod_stack_end:
-	.err_str1: db 'Utter kernel failure: INT', 0
-	.err_str2: db ' raised. Error code: ', 0
-
-;
-; Calls int 0x80
-;
-global _int80
-_int80:
-		int 0x80
-		ret
+%include 'isr_stub.inc'
 
 ;
 ; Enables ints

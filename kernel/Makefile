@@ -9,7 +9,7 @@ kernel.bin: kstub.ao kernel.ld $(wildcard *.c) $(wildcard *.h)
 		-static \
 		kstub.ao *.o
 
-kstub.ao: kstub.asm
+kstub.ao: kstub.asm isr_stub.inc
 	@echo "[ASM] kstub.ao"
 	@nasm -f elf32 -o kstub.ao kstub.asm > /dev/null
 
