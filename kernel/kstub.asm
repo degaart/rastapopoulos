@@ -29,7 +29,7 @@ _kstart:
 
 ; halt processor
 global _halt
-_khalt:
+_halt:
 		cli
 		hlt
 		jmp _khalt
@@ -145,15 +145,15 @@ _idt_load:
 		; load idtr
 		lidt [.idtr]
 		
-		; enable interrupts
-		breakpoint
-		sti
-		
+		;  do not enable interrupts just yet, dumbass!
+
 		; try a divide by zero to test
 		;mov cx, 0
+		;breakpoint
 		;div cx
 
 		popa
+		;breakpoint
 		ret				; GPF here, motherfucker!
 
 	.idtr:
@@ -193,6 +193,23 @@ _isr80:
 		
 		iret
 		
+; 
+; ISR entry point
+; Problem: how do we know which C ISR to call?
+; Fucking solution: Generate 256 ISRs
+; Use a fucking static table to which the ISRs will
+; look for the corresponding C function to call
+; Note: the _idt_load should know when an ISR is not
+; present, and instead of providing lidt with the thunk,
+; should just put a zero IDT entry there
+;
+__isr_table: times 256 dd 0
+; Param for this macro: offset into __isr_table
+%macro __isr_thunk 1
+	
+
+%endmacro
+
 		
 ; Macro for defining generic ISRs
 ; Params:
@@ -216,8 +233,9 @@ __isr_%1:
 %define BSOD_COL (12|0x10)
 _bsod:
 		; Params
-		;  ecx: error code
+		;  dh: error code
 		;  dl: int number (byte)
+		breakpoint
 		mov ebp, esp				; Stack of calling code
 
 		mov ax, KERN_DATA_SEL
@@ -242,6 +260,16 @@ _bsod:
 		
 		mov esi, .err_str2
 		call .write_str
+		
+		; Display error code
+		mov eax, dword [ebp]
+		and eax, 0xF000
+		shr eax, 4
+		call .write_uint4
+		
+		movzx eax, byte [ebp]
+		and eax, 0xF
+		call .write_uint4
 		
 	.halt:
 		cli
@@ -269,7 +297,7 @@ _bsod:
 	.bsod_stack: times 256 db 0
 	.bsod_stack_end:
 	.err_str1: db 'Utter kernel failure: INT', 0
-	.err_str2: db ' raised :(', 0
+	.err_str2: db ' raised. Error code: ', 0
 
 ;
 ; Calls int 0x80

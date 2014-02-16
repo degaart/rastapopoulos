@@ -2,6 +2,7 @@
 #include "kstring.h"
 #include "kidt.h"
 #include "kstub.h"
+#include "kterm.h"
 
 #define SELECTOR_CODE 0x08
 
@@ -13,6 +14,18 @@ static struct IDT_ENTRY encode_idt(uint16_t selector, uint32_t offset, uint8_t a
 	entry.offset_hi = (offset & 0xFFFF0000) << 16;
 	entry.attributes = attributes;
 	return(entry);
+}
+
+/*
+	Returns:
+		True: pop error code from stack before returning
+*/
+uint32_t utter_error() {
+	write_string_attr("UTTER KERNEL FAILURE: ", COLOR_LIGHT_RED|0x10);
+	write_value_attr(type, COLOR_LIGHT_RED|0x10);
+	write_string_attr("CODE: ", COLOR_LIGHT_RED|0x10);
+	write_value_attr(code, COLOR_LIGHT_RED|0x10);
+	_halt();
 }
 
 void idt_setup() {
@@ -41,4 +54,5 @@ void idt_setup() {
 	_idt_load(&idtr, idt);
 	//_sti();
 }
+
 

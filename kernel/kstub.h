@@ -17,5 +17,8 @@
 	
 
 	#define breakpoint() asm __volatile__("xchgw %%bx,%%bx;"::)
+	#define cli() asm __volatile__("cli;")
+	#define sti() asm __volatile__("sti;")
+	
 #endif //_KSTUB_H_
 
