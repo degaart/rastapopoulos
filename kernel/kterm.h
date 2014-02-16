@@ -29,6 +29,7 @@
 	void scroll_screen();
 	void write_string_attr(const char* str, enum VGA_COLOR attr);
 	void write_value_attr(uint32_t value, enum VGA_COLOR attr);
+	void write_string(const char* str);
 	void clear_screen();
 	void term_init();
 

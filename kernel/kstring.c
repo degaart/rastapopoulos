@@ -11,5 +11,15 @@ void memcpy(void* dst, const void* src, unsigned amount) {
 	}
 }
 
+void memset(void* dst, int val, unsigned siz) {
+	uint8_t* p = (uint8_t*)dst;
+	while(siz--) {
+		*p = val;
+		p++;
+	}
+}
 
+void bzero(void* dst, unsigned siz) {
+	memset(dst, 0, siz);
+}
 

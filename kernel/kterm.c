@@ -117,6 +117,10 @@ void write_value_attr(uint32_t value, enum VGA_COLOR attr) {
 	write_string_attr(buffer, attr);
 }
 
+void write_string(const char* str) {
+	write_string_attr(str, COLOR_LIGHT_GREY);
+}
+
 /* Clear screen */
 void clear_screen() {
 	for(unsigned y=0; y<25; y++) {
