@@ -7,12 +7,17 @@
 
 static IRQ_HANDLER irq_handlers[16];
 
+
+#define EXCEPTION_EXTERNAL			(1)
+#define EXCEPTION_IDT				(1<<1)
+#define EXCEPTION_TI				(1<<2)
+
 /*
 	Generic handler for unhandled interrupts
 */
 #define _DEF_NAME(num, nam) case num: int_name=nam; break
 #define ERR_COL (COLOR_LIGHT_RED|0x10)
-static void unhandled_isr(uint32_t type, uint32_t code, const void* esp) {
+static void unhandled_isr(uint32_t type, uint32_t code, const void* address) {
 	const char* int_name;
 	switch(type) {
 	_DEF_NAME(0, "DIVIDE_ERROR");
@@ -45,20 +50,34 @@ static void unhandled_isr(uint32_t type, uint32_t code, const void* esp) {
 	else
 		write_value_attr(type, ERR_COL);
 
-	write_string_attr(", code: ", ERR_COL);
-	write_value_attr(code, ERR_COL);
+	if(code != 0xFFFFFFFF) {
+		write_string_attr(", code: ", ERR_COL);
+		write_value_attr(code, ERR_COL);
+		
+		write_string_attr(" (", ERR_COL);
+		if(code & EXCEPTION_EXTERNAL)
+			write_string_attr("EXCEPTION_EXTERNAL ", ERR_COL);
+		if(code & EXCEPTION_IDT)
+			write_string_attr("EXCEPTION_IDT ", ERR_COL);
+		else if(code & EXCEPTION_TI)
+			write_string_attr("EXCEPTION_LDT ", ERR_COL);
+		else
+			write_string_attr("EXCEPTION_GDT ", ERR_COL);
+		write_string_attr(")", ERR_COL);
+	}
 	
-	write_string_attr(", address: ", ERR_COL);
-	write_value_attr((uint32_t)esp, ERR_COL);
+	write_string_attr(", Address: ", ERR_COL);
+	write_value_attr(((uint16_t)address)+2, ERR_COL);
+	write_string_attr(":", ERR_COL);
+	write_value_attr((uint32_t)address, ERR_COL);
 	_halt();
 }
-
 
 #define PAGE_FAULT_ACCESS_VIOLATION(x)		((x)&1)
 #define PAGE_FAULT_WRITE(x)					((x)&(1<<1))
 #define PAGE_FAULT_USERMODE(x)				((x)&(1<<2))
 #define PAGE_FAULT_RSRV_BIT_VIOLATION_NOT(x) ((x)&(1<<3))
-static void page_fault_isr(uint32_t type, uint32_t code, const void* esp) {
+static void page_fault_isr(uint32_t type, uint32_t code, const void* address) {
 	write_string_attr("Page fault occured at linear address: ", ERR_COL);
 	write_value_attr(_read_cr2(), ERR_COL);
 	

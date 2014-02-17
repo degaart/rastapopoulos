@@ -54,11 +54,6 @@ __isr_thunk_%1:
 		
 		; cleanup stack
 		add esp, 12
-
-		; pop error code if needed
-		%if (%1==8) || ((%1>=10) && (%1<=14)) || (%1==17)
-			pop eax
-		%endif
 		
 		; restore state
 		pop gs
@@ -67,6 +62,11 @@ __isr_thunk_%1:
 		pop ds
 		popa
 		pop ebp
+
+		; pop error code if needed
+		%if (%1==8) || ((%1>=10) && (%1<=14)) || (%1==17)
+			pop eax
+		%endif
 		iret
 %endmacro
 

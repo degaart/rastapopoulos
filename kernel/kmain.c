@@ -32,6 +32,7 @@ void irq0_handler(uint32_t irq) {
 		if((counter % 200) == 0) {
 			/* Try to access undefined memory */
 			uint8_t* memory =(uint8_t*)(4*1024*1024);
+			breakpoint();
 			*memory = 0;
 		}
 	}
