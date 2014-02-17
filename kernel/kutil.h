@@ -35,5 +35,8 @@
 		This variable points to end of kernel memory, aligned to 4096 bytes
 	*/	
 	void* kernel_end;
+	
+	#define KERNEL_CODE_SEL 0x08
+	#define KERNEL_DATA_SEL 0x10
 
 #endif //_KUTIL_H_

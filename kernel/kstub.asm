@@ -34,7 +34,6 @@ _kstart:
 		cmp esi, _kernel_end
 		jb .init_bss
 		
-
 		; call kernel entry point
 		call kmain
 		jmp _halt
@@ -212,4 +211,25 @@ _getflags:
 		pop eax
 		ret
 
+
+;
+; Control registers accessors
+;
+%macro CR_ACCESSOR 1
+global _read_%1
+_read_%1:
+		mov eax, %1
+		ret
+
+global _write_%1
+_write_%1:
+		mov eax, [esp+4]
+		mov %1, eax
+		ret
+%endmacro
+
+CR_ACCESSOR cr0
+CR_ACCESSOR cr2
+CR_ACCESSOR cr3
+CR_ACCESSOR cr4
 

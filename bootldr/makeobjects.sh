@@ -2,7 +2,7 @@
 
 for i in *.c
 do
-	echo "[CC] $i"
+	echo "[CC]" $(basename $i)'.o'
 	i586-elf-gcc \
 		-S \
 		-std=gnu99 \

@@ -5,10 +5,6 @@
 #include "kterm.h"
 #include "pic.h"
 
-#define KERN_CODE_SEL 0x08
-#define IDT_IRQ_START	(32)
-#define IDT_IRQ_END		(32+16)
-
 static IRQ_HANDLER irq_handlers[16];
 
 /*
@@ -57,6 +53,33 @@ static void unhandled_isr(uint32_t type, uint32_t code, const void* esp) {
 	_halt();
 }
 
+
+#define PAGE_FAULT_ACCESS_VIOLATION(x)		((x)&1)
+#define PAGE_FAULT_WRITE(x)					((x)&(1<<1))
+#define PAGE_FAULT_USERMODE(x)				((x)&(1<<2))
+#define PAGE_FAULT_RSRV_BIT_VIOLATION_NOT(x) ((x)&(1<<3))
+static void page_fault_isr(uint32_t type, uint32_t code, const void* esp) {
+	write_string_attr("Page fault occured at linear address: ", ERR_COL);
+	write_value_attr(_read_cr2(), ERR_COL);
+	
+	if(PAGE_FAULT_ACCESS_VIOLATION(code))
+		write_string_attr("\nType: ACCESS_VIOLATION\n", ERR_COL);
+	else
+		write_string_attr("\nType: NONPRESENT_PAGE\n", ERR_COL);
+	if(PAGE_FAULT_WRITE(code))
+		write_string_attr("Access type: WRITE\n", ERR_COL);
+	else
+		write_string_attr("Access type: READ\n", ERR_COL);
+	if(PAGE_FAULT_USERMODE(code))
+		write_string_attr("Source type: USERMODE\n", ERR_COL);
+	else
+		write_string_attr("Source type; SUPERVISOR_MODE\n", ERR_COL);
+	if(PAGE_FAULT_RSRV_BIT_VIOLATION_NOT(code))
+		write_string_attr("Reserved bits violation: NO\n", ERR_COL);
+	else
+		write_string_attr("Reserved bits violation: YES\n", ERR_COL);
+}
+
 static void irq_isr(uint32_t type, uint32_t code, const void* esp) {
 	/* Check spurious IRQs */
 	unsigned irq = type-IDT_IRQ_START;
@@ -102,9 +125,12 @@ void idt_setup() {
 				IDT_ATTR_PRIVILEGE(0)|
 				IDT_ATTR_STORAGE_SEG(0)|
 				IDT_GATE_INT32;
-			idt[i].selector = KERN_CODE_SEL;
+			idt[i].selector = KERNEL_CODE_SEL;
 		}
 	}
+	
+	/* Remap page fault handler (for now. Do it elsewhere next time) */
+	idt[14].handler = page_fault_isr;
 
 	/* Load IDT */
 	_idt_load(idt, sizeof(idt)/sizeof(*idt));
@@ -115,5 +141,6 @@ void idt_set_irq_handler(int irq, IRQ_HANDLER handler) {
 		PANIC("Attempted to set an IRQ handler while interrupts enabled");
 	irq_handlers[irq] = handler;
 }
+
 
 

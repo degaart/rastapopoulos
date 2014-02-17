@@ -11,19 +11,10 @@
 #include "kstub.h"
 #include "pic.h"
 #include "pit.h"
-
-
-/*
-	Using some linker magic (cf kernel.ld), this variable
-	lies on the end of the bss section, i.e.
-	on the end of the kernel
-	Taking it's address brings us the physical address of the
-	end of the kernel
-*/
-extern uint32_t _kernel_end;
+#include "kstring.h"
+#include "paging.h"
 
 #define ERR_COL (COLOR_LIGHT_RED|0x10)
-
 void panic(const char* file, int line, const char* message) {
 	write_string_attr("Kernel error at ", ERR_COL);
 	write_string_attr(file, ERR_COL);
@@ -38,12 +29,28 @@ void irq0_handler(uint32_t irq) {
 	static uint32_t counter = 0;
 	counter++;
 	if((counter % 100)==0) {
-		//DUMP32(counter);
+		if((counter % 200) == 0) {
+			/* Try to access undefined memory */
+			uint8_t* memory =(uint8_t*)(4*1024*1024);
+			*memory = 0;
+		}
 	}
 }
 
+/*
+	Using some linker magic (cf kernel.ld), this variable
+	lies on the end of the bss section, i.e.
+	on the end of the kernel
+	Taking it's address brings us the physical address of the
+	end of the kernel
+*/
+extern uint32_t _kernel_end;
+
 void kmain() {
+	/* Init initial kernel terminal handling */
 	term_init();
+	write_string_attr("RastapopoulOS", COLOR_CYAN);
+	write_string_attr(" started\n", COLOR_LIGHT_GREY);
 	
 	/*
 		HACKHACKHACK
@@ -58,35 +65,37 @@ void kmain() {
 	/* Get end of kernel memory */
 	kernel_end = ALIGN(&kernel_end, 4096);
 
-	/* Continue normal flow */
-	write_string_attr("RastapopoulOS", COLOR_CYAN);
-	write_string_attr(" started\n", COLOR_LIGHT_GREY);
-
+	/* Load IDT */
 	write_string("Loading IDT\n");
 	idt_setup();
 	write_string("IDT loaded\n");
+
+	/* Enable paging */	
+	write_string("Mapping the low 4Mb of memory\n");
+	paging_init();
 	
+	/* Init IRQs */
 	write_string("Remapping IRQs\n");
-	pic_remap(32, 32+8);
+	pic_remap(IDT_IRQ_START, IDT_IRQ_START+8);
 	
 	write_string("Masking unused IRQs\n");
 	pic_disable();
 	pic_enable_line(0);
-	
+
+	/* Initializing system clock */	
 	write_string("Adding handler for IRQ0\n");
 	idt_set_irq_handler(0, irq0_handler);
 	
 	write_string("Setting PIT interval to 100hz\n");
 	pit_set_interval(100);
 
+	/* Ready to enable interrupts */
 	write_string("Enabling interrupts\n");
 	sti();
 
-
+	/* Halt */
 	write_string("Halting\n");
 	while(1)
 		_ihalt();
-
-	_halt();
 }
 

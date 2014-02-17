@@ -13,6 +13,15 @@
 	extern void _sti();
 	extern void _ihalt();
 	extern uint32_t _getflags();
+	
+	extern void _write_cr0(uint32_t);
+	extern uint32_t _read_cr0();
+	extern void _write_cr2(uint32_t);
+	extern uint32_t _read_cr2();
+	extern void _write_cr3(uint32_t);
+	extern uint32_t _read_cr3();
+	extern void _write_cr4(uint32_t);
+	extern uint32_t _read_cr4();
 
 	struct IDT_ENTRY;
 	extern void _idt_load(const struct IDT_ENTRY*, uint32_t count);

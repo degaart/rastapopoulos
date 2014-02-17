@@ -1,7 +1,7 @@
 .PHONY: boot/bootsect.bin bootldr/bootldr.bin kernel/kernel.bin
 
 run: floppy.img
-	@qemu-system-i386 -fda floppy.img -boot a
+	@qemu-system-i386 -fda floppy.img -boot a -m 16
 	
 debug: floppy.img
 	@/opt/bochs/bin/bochs -q -f bochsrc

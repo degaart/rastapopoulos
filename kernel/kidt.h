@@ -22,9 +22,12 @@
 	#define IDT_GATE_INT16			0x06
 	#define IDT_GATE_TRAP16			0x07
 	
+	#define IDT_IRQ_START	(32)
+	#define IDT_IRQ_END		(32+16)
+	
 	void idt_setup();
 	void idt_map_default_irqs();
 	void idt_set_irq_handler(int irq, IRQ_HANDLER handler);
-	
+
 #endif //_KIDT_H_
 
