@@ -2,7 +2,7 @@
 #include "kmalloc.h"
 #include "kutil.h"
 
-void* kmalloc_a(unsigned size, unsigned alignment) {
+void* kmalloc_seg_a(unsigned size, unsigned alignment) {
 	static void* mem_start = (void*)0xFFFFFFFF;
 	if(mem_start == (void*)0xFFFFFFFF)
 		mem_start = kernel_end;
@@ -18,8 +18,9 @@ void* kmalloc_a(unsigned size, unsigned alignment) {
 /*
 	Very simple kernel allocator, does not permit
 	freeing of the allocated memory
+	Should only be used when paging disabled
 */
-void* kmalloc(unsigned el_count, unsigned el_size) {
-	return(kmalloc_a(el_count*el_size, el_size));
+void* kmalloc_seg(unsigned el_count, unsigned el_size) {
+	return(kmalloc_seg_a(el_count*el_size, el_size));
 }
 

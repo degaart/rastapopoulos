@@ -55,7 +55,7 @@
 #define CR4_PMC_ENABLE			(1<<8)
 
 void paging_init() {
-	uint32_t* page_table = (uint32_t*)kmalloc_a(1024*sizeof(uint32_t), 4096);
+	uint32_t* page_table = (uint32_t*)kmalloc_seg_a(1024*sizeof(uint32_t), 4096);
 
 	/* Map first 4Mb for kernel */
 	uint32_t page_start = 0;
@@ -71,7 +71,7 @@ void paging_init() {
 			_halt();*/
 	}
 	
-	uint32_t* page_directory = (uint32_t*)kmalloc(1024*sizeof(uint32_t), 4096);
+	uint32_t* page_directory = (uint32_t*)kmalloc_seg(1024*sizeof(uint32_t), 4096);
 	bzero(page_directory, 1024*sizeof(uint32_t));
 	page_directory[0] = 
 		PAGE_DIR_PRESENT|

@@ -283,6 +283,45 @@ _enter_pmode:
 	.gdt_desc_offset: dd 0
 	.gdt_desc_end:
 
+global _get_memmap
+_get_memmap:
+		; Get memory map using int 0x15,0xE820
+		; Parameters:
+		;	EBP+8	DWORD		Buffer address
+		;	EBP+12	DWORD		Buffer size address. Will contain actual length on exit
+		;	EBP+16	DWORD		Continuation value address. Will contain new value on exit
+		; Returns:
+		;	EAX = 0 if failure
+		;
+		push ebp
+		mov ebp, esp
+		pushad
+	
+		mov edx, 0x534D4150			; magic value
+		mov eax, [ebp+16]
+		mov ebx, [eax]				; *continuation value
+		mov eax, [ebp+12]
+		mov ecx, [eax]				; *buffer size
+		mov edi, [ebp+8]			; buffer address
+		mov eax, 0xE820				; function
+		int 0x15
+		jc .error
+		cmp eax, 0x534D4150
+		jne .error
+		
+		mov eax, [ebp+12]
+		mov [eax], ecx				; *buffer size = ecx
+		mov eax, [ebp+16]
+		mov [eax], ebx				; *continuation value
+		xor eax, eax
+	.return:
+		popad
+		pop ebp
+		ret
+	.error:
+		mov eax, 1
+		jmp short .return
+
 align 64, db 90
 entry32:
 		; 32-bit entry point

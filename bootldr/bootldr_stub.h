@@ -21,6 +21,7 @@ extern void _int13(struct REG16* regs);
 extern uint32_t _check_a20();
 extern void _enable_a20();
 extern void _memcpyl(void* dst, void* src, uint16_t siz);
+extern int _get_memmap(void* buffer, int* size, int* cont);
 
 struct GDT_ENTRY {
 	uint8_t v[8];

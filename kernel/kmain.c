@@ -14,6 +14,9 @@
 #include "kstring.h"
 #include "paging.h"
 
+uint16_t* memmap_size = (uint16_t*)0x502;
+uint32_t* memmap_start = (uint32_t*)0x508;
+
 #define ERR_COL (COLOR_LIGHT_RED|0x10)
 void panic(const char* file, int line, const char* message) {
 	write_string_attr("Kernel error at ", ERR_COL);
@@ -29,12 +32,6 @@ void irq0_handler(uint32_t irq) {
 	static uint32_t counter = 0;
 	counter++;
 	if((counter % 100)==0) {
-		if((counter % 200) == 0) {
-			/* Try to access undefined memory */
-			uint8_t* memory =(uint8_t*)(4*1024*1024);
-			breakpoint();
-			*memory = 0;
-		}
 	}
 }
 

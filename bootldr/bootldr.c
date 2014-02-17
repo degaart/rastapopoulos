@@ -22,6 +22,8 @@ uint8_t *pboot_device = (uint8_t*)0x500;
 uint16_t boot_device;
 uint8_t workmem[512];
 uint8_t* kernel_load_area = (uint8_t*)0x100000;
+uint16_t* memmap_size = (uint16_t*)0x502;
+uint32_t* memmap_start = (uint32_t*)0x508;
 
 struct GDT_ENTRY gdt[3];
 
@@ -67,8 +69,56 @@ struct GDT_ENTRY encode_gdt(uint32_t base, uint32_t limit, uint32_t type) {
     return(entry);
 }
 
+static void get_memmap() {
+	int cookie;
+	int size;
+	uint32_t* buffer;
+	int count;
+	
+	cookie = 0;
+	buffer = memmap_start;
+	count = 0;
+	while(1) {
+		for(int i=0; i<6; i++)
+			buffer[i] = 0;
+		size = 20;
+		if(!_get_memmap(buffer, &size, &cookie)) {
+			write_string("ERROR: Could not get memory map\r\n");
+			_halt();
+		}
+		if(buffer[2]) {
+			buffer += 6;
+			count++;
+		}
+		
+		if(!cookie)
+			break;
+		
+	}
+	*memmap_size = count;
+}
+
+static void dump_memmap() {
+	uint32_t* buffer = memmap_start;
+	for(int i=0; i<*memmap_size; i++) {
+		write_string("    BASE: ");
+		write_uint32(buffer[0]);
+		write_string(" LENGTH: ");
+		write_uint32(buffer[2]);
+		write_string(" TYPE: ");
+		write_uint32(buffer[4]);
+		write_string("\r\n");
+		buffer += 6;
+	}
+}
+
 void cstart() {
+	/* Store boot device */
 	boot_device = *pboot_device;
+	
+	/* Get memory map */
+	write_string("Getting memory map\r\n");
+	get_memmap();
 	
 	/* Check and enable A20 gate */
 	write_string("Checking A20 gate\r\n");
@@ -140,7 +190,5 @@ void cstart() {
 	_enter_pmode(gdt, sizeof(gdt)/sizeof(*gdt), kernel_load_area);
 	_halt();
 }
-
-
 
 
