@@ -32,7 +32,12 @@
 	void write_string(const char* str);
 	void clear_screen();
 	void term_init();
-
+	
+	#define DUMP32(v) \
+		write_string_attr(#v ": ", COLOR_LIGHT_GREY); \
+		write_value_attr(v, COLOR_LIGHT_GREY); \
+		write_string_attr("\n", COLOR_LIGHT_GREY)
+	
 #endif //_KTERM_H_
 
 

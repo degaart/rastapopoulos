@@ -3,8 +3,13 @@
 #include "kidt.h"
 #include "kstub.h"
 #include "kterm.h"
+#include "pic.h"
 
 #define KERN_CODE_SEL 0x08
+#define IDT_IRQ_START	(32)
+#define IDT_IRQ_END		(32+16)
+
+static IRQ_HANDLER irq_handlers[16];
 
 /*
 	Generic handler for unhandled interrupts
@@ -52,13 +57,46 @@ static void unhandled_isr(uint32_t type, uint32_t code, const void* esp) {
 	_halt();
 }
 
+static void irq_isr(uint32_t type, uint32_t code, const void* esp) {
+	/* Check spurious IRQs */
+	unsigned irq = type-IDT_IRQ_START;
+	unsigned spurious = 0;
+	
+	if(irq == 7) {
+		unsigned isr = pic_get_isr();
+		if(!( isr & (1<<7) ))
+			spurious=1;
+	} else if(irq==15) {
+		unsigned isr = pic_get_isr();
+		if(!( isr & (1<<15) )) {
+			spurious=1;
+			
+			/* Send non-specific EOI to master */
+			pic_send_eoi(2);
+		}
+	}
+	if(!spurious) {
+		if(irq_handlers[irq])
+			irq_handlers[irq](irq);
+		pic_send_eoi(irq);
+	}
+}
+
 void idt_setup() {
-	struct IDT_ENTRY idt[20];
+	struct IDT_ENTRY idt[48];
 	
 	bzero(idt, sizeof(idt));
+	
+	/* Use default handler for exceptions/traps/faults */
 	for(int i=0; i<sizeof(idt)/sizeof(*idt); i++) {
 		if((i!=1) && (i!=15)) {
-			idt[i].handler = unhandled_isr;
+			if((i>=IDT_IRQ_START) && (i<=IDT_IRQ_END)) {
+				/* IRQ handler */
+				idt[i].handler = irq_isr;
+			} else {
+				/* Interrupt handler */
+				idt[i].handler = unhandled_isr;
+			}
 			idt[i].attributes =
 				IDT_ATTR_PRESENT(1)|
 				IDT_ATTR_PRIVILEGE(0)|
@@ -67,6 +105,15 @@ void idt_setup() {
 			idt[i].selector = KERN_CODE_SEL;
 		}
 	}
-	
+
+	/* Load IDT */
 	_idt_load(idt, sizeof(idt)/sizeof(*idt));
 }
+
+void idt_set_irq_handler(int irq, IRQ_HANDLER handler) {
+	if(_getflags() & EFLAGS_IF)
+		PANIC("Attempted to set an IRQ handler while interrupts enabled");
+	irq_handlers[irq] = handler;
+}
+
+

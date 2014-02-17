@@ -33,6 +33,15 @@ _halt:
 		cli
 		hlt
 		jmp _halt
+
+;
+; Halt processor (does not disable interrupts)
+; may return to calling code
+;
+global _ihalt
+_ihalt:
+		hlt
+		ret
 	
 ; emit byte at port
 global _outb
@@ -58,18 +67,6 @@ _inb:
 global _breakpoint
 _breakpoint:
 		breakpoint
-		ret
-
-; Attempt to delay using some tricks
-global _delay
-_delay:
-		mov ecx, 0x1FFFFF
-	.loop:
-		mov word [esp+4], 0x3D5
-		call _inb
-		dec ecx
-		cmp ecx,0
-		jne .loop
 		ret
 
 ;
@@ -114,7 +111,6 @@ _idt_load:
 		dec ecx
 		jmp .move_entries
 	.load_idt:
-		breakpoint
 		mov ebx, .idt						; IDT entry base
 		mov esi, [ebp+8]					; entries
 		mov edx, [ebp+12]					; count
@@ -195,6 +191,13 @@ _cli:
 		cli
 		ret
 
-
+;
+; get flags register
+;
+global _getflags
+_getflags:
+		pushf
+		pop eax
+		ret
 
 

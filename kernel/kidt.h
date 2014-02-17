@@ -2,6 +2,8 @@
 #define _KIDT_H_
 	
 	typedef void (*ISR_PROC)(uint32_t, uint32_t, const void* esp);
+	typedef void (*IRQ_HANDLER)(uint32_t);
+
 	struct IDT_ENTRY {
 		ISR_PROC handler;
 		uint16_t attributes;
@@ -21,6 +23,8 @@
 	#define IDT_GATE_TRAP16			0x07
 	
 	void idt_setup();
+	void idt_map_default_irqs();
+	void idt_set_irq_handler(int irq, IRQ_HANDLER handler);
 	
 #endif //_KIDT_H_
 

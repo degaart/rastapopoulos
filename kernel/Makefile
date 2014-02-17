@@ -3,10 +3,11 @@
 kernel.bin: kstub.ao kernel.ld $(wildcard *.c) $(wildcard *.h)
 	@./makeobjects.sh
 	@echo "[LD] kernel.bin"
-	@i586-elf-gcc \
+	@i586-elf-ld\
 		-T kernel.ld -o kernel.bin \
 		-nostdlib \
 		-static \
+		-Map kernel.map \
 		kstub.ao *.o
 
 kstub.ao: kstub.asm isr_stub.inc
@@ -15,6 +16,4 @@ kstub.ao: kstub.asm isr_stub.inc
 
 clean:
 	@rm -vf *.ao *.o *.bin *.tmp *.s *.elf
-
-
 

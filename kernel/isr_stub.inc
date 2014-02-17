@@ -13,7 +13,6 @@
 %macro __isr_thunk 1
 align 4
 __isr_thunk_%1:
-		;breakpoint
 		push ebp
 		mov ebp, esp
 		pusha
