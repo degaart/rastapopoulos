@@ -9,6 +9,7 @@
 #include "kidt.h"
 #include "kstub.h"
 #include "pic.h"
+#include "pit.h"
 
 #define ERR_COL (COLOR_LIGHT_RED|0x10)
 
@@ -23,7 +24,11 @@ void panic(const char* file, int line, const char* message) {
 }
 
 void irq0_handler(uint32_t irq) {
-	DUMP32(irq);
+	static uint32_t counter = 0;
+	counter++;
+	if((counter % 100)==0) {
+		DUMP32(counter);
+	}
 }
 
 void kmain() {
@@ -45,6 +50,9 @@ void kmain() {
 	
 	write_string("Adding handler for IRQ0\n");
 	idt_set_irq_handler(0, irq0_handler);
+	
+	write_string("Setting PIT interval to 100hz\n");
+	pit_set_interval(100);
 
 	write_string("Enabling interrupts\n");
 	sti();
@@ -54,12 +62,4 @@ halte:
 
 	_halt();
 }
-
-#if 0
-	/* Program the PIT */
-	int divisor = 1193180 / 100;       /* Calculate our divisor */
-    _outb(0x43, 0x36);             /* Set our command byte 0x36 */
-    _outb(0x40, divisor & 0xFF);   /* Set low byte of divisor */
-    _outb(0x40, divisor >> 8);     /* Set high byte of divisor */
-#endif
 
