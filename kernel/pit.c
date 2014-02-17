@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include "kterm.h"
-#include "kstub.h"
 #include "ports.h"
+#include "kutil.h"
 
 #define PIT_CHANNEL0			(0x0<<6)
 #define PIT_CHANNEL1			(0x1<<6)

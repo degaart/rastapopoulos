@@ -24,6 +24,18 @@ _kstart:
 		mov gs, ax
 		mov esp, 0x7FFFF			; 492031 bytes of stack (480kb)
 
+		; zero bss section of kernel memory
+		extern _bss_start
+		extern _kernel_end
+		mov esi, _bss_start
+	.init_bss:
+		mov dword [esi], 0
+		add esi, 4
+		cmp esi, _kernel_end
+		jb .init_bss
+		
+
+		; call kernel entry point
 		call kmain
 		jmp _halt
 

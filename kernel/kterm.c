@@ -2,8 +2,8 @@
 	VGA Terminal output functions
 */
 #include <stdint.h>
+#include "kutil.h"
 #include "kterm.h"
-#include "kstub.h"
 #include "kstring.h"
 
 /* Utility macros *********************************************************/

@@ -1,8 +1,9 @@
 #include <stdint.h>
-#include "kstub.h"
+#include "kutil.h"
 #include "ports.h"
 #include "pic.h"
 #include "kterm.h"
+
 
 #define ICW1_ICW4			0x01		/* ICW4 (not) needed */
 #define ICW1_SINGLE			0x02		/* Single (cascade) mode */

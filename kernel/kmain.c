@@ -5,11 +5,22 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "kutil.h"
 #include "kterm.h"
 #include "kidt.h"
 #include "kstub.h"
 #include "pic.h"
 #include "pit.h"
+
+
+/*
+	Using some linker magic (cf kernel.ld), this variable
+	lies on the end of the bss section, i.e.
+	on the end of the kernel
+	Taking it's address brings us the physical address of the
+	end of the kernel
+*/
+extern uint32_t _kernel_end;
 
 #define ERR_COL (COLOR_LIGHT_RED|0x10)
 
@@ -27,13 +38,27 @@ void irq0_handler(uint32_t irq) {
 	static uint32_t counter = 0;
 	counter++;
 	if((counter % 100)==0) {
-		DUMP32(counter);
+		//DUMP32(counter);
 	}
 }
 
 void kmain() {
-	//_sti();
 	term_init();
+	
+	/*
+		HACKHACKHACK
+		It seems sometimes the bss segment isn't
+		correctly initilized when using binary format output
+		We check for this condition here and bail out if needed
+	*/
+	static int __test_initialized = 0;
+	if(__test_initialized)
+		PANIC("Well, it seems the bss section of the kernel is not initialized");
+		
+	/* Get end of kernel memory */
+	kernel_end = ALIGN(&kernel_end, 4096);
+
+	/* Continue normal flow */
 	write_string_attr("RastapopoulOS", COLOR_CYAN);
 	write_string_attr(" started\n", COLOR_LIGHT_GREY);
 
@@ -56,9 +81,11 @@ void kmain() {
 
 	write_string("Enabling interrupts\n");
 	sti();
-halte:
-	_ihalt();
-	goto halte;
+
+
+	write_string("Halting\n");
+	while(1)
+		_ihalt();
 
 	_halt();
 }

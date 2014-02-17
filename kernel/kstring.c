@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "kutil.h"
 #include "kstring.h"
 
 /* Copy memory byte by byte, forward direction (so no overlapping possible) */

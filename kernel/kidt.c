@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include "kstring.h"
 #include "kidt.h"
-#include "kstub.h"
+#include "kutil.h"
 #include "kterm.h"
 #include "pic.h"
 
