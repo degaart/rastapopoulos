@@ -13,9 +13,7 @@
 #include "pit.h"
 #include "kstring.h"
 #include "paging.h"
-
-uint16_t* memmap_size = (uint16_t*)0x502;
-uint32_t* memmap_start = (uint32_t*)0x508;
+#include "kmalloc.h"
 
 #define ERR_COL (COLOR_LIGHT_RED|0x10)
 void panic(const char* file, int line, const char* message) {
@@ -31,8 +29,8 @@ void panic(const char* file, int line, const char* message) {
 void irq0_handler(uint32_t irq) {
 	static uint32_t counter = 0;
 	counter++;
-	if((counter % 100)==0) {
-	}
+	/*if((counter % 100)==0) {
+	}*/
 }
 
 /*
@@ -71,6 +69,10 @@ void kmain() {
 	/* Enable paging */	
 	write_string("Mapping the low 4Mb of memory\n");
 	paging_init();
+	
+	/* Dump memory map */
+	//kmalloc_dump_memmap();
+	kmalloc_init();
 	
 	/* Init IRQs */
 	write_string("Remapping IRQs\n");

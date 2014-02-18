@@ -65,13 +65,9 @@ void paging_init() {
 			PAGE_ENTRY_SUPERVISOR|
 			PAGE_DIR_BASE(page_start);
 		page_start += 4096;
-		/*DUMP32(page_table[i]);
-		
-		if(i==16)
-			_halt();*/
 	}
 	
-	uint32_t* page_directory = (uint32_t*)kmalloc_seg(1024*sizeof(uint32_t), 4096);
+	uint32_t* page_directory = (uint32_t*)kmalloc_seg_a(1024*sizeof(uint32_t), 4096);
 	bzero(page_directory, 1024*sizeof(uint32_t));
 	page_directory[0] = 
 		PAGE_DIR_PRESENT|
@@ -79,7 +75,27 @@ void paging_init() {
 		PAGE_DIR_SUPERVISOR|
 		PAGE_DIR_SIZE4K|
 		PAGE_DIR_BASE(page_table);
+	
+	/* Seems we need 8Mb after all */
+	/*page_table = (uint32_t*)kmalloc_seg_a(1024*sizeof(uint32_t), 4096);
+	for(int i=0; i<1024; i++) {
+		page_table[i] = 
+			PAGE_ENTRY_PRESENT|
+			PAGE_ENTRY_SUPERVISOR|
+			PAGE_DIR_BASE(page_start);
+		page_start += 4096;
+	}
+	page_directory[1] =
+		PAGE_DIR_PRESENT|
+		PAGE_DIR_RDWRITE|
+		PAGE_DIR_SUPERVISOR|
+		PAGE_DIR_SIZE4K|
+		PAGE_DIR_BASE(page_table);*/
+		
 	_write_cr3((uint32_t)page_directory);
 	_write_cr0(_read_cr0() | CR0_PAGING);
 	//_halt();
 }
+
+
+

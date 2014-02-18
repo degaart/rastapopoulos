@@ -97,6 +97,9 @@ static void page_fault_isr(uint32_t type, uint32_t code, const void* address) {
 		write_string_attr("Reserved bits violation: NO\n", ERR_COL);
 	else
 		write_string_attr("Reserved bits violation: YES\n", ERR_COL);
+	
+	if(!PAGE_FAULT_USERMODE(code))
+		_halt();
 }
 
 static void irq_isr(uint32_t type, uint32_t code, const void* esp) {

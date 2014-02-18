@@ -13,6 +13,7 @@
 	
 	void panic(const char* file, int line, const char* message);
 	#define PANIC(msg) panic(__FILE__, __LINE__, msg);
+	#define ASSERT(cond) if(!(cond)) { PANIC("Assertion failure: " #cond); }
 	
 	void iowait();
 	
