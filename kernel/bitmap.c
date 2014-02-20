@@ -1,5 +1,7 @@
 #include <stdint.h>
 #include "kutil.h"
+#include "kterm.h"
+#include "kstring.h"
 #include "bitmap.h"
 
 /*
@@ -21,7 +23,18 @@ void bitmap_set(struct BITMAP* bitmap, unsigned index, unsigned value) {
  index: index of the bit
  */
 unsigned bitmap_get(const struct BITMAP* bitmap, unsigned index) {
+	if(index >= bitmap->bitcount) {
+		write_string("index >= bitmap->bitcount ");
+		DUMP32(index);
+		DUMP32(bitmap->bitcount);
+	}
     ASSERT(index < bitmap->bitcount);
+
+	if((index/32) >= bitmap->elcount) {
+		write_string("(index/32) >= bitmap->elcount ");
+		DUMP32(index/32);
+		DUMP32(bitmap->elcount);
+	}    
     ASSERT((index / 32) < bitmap->elcount);
     
     unsigned ret = bitmap->data[index / 32] & (1 << (index % 32));    /* TODO: Remove right shift */
@@ -53,7 +66,7 @@ unsigned bitmap_find_free(const struct BITMAP* bitmap) {
 	return(UINT32_MAX);
 }
 
-unsigned bitmap_contiguous(const struct BITMAP* bitmap, unsigned start_bit, unsigned region_size) {
+static unsigned bitmap_contiguous(const struct BITMAP* bitmap, unsigned start_bit, unsigned region_size) {
     unsigned contiguous = 1;
     for(unsigned bit = start_bit; bit < start_bit+region_size; bit++) {
         if(bitmap_get(bitmap, bit)) {
@@ -90,25 +103,33 @@ unsigned bitmap_find_free_region(const struct BITMAP* bitmap, unsigned region_si
 /*
     Size: bitmap element count
  */
-void bitmap_dump(const struct BITMAP* bitmap) {
-    for(size_t i=0; i<bitmap->elcount; i++) {
+static void bitmap_dump(const struct BITMAP* bitmap) {
+#ifdef __APPLE__
+    for(unsigned i=0; i<bitmap->elcount; i++) {
         printf("%08X ", bitmap->data[i]);
     }
     printf("\n");
+#endif
 }
 
-void bitmap_dump_bits(const struct BITMAP* bitmap, size_t size) {
+static void bitmap_dump_bits(const struct BITMAP* bitmap, unsigned size) {
+#ifdef __APPLE__
     for(size_t i=0; i<size*32; i++) {
         printf("%c", bitmap_get(bitmap, i)?'1':'0');
     }
     printf("\n");
+#endif
 }
 
+/*
+	Get size of memory in bytes required to
+	store a bitmap containaing the specified number of bits
+*/
 uint32_t bitmap_get_storage_size(uint32_t bitcount) {
-    if(bitcount % 8 == 0)
-        return( bitcount / 8 );
+    if(bitcount % 32 == 0)
+        return( (bitcount / 32) * 4 );
     else
-        return( (bitcount / 8) + 1 );
+        return( ((bitcount / 32) + 1) * 4 );
 }
 
 void bitmap_init(struct BITMAP* bitmap, uint32_t bitcount, void* storage) {
@@ -116,6 +137,8 @@ void bitmap_init(struct BITMAP* bitmap, uint32_t bitcount, void* storage) {
     bitmap->data = storage;
     bitmap->size_bytes = bitmap_get_storage_size(bitcount);
     bitmap->elcount = bitmap->size_bytes/4;
-    memset(bitmap->data, 0, bitmap->size_bytes);
+    bzero(bitmap->data, bitmap->size_bytes);
+    
+    ASSERT(bitmap->elcount*32 > bitmap->bitcount);
 }
 

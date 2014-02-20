@@ -12,8 +12,9 @@
 #include "pic.h"
 #include "pit.h"
 #include "kstring.h"
-#include "paging.h"
 #include "kmalloc.h"
+#include "pmm.h"
+#include "vmm.h"
 
 #define ERR_COL (COLOR_LIGHT_RED|0x10)
 void panic(const char* file, int line, const char* message) {
@@ -66,13 +67,9 @@ void kmain() {
 	idt_setup();
 	write_string("IDT loaded\n");
 
-	/* Enable paging */	
-	write_string("Mapping the low 4Mb of memory\n");
-	paging_init();
-	
-	/* Dump memory map */
-	//kmalloc_dump_memmap();
-	kmalloc_init();
+	/* Initialize VMM*/	
+	write_string("Initializing VMM\n");
+	vmm_init();
 	
 	/* Init IRQs */
 	write_string("Remapping IRQs\n");

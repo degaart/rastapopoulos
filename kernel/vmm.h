@@ -1,5 +1,5 @@
-#ifndef _PAGING_H_
-#define _PAGING_H_
+#ifndef _VMM_H_
+#define _VMM_H_
 
 	#define PAGE_DIR_PRESENT		0x1
 	#define PAGE_DIR_RDONLY			0x0
@@ -12,12 +12,16 @@
 	#define PAGE_DIR_SIZE4K			0x0
 	#define PAGE_DIR_SIZE4M			(0x1<<7)
 	#define PAGE_DIR_GLOBAL			(0x1<<8)
-	#define PAGE_DIR_DATA(x)		(((x) & 0x7) << 9)
-	#define PAGE_DIR_BASE(x)		( ( (uint32_t) x ) & 0xFFFFF000 )
+	#define PAGE_DIR_BASE(x)		( ( (uint32_t) (x) ) & 0xFFFFF000 )
 	#define PAGE_DIR_DATA2(x)		((x) >> 1)				/* Only available if PAGE_DIR_PRESENT not set */
+	#define PAGE_DIR_PAGETABLE(x)	( ( (uint32_t) (x) ) & 0xFFFFF000 )
+	#define PAGE_DIR_PAGETABLE_MASK 0xFFFFF000
+	
+	
 	
 	#define PAGE_ENTRY_PRESENT		PAGE_DIR_PRESENT
 	#define PAGE_ENTRY_RDONLY		PAGE_DIR_RDONLY
+	#define PAGE_ENTRY_RDWRITE		PAGE_DIR_RDWRITE
 	#define PAGE_ENTRY_USER			PAGE_DIR_USER
 	#define PAGE_ENTRY_SUPERVISOR	PAGE_DIR_SUPERVISOR
 	#define PAGE_ENTRY_WRTHROUGH	PAGE_DIR_WRTHROUGH
@@ -26,7 +30,8 @@
 	#define PAGE_ENTRY_DIRTY		(0x1<<6)
 	#define PAGE_ENTRY_GLOBAL		PAGE_DIR_GLOBAL
 	#define PAGE_ENTRY_DATA(x)		PAGE_DIR_DATA(x)
-	#define PAGE_ENTRY_BASE(x)		PAGE_DIR_BASE(x)
+	#define PAGE_ENTRY_BASE(x)		( ( (uint32_t) (x) ) & 0xFFFFF000 )
+	#define PAGE_ENTRY_BASE_MASK	0xFFFFF000
 	#define PAGE_ENTRY_DATA2(x)		PAGE_DIR_DATA2(x)
 	
 	#define CR0_PAGING				(1<<31)
@@ -51,7 +56,8 @@
 	#define CR4_PAGE_GLOBAL_ENABLE	(1<<7)
 	#define CR4_PMC_ENABLE			(1<<8)
 
-	void paging_init();
+	void vmm_init();
+	void vmm_map(uint32_t linear_address, uint32_t physical_address, uint32_t flags);
+	void vmm_flush();
 
-#endif //_PAGING_H_
-
+#endif //_VMM_H_

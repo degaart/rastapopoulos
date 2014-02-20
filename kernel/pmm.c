@@ -5,8 +5,7 @@
 #include "kutil.h"
 #include "kstring.h"
 #include "pmm.h"
-
-struct BITMAP physical_memory_map;
+#include "kterm.h"
 
 #define BIOS_MEMMAP_TYPE_FREE 			1
 #define BIOS_MEMMAP_TYPE_RESERVED 		2
@@ -26,9 +25,7 @@ struct MEM_REGION {
 	uint32_t base;
 	struct BITMAP* bitmap;
     struct MEM_REGION* next;
-#ifdef DEBUG
     uint32_t size;
-#endif
 } __attribute__((packed));
 
 LL_DECLARE(MEM_REGIONS, struct MEM_REGION);
@@ -51,14 +48,14 @@ void pmm_init() {
             struct MEM_REGION* region = (struct MEM_REGION*)kmalloc_seg(1, sizeof(struct MEM_REGION));
             region->base = (bios_memmap[i].base & UINT32_MAX);
             
-            uint32_t true_size = bios_memmap[i].size & UINT32_MAX;
+            uint32_t true_size = ((bios_memmap[i].size & UINT32_MAX)/4096)*4096; /* Makes us oblivious to memory < PAGE_SIZE at the end of the block */
+            ASSERT(true_size != 0);
+            
             uint32_t bitmap_size = bitmap_get_storage_size(true_size/4096);
             struct BITMAP* region_bitmap = (struct BITMAP*)kmalloc_seg(1, sizeof(struct BITMAP));
             bitmap_init(region_bitmap, true_size/4096, kmalloc_seg(bitmap_size, 1));
             region->bitmap = region_bitmap;
-#ifdef DEBUG
             region->size = true_size;
-#endif
             
             MEM_REGIONS_append(&mem_regions, region);
 		}
@@ -83,7 +80,7 @@ uint32_t pmm_alloc_page() {
             
             bitmap_set(region->bitmap, location, 1);
             uint32_t result = region->base+(location*4096);
-            
+
             ASSERT(result < (region->base+region->size));
             return(result);
         }
@@ -159,11 +156,67 @@ void pmm_free_range(uint32_t location, uint32_t range) {
 uint32_t pmm_get_free() {
     uint32_t free_memory = 0;
     for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
-        for(unsigned page=0; page<region->bitmap->bitcount; page++) {
+        for(unsigned page=0; page < region->bitmap->bitcount; page++) {
             if(!bitmap_get(region->bitmap, page))
                 free_memory += 4096;
         }
     }
     return(free_memory);
+}
+
+/*
+	Dump memory map given to us by bootloader
+*/
+void pmm_dump_bios_memmap() {
+	struct BIOS_MEMMAP_ENTRY* entry = bios_memmap;
+	for(int i=0; i<*bios_memmap_size; i++) {
+		write_string("    BASE: ");
+		write_uint32(entry->base);
+		write_string(" LENGTH: ");
+		write_uint32(entry->size);
+		write_string(" TYPE: ");
+		write_uint32(entry->type);
+		write_string("\n");
+		entry++;
+	}
+}
+
+void pmm_dump_mem_regions() {
+	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
+		write_string("    ");
+		write_uint32(region->base);
+		write_string(" - ");
+		write_uint32(region->base+region->size);
+		write_string("\n");
+	}
+}
+
+/*
+	Check if the page at specified location is usable
+*/
+uint32_t pmm_page_usable(uint32_t location) {
+	ASSERT((location % 4096) == 0);
+	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
+		if((location >= region->base) && (location < region->base + region->size)) {
+			return(!bitmap_get(region->bitmap, (location - region->base)/4096));
+		}
+	}
+	return(0);
+}
+
+/*
+	Reserve the page at specified location
+*/
+void pmm_reserve(uint32_t location) {
+	if(!pmm_page_usable(location))
+		PANIC("Trying to reserve an unusable page\n");
+    
+	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
+		if((location >= region->base) && (location < region->base + region->size)) {
+			if(bitmap_get(region->bitmap, (location - region->base)/4096))
+				PANIC("Trying to reserve an already allocated page\n");
+			bitmap_set(region->bitmap, (location - region->base)/4096, 1);
+		}
+	}
 }
 
