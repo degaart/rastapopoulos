@@ -11,5 +11,9 @@
 	void pmm_dump_mem_regions();
 	uint32_t pmm_page_usable(uint32_t location);
 	void pmm_reserve(uint32_t location);
+	void pmm_add_region(uint32_t base, uint32_t size, uint32_t type);
+	
+	#define REGION_FREE						1
+	#define REGION_RESERVED					2
 
 #endif //_PMM_H_

@@ -2,6 +2,7 @@
 	VGA Terminal output functions
 */
 #include <stdint.h>
+#include <stdarg.h>
 #include "kutil.h"
 #include "kterm.h"
 #include "kstring.h"
@@ -121,6 +122,16 @@ void write_uint32(uint32_t value) {
 	write_value_attr(value, COLOR_LIGHT_GREY);
 }
 
+void write_decimal_attr(uint32_t value, enum VGA_COLOR attr) {
+	char buffer[11];
+	itoa(buffer, value);
+	write_string_attr(buffer, attr);
+}
+
+void write_decimal(uint32_t value) {
+	write_decimal_attr(value, COLOR_LIGHT_GREY);
+}
+
 void write_string(const char* str) {
 	write_string_attr(str, COLOR_LIGHT_GREY);
 }
@@ -140,3 +151,57 @@ void clear_screen() {
 void term_init() {
 	get_cursor_pos(&cursor_x, &cursor_y);
 }
+
+/*
+	This is not even optimized a little bit
+	And that's because we don't have dynamic memory allocation
+	functions yet
+*/
+void write_format_attr_v(enum VGA_COLOR attr, const char* format, va_list args) {
+	char buffer[2];
+	
+	buffer[1] = '\0';
+	while(*format) {
+		if(*format == '%') {
+			switch(*(format+1)) {
+			case 'd':
+			case 'u':
+				write_decimal_attr(va_arg(args, uint32_t), attr);
+				break;
+			case 'x':
+			case 'X':
+				write_value_attr(va_arg(args, uint32_t), attr);
+				break;
+			case 's':
+				write_string_attr(va_arg(args, const char*), attr);
+				break;
+			default:
+				/* Don't even bother, bugs await here */
+				*buffer = *(format+1);
+				PANIC("Bad format specifier: '%s'", buffer);
+				break;
+			}
+			format++;
+		} else {
+			buffer[0] = *format;
+			write_string_attr(buffer, attr);
+		}
+		format++;
+	}
+}
+
+void write_format_attr(enum VGA_COLOR attr, const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	write_format_attr_v(attr, format, args);
+	va_end(args);
+}
+
+void write_format(const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	write_format_attr_v(COLOR_LIGHT_GREY, format, args);
+	va_end(args);
+}
+
+

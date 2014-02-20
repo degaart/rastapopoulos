@@ -16,14 +16,15 @@
 #include "pmm.h"
 #include "vmm.h"
 
-#define ERR_COL (COLOR_LIGHT_RED|0x10)
-void panic(const char* file, int line, const char* message) {
-	write_string_attr("Kernel error at ", ERR_COL);
-	write_string_attr(file, ERR_COL);
-	write_string_attr("[", ERR_COL);
-	write_value_attr(line, ERR_COL);
-	write_string_attr("]: ", ERR_COL);
-	write_string_attr(message, ERR_COL);
+void panic(const char* file, int line, const char* function, const char* message, ...) {
+	write_format_attr(PANIC_COLOR, "Kernel panic at %s[%d](%s): ", file, line, function);
+	
+	va_list args;
+	va_start(args, message);
+	write_format_attr_v(PANIC_COLOR, message, args);
+	va_end(args);
+	
+	write_format_attr(PANIC_COLOR, "\n");	/* just for the sake of it */
 	_halt();
 }
 
@@ -61,7 +62,7 @@ void kmain() {
 		
 	/* Get end of kernel memory */
 	kernel_end = ALIGN(&kernel_end, 4096);
-
+	
 	/* Load IDT */
 	write_string("Loading IDT\n");
 	idt_setup();
@@ -69,6 +70,7 @@ void kmain() {
 
 	/* Initialize VMM*/	
 	write_string("Initializing VMM\n");
+	vmm_dump_mem_regions();
 	vmm_init();
 	
 	/* Init IRQs */

@@ -137,8 +137,22 @@ void bitmap_init(struct BITMAP* bitmap, uint32_t bitcount, void* storage) {
     bitmap->data = storage;
     bitmap->size_bytes = bitmap_get_storage_size(bitcount);
     bitmap->elcount = bitmap->size_bytes/4;
-    bzero(bitmap->data, bitmap->size_bytes);
+    bitmap_clear(bitmap);
     
     ASSERT(bitmap->elcount*32 > bitmap->bitcount);
+}
+
+/*
+	Unset all the bits in the bitmap
+*/
+void bitmap_clear(struct BITMAP* bitmap) {
+	bzero(bitmap->data, bitmap->size_bytes);
+}
+
+/*
+	Set all the bits in the bitmap
+*/
+void bitmap_fill(struct BITMAP* bitmap) {
+	memset(bitmap->data, 0xFF, bitmap->size_bytes);
 }
 

@@ -19,6 +19,10 @@ static uint32_t paging_enabled = 0;
 void vmm_init() {
 	/* First we initialize the physical memory manager */
 	pmm_init();
+	pmm_dump_mem_regions();
+	
+	/* Need to add manually memory which is not marked by the bios as reserved or free */
+	pmm_add_region(VGA_PAGE, 4096, REGION_RESERVED);
 
 	/* Allocate the page directory */
 	page_directory = (uint32_t*)kmalloc_seg_a(1024*sizeof(uint32_t), 4096);
@@ -37,9 +41,9 @@ void vmm_init() {
 			vmm_map(location, location, PAGE_ENTRY_SUPERVISOR|PAGE_ENTRY_RDWRITE);
 		}
 	}
-	
+
 	/* Actually, we also need to map VGA memory at this point */
-	vmm_map(0xB8000, 0xB8000, PAGE_ENTRY_SUPERVISOR|PAGE_ENTRY_RDWRITE);
+	vmm_map(VGA_PAGE, VGA_PAGE, PAGE_ENTRY_SUPERVISOR|PAGE_ENTRY_RDWRITE);
 	
 	/* That's all, folks */
 	vmm_flush();
@@ -52,9 +56,9 @@ void vmm_init() {
 */
 void vmm_map(uint32_t linear_address, uint32_t physical_address, uint32_t flags) {
 	/* Check with PMM if this page is usable */
-	if(!pmm_page_usable(physical_address) && (physical_address!=VGA_PAGE))
-		PANIC("Trying to map an unusable page\n");
-		
+	if(!pmm_page_usable(physical_address))
+		PANIC("Trying to map an unusable page at physical address %X", physical_address);
+
 	/* K it's usable, tell PMM about it */
 	if(physical_address!=VGA_PAGE)
 		pmm_reserve(linear_address);
@@ -94,5 +98,13 @@ void vmm_map(uint32_t linear_address, uint32_t physical_address, uint32_t flags)
 
 void vmm_flush() {
 	_write_cr3((uint32_t)page_directory);
+}
+
+void vmm_dump_mem_regions() {
+	pmm_dump_mem_regions();
+}
+
+int vmm_paging_enabled() {
+	return(paging_enabled);
 }
 

@@ -59,5 +59,7 @@
 	void vmm_init();
 	void vmm_map(uint32_t linear_address, uint32_t physical_address, uint32_t flags);
 	void vmm_flush();
+	void vmm_dump_mem_regions();
+	int vmm_paging_enabled();
 
 #endif //_VMM_H_

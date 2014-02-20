@@ -13,6 +13,8 @@
 	unsigned bitmap_find_free_region(const struct BITMAP* bitmap, unsigned region_size);
 	uint32_t bitmap_get_storage_size(uint32_t bitcount);
 	void bitmap_init(struct BITMAP* bitmap, uint32_t bitcount, void* storage);
+	void bitmap_clear(struct BITMAP* bitmap);
+	void bitmap_fill(struct BITMAP* bitmap);
 
 #endif //_BITMAP_H_
 
