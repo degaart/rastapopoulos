@@ -7,7 +7,6 @@
 
 static IRQ_HANDLER irq_handlers[16];
 
-
 #define EXCEPTION_EXTERNAL			(1)
 #define EXCEPTION_IDT				(1<<1)
 #define EXCEPTION_TI				(1<<2)
@@ -78,9 +77,7 @@ static void unhandled_isr(uint32_t type, uint32_t code, const void* address) {
 #define PAGE_FAULT_USERMODE(x)				((x)&(1<<2))
 #define PAGE_FAULT_RSRV_BIT_VIOLATION_NOT(x) ((x)&(1<<3))
 static void page_fault_isr(uint32_t type, uint32_t code, const void* address) {
-	breakpoint();
 	write_string_attr("Page fault occured at linear address: ", ERR_COL);
-	breakpoint();
 	write_value_attr(_read_cr2(), ERR_COL);
 	
 	if(PAGE_FAULT_ACCESS_VIOLATION(code))

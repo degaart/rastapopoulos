@@ -61,5 +61,7 @@
 	void vmm_flush();
 	void vmm_dump_mem_regions();
 	int vmm_paging_enabled();
+	void vmm_unmap(uint32_t linear_address);
+	void* vmm_alloc_pages(uint32_t pages_count);
 
 #endif //_VMM_H_

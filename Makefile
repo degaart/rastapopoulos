@@ -4,7 +4,7 @@ run: floppy.img
 	@qemu-system-i386 -fda floppy.img -boot a -m 16
 	
 debug: floppy.img
-	@/opt/bochs/bin/bochs -q -f bochsrc
+	@/opt/bochs/bin/bochs -q -f bochsrc -rc bochs.init
 
 floppy.img: boot/bootsect.bin bootldr/bootldr.bin kernel/kernel.bin
 	@echo "[INIT] floppy.img"

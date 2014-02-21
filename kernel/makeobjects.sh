@@ -10,7 +10,7 @@ do
 		-O0 \
 		-march=i386 -mno-accumulate-outgoing-args \
 		-fno-builtin -ffreestanding -fno-inline \
-		-Wno-pointer-to-int-cast \
+		-Wall -Wno-pointer-to-int-cast -Wno-unused-function \
 		$i
 	
 done

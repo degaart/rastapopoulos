@@ -23,17 +23,17 @@ static uint16_t* bios_memmap_size = (uint16_t*)0x502;
 static struct BIOS_MEMMAP_ENTRY* bios_memmap = (struct BIOS_MEMMAP_ENTRY*)0x508;
 
 struct MEM_REGION {
+	LL_HEADER(MEM_REGION);
 	uint32_t base;
 	struct BITMAP* bitmap;
-    struct MEM_REGION* next;
     uint32_t size;
     uint32_t type;
 } __attribute__((packed));
 
-LL_DECLARE(MEM_REGIONS, struct MEM_REGION);
-LL_IMPLEMENT(MEM_REGIONS, struct MEM_REGION);
+LL_DECLARE(MEM_REGIONS, MEM_REGION);
+LL_IMPLEMENT(MEM_REGIONS, MEM_REGION);
 
-static MEM_REGIONS mem_regions;
+static struct MEM_REGIONS mem_regions;
 
 /*
  We shall store usable physical memory in a linked
@@ -126,6 +126,7 @@ void pmm_free(uint32_t location) {
 
 /*
  Allocate a contiguous region of memory
+ Param: pages: number of pages to allocate
  Returns UINT32_MAX if there's no memory left
  */
 uint32_t pmm_alloc_range(uint32_t pages) {
@@ -227,6 +228,21 @@ uint32_t pmm_page_usable(uint32_t location) {
 	return(0);
 }
 
+int pmm_page_status(uint32_t location) {
+	ASSERT((location % 4096) == 0);
+	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
+		if((location >= region->base) && (location < region->base + region->size)) {
+			if(region->type == REGION_RESERVED)
+				return(PMM_STATUS_RESERVED);
+			else if(bitmap_get(region->bitmap, (location - region->base)/4096))
+				return(PMM_STATUS_ALLOCATED);
+			else
+				return(PMM_STATUS_FREE);
+		}
+	}
+	return(PMM_STATUS_ABSENT);
+}
+
 /*
 	Reserve the page at specified location
 */
@@ -234,13 +250,13 @@ void pmm_reserve(uint32_t location) {
 	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
 		if((location >= region->base) && (location < region->base + region->size)) {
 			if(bitmap_get(region->bitmap, (location - region->base)/4096))
-				PANIC("Trying to reserve an already allocated page\n");
+				PANIC("Trying to reserve already allocated memory at physical address %X", location);
 			bitmap_set(region->bitmap, (location - region->base)/4096, 1);
 			return;
 		}
 	}
 	
-	PANIC("Trying to reserve an unknown page");
+	PANIC("Trying to reserve memory which is absent at physical address %X", location);
 }
 
 /*

@@ -15,17 +15,10 @@
 #include "kmalloc.h"
 #include "pmm.h"
 #include "vmm.h"
+#include "kmalloc.h"
 
-void panic(const char* file, int line, const char* function, const char* message, ...) {
-	write_format_attr(PANIC_COLOR, "Kernel panic at %s[%d](%s): ", file, line, function);
-	
-	va_list args;
-	va_start(args, message);
-	write_format_attr_v(PANIC_COLOR, message, args);
-	va_end(args);
-	
-	write_format_attr(PANIC_COLOR, "\n");	/* just for the sake of it */
-	_halt();
+void infinite_recurse() {
+	infinite_recurse();
 }
 
 void irq0_handler(uint32_t irq) {
@@ -43,7 +36,6 @@ void irq0_handler(uint32_t irq) {
 	end of the kernel
 */
 extern uint32_t _kernel_end;
-
 void kmain() {
 	/* Init initial kernel terminal handling */
 	term_init();
@@ -66,13 +58,16 @@ void kmain() {
 	/* Load IDT */
 	write_string("Loading IDT\n");
 	idt_setup();
-	write_string("IDT loaded\n");
 
 	/* Initialize VMM*/	
 	write_string("Initializing VMM\n");
 	vmm_dump_mem_regions();
 	vmm_init();
 	
+	/* Initialize kernel allocator */
+	write_string("Initializing kernel allocator\n");
+	kmalloc_init();
+
 	/* Init IRQs */
 	write_string("Remapping IRQs\n");
 	pic_remap(IDT_IRQ_START, IDT_IRQ_START+8);

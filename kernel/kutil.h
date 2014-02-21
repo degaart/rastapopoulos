@@ -12,7 +12,11 @@
 	#define popf() asm __volatile__("popf");
 	
 	void panic(const char* file, int line, const char* function, const char* message, ...);
-	#define PANIC(...) panic(__FILE__, __LINE__, __func__, __VA_ARGS__);
+	void trace(const char* file, int line, const char* function, const char* message, ...);
+	
+	#define PANIC(...) panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
+	#define TRACE(...) trace(__FILE__, __LINE__, __func__, __VA_ARGS__)
+	
 	#define ASSERT(cond) while(!(cond)) PANIC("Assertion failure: " #cond)
 	
 	void iowait();
@@ -35,7 +39,7 @@
 		( ( ( value ) + ( ( alignment ) - 1 ) ) & ~( ( alignment ) - 1 ) )
 
 	/* Aligns-down a value */
-	#define TRUCATE32(value, alignment) \
+	#define TRUNCATE32(value, alignment) \
 		(((value) / (alignment)) * (alignment))
 
 	#include "kstub.h"
@@ -47,6 +51,12 @@
 	
 	#define KERNEL_CODE_SEL 0x08
 	#define KERNEL_DATA_SEL 0x10
+	
+	#define __CONCAT_IMPL( x, y ) x##y
+    #define MACRO_CONCAT( x, y ) __CONCAT_IMPL( x, y )
+
+    #define STATIC_ASSERT(c) \
+        struct MACRO_CONCAT(_STATIC_ASSERT_,__COUNTER__) { int check[ (c) ? 0 : -1 ]; }
 
 #endif //_KUTIL_H_
 

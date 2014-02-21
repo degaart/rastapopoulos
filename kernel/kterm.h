@@ -44,9 +44,9 @@
 	void term_init();
 	
 	#define DUMP32(v) \
-		write_string_attr(#v ": ", COLOR_LIGHT_GREY); \
-		write_value_attr(v, COLOR_LIGHT_GREY); \
-		write_string_attr("\n", COLOR_LIGHT_GREY)
+		write_format("(%s:%u) %s: %X\n", __FILE__, __LINE__, #v, v)
+	#define DUMP_PTR(ptr) \
+		write_format("(%s:%u) %s: %X\n", __FILE__, __LINE__, #ptr, ptr)
 	
 #endif //_KTERM_H_
 

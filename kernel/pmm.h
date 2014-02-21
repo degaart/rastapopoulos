@@ -12,8 +12,14 @@
 	uint32_t pmm_page_usable(uint32_t location);
 	void pmm_reserve(uint32_t location);
 	void pmm_add_region(uint32_t base, uint32_t size, uint32_t type);
+	int pmm_page_status(uint32_t location);
 	
 	#define REGION_FREE						1
 	#define REGION_RESERVED					2
+	
+	#define PMM_STATUS_FREE			0
+	#define PMM_STATUS_ALLOCATED	1
+	#define PMM_STATUS_RESERVED		2
+	#define PMM_STATUS_ABSENT		4
 
 #endif //_PMM_H_
