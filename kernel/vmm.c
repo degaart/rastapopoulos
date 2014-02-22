@@ -104,9 +104,15 @@ void vmm_map(uint32_t linear_address, uint32_t physical_address, uint32_t flags)
 		need to allocate memory for it
 	*/
 	if(!(page_directory[directory_entry] & PAGE_DIR_PRESENT)) {
-		uint32_t* page_table = (uint32_t*)kmalloc_seg_a(1024*sizeof(uint32_t), 4); /* Page directories need not be aligned to PAGE_SIZE */
+		uint32_t* page_table = 0;
+		if(paging_enabled) {
+			page_table = (uint32_t*)pmm_alloc_range(1);
+			if(page_table == INVALID_ADDRESS)
+				PANIC("Physical memory exhaustion trying to allocate a page table");
+		} else {
+			page_table = (uint32_t*)kmalloc_seg_a(1024*sizeof(uint32_t), 4); /* Page directories need not be aligned to PAGE_SIZE */
+		}
 		bzero(page_table, 1024*sizeof(uint32_t));
-		
 		page_directory[directory_entry] = 
 					PAGE_DIR_PRESENT|
 					PAGE_DIR_RDWRITE|
@@ -193,7 +199,8 @@ static void* vmm_find_free_linear(uint32_t bytecount) {
 
 /* Allocate a range of pages, and return the resulting linear address */
 void* vmm_alloc_pages(uint32_t pages_count) {
-	/* We don't need an interrupt messing with pmm */
+	TRACE("Requesting %u pages (%u bytes)", pages_count, pages_count*PAGE_SIZE);
+	
 	pushf();
 	cli();
 	
@@ -217,6 +224,7 @@ void* vmm_alloc_pages(uint32_t pages_count) {
 
 	/* Reenable interrupts */	
 	popf();
+	TRACE("Allocated: %X - %X (%u bytes)", physical_address, physical_address+(pages_count*4096), pages_count*4096);
 	return(linear_address);
 }
 

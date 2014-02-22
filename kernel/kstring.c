@@ -50,19 +50,29 @@ unsigned atoi(const char* str) {
 
 /* This one, we're gonna need to code it ourselves */
 void itoa(char* str, uint32_t n) {
+	if(!n) {
+        *str = '0';
+        *(str+1) = '\0';
+        return;
+    }
+    
 	char* out = str;
+    int leading_zeros = 1;
+    static const int divisors[] = {
+        1, 10, 100, 1000, 10000, 100000, 1000000,
+        10000000, 100000000, 1000000000
+    };
 	for(int32_t digit=9; digit>=0; digit--) {
-		/* poor man's exponentiation */
-		uint32_t divisor=1;
-		for(uint32_t i=0; i<digit; i++)
-			divisor *= 10;
+		uint32_t divisor=divisors[digit];
         
 		ASSERT(divisor != 0);
 		uint32_t val = n/divisor;
 		ASSERT(val < 10);
-        if(val)
+        if(!leading_zeros || val) {
+            leading_zeros = 0;
             *(out++) = '0'+val;
-		n %= divisor;
+        }
+        n %= divisor;
 	}
 	*out = '\0';
 }

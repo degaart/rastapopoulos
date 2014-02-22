@@ -42,16 +42,20 @@ void kmain() {
 	write_string_attr("RastapopoulOS", COLOR_CYAN);
 	write_string_attr(" started\n", COLOR_LIGHT_GREY);
 	
-	/*
-		HACKHACKHACK
-		It seems sometimes the bss segment isn't
-		correctly initilized when using binary format output
-		We check for this condition here and bail out if needed
-	*/
-	static int __test_initialized = 0;
-	if(__test_initialized)
-		PANIC("Well, it seems the bss section of the kernel is not initialized");
-		
+	/* Test ALIGN32  14690 */
+	char buffer[11];
+	itoa(buffer, 14690);
+	write_string(buffer);
+	
+/* 
+	DUMP32D(ALIGN32(4096, 4096));
+	DUMP32D(ALIGN32(4097, 4096));
+	DUMP32D(ALIGN32(14686, 4096));
+*/
+	_halt();
+
+
+
 	/* Get end of kernel memory */
 	kernel_end = ALIGN(&kernel_end, 4096);
 	
@@ -67,6 +71,14 @@ void kmain() {
 	/* Initialize kernel allocator */
 	write_string("Initializing kernel allocator\n");
 	kmalloc_init();
+	
+	void* memory[10];
+	const int chunk_size = (14*1024*1024)/10;
+	for(int i=0; i<1; i++) {
+		memory[i] = kmalloc(chunk_size);
+	}
+	write_format("Free memory: %u Kb\n", pmm_get_free()/1024);
+	_halt();
 
 	/* Init IRQs */
 	write_string("Remapping IRQs\n");

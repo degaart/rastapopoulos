@@ -47,6 +47,8 @@
 		write_format("(%s:%u) %s: %X\n", __FILE__, __LINE__, #v, v)
 	#define DUMP_PTR(ptr) \
 		write_format("(%s:%u) %s: %X\n", __FILE__, __LINE__, #ptr, ptr)
+	#define DUMP32D(v) \
+		write_format("(%s:%u) %s: %u\n", __FILE__, __LINE__, #v, v)
 	
 #endif //_KTERM_H_
 

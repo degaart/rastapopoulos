@@ -31,6 +31,12 @@ static void kmalloc_remove_block(struct FREE_BLOCK* block) {
 	FREE_BLOCKS_remove(&free_blocks, block);
 }
 
+static void kmalloc_dump() {
+	for(struct FREE_BLOCK* block=free_blocks.first; block; block=block->next) {
+		write_format("    %X - %X (%u bytes)\n", block->base, block->base+block->size, block->size);
+	}	
+}
+
 void kmalloc_init() {
 	heap_extent = (uint32_t)kmalloc_seg_get_start();
 	FREE_BLOCKS_init(&free_blocks);
@@ -49,8 +55,14 @@ void kmalloc_init() {
 	Allocate memory of the given size
 */
 void* kmalloc(uint32_t size) {
+	TRACE("Requesting %u bytes", size);
+
 	/* adjust size for header */
+	DUMP32D(size);
+	DUMP32D(size+4);
+	DUMP32D(14686+4);
 	size += 4;
+	DUMP32D(size);
 	
 	/* Find fitting free block */
 	struct FREE_BLOCK* block = 0;
@@ -64,6 +76,9 @@ void* kmalloc(uint32_t size) {
 		VMM for more memory
 	*/
 	if(!block) {
+		DUMP32D(size);
+		DUMP32D(ALIGN32(size, 4096));
+		DUMP32D(ALIGN32(size, 4096)/4096);
 		block = kmalloc_register_block(
 			vmm_alloc_pages(ALIGN32(size, 4096)/4096),
 			ALIGN32(size,4096)
@@ -82,6 +97,8 @@ void* kmalloc(uint32_t size) {
 	
 	/* Push size of block into the header */
 	*((uint32_t*)location) = size;
+	
+	kmalloc_dump();
 	return(location);
 }
 
