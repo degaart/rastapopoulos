@@ -206,15 +206,16 @@ void* vmm_alloc_pages(uint32_t pages_count) {
 
 	pushf();
 	cli();
-
-	void* physical_address = (void*)pmm_alloc_range(pages_count);
-	if(physical_address == INVALID_ADDRESS)
-		PANIC("Physical memory exhaustion");
-		
+	
 	void* linear_address = vmm_find_free_linear(pages_count*PAGE_SIZE);
 	if(linear_address == INVALID_ADDRESS)
 		PANIC("Linear address exhaustion");
 	TRACE("Free linear address found at: %X", linear_address);
+
+	/* Only the linear address needs to be contiguous */
+	void* physical_address = (void*)pmm_alloc_range(pages_count);
+	if(physical_address == INVALID_ADDRESS)
+		PANIC("Physical memory exhaustion");
 
 	vmm_map(
 		(uint32_t)linear_address,
