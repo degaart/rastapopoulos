@@ -15,7 +15,7 @@ static IRQ_HANDLER irq_handlers[16];
 	Generic handler for unhandled interrupts
 */
 #define _DEF_NAME(num, nam) case num: int_name=nam; break
-#define ERR_COL (COLOR_LIGHT_RED|0x10)
+#define ERR_COL PANIC_COLOR
 static void unhandled_isr(uint32_t type, uint32_t code, const void* address) {
 	const char* int_name;
 	switch(type) {
@@ -77,28 +77,16 @@ static void unhandled_isr(uint32_t type, uint32_t code, const void* address) {
 #define PAGE_FAULT_USERMODE(x)				((x)&(1<<2))
 #define PAGE_FAULT_RSRV_BIT_VIOLATION_NOT(x) ((x)&(1<<3))
 static void page_fault_isr(uint32_t type, uint32_t code, const void* address) {
-	write_string_attr("Page fault occured at linear address: ", ERR_COL);
-	write_value_attr(_read_cr2(), ERR_COL);
-	
-	if(PAGE_FAULT_ACCESS_VIOLATION(code))
-		write_string_attr("\nType: ACCESS_VIOLATION\n", ERR_COL);
-	else
-		write_string_attr("\nType: NONPRESENT_PAGE\n", ERR_COL);
-	if(PAGE_FAULT_WRITE(code))
-		write_string_attr("Access type: WRITE\n", ERR_COL);
-	else
-		write_string_attr("Access type: READ\n", ERR_COL);
-	if(PAGE_FAULT_USERMODE(code))
-		write_string_attr("Source type: USERMODE\n", ERR_COL);
-	else
-		write_string_attr("Source type; SUPERVISOR_MODE\n", ERR_COL);
-	if(PAGE_FAULT_RSRV_BIT_VIOLATION_NOT(code))
-		write_string_attr("Reserved bits violation: NO\n", ERR_COL);
-	else
-		write_string_attr("Reserved bits violation: YES\n", ERR_COL);
-	
-	if(!PAGE_FAULT_USERMODE(code))
-		_halt();
+	write_format_attr(
+		PANIC_COLOR,
+		"Page fault: { CR2: %X, address: %X, type: %s, access: %s, source: %s }\n",
+		_read_cr2(),
+		address,
+		PAGE_FAULT_ACCESS_VIOLATION(code)?"ACCESS_VIOLATION":"UNMAPPED_ADDRESS",
+		PAGE_FAULT_WRITE(code)?"WRITE":"READ",
+		PAGE_FAULT_USERMODE(code)?"USERMODE":"SUPERVISOR_MODE"
+	);
+	_halt();
 }
 
 static void irq_isr(uint32_t type, uint32_t code, const void* esp) {

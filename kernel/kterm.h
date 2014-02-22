@@ -43,6 +43,11 @@
 	void clear_screen();
 	void term_init();
 	
+	void write_debug(const char* format, ...);
+	void write_debug_v(const char* format, va_list args);
+	void write_debug_string(const char* str);
+	void write_debug_char(int ch);
+	
 	#define DUMP32(v) \
 		write_format("(%s:%u) %s: %X\n", __FILE__, __LINE__, #v, v)
 	#define DUMP_PTR(ptr) \

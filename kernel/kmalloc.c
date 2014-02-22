@@ -17,13 +17,21 @@ LL_IMPLEMENT(FREE_BLOCKS, FREE_BLOCK);
 struct FREE_BLOCKS free_blocks;		/* List of free blocks */
 static uint32_t heap_extent;		/* First byte of unusable memory */
 
+static void FREE_BLOCKS_append_dbg(struct FREE_BLOCKS* lst, struct FREE_BLOCK* el) {
+	TRACE("Appending free block %X - %X (%u bytes)", el->base, el->base+el->size, el->size);
+	FREE_BLOCKS_append(lst, el);
+}
+
 /*
 	Register a new block in the free list	
 */
 static struct FREE_BLOCK* kmalloc_register_block(void* linear_address, uint32_t size) {
+	/* TRACE("Registering block %X - %X (%u bytes)", linear_address, linear_address+size, size); */
+
 	struct FREE_BLOCK* block = (struct FREE_BLOCK*)kmalloc(sizeof(struct FREE_BLOCK*));
 	block->base = linear_address;
 	block->size = size;
+	FREE_BLOCKS_append_dbg(&free_blocks, block);
 	return(block);
 }
 
@@ -48,21 +56,15 @@ void kmalloc_init() {
 	struct FREE_BLOCK* block = vmm_alloc_pages(1);
 	block->base = block+4;
 	block->size = 4096-4;
-	FREE_BLOCKS_append(&free_blocks, block);
+	FREE_BLOCKS_append_dbg(&free_blocks, block);
 }
 
 /*
 	Allocate memory of the given size
 */
 void* kmalloc(uint32_t size) {
-	TRACE("Requesting %u bytes", size);
-
 	/* adjust size for header */
-	DUMP32D(size);
-	DUMP32D(size+4);
-	DUMP32D(14686+4);
 	size += 4;
-	DUMP32D(size);
 	
 	/* Find fitting free block */
 	struct FREE_BLOCK* block = 0;
@@ -76,13 +78,15 @@ void* kmalloc(uint32_t size) {
 		VMM for more memory
 	*/
 	if(!block) {
-		DUMP32D(size);
-		DUMP32D(ALIGN32(size, 4096));
-		DUMP32D(ALIGN32(size, 4096)/4096);
+		TRACE("Asking VMM for more memory");
+		void* address = vmm_alloc_pages(ALIGN32(size, 4096)/4096);
+		TRACE("VMM allocated page(s) at linear address: %X", address);
+
 		block = kmalloc_register_block(
-			vmm_alloc_pages(ALIGN32(size, 4096)/4096),
+			address,
 			ALIGN32(size,4096)
 		);
+		TRACE("Allocated block: %X", block);
 	}
 
 	/* Adjust start of block */
@@ -98,7 +102,7 @@ void* kmalloc(uint32_t size) {
 	/* Push size of block into the header */
 	*((uint32_t*)location) = size;
 	
-	kmalloc_dump();
+	/* kmalloc_dump(); */
 	return(location);
 }
 
@@ -108,7 +112,7 @@ void* kmalloc(uint32_t size) {
 static void* kmalloc_seg_mem_start = (void*)0xFFFFFFFF;
 void* kmalloc_seg_a(unsigned size, unsigned alignment) {
 	if(vmm_paging_enabled())
-		PANIC("Calling kmalloc_seg_a with pagin enabled");
+		PANIC("Calling kmalloc_seg_a with paging enabled");
 
 	if(kmalloc_seg_mem_start == (void*)0xFFFFFFFF)
 		kmalloc_seg_mem_start = kernel_end;
@@ -116,9 +120,7 @@ void* kmalloc_seg_a(unsigned size, unsigned alignment) {
 	/* Begin to allocate memory at mem_start, and align to element size */
 	void* allocated_mem = ALIGN(kmalloc_seg_mem_start, alignment);
 	if(size >= 0x100000) {
-		write_string("WARNING: Trying to allocate ");
-		write_uint32(size);
-		write_string(" of memory in initial memory manager\n");
+		TRACE("WARNING: Trying to allocate %u bytes of memory in initial memory manager", size);
 	}
 	ASSERT((uint32_t)allocated_mem < 0x400000);
 	

@@ -58,14 +58,14 @@ void vmm_init() {
 	paging_enabled = 1;
 	
 	/* Print information about usable memory */
-	write_format(
+	TRACE(
 		"Kernel starts at: %X\n"
-		"Kernel ends at: %X\n",
+		"Kernel ends at: %X",
 		0x100000,
 		kmalloc_seg_get_start()
 	);
-	write_format("Kernel memory: %u Kb\n", (((uint32_t)kmalloc_seg_get_start())-0x100000)/1024);
-	write_format("Free memory: %u Kb\n", pmm_get_free()/1024);
+	TRACE("Kernel memory: %u Kb", (((uint32_t)kmalloc_seg_get_start())-0x100000)/1024);
+	TRACE("Free memory: %u Kb", pmm_get_free()/1024);
 }
 
 /*
@@ -75,6 +75,9 @@ void vmm_init() {
 	with it elsewhere
 */
 void vmm_map(uint32_t linear_address, uint32_t physical_address, uint32_t flags) {
+	if(paging_enabled)
+		TRACE("Mapping linear address %X to physical address %X", linear_address, physical_address);
+	
 	/*
 		Check with PMM if this page is usable
 		Note that we can map reserved addresses
@@ -200,10 +203,10 @@ static void* vmm_find_free_linear(uint32_t bytecount) {
 /* Allocate a range of pages, and return the resulting linear address */
 void* vmm_alloc_pages(uint32_t pages_count) {
 	TRACE("Requesting %u pages (%u bytes)", pages_count, pages_count*PAGE_SIZE);
-	
+
 	pushf();
 	cli();
-	
+
 	void* physical_address = (void*)pmm_alloc_range(pages_count);
 	if(physical_address == INVALID_ADDRESS)
 		PANIC("Physical memory exhaustion");
@@ -211,7 +214,8 @@ void* vmm_alloc_pages(uint32_t pages_count) {
 	void* linear_address = vmm_find_free_linear(pages_count*PAGE_SIZE);
 	if(linear_address == INVALID_ADDRESS)
 		PANIC("Linear address exhaustion");
-		
+	TRACE("Free linear address found at: %X", linear_address);
+
 	vmm_map(
 		(uint32_t)linear_address,
 		(uint32_t)physical_address,

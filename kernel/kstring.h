@@ -6,6 +6,7 @@
 	void bzero(void* dst, unsigned siz);
 	unsigned atoi(const char* str);
 	void itoa(char* str, uint32_t n);
+	void itox(char* str, uint32_t n);
 
 #endif
 

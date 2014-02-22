@@ -15,13 +15,13 @@ void panic(const char* file, int line, const char* function, const char* message
 }
 
 void trace(const char* file, int line, const char* function, const char* message, ...) {
-	write_format("(%s:%u): ", file, line);
+	write_debug("(%s:%u): ", file, line);
 	
 	va_list args;
 	va_start(args, message);
-	write_format_attr_v(COLOR_LIGHT_GREY,message, args);
+	write_debug_v(message, args);
 	va_end(args);
 	
-	write_format("\n");	/* just for the sake of it */
+	write_debug_string("\n");	/* just for the sake of it */
 }
 

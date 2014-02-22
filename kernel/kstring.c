@@ -77,4 +77,10 @@ void itoa(char* str, uint32_t n) {
 	*out = '\0';
 }
 
-
+#define HEX_CHAR(d) ( ((d)<10) ? ((d)+'0') : ((d)+('A'-10)) )
+void itox(char* str, uint32_t n) {
+	for(int digit=0; digit<8; digit++) {
+		str[7-digit] = HEX_CHAR( (n & (0xF << 4*digit)) >> (4*digit) );
+	}
+	str[8] = '\0';
+}

@@ -175,6 +175,9 @@ void write_format_attr_v(enum VGA_COLOR attr, const char* format, va_list args) 
 			case 's':
 				write_string_attr(va_arg(args, const char*), attr);
 				break;
+			case '%':
+				write_string_attr("%s", attr);
+				break;
 			default:
 				/* Don't even bother, bugs await here */
 				*buffer = *(format+1);
@@ -204,4 +207,57 @@ void write_format(const char* format, ...) {
 	va_end(args);
 }
 
+void write_debug_v(const char* format, va_list args) {
+	char buffer[12];
+	
+	while(*format) {
+		if(*format == '%') {
+			switch(*(format+1)) {
+			case 'd':
+			case 'u':
+				itoa(buffer, va_arg(args, uint32_t));
+				write_debug_string(buffer);
+				break;
+			case 'x':
+			case 'X':
+				itox(buffer, va_arg(args, uint32_t));
+				write_debug_string("0x");
+				write_debug_string(buffer);
+				break;
+			case 's':
+				write_debug_string(va_arg(args, const char*));
+				break;
+			case '%':
+				write_debug_string("%");
+				break;
+			default:
+				*buffer = *(format+1);
+				*(buffer+1) = '\0';
+				PANIC("Bad format specifier: '%s'", buffer);
+				break;
+			}
+			format++;
+		} else {
+			write_debug_char(*format);
+		}
+		format++;
+	}
+}
 
+void write_debug(const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+	write_debug_v(format, args);
+	va_end(args);
+}
+
+void write_debug_string(const char* str) {
+	while(*str) {
+		write_debug_char(*str);
+		str++;
+	}
+}
+
+void write_debug_char(int ch) {
+	_outb(0xE9, (ch & 0xFF));
+}
