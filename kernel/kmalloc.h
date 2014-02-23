@@ -8,6 +8,10 @@
 
 	void kmalloc_init();
 	void* kmalloc(uint32_t size);
-
+	void kfree(void*);
+	void kmalloc_dump();
+	uint32_t kmalloc_largest();
+	uint32_t kmalloc_heap_size();
+	
 #endif //_KMALLOC_H_
 

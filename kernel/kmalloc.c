@@ -15,56 +15,59 @@ LL_DECLARE(FREE_BLOCKS, FREE_BLOCK);
 LL_IMPLEMENT(FREE_BLOCKS, FREE_BLOCK);
 
 struct FREE_BLOCKS free_blocks;		/* List of free blocks */
-static uint32_t heap_extent;		/* First byte of unusable memory */
 
-static void FREE_BLOCKS_append_dbg(struct FREE_BLOCKS* lst, struct FREE_BLOCK* el) {
-	TRACE("Appending free block %X - %X (%u bytes)", el->base, el->base+el->size, el->size);
-	FREE_BLOCKS_append(lst, el);
-}
+#define BLOCK_MAGIC 0xB16B00B5
+struct BLOCK_HEADER {
+    uint32_t magic;
+    uint32_t size;
+};
+#define BLOCK_HEADER_SIZE sizeof(struct BLOCK_HEADER)
+
+static uint32_t heap_size = 0;
 
 /*
-	Register a new block in the free list	
-*/
-static struct FREE_BLOCK* kmalloc_register_block(void* linear_address, uint32_t size) {
-	/* TRACE("Registering block %X - %X (%u bytes)", linear_address, linear_address+size, size); */
+    Ask VMM for more pages, and add these pages to the free list
+ */
+struct FREE_BLOCK* kmalloc_add_free_pages(uint32_t size) {
+    int pages_count = ALIGN32(size+sizeof(struct FREE_BLOCK), 4096)/4096;
+    /* TRACE("Growing kernel heap by %u bytes", pages_count*4096); */
 
-	struct FREE_BLOCK* block = (struct FREE_BLOCK*)kmalloc(sizeof(struct FREE_BLOCK*));
-	block->base = linear_address;
-	block->size = size;
-	FREE_BLOCKS_append_dbg(&free_blocks, block);
-	return(block);
+	struct FREE_BLOCK* block = vmm_alloc_pages(pages_count);
+	ASSERT(vmm_linear_to_physical(block) != 0);
+	/* ASSERT(block != 0x400000); */
+	((uint8_t*)block)[0] = 0;
+
+	block->base = ((void*)block)+sizeof(struct FREE_BLOCK); /* page fault here */
+	block->size = (pages_count*4096)-sizeof(struct FREE_BLOCK);
+	FREE_BLOCKS_append(&free_blocks, block);
+    heap_size += (pages_count*4096);
+    return(block);
 }
 
-static void kmalloc_remove_block(struct FREE_BLOCK* block) {
+void kmalloc_remove_block(struct FREE_BLOCK* block) {
 	FREE_BLOCKS_remove(&free_blocks, block);
 }
 
-static void kmalloc_dump() {
+void kmalloc_dump() {
 	for(struct FREE_BLOCK* block=free_blocks.first; block; block=block->next) {
+#ifdef __APPLE__
+        printf("    %08X - %08X (%u bytes)\n", (uint32_t)block->base, (uint32_t)(block->base+block->size), block->size);
+#else
 		write_format("    %X - %X (%u bytes)\n", block->base, block->base+block->size, block->size);
-	}	
+#endif
+	}
 }
 
 void kmalloc_init() {
-	heap_extent = (uint32_t)kmalloc_seg_get_start();
 	FREE_BLOCKS_init(&free_blocks);
-	
-	/*
-		Allocate a page right away from vmm, as kmalloc uses dynamic allocation
-		We can place the new block in the newly allocated page
-	*/
-	struct FREE_BLOCK* block = vmm_alloc_pages(1);
-	block->base = block+4;
-	block->size = 4096-4;
-	FREE_BLOCKS_append_dbg(&free_blocks, block);
 }
 
 /*
-	Allocate memory of the given size
-*/
+ Allocate memory of the given size
+ */
 void* kmalloc(uint32_t size) {
 	/* adjust size for header */
-	size += 4;
+	size += BLOCK_HEADER_SIZE;
 	
 	/* Find fitting free block */
 	struct FREE_BLOCK* block = 0;
@@ -74,22 +77,20 @@ void* kmalloc(uint32_t size) {
 	}
 	
 	/*
-		if no free blocks found to satisfy request, ask
-		VMM for more memory
-	*/
+     if no free blocks found to satisfy request, ask
+     VMM for more memory
+     */
 	if(!block) {
-		TRACE("Asking VMM for more memory");
-		void* address = vmm_alloc_pages(ALIGN32(size, 4096)/4096);
-		TRACE("VMM allocated page(s) at linear address: %X", address);
-
-		block = kmalloc_register_block(
-			address,
-			ALIGN32(size,4096)
-		);
-		TRACE("Allocated block: %X", block);
+        block = kmalloc_add_free_pages(size);
+        ASSERT(block != NULL);
+        ASSERT(block->base != NULL);
+        ASSERT(block->size >= size);
 	}
-
+    
 	/* Adjust start of block */
+    ASSERT(block->base != NULL);
+    ASSERT(block->size >= size);
+
 	void* location = block->base;
 	block->base += size;
 	block->size -= size;
@@ -100,23 +101,83 @@ void* kmalloc(uint32_t size) {
 	}
 	
 	/* Push size of block into the header */
-	*((uint32_t*)location) = size;
-	
-	/* kmalloc_dump(); */
-	return(location);
+    struct BLOCK_HEADER* header = (struct BLOCK_HEADER*)location;
+    header->magic = BLOCK_MAGIC;
+    header->size = size - BLOCK_HEADER_SIZE;
+	return(location + BLOCK_HEADER_SIZE);
+}
+
+void kfree(void* location) {
+    struct BLOCK_HEADER* header = location - BLOCK_HEADER_SIZE;
+    ASSERT(header->magic == BLOCK_MAGIC);
+   
+    /* Get block size from header */
+    uint32_t size = header->size;
+    
+    /* Adjust size and location to take care of header */
+    size += BLOCK_HEADER_SIZE;
+    location -= BLOCK_HEADER_SIZE;
+    
+    /*
+        Check if we can merge this block with other blocks
+     */
+    struct FREE_BLOCK* block;
+    for(block=free_blocks.first; block; block=block->next) {
+        if(block->base == location+size) {
+            block->base = location;
+            block->size += size;
+            return;
+        } else if(block->base+block->size == location) {
+            block->size += size;
+            return;
+        }
+    }
+    
+    /* Check if we can reuse the blocks memory to store it's FREE_BLOCK node */
+    if(size > sizeof(struct FREE_BLOCK)) {
+        block = location;
+        block->base = location+sizeof(struct FREE_BLOCK);
+        block->size = size - sizeof(struct FREE_BLOCK);
+        FREE_BLOCKS_append(&free_blocks, block);
+    } else {
+        block = (struct FREE_BLOCK*)kmalloc(sizeof(struct FREE_BLOCK));
+        block->base = location;
+        block->size = size;
+        FREE_BLOCKS_append(&free_blocks, block);
+    }
 }
 
 /*
-	Allocate, using specified alignment
-*/
+    Query largest contiguous block that can be allocated
+ */
+uint32_t kmalloc_largest() {
+    uint32_t largest = 0;
+    for(struct FREE_BLOCK* block = free_blocks.first; block; block=block->next) {
+        if((block->size > BLOCK_HEADER_SIZE) && (block->size - BLOCK_HEADER_SIZE > largest))
+            largest = block->size - BLOCK_HEADER_SIZE;
+    }
+    return(largest);
+}
+
+/*
+    Return size of kernel heap
+ */
+uint32_t kmalloc_heap_size() {
+    return(heap_size);
+}
+
+#ifndef __APPLE__
+/*
+ Allocate, using specified alignment
+ */
 static void* kmalloc_seg_mem_start = (void*)0xFFFFFFFF;
 void* kmalloc_seg_a(unsigned size, unsigned alignment) {
 	if(vmm_paging_enabled())
 		PANIC("Calling kmalloc_seg_a with paging enabled");
-
+    
 	if(kmalloc_seg_mem_start == (void*)0xFFFFFFFF)
 		kmalloc_seg_mem_start = kernel_end;
-
+    
 	/* Begin to allocate memory at mem_start, and align to element size */
 	void* allocated_mem = ALIGN(kmalloc_seg_mem_start, alignment);
 	if(size >= 0x100000) {
@@ -130,19 +191,19 @@ void* kmalloc_seg_a(unsigned size, unsigned alignment) {
 }
 
 /*
-	Very simple kernel allocator, does not permit
-	freeing of the allocated memory
-	Should only be used when paging disabled
-*/
+ Very simple kernel allocator, does not permit
+ freeing of the allocated memory
+ Should only be used when paging disabled
+ */
 void* kmalloc_seg(unsigned el_count, unsigned el_size) {
 	return(kmalloc_seg_a(el_count*el_size, el_size));
 }
 
 /*
-	Get start of the current zone
-*/
+ Get start of the current zone
+ */
 void* kmalloc_seg_get_start() {
 	return(kmalloc_seg_mem_start);
 }
-
+#endif
 

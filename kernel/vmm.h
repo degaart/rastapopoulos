@@ -2,14 +2,11 @@
 #define _VMM_H_
 
 	#define PAGE_DIR_PRESENT		0x1
-	#define PAGE_DIR_RDONLY			0x0
 	#define PAGE_DIR_RDWRITE		(0x1<<1)
 	#define PAGE_DIR_USER			(0x1<<2)
-	#define PAGE_DIR_SUPERVISOR		0x0
 	#define PAGE_DIR_WRTHROUGH		(0x1<<3)
 	#define PAGE_DIR_UNCACHED		(0x1<<4)
 	#define PAGE_DIR_ACCESSED		(0x1<<5)
-	#define PAGE_DIR_SIZE4K			0x0
 	#define PAGE_DIR_SIZE4M			(0x1<<7)
 	#define PAGE_DIR_GLOBAL			(0x1<<8)
 	#define PAGE_DIR_BASE(x)		( ( (uint32_t) (x) ) & 0xFFFFF000 )
@@ -20,10 +17,8 @@
 	
 	
 	#define PAGE_ENTRY_PRESENT		PAGE_DIR_PRESENT
-	#define PAGE_ENTRY_RDONLY		PAGE_DIR_RDONLY
 	#define PAGE_ENTRY_RDWRITE		PAGE_DIR_RDWRITE
 	#define PAGE_ENTRY_USER			PAGE_DIR_USER
-	#define PAGE_ENTRY_SUPERVISOR	PAGE_DIR_SUPERVISOR
 	#define PAGE_ENTRY_WRTHROUGH	PAGE_DIR_WRTHROUGH
 	#define PAGE_ENTRY_UNCACHED		PAGE_DIR_UNCACHED
 	#define PAGE_ENTRY_ACCESSED		PAGE_DIR_ACCESSED
@@ -63,5 +58,6 @@
 	int vmm_paging_enabled();
 	void vmm_unmap(uint32_t linear_address);
 	void* vmm_alloc_pages(uint32_t pages_count);
+	void* vmm_linear_to_physical(void* linear_address);
 
 #endif //_VMM_H_

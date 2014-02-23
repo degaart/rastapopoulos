@@ -17,7 +17,7 @@
 	#define PANIC(...) panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
 	#define TRACE(...) trace(__FILE__, __LINE__, __func__, __VA_ARGS__)
 	
-	#define ASSERT(cond) while(!(cond)) PANIC("Assertion failure: " #cond)
+	#define ASSERT(cond) while(!(cond)) PANIC("Assertion failure: %s", #cond)
 	
 	void iowait();
 

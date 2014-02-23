@@ -57,17 +57,15 @@ void kmain() {
 	/* Initialize kernel allocator */
 	write_string("Initializing kernel allocator\n");
 	kmalloc_init();
+	write_format("Free physical memory: %u Kb\n", pmm_get_free()/1024);
 	
 	void* memory[256];
-	const int chunk_size = 64;
-	DUMP32D(chunk_size);
+	const int chunk_size = 8192;
 	for(int i=0; i<256; i++) {
-		if(i >= 60)
-			DUMP32D(i);
 		memory[i] = kmalloc(chunk_size);
 	}
 	(void)memory;
-	write_format("Free memory: %u Kb\n", pmm_get_free()/1024);
+	write_format("Free physical memory: %u Kb\n", pmm_get_free()/1024);
 	_halt();
 
 	/* Init IRQs */
