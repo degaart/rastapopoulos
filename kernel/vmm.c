@@ -244,7 +244,8 @@ static int vmm_linear_contiguous(uint32_t page, uint32_t count) {
 			dir++;
 		}
 		if(page_directory[dir] & PAGE_DIR_PRESENT) {
-			if(TABLE(page_directory[dir])[entry] & PAGE_DIR_PRESENT)
+			vmm_load_pagetable(page_directory[dir] & PAGE_DIR_PAGETABLE_MASK);
+			if(current_page_table[entry] & PAGE_DIR_PRESENT)
 				return(0);
 		}
 		entry++;
