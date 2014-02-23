@@ -32,6 +32,7 @@ struct FREE_BLOCK* kmalloc_add_free_pages(uint32_t size) {
     int pages_count = ALIGN32(size+sizeof(struct FREE_BLOCK), 4096)/4096;
     /* TRACE("Growing kernel heap by %u bytes", pages_count*4096); */
 
+	TRACE("Allocating %u pages", pages_count);
 	struct FREE_BLOCK* block = vmm_alloc_pages(pages_count);
 	ASSERT(vmm_linear_to_physical(block) != 0);
 	/* ASSERT(block != 0x400000); */
