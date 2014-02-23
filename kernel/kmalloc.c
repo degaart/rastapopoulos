@@ -134,17 +134,29 @@ void kfree(void* location) {
     }
     
     /* Check if we can reuse the blocks memory to store it's FREE_BLOCK node */
-    if(size > sizeof(struct FREE_BLOCK)) {
+#if 0
+	/* This code is buggy as hell */
+    if(size > sizeof(struct FREE_BLOCK)+BLOCK_HEADER_SIZE) {
+    	header = location;
+    	header->magic = BLOCK_MAGIC;
+    	header->size = size - BLOCK_HEADER_SIZE;
+    	
+    	location += BLOCK_HEADER_SIZE;
+    	size -= BLOCK_HEADER_SIZE;
+
         block = location;
         block->base = location+sizeof(struct FREE_BLOCK);
         block->size = size - sizeof(struct FREE_BLOCK);
         FREE_BLOCKS_append(&free_blocks, block);
     } else {
+#endif
         block = (struct FREE_BLOCK*)kmalloc(sizeof(struct FREE_BLOCK));
         block->base = location;
         block->size = size;
         FREE_BLOCKS_append(&free_blocks, block);
-    }
+#if 0
+     }
+#endif
 }
 
 /*

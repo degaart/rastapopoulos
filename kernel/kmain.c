@@ -16,6 +16,7 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "kmalloc.h"
+#include "ll.h"
 
 void infinite_recurse() {
 	infinite_recurse();
@@ -58,15 +59,6 @@ void kmain() {
 	write_string("Initializing kernel allocator\n");
 	kmalloc_init();
 	write_format("Free physical memory: %u Kb\n", pmm_get_free()/1024);
-	
-	void* memory[256];
-	const int chunk_size = 8192;
-	for(int i=0; i<256; i++) {
-		memory[i] = kmalloc(chunk_size);
-	}
-	(void)memory;
-	write_format("Free physical memory: %u Kb\n", pmm_get_free()/1024);
-	_halt();
 
 	/* Init IRQs */
 	write_string("Remapping IRQs\n");

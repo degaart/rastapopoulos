@@ -254,7 +254,7 @@ static int vmm_linear_contiguous(uint32_t page, uint32_t count) {
 	return(1);
 }
 
-static void* vmm_find_free_linear(uint32_t bytecount) {
+void* vmm_find_free_linear(uint32_t bytecount) {
 	bytecount = ALIGN32(bytecount, PAGE_SIZE);
 	int pagecount = bytecount / PAGE_SIZE;
 	

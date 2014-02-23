@@ -59,5 +59,6 @@
 	void vmm_unmap(uint32_t linear_address);
 	void* vmm_alloc_pages(uint32_t pages_count);
 	void* vmm_linear_to_physical(void* linear_address);
+	void* vmm_find_free_linear(uint32_t bytecount);
 
 #endif //_VMM_H_
