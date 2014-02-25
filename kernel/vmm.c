@@ -59,6 +59,7 @@ void vmm_init() {
 				pmm_reserve(location);
 		}
 	}
+	TRACE("Mapped %X - %X", 0, ALIGN32((uint32_t)kmalloc_seg_get_start(), PAGE_SIZE));
 
 	/* That's all, folks */
 	vmm_flush();

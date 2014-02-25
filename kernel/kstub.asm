@@ -5,6 +5,7 @@
 bits 32
 
 extern kmain
+extern write_debug
 
 %define breakpoint		xchg bx,bx
 %define KERN_DATA_SEL	0x10			; kernel data selector
@@ -41,6 +42,7 @@ _kstart:
 ; halt processor
 global _halt
 _halt:
+		nop
 		cli
 		hlt
 		jmp _halt
@@ -78,6 +80,79 @@ _inb:
 global _breakpoint
 _breakpoint:
 		breakpoint
+		ret
+
+;
+; Somehow call user-mode
+; Params:
+;	DWORD ss	ebp+8
+; 	DWORD esp	ebp+12
+;	DWORD cs	ebp+16
+;	DWORD eip	ebp+20
+global _call_usermode
+_call_usermode:
+		breakpoint
+		push ebp
+		mov ebp, esp
+
+		cli
+		mov ax, [ebp+8]
+		mov ds, ax
+		mov es, ax
+		mov fs, ax
+		mov gs, ax
+
+		; This is silly! cs and ds are pushed as motherfucking DWORDs!!!
+		;pushf
+		;pop eax
+		;or eax, 0x200				; set if flags in usermode
+
+		pushf
+		pop eax
+		push dword [ebp+8]			; ss, as DWORD
+		push dword [ebp+12]			; esp
+		push eax					; flags
+		push dword [ebp+16]			; cs
+		push dword [ebp+20]			; da proc
+		iret
+		jmp $						; normally, we should't get here
+
+global _usermode_entry:
+_usermode_entry:
+		breakpoint
+
+		; we can call kernel with this
+		int 0x80
+		jmp _usermode_entry
+
+;
+; Load new GDT
+; Params:	ebp+8	physical address of new GDT
+;			ebp+12	size of new GDT
+global _gdt_load
+_gdt_load:
+		push ebp
+		mov ebp, esp
+		
+		mov eax, [ebp+8]
+		mov [.gdt_offset], eax
+		mov eax, [ebp+12]
+		dec eax
+		mov [.gdt_limit], ax
+		
+		lgdt [.gdtr]
+		
+		pop ebp
+		ret
+
+	.gdtr:
+	.gdt_limit: dw 0
+	.gdt_offset: dd 0
+
+global _tss_load
+_tss_load:
+		mov ax, [esp+4]
+		ltr ax
 		ret
 
 ;

@@ -25,7 +25,7 @@ uint8_t* kernel_load_area = (uint8_t*)0x100000;
 uint16_t* memmap_size = (uint16_t*)0x502;
 uint32_t* memmap_start = (uint32_t*)0x508;
 
-struct GDT_ENTRY gdt[3];
+struct GDT_ENTRY gdt[5];
 
 /*
 	Interrupt 0 handler
@@ -186,6 +186,8 @@ void cstart() {
 	gdt[0] = encode_gdt(0, 0, 0);
 	gdt[1] = encode_gdt(0, 0xFFFFFFFF, 0x9A);
 	gdt[2] = encode_gdt(0, 0xFFFFFFFF, 0x92);
+	gdt[3] = encode_gdt(0, 0xFFFFFFFF, 0xFA);
+	gdt[4] = encode_gdt(0, 0xFFFFFFFF, 0xF2);
 	
 	_enter_pmode(gdt, sizeof(gdt)/sizeof(*gdt), kernel_load_area);
 	_halt();

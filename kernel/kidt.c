@@ -41,7 +41,7 @@ static void unhandled_isr(uint32_t type, uint32_t code, const void* address) {
 	default:
 		int_name = 0;
 	};
-
+	
 	write_string_attr("Unhandled kernel interrupt: ", ERR_COL);
 
 	if(int_name)
@@ -62,7 +62,9 @@ static void unhandled_isr(uint32_t type, uint32_t code, const void* address) {
 			write_string_attr("EXCEPTION_LDT ", ERR_COL);
 		else
 			write_string_attr("EXCEPTION_GDT ", ERR_COL);
-		write_string_attr(")", ERR_COL);
+		write_string_attr("), ", ERR_COL);
+		write_string_attr("Segment: ", ERR_COL);
+		write_value_attr((code >> 3) & 0xFFFF, ERR_COL);
 	}
 	
 	write_string_attr(", Address: ", ERR_COL);
@@ -114,8 +116,12 @@ static void irq_isr(uint32_t type, uint32_t code, const void* esp) {
 	}
 }
 
+static void syscall_isr(uint32_t type, uint32_t code, const void* esp) {
+	PANIC("Inside syscall handler");
+}
+
 void idt_setup() {
-	struct IDT_ENTRY idt[48];
+	struct IDT_ENTRY idt[256];
 	
 	bzero(idt, sizeof(idt));
 	
@@ -140,6 +146,13 @@ void idt_setup() {
 	
 	/* Remap page fault handler (for now. Do it elsewhere next time) */
 	idt[14].handler = page_fault_isr;
+
+	idt[0x80].handler = syscall_isr;
+	idt[0x80].attributes =
+				IDT_ATTR_PRESENT(1)|
+				IDT_ATTR_PRIVILEGE(3)|
+				IDT_ATTR_STORAGE_SEG(0)|
+				IDT_GATE_INT32;
 
 	/* Load IDT */
 	_idt_load(idt, sizeof(idt)/sizeof(*idt));

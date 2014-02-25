@@ -51,6 +51,8 @@
 	
 	#define KERNEL_CODE_SEL 0x08
 	#define KERNEL_DATA_SEL 0x10
+	#define USER_CODE_SEL	(KERNEL_DATA_SEL+8)
+	#define USER_DATA_SEL	(USER_CODE_SEL+8)
 	
 	#define __CONCAT_IMPL( x, y ) x##y
     #define MACRO_CONCAT( x, y ) __CONCAT_IMPL( x, y )

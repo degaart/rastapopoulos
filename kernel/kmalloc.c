@@ -14,7 +14,7 @@ struct FREE_BLOCK {
 LL_DECLARE(FREE_BLOCKS, FREE_BLOCK);
 LL_IMPLEMENT(FREE_BLOCKS, FREE_BLOCK);
 
-struct FREE_BLOCKS free_blocks;		/* List of free blocks */
+static struct FREE_BLOCKS free_blocks;		/* List of free blocks */
 
 #define BLOCK_MAGIC 0xB16B00B5
 struct BLOCK_HEADER {

@@ -17,6 +17,9 @@
 #include "vmm.h"
 #include "kmalloc.h"
 #include "ll.h"
+#include "gdt.h"
+
+static uint8_t usermode_stack[65536];
 
 void infinite_recurse() {
 	infinite_recurse();
@@ -42,10 +45,13 @@ void kmain() {
 	term_init();
 	write_string_attr("RastapopoulOS", COLOR_CYAN);
 	write_string_attr(" started\n", COLOR_LIGHT_GREY);
-	
+
 	/* Get end of kernel memory */
 	kernel_end = ALIGN(&kernel_end, 4096);
 	
+	/* Install new GDT */
+	gdt_init();
+
 	/* Load IDT */
 	write_string("Loading IDT\n");
 	idt_setup();
@@ -54,7 +60,7 @@ void kmain() {
 	write_string("Initializing VMM\n");
 	vmm_dump_mem_regions();
 	vmm_init();
-	
+
 	/* Initialize kernel allocator */
 	write_string("Initializing kernel allocator\n");
 	kmalloc_init();
@@ -66,7 +72,17 @@ void kmain() {
 	
 	write_string("Masking unused IRQs\n");
 	pic_disable();
-	pic_enable_line(0);
+/* 	pic_enable_line(0); */
+
+	/* Test: exec code in user-mode */
+	write_string("Calling user-mode\n");
+	_call_usermode(
+		USER_DATA_SEL|0x3,
+		(uint32_t)usermode_stack,
+		USER_CODE_SEL|0x3,
+		(uint32_t)_usermode_entry
+	);
+	_halt();
 
 	/* Initializing system clock */	
 	write_string("Adding handler for IRQ0\n");

@@ -26,4 +26,13 @@
 	struct IDT_ENTRY;
 	extern void _idt_load(const struct IDT_ENTRY*, uint32_t count);
 	
+	struct GDT_ENTRY;
+	extern void _gdt_load(const struct GDT_ENTRY* gdt, uint32_t size);
+	
+	extern void _tss_load(uint32_t tss_selector);
+	
+	extern void _call_usermode(uint32_t ss, uint32_t esp, uint32_t cs, uint32_t eip);
+	extern void _usermode_entry();
+	
 #endif //_KSTUB_H_
+
