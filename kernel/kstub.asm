@@ -89,6 +89,7 @@ _breakpoint:
 ; 	DWORD esp	ebp+12
 ;	DWORD cs	ebp+16
 ;	DWORD eip	ebp+20
+;	DWORD cr3	ebp+24
 global _call_usermode
 _call_usermode:
 		breakpoint
@@ -101,8 +102,13 @@ _call_usermode:
 		mov es, ax
 		mov fs, ax
 		mov gs, ax
+		
+		; Need to change cr3 to the pagetable of the process
+		mov eax, [ebp+24]
+		mov cr3, eax
 
-		; This is silly! cs and ds are pushed as motherfucking DWORDs!!!
+		; Uncomment following lines when interrupts
+		; are to be enabled in user-mode
 		;pushf
 		;pop eax
 		;or eax, 0x200				; set if flags in usermode
@@ -117,6 +123,9 @@ _call_usermode:
 		iret
 		jmp $						; normally, we should't get here
 
+;
+; Need to map this page as ring3 accessible
+;
 global _usermode_entry:
 _usermode_entry:
 		breakpoint

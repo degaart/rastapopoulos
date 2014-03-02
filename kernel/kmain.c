@@ -18,8 +18,7 @@
 #include "kmalloc.h"
 #include "ll.h"
 #include "gdt.h"
-
-static uint8_t usermode_stack[65536];
+#include "process.h"
 
 void infinite_recurse() {
 	infinite_recurse();
@@ -72,17 +71,30 @@ void kmain() {
 	
 	write_string("Masking unused IRQs\n");
 	pic_disable();
-/* 	pic_enable_line(0); */
+ 	pic_enable_line(0); 
 
 	/* Test: exec code in user-mode */
 	write_string("Calling user-mode\n");
+	struct PROCESS proc;
+	process_create(&proc, NULL);
 	_call_usermode(
+		USER_DATA_SEL|0x3,
+		(uint32_t)proc.esp,
+		USER_CODE_SEL|0x3,
+		(uint32_t)proc.eip,
+		(uint32_t)proc.pagedir
+	);
+
+	/* 
+_call_usermode(
 		USER_DATA_SEL|0x3,
 		(uint32_t)usermode_stack,
 		USER_CODE_SEL|0x3,
 		(uint32_t)_usermode_entry
 	);
-	_halt();
+ */
+
+//	_halt();
 
 	/* Initializing system clock */	
 	write_string("Adding handler for IRQ0\n");

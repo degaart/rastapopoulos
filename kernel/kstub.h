@@ -31,7 +31,7 @@
 	
 	extern void _tss_load(uint32_t tss_selector);
 	
-	extern void _call_usermode(uint32_t ss, uint32_t esp, uint32_t cs, uint32_t eip);
+	extern void _call_usermode(uint32_t ss, uint32_t esp, uint32_t cs, uint32_t eip, uint32_t cr3);
 	extern void _usermode_entry();
 	
 #endif //_KSTUB_H_

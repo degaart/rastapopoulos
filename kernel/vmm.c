@@ -211,13 +211,16 @@ void vmm_unmap(uint32_t linear_address) {
 	uint32_t directory_entry = DIR(page);
 	uint32_t pagetable_entry = ENTRY(page);
 	if(page_directory[directory_entry] & PAGE_DIR_PRESENT) {
-		uint32_t* page_table = (uint32_t*)(page_directory[directory_entry] & PAGE_DIR_PAGETABLE_MASK);
-		if(page_table[pagetable_entry] & PAGE_ENTRY_PRESENT) {
-			page_table[pagetable_entry] &= ~PAGE_ENTRY_PRESENT;
+		vmm_load_pagetable(page_directory[directory_entry] & PAGE_DIR_PAGETABLE_MASK);
+		if(current_page_table[pagetable_entry] & PAGE_ENTRY_PRESENT) {
+			current_page_table[pagetable_entry] &= ~PAGE_ENTRY_PRESENT;
 			return;
+		} else {
+			PANIC("Page table entry for %X is not present", linear_address);
 		}
+	} else {
+		PANIC("Page directory for %X is not present", linear_address);
 	}
-	PANIC("Trying to unmap already unmapped linear address: %X", linear_address);
 }
 
 void vmm_flush() {
@@ -263,7 +266,7 @@ void* vmm_find_free_linear(uint32_t bytecount) {
 		if(vmm_linear_contiguous(page, pagecount)) {
 			return((void*)(page*PAGE_SIZE));
 		} else {
-			page += pagecount;
+			page += pagecount-1; /* 'cause page++ */
 		}
 	}
 	return((void*)UINT32_MAX);
@@ -329,4 +332,47 @@ static void vmm_load_pagetable(uint32_t physical_address) {
 		vmm_flush();
 	}
 }
+
+/* Copy current kernel pagedir to specified buffer */
+void* vmm_copy_pagedir(void* buffer) {
+	memcpy(buffer, page_directory, 1024*sizeof(uint32_t));
+	return(buffer);
+}
+
+void* vmm_placement_alloc(uint32_t physical_address, uint32_t pages) {
+	pushf();
+	cli();
+	
+	void* linear_address = vmm_find_free_linear(pages*PAGE_SIZE);
+	if(linear_address == INVALID_ADDRESS)
+		PANIC("Linear address exhaustion");
+		
+	for(uint32_t i=0; i<pages; i++) {
+		vmm_map(
+			((uint32_t)linear_address)+(i*PAGE_SIZE),
+			((uint32_t)physical_address)+(i*PAGE_SIZE),
+			PAGE_ENTRY_RDWRITE
+		);
+	}
+	vmm_flush();
+	
+	popf();
+	return(linear_address);
+}
+
+void vmm_placement_free(void* linear_address, uint32_t pages) {
+	pushf();
+	cli();
+	
+	for(void* address=linear_address; address<linear_address+(pages*PAGE_SIZE); address+=PAGE_SIZE) {
+		/*
+			We don't free physical memory 'cause vmm_placement_alloc
+			doesn't manage physical memory
+		*/
+		vmm_unmap((uint32_t)address);
+	}
+	vmm_flush();
+	popf();
+}
+
 

@@ -60,5 +60,8 @@
 	void* vmm_alloc_pages(uint32_t pages_count);
 	void* vmm_linear_to_physical(void* linear_address);
 	void* vmm_find_free_linear(uint32_t bytecount);
+	void* vmm_copy_pagedir(void* buffer);
+	void* vmm_placement_alloc(uint32_t physical_address, uint32_t pages);
+	void vmm_placement_free(void* linear_address, uint32_t pages);
 
 #endif //_VMM_H_
