@@ -7,3 +7,8 @@ gen_gdt: gen_gdt.c
 	
 clean:
 	@rm -vf *.ao *.o *.bin *.tmp *.s *.elf
+
+hello.bin: hello.asm
+	nasm -f bin -o hello.bin hello.asm
+
+

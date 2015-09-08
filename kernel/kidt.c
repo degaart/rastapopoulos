@@ -117,6 +117,9 @@ static void irq_isr(uint32_t type, uint32_t code, const void* esp) {
 }
 
 static void syscall_isr(uint32_t type, uint32_t code, const void* esp) {
+	//write_format("syscall.type=%X, syscall.code=%X\n", type, code);
+	//write_format("*esp=%X\n", esp);
+	TRACE("Syscall called: { type: %X, code: %X }", type, code);
 	PANIC("Inside syscall handler");
 }
 

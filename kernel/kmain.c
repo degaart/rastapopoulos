@@ -60,6 +60,10 @@ void kmain() {
 	vmm_dump_mem_regions();
 	vmm_init();
 
+	if(UINT32_MAX == pmm_alloc_range(3840))
+		PANIC("Physical memory exhausted");
+	_halt();
+
 	/* Initialize kernel allocator */
 	write_string("Initializing kernel allocator\n");
 	kmalloc_init();

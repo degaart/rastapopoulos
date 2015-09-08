@@ -45,11 +45,11 @@ static struct MEM_REGIONS mem_regions;
 void pmm_init() {
     /* init memory regions structure */
 	MEM_REGIONS_init(&mem_regions);
+
 	for(int i=0; i<*bios_memmap_size; i++) {
         if((bios_memmap[i].base < UINT32_MAX) && (bios_memmap[i].base+bios_memmap[i].size < UINT32_MAX)) {
     		if(bios_memmap[i].type != BIOS_MEMMAP_TYPE_FREE && bios_memmap[i].type != BIOS_MEMMAP_TYPE_RESERVED && bios_memmap[i].type != BIOS_MEMMAP_TYPE_ACPI_RECLAIM)
     			continue;
-
             struct MEM_REGION* region = (struct MEM_REGION*)kmalloc_seg(1, sizeof(struct MEM_REGION));
             region->base = (bios_memmap[i].base & UINT32_MAX);
             
@@ -147,7 +147,6 @@ uint32_t pmm_alloc_range(uint32_t pages) {
 			}
         }
     }
-    
     return(UINT32_MAX);
 }
 

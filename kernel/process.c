@@ -9,7 +9,7 @@
 #include "pmm.h"
 #include "hello.h"
 
-#define PROCESS_ENTRY (128*1024*1024)
+#define PROCESS_ENTRY (128*1024*1024) /* 0x8000000 */
 
 void process_create(struct PROCESS* proc, void* address) {
 	bzero(proc, sizeof(struct PROCESS*));
@@ -57,14 +57,15 @@ void process_create(struct PROCESS* proc, void* address) {
 	uint8_t* process_image = (uint8_t*)vmm_placement_alloc(process_memory_physical, 1);
 	TRACE("process_image: %X", process_image);
 	memcpy(process_image, hello_bin, hello_bin_size);
-	vmm_placement_free(process_image, 1);
+//	vmm_placement_free(process_image, 1);
 	
 	/*
 		Wait! we also need to alloc space for the stack of the process, and map it!
 		We're so lazy, we just put the stack at the end of the process's page
 	*/
 	proc->ss = USER_DATA_SEL|0x3;
-	proc->esp = process_memory_physical+4095;
+	//proc->esp = process_memory_physical+4095;		// this didn't work (unmapped address)
+	proc->esp = process_memory_physical+511;
 
 	/* Now, what remains is to set eip */
 	proc->eip = PROCESS_ENTRY;

@@ -18,6 +18,14 @@ kstub.ao: kstub.asm isr_stub.inc
 clean:
 	@rm -vf *.ao *.o *.bin *.tmp *.s *.elf *.map
 
+hello.h: hello.bin
+	@echo "[BIN] hello.h"
+	@bin2c -o hello.h hello.bin
+
+hello.bin: hello.asm
+	@echo "[ASM] hello.asm"
+	@nasm -f bin -o hello.bin hello.asm
+
 #@i586-elf-gcc \
 #	-v \
 #	-T kernel.ld -o kernel.bin \

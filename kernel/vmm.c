@@ -205,7 +205,7 @@ static void vmm_map_seg(uint32_t linear_address, uint32_t physical_address, uint
 void vmm_unmap(uint32_t linear_address) {
 	if(linear_address % 4096)
 		PANIC("Invalid linear address: %X", linear_address);
-	TRACE("Unmapping %X", linear_address);
+	//TRACE("Unmapping %X", linear_address);
 
 	uint32_t page = linear_address/PAGE_SIZE;
 	uint32_t directory_entry = DIR(page);

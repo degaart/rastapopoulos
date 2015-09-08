@@ -139,7 +139,7 @@ void bitmap_init(struct BITMAP* bitmap, uint32_t bitcount, void* storage) {
     bitmap->elcount = bitmap->size_bytes/4;
     bitmap_clear(bitmap);
     
-    ASSERT(bitmap->elcount*32 > bitmap->bitcount);
+    ASSERT(bitmap->elcount*32 >= bitmap->bitcount);
 }
 
 /*

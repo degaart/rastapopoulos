@@ -100,6 +100,8 @@ void write_string_attr(const char* str, enum VGA_COLOR attr) {
 		}
 	}
 	set_cursor_pos(cursor_x, cursor_y);
+
+	write_debug_string(str);
 }
 
 /*
@@ -149,6 +151,7 @@ void clear_screen() {
 }
 
 void term_init() {
+	/* init terminal (get cursor pos) */
 	get_cursor_pos(&cursor_x, &cursor_y);
 }
 
@@ -259,5 +262,9 @@ void write_debug_string(const char* str) {
 }
 
 void write_debug_char(int ch) {
-	_outb(0xE9, (ch & 0xFF));
+	//while(!(_inb(0x3fb + 5) & 0x20)); /* wait for queue empty */
+
+	//_outb(0x3fb, ch & 0xFF);
+
+	_outb(0xe9, (ch & 0xFF));
 }
