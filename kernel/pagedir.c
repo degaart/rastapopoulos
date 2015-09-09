@@ -28,7 +28,7 @@ static int paging_enabled() {
 
 
 void pagedir_init(struct PAGEDIR* pagedir) {
-	pagedir->pagedir = pmm_alloc_range((sizeof(uint32_t)*1024)/4096);
+	pagedir->pagedir = pmm_alloc((sizeof(uint32_t)*1024)/4096);
 }
 
 void pagedir_map(

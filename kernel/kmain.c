@@ -57,12 +57,8 @@ void kmain() {
 
 	/* Initialize VMM*/	
 	write_string("Initializing VMM\n");
-	vmm_dump_mem_regions();
 	vmm_init();
-
-	if(UINT32_MAX == pmm_alloc_range(3840))
-		PANIC("Physical memory exhausted");
-	_halt();
+	vmm_dump_mem_regions();
 
 	/* Initialize kernel allocator */
 	write_string("Initializing kernel allocator\n");
@@ -81,6 +77,7 @@ void kmain() {
 	write_string("Calling user-mode\n");
 	struct PROCESS proc;
 	process_create(&proc, NULL);
+	TRACE("Process ESP: %x, EIP: %X", proc.esp, proc.eip);
 	_call_usermode(
 		USER_DATA_SEL|0x3,
 		(uint32_t)proc.esp,

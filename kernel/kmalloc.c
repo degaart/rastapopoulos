@@ -66,6 +66,8 @@ void kmalloc_init() {
  Allocate memory of the given size
  */
 void* kmalloc(uint32_t size) {
+    ASSERT(vmm_paging_enabled());
+
 	/* adjust size for header */
 	size += BLOCK_HEADER_SIZE;
 	

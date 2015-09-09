@@ -20,7 +20,7 @@ void process_create(struct PROCESS* proc, void* address) {
 		copy the current kernel pagedir, hoping
 		for the best
 	*/
-	proc->pagedir = pmm_alloc_range(1024);
+	proc->pagedir = pmm_alloc(1024);
 	uint32_t* page_dir = (uint32_t*)vmm_placement_alloc(proc->pagedir, 1024);
 	TRACE("page_dir: %X", page_dir);
 	vmm_copy_pagedir(page_dir);
@@ -30,7 +30,7 @@ void process_create(struct PROCESS* proc, void* address) {
 		The process's executable code should start at 128MB
 		For now, we only need one page
 	*/
-	uint32_t page_table_physical = pmm_alloc_range(1024);
+	uint32_t page_table_physical = pmm_alloc(1024);
 	page_dir[32] = 
 			PAGE_DIR_PRESENT|
 			PAGE_DIR_RDWRITE|
@@ -54,7 +54,7 @@ void process_create(struct PROCESS* proc, void* address) {
 	vmm_placement_free(page_table, 1024);
 	
 	/* Now, we need to copy process image into process_memory_physical */
-	uint8_t* process_image = (uint8_t*)vmm_placement_alloc(process_memory_physical, 1);
+	uint8_t* process_image = (uint8_t*)vmm_placement_alloc(process_memory_physical, 2);
 	TRACE("process_image: %X", process_image);
 	memcpy(process_image, hello_bin, hello_bin_size);
 //	vmm_placement_free(process_image, 1);
@@ -64,8 +64,7 @@ void process_create(struct PROCESS* proc, void* address) {
 		We're so lazy, we just put the stack at the end of the process's page
 	*/
 	proc->ss = USER_DATA_SEL|0x3;
-	//proc->esp = process_memory_physical+4095;		// this didn't work (unmapped address)
-	proc->esp = process_memory_physical+511;
+	proc->esp = PROCESS_ENTRY+4096;
 
 	/* Now, what remains is to set eip */
 	proc->eip = PROCESS_ENTRY;

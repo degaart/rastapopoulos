@@ -5,8 +5,6 @@ org 0x8000000
 start:
 		xchg bx, bx
 		mov eax, 0xB16B00B5
-		push eax
-		jmp halt
 		int 0x80
 
 

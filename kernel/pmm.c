@@ -55,15 +55,17 @@ void pmm_init() {
             
             uint32_t true_size;
             if(bios_memmap[i].type == BIOS_MEMMAP_TYPE_FREE || bios_memmap[i].type == BIOS_MEMMAP_TYPE_ACPI_RECLAIM)
-            	true_size = ((bios_memmap[i].size & UINT32_MAX)/4096)*4096; 	/* Makes us oblivious to memory < PAGE_SIZE at the end of the block */
+            	true_size = ((bios_memmap[i].size & UINT32_MAX)/PAGE_SIZE)*PAGE_SIZE; 	/* Makes us oblivious to memory < PAGE_SIZE at the end of the block */
             else
-            	true_size = ALIGN32(bios_memmap[i].size & UINT32_MAX, 4096);					/* We don't care about memory memory access issues, so we just align size to 4096 bytes */
+            	true_size = ALIGN32(bios_memmap[i].size & UINT32_MAX, PAGE_SIZE);					/* We don't care about memory memory access issues, so we just align size to 4096 bytes */
             
             ASSERT(true_size != 0);
 
-            uint32_t bitmap_size = bitmap_get_storage_size(true_size/4096);
+            uint32_t bitmap_size = bitmap_get_storage_size(true_size/PAGE_SIZE);
+            TRACE("size: %d, bitmap_size: %d", bitmap_size, true_size/PAGE_SIZE);
+
             struct BITMAP* region_bitmap = (struct BITMAP*)kmalloc_seg(1, sizeof(struct BITMAP));
-            bitmap_init(region_bitmap, true_size/4096, kmalloc_seg(bitmap_size, 4));
+            bitmap_init(region_bitmap, true_size/PAGE_SIZE, kmalloc_seg(bitmap_size, 4));
             if(bios_memmap[i].type == BIOS_MEMMAP_TYPE_ACPI_RECLAIM)
             	bitmap_fill(region_bitmap);
 
@@ -97,7 +99,7 @@ uint32_t pmm_alloc_page() {
 				ASSERT(!bitmap_get(region->bitmap, location));
 				
 				bitmap_set(region->bitmap, location, 1);
-				uint32_t result = region->base+(location*4096);
+				uint32_t result = region->base+(location*PAGE_SIZE);
 	
 				ASSERT(result < (region->base+region->size));
 				return(result);
@@ -108,16 +110,16 @@ uint32_t pmm_alloc_page() {
 }
 
 /* Free a page in the specified location */
-void pmm_free(uint32_t location) {
-    if(location % 4096)
-        PANIC("location is not divisible by 4096\n");
+void pmm_free_page(uint32_t location) {
+    if(location % PAGE_SIZE)
+        PANIC("location is not divisible by PAGE_SIZE\n");
 
     for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
         if((location >= region->base) && (location < region->base+region->size)) {
-            if(!bitmap_get(region->bitmap, (location-region->base)/4096)) {
+            if(!bitmap_get(region->bitmap, (location-region->base)/PAGE_SIZE)) {
                 PANIC("Trying to deallocate an unallocated page\n");
             }
-            bitmap_set(region->bitmap, (location-region->base)/4096, 0);
+            bitmap_set(region->bitmap, (location-region->base)/PAGE_SIZE, 0);
             return;
         }
     }
@@ -129,7 +131,7 @@ void pmm_free(uint32_t location) {
  Param: pages: number of pages to allocate
  Returns UINT32_MAX if there's no memory left
  */
-uint32_t pmm_alloc_range(uint32_t pages) {
+uint32_t pmm_alloc(uint32_t pages) {
     if(!pages)
         PANIC("Trying to allocate a range of 0 pages\n");
     
@@ -142,7 +144,7 @@ uint32_t pmm_alloc_range(uint32_t pages) {
 						PANIC("Page is already allocated\n");
 					bitmap_set(region->bitmap, i, 1);
 				}
-				uint32_t result = region->base+(location*4096);
+				uint32_t result = region->base+(location*PAGE_SIZE);
 				return(result);
 			}
         }
@@ -154,13 +156,13 @@ uint32_t pmm_alloc_range(uint32_t pages) {
  Free a contiguous region of memory
  range: count of pages to free
 */
-void pmm_free_range(uint32_t location, uint32_t range) {
+void pmm_free(uint32_t location, uint32_t range) {
     for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
         if((location>=region->base) && (location<region->base+region->size)) {
-            if(location+(range*4096) >= region->base+region->size)
+            if(location+(range*PAGE_SIZE) >= region->base+region->size)
                 PANIC("Range of pages to free extends beyond current region\n");
 
-            for(unsigned page=(location - region->base)/4096; page<((location - region->base)/4096) + range; page++) {
+            for(unsigned page=(location - region->base)/PAGE_SIZE; page<((location - region->base)/PAGE_SIZE) + range; page++) {
                 if(!bitmap_get(region->bitmap, page))
                     PANIC("Page is not allocated\n");
                 bitmap_set(region->bitmap, page, 0);
@@ -178,7 +180,7 @@ uint32_t pmm_get_free() {
     	if(region->type == REGION_FREE) {
 			for(unsigned page=0; page < region->bitmap->bitcount; page++) {
 				if(!bitmap_get(region->bitmap, page))
-					free_memory += 4096;
+					free_memory += PAGE_SIZE;
 			}
         }
     }
@@ -218,22 +220,22 @@ void pmm_dump_mem_regions() {
 	go and make wild assumptions with this, ok?
 */
 uint32_t pmm_page_usable(uint32_t location) {
-	ASSERT((location % 4096) == 0);
+	ASSERT((location % PAGE_SIZE) == 0);
 	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
 		if((location >= region->base) && (location < region->base + region->size)) {
-			return(!bitmap_get(region->bitmap, (location - region->base)/4096));
+			return(!bitmap_get(region->bitmap, (location - region->base)/PAGE_SIZE));
 		}
 	}
 	return(0);
 }
 
 int pmm_page_status(uint32_t location) {
-	ASSERT((location % 4096) == 0);
+	ASSERT((location % PAGE_SIZE) == 0);
 	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
 		if((location >= region->base) && (location < region->base + region->size)) {
 			if(region->type == REGION_RESERVED)
 				return(PMM_STATUS_RESERVED);
-			else if(bitmap_get(region->bitmap, (location - region->base)/4096))
+			else if(bitmap_get(region->bitmap, (location - region->base)/PAGE_SIZE))
 				return(PMM_STATUS_ALLOCATED);
 			else
 				return(PMM_STATUS_FREE);
@@ -248,9 +250,9 @@ int pmm_page_status(uint32_t location) {
 void pmm_reserve(uint32_t location) {
 	for(struct MEM_REGION* region = mem_regions.first; region; region = region->next) {
 		if((location >= region->base) && (location < region->base + region->size)) {
-			if(bitmap_get(region->bitmap, (location - region->base)/4096))
+			if(bitmap_get(region->bitmap, (location - region->base)/PAGE_SIZE))
 				PANIC("Trying to reserve already allocated memory at physical address %X", location);
-			bitmap_set(region->bitmap, (location - region->base)/4096, 1);
+			bitmap_set(region->bitmap, (location - region->base)/PAGE_SIZE, 1);
 			return;
 		}
 	}
@@ -263,9 +265,9 @@ void pmm_reserve(uint32_t location) {
 	Please. Please, do not add overlapping regions of different types
 */
 void pmm_add_region(uint32_t base, uint32_t size, uint32_t type) {
-	if(base % 4096)
+	if(base % PAGE_SIZE)
 		PANIC("Invalid region");
-	if(size % 4096)
+	if(size % PAGE_SIZE)
 		PANIC("Invalid page size");
 	if(vmm_paging_enabled())
 		PANIC("Paging already enabled");
@@ -285,7 +287,8 @@ void pmm_add_region(uint32_t base, uint32_t size, uint32_t type) {
 	region->size = size;
 	region->type = type;
 	region->bitmap = (struct BITMAP*)kmalloc_seg(1, sizeof(struct BITMAP*));
-	bitmap_init(region->bitmap, size/4096, kmalloc_seg_a(bitmap_get_storage_size(size/4096), 4));
+	bitmap_init(region->bitmap, size/PAGE_SIZE, kmalloc_seg_a(bitmap_get_storage_size(size/PAGE_SIZE), 4));
+
 	MEM_REGIONS_append(&mem_regions, region);
 }
 

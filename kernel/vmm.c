@@ -31,7 +31,7 @@ static void vmm_load_pagetable(uint32_t physical_address);
 void vmm_init() {
 	/* First we initialize the physical memory manager */
 	pmm_init();
-	pmm_dump_mem_regions();
+	//pmm_dump_mem_regions();
 	
 	/* Need to add manually memory which is not marked by the bios as reserved or free */
 	pmm_add_region(VGA_PAGE, PAGE_SIZE, REGION_RESERVED);
@@ -114,7 +114,7 @@ void vmm_map(uint32_t linear_address, uint32_t physical_address, uint32_t flags)
 		need to allocate memory for it
 	*/
 	if(!(page_directory[directory_entry] & PAGE_DIR_PRESENT)) {
-		uint32_t page_table_physical = pmm_alloc_range(1);
+		uint32_t page_table_physical = pmm_alloc(1);
 		if(page_table_physical == UINT32_MAX)
 			PANIC("Physical memory exhaustion trying to allocate a page table");
 		
@@ -282,7 +282,7 @@ void* vmm_alloc_pages(uint32_t pages_count) {
 		PANIC("Linear address exhaustion");
 
 	/* Only the linear address needs to be contiguous */
-	void* physical_address = (void*)pmm_alloc_range(pages_count);
+	void* physical_address = (void*)pmm_alloc(pages_count);
 	if(physical_address == INVALID_ADDRESS)
 		PANIC("Physical memory exhaustion");
 
