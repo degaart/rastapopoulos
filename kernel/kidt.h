@@ -29,5 +29,8 @@
 	void idt_map_default_irqs();
 	void idt_set_irq_handler(int irq, IRQ_HANDLER handler);
 
+	struct PROCESS;
+	void idt_set_current_process(struct PROCESS* proc);
+
 #endif //_KIDT_H_
 

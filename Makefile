@@ -1,10 +1,12 @@
-.PHONY: boot/bootsect.bin bootldr/bootldr.bin kernel/kernel.bin
+.PHONY: boot/bootsect.bin bootldr/bootldr.bin kernel/kernel.bin all
+
+all: floppy.img
 
 debug: floppy.img
 	@/opt/bochs/bin/bochs -q -f bochsrc -rc bochs.init
 
 run: floppy.img
-	@qemu-system-i386 -fda floppy.img -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log
+	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log
 
 floppy.img: boot/bootsect.bin bootldr/bootldr.bin kernel/kernel.bin
 	@echo "[INIT] floppy.img"

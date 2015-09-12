@@ -77,7 +77,12 @@ void kmain() {
 	write_string("Calling user-mode\n");
 	struct PROCESS proc;
 	process_create(&proc, NULL);
-	TRACE("Process ESP: %x, EIP: %X", proc.esp, proc.eip);
+	TRACE(
+		"Process { address: %X, pagedir: %X, eip: %X, ss: %X, esp: %X }", 
+		&proc, proc.pagedir, proc.eip, (unsigned)proc.ss, proc.esp
+	);
+
+	idt_set_current_process(&proc);
 	_call_usermode(
 		USER_DATA_SEL|0x3,
 		(uint32_t)proc.esp,

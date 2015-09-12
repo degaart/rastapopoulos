@@ -4,8 +4,10 @@
 #include "kutil.h"
 #include "kterm.h"
 #include "pic.h"
+#include "process.h"
 
 static IRQ_HANDLER irq_handlers[16];
+static struct PROCESS *_current_process;
 
 #define EXCEPTION_EXTERNAL			(1)
 #define EXCEPTION_IDT				(1<<1)
@@ -118,7 +120,26 @@ static void irq_isr(uint32_t type, uint32_t code, const void* esp) {
 
 static void syscall_isr(uint32_t type, uint32_t code, const void* esp) {
 	TRACE("Syscall called: { type: %X, code: %X, esp: %X }", type, code, esp);
+	
 	/* Map process's ESP into kernel space so we can access args */
+	/*
+		Problem: we now need the page directory of the process to know where in physical memory
+		is the esp
+	*/
+	TRACE(
+		"Current process { "
+		"address: %X, "
+		"pagedir: %X, "
+		"eip: %X, "
+		"ss: %X, "
+		"esp: %X }",
+		_current_process,
+		_current_process->pagedir,
+		_current_process->eip,
+		(int)_current_process->ss,
+		_current_process->esp
+	);
+
 	PANIC("Inside syscall handler");
 }
 
@@ -166,5 +187,6 @@ void idt_set_irq_handler(int irq, IRQ_HANDLER handler) {
 	irq_handlers[irq] = handler;
 }
 
-
-
+void idt_set_current_process(struct PROCESS* proc) {
+	_current_process = proc;
+}
