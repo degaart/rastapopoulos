@@ -49,7 +49,7 @@ start:
 		mov es,ax
 		mov ss,ax
 		mov sp,0x7BFF
-			
+
 		; When booted from FAT12:
 		; 0x7C0B	bytes/sector. Always 512 for floppy (word)
 		; 0x7C0D	sectors/cluster. Usually 1 for floppy (byte)
@@ -172,6 +172,8 @@ start:
 		; bootldr expects to start at 0x000
 		; so we need to adjust cs
 		;jmp 0x7E0:0
+		mov di, str.loading
+		call write_string
 		jmp load_area
 
 read_file:
@@ -321,6 +323,7 @@ str:
 		.notfound: db 'BOOTLDR missing',0x0D,0x0A,0
 		.found: db 'BOOTLDR found',0x0D,0x0A,0
 		.unsupported: db 'Unsuported',0x0D,0x0A,0
+		.loading: db 'Loading',0x0D,0x0A,0
 
 		; padding for bios
 		times 510-($-$$) db 0

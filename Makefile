@@ -20,13 +20,17 @@ floppy.img:
 
 	@echo "[INIT] floppy.img"
 	@[ -f floppy.img ] || dd if=/dev/zero of=floppy.img bs=512 count=2880 > /dev/null
-	@mformat -i floppy.img -t 80 -h 2 -n 18 -B boot/obj/bootsect.bin
+	@mformat -i floppy.img -t 80 -h 2 -n 18
+
+	@echo "[CP] bootsect.bin"
+	@dd if=boot/obj/bootsect.bin of=floppy.img conv=notrunc bs=1 count=3 &> /dev/null
+	@dd if=boot/obj/bootsect.bin of=floppy.img conv=notrunc seek=61 skip=61 bs=1 &> /dev/null
 	
 	@echo "[CP] bootldr.bin"
-	@mcopy -D o -i floppy.img bootldr/bootldr.bin ::BOOTLDR
+	@mcopy -D o -i floppy.img bootldr/obj/bootldr.bin ::BOOTLDR
 	
 	@echo "[CP] kernel.bin"
-	@mcopy -D o -i floppy.img kernel/kernel.bin ::KERNEL
+	@mcopy -D o -i floppy.img kernel/obj/kernel.bin ::KERNEL
 
 bootsect:
 	@( cd boot && make ; )

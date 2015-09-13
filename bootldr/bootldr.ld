@@ -1,26 +1,31 @@
 OUTPUT_FORMAT("binary")
 ENTRY(_start)
-phys = 0x7E00;
+
 SECTIONS
 {
-  .text phys : AT(phys) {
-    code = .;
+  /*
+    Put a space after the section name and before the colon
+  */
+  .text 0x7E00 :
+  {
+    _TEXT_START_ = .;
     *(.text)
     *(.rodata)
-    . = ALIGN(2);
+    _TEXT_END_ = .;
   }
-  .data : AT(phys + (data - code))
+  
+  .data :
   {
-    data = .;
+    _DATA_START_ = .; 
     *(.data)
-    . = ALIGN(2);
+    _DATA_START_ = .;
   }
-  .bss : AT(phys + (bss - code))
-  {
-    bss = .;
-    *(.bss)
-    . = ALIGN(2);
-  }
-  end = .;
-}
 
+  .bss :
+  {
+    _BSS_START_ = .;
+    *(.bss)
+    _BSS_END_ = .;
+  }
+  _bootldr_end = .;
+}

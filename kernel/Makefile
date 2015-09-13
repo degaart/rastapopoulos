@@ -1,49 +1,45 @@
 .SUFFIXES:
 .PHONY: all clean
 
-AS=nasm
-CC=smlrc
-LD=i586-elf-ld
+CC=i586-elf-gcc
 CPP=i586-elf-cpp
+LD=i586-elf-ld
+
+CFLAGS = \
+	-std=gnu99 -O0 -masm=intel -march=i386 -mno-accumulate-outgoing-args \
+	-fverbose-asm -fno-builtin -ffreestanding -fno-inline \
+	-Wno-pointer-to-int-cast
 
 LDFLAGS = \
 	-nostdlib \
 	-static
 
-
 SRCS = \
-	main.c \
-	term.c \
-	mem.c \
-	util.c
+	main.c
 
 ASM_SRCS = \
-	stub.asm
+	kernel_stub.asm
 
 OBJS := $(patsubst %.c,obj/%.o,$(SRCS))
 ASM_OBJS := $(patsubst %.asm,obj/%.ao,$(ASM_SRCS))
 
-all: obj/Makefile.depends obj/bootldr.bin
+all: obj/Makefile.depends obj/kernel.bin
 
-obj/bootldr.bin: $(ASM_OBJS) $(OBJS)
+obj/kernel.bin: $(ASM_OBJS) $(OBJS) 
 	@echo "[LD] $^"
-	@ $(LD) \
-		-o $@ \
-		-T bootldr.ld \
-		-Map obj/bootldr.map \
+	@$(LD) \
+		-T kernel.ld -o $@ \
+		-Map obj/kernel.map \
 		$(LDFLAGS) \
 		$^
 
 $(OBJS):
 	@echo "[CC] $<"
-	@ $(CPP) -E $< -o $@.i
-	@echo "use16" > $@.asm
-	@ $(CC) -seg16 $@.i >> $@.asm
-	@ $(AS) -f elf32 -o $@ $@.asm
+	@$(CC) -c -o $@ $(CFLAGS) $<
 	
 $(ASM_OBJS): $(ASM_SRCS)
 	@echo "[ASM] $<"
-	@ $(AS) -f elf32 -o $@ $^
+	@nasm -f elf32 -o $@ $^
 
 obj/Makefile.depends: $(SRCS)
 	@echo > obj/Makefile.depends
@@ -57,3 +53,4 @@ obj/Makefile.depends: $(SRCS)
 
 clean:
 	@rm -f obj/*
+
