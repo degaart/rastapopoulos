@@ -7,6 +7,8 @@
 
  Memory layout:
 	 0x0500 - 0x05FF		: kernel params
+	 	0x500	uint16_t	: boot device
+	 	0x502	uint16_t	: memmap size
 	 0x05FF - 0x7BFF		; bootloader stack
 	 0x7C00 - 0x7DFF		: BPB of boot drive
 	 0x100000 - ?			: kernel load area

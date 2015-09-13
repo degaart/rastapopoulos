@@ -1,7 +1,0 @@
-To compile dev86 on mac:
-
-copy copt.c to copt/
-copy makefile.in to source root dir
-install gcc-4.0
-execute CC=gcc-4.0 make PREFIX=$PREFIX
-
