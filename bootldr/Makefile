@@ -2,7 +2,7 @@
 .PHONY: all clean
 
 AS=nasm
-CC=smlrc
+CC=smlrcc
 LD=i586-elf-ld
 CPP=i586-elf-cpp
 
@@ -15,10 +15,12 @@ SRCS = \
 	main.c \
 	term.c \
 	mem.c \
-	util.c
+	util.c \
+	io.c \
+    debug.c
 
 ASM_SRCS = \
-	stub.asm
+	stub.asm 
 
 OBJS := $(patsubst %.c,obj/%.o,$(SRCS))
 ASM_OBJS := $(patsubst %.asm,obj/%.ao,$(ASM_SRCS))
@@ -36,14 +38,13 @@ obj/bootldr.bin: $(ASM_OBJS) $(OBJS)
 
 $(OBJS):
 	@echo "[CC] $<"
-	@ $(CPP) -E $< -o $@.i
-	@echo "use16" > $@.asm
-	@ $(CC) -seg16 $@.i >> $@.asm
+	@ $(CPP) -E $< -o $@.i --std=gnu99
+	@ $(CC) -c -S -flat16 $@.i
 	@ $(AS) -f elf32 -o $@ $@.asm
 	
-$(ASM_OBJS): $(ASM_SRCS)
+obj/%.ao: %.asm
 	@echo "[ASM] $<"
-	@ $(AS) -f elf32 -o $@ $^
+	@ $(AS) -f elf32 -o $@ $<
 
 obj/Makefile.depends: $(SRCS)
 	@echo > obj/Makefile.depends

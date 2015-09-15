@@ -1,9 +1,11 @@
 #include "term.h"
 #include "util.h"
+#include "io.h"
+#include "debug.h"
 
 void main() {
-	write_string("Rastapopoulos bootloader\n");
-	write_string("Enabling A20 gate\n");
+    TRACE("*** Rastapopoulos bootloader ***");
+	TRACE("Enabling A20 gate");
 	enable_a20();
-	while(1);
+    halt();
 }

@@ -3,7 +3,11 @@
 #include "util.h"
 
 void write_char(unsigned ch) {
-	asm(
+	/*
+		First param in 16-bit mode: bp+4
+		               32-bit mode: bp+8
+	*/
+    	asm(
 		"push bx\n"
 		"mov ah, 0x0E\n"
 		"mov al, [bp+4]\n"
