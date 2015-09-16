@@ -23,8 +23,8 @@ floppy.img:
 	@mformat -i floppy.img -t 80 -h 2 -n 18
 
 	@echo "[CP] bootsect.bin"
-	@dd if=boot/obj/bootsect.bin of=floppy.img conv=notrunc bs=1 count=3 &> /dev/null
-	@dd if=boot/obj/bootsect.bin of=floppy.img conv=notrunc seek=61 skip=61 bs=1 &> /dev/null
+	@dd if=bootsect/obj/bootsect.bin of=floppy.img conv=notrunc bs=1 count=3 &> /dev/null
+	@dd if=bootsect/obj/bootsect.bin of=floppy.img conv=notrunc seek=61 skip=61 bs=1 &> /dev/null
 	
 	@echo "[CP] bootldr.bin"
 	@mcopy -D o -i floppy.img bootldr/obj/bootldr.bin ::BOOTLDR
@@ -33,7 +33,7 @@ floppy.img:
 	@mcopy -D o -i floppy.img kernel/obj/kernel.bin ::KERNEL
 
 bootsect:
-	@( cd boot && make ; )
+	@( cd bootsect && make ; )
 
 bootldr:
 	@( cd bootldr && make ; )
@@ -42,7 +42,7 @@ kernel:
 	@( cd kernel && make ; )
 
 clean:
-	@( cd boot && make clean; )
+	@( cd bootsect && make clean; )
 	@( cd bootldr && make clean; )
 	@( cd kernel && make clean; )
 	@rm -vf *.o *.bin *.tmp *.img
