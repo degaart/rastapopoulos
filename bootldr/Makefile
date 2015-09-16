@@ -17,7 +17,8 @@ SRCS = \
 	mem.c \
 	util.c \
 	io.c \
-    debug.c
+    debug.c \
+    malloc.c
 
 ASM_SRCS = \
 	stub.asm 
