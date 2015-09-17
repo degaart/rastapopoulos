@@ -1,14 +1,21 @@
 .SUFFIXES:
 .PHONY: all clean
 
-CC=i586-elf-gcc
-CPP=i586-elf-cpp
+AS=nasm
+CC=clang
+CPP=clang
 LD=i586-elf-ld
 
+# CFLAGS = \
+# 	-std=gnu99 -O0 -masm=intel -march=i386 -mno-accumulate-outgoing-args \
+# 	-fverbose-asm -fno-builtin -ffreestanding -fno-inline \
+# 	-Wno-pointer-to-int-cast -Werror -Wfatal-errors
+
 CFLAGS = \
-	-std=gnu99 -O0 -masm=intel -march=i386 -mno-accumulate-outgoing-args \
-	-fverbose-asm -fno-builtin -ffreestanding -fno-inline \
-	-Wno-pointer-to-int-cast
+	-std=gnu99 -O0 -Os \
+	-masm=intel \
+	-march=i386 -target i586-elf-unknown  -ffreestanding -fno-builtin -nostdlib \
+	-Werror -Wfatal-errors
 
 LDFLAGS = \
 	-nostdlib \
@@ -18,7 +25,9 @@ SRCS = \
 	main.c
 
 ASM_SRCS = \
-	kernel_stub.asm
+	stub.asm \
+	outb.asm \
+	inb.asm
 
 OBJS := $(patsubst %.c,obj/%.o,$(SRCS))
 ASM_OBJS := $(patsubst %.asm,obj/%.ao,$(ASM_SRCS))
@@ -35,18 +44,19 @@ obj/kernel.bin: $(ASM_OBJS) $(OBJS)
 
 $(OBJS):
 	@echo "[CC] $<"
+	@$(CC) -S -o $@.S $(CFLAGS) $<
 	@$(CC) -c -o $@ $(CFLAGS) $<
 	
-$(ASM_OBJS): $(ASM_SRCS)
+obj/%.ao: %.asm
 	@echo "[ASM] $<"
-	@nasm -f elf32 -o $@ $^
+	@ $(AS) -f elf32 -o $@ $<
 
 obj/Makefile.depends: $(SRCS)
 	@echo > obj/Makefile.depends
 	@for i in $^; do \
 		echo "[DEP] $$i"; \
 		/bin/echo -n "obj/" >> obj/Makefile.depends; \
-		$(CPP) $(CFLAGS) -MM $$i >> obj/Makefile.depends ; \
+		$(CPP) -E $(CFLAGS) -MM $$i >> obj/Makefile.depends ; \
 	done
 
 -include obj/Makefile.depends

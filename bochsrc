@@ -8,4 +8,5 @@ floppya: 1_44=floppy.img, status=inserted, write_protected=1
 boot: floppy
 port_e9_hack: enabled=1
 display_library: nogui, options="hideIPS"
+com1: enabled=1, mode=file, dev=/tmp/rastapopoulos.log
 

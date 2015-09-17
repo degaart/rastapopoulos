@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include "debug.h"
 #include "io.h"
 #include "util.h"
@@ -7,7 +8,10 @@ void trace_write(int ch, void* params) {
 }
 
 void trace(const char* file, unsigned line, const char* function, const char* fmt, ...) {
-    tracev(file, line, function, fmt, (char*)&fmt + sizeof(const char*));
+    va_list ap;
+    va_start(ap, fmt);
+    tracev(file, line, function, fmt, ap);
+    va_end(ap);
 }
 
 void tracev(const char* file, unsigned line, const char* function, const char* fmt, va_list args) {

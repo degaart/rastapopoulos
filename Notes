@@ -1,0 +1,9 @@
+* Bootloader
+    * I abandonned SmallerC because I didn't want to handle segments in real-mode
+    * I abandonned clang: although it emitted better code than gcc and had -m16, it's intel syntax support was poor (bug when using input args)
+    * So, for now, back to gcc. Might need to upgrade to gcc-4.9 to get -m16
+    * So, if we're back to gcc, might just as well restore the old code, but use the new Makefile
+    * Assembly in 16-bit code:
+        - First argument is in [ebp+8]
+        - use retf or db 0x66;ret ro return from routine
+

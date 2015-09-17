@@ -41,7 +41,7 @@ void itox(char* str, unsigned n) {
 		return;
 	} else {
 		char* out = str;
-		unsigned nibble = 4;
+		unsigned nibble = 8;
         
 		while(nibble) {
             unsigned shift = (nibble - 1) * 4;
@@ -58,7 +58,11 @@ void itox(char* str, unsigned n) {
 }
 
 void format(write_callback_t callback, void* callback_params, const char* format, ...) {
-    formatv(callback, callback_params, format, (char*)&format + sizeof(char*) );
+    va_list args;
+
+    va_start(args, format);
+    formatv(callback, callback_params, format, args);
+    va_end(args);
 }
 
 void formatv(write_callback_t callback, void* callback_params, const char* format, va_list args) {
@@ -72,8 +76,7 @@ void formatv(write_callback_t callback, void* callback_params, const char* forma
             switch(*(format+1)) {
             case 'd':
             case 'u':
-                val = *((unsigned*)args);
-                args += sizeof(unsigned);
+                val = va_arg(args, unsigned);
 
                 itoa(num_buffer, val);
                 p = num_buffer;
@@ -83,8 +86,7 @@ void formatv(write_callback_t callback, void* callback_params, const char* forma
                 format++;
                 break;
             case 's':
-                p = *((char**)args);
-                args += sizeof(char*);
+                p = va_arg(args, char*);
 
                 while(*p)
                     callback(*(p++), callback_params);
@@ -93,8 +95,7 @@ void formatv(write_callback_t callback, void* callback_params, const char* forma
                 break;
             case 'X':
             case 'x':
-                val = *((unsigned*)args);
-                args += sizeof(unsigned);
+                val = va_arg(args, unsigned);
 
                 itox(num_buffer, val);
                 p = num_buffer;
@@ -105,8 +106,7 @@ void formatv(write_callback_t callback, void* callback_params, const char* forma
                 break;
             case 'p':
             case 'P':
-                val = *((unsigned*)args);
-                args += sizeof(unsigned);
+                val = va_arg(args, unsigned);
 
                 num_buffer[0] = '0';
                 num_buffer[1] = 'x';

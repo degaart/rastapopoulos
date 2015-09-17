@@ -1,4 +1,4 @@
-STARTUP(obj/kernel_stub.ao)
+/*STARTUP(obj/kernel_stub.ao)*/
 OUTPUT_FORMAT("binary")
 
 SECTIONS

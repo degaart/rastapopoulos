@@ -5,24 +5,6 @@
 
 #include "io.h"
 
-unsigned inb(unsigned port) {
-	asm(
-		"xchg bx, bx\n"
-		"mov dx, [bp+4]\n"
-		"in al, dx\n"
-		"and eax, 0x00FF\n"
-	);
-}
-
-void outb(unsigned port, unsigned byte) {
-	asm(
-		"mov dx, [bp+4]\n"
-		"mov ax, [bp+6]\n"
-		"out dx, al\n"
-	);
-}
-
-
 void serial_write_char(int ch) {
 	outb(0xE9, ch); /* Bochs debug output */
 

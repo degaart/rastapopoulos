@@ -8,6 +8,9 @@ debug: floppy.img
 run: floppy.img
 	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log -nographic
 
+run_graphic: floppy.img
+	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log 
+
 floppy.img:
 	@echo "[MAKE] bootsect"
 	@make bootsect

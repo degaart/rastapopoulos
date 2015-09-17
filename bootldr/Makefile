@@ -2,9 +2,15 @@
 .PHONY: all clean
 
 AS=nasm
-CC=smlrcc
+CC=clang
 LD=i586-elf-ld
-CPP=i586-elf-cpp
+CPP=clang
+
+CFLAGS = \
+	-std=gnu99 -O0 -Os \
+	-masm=intel \
+	-m16 -march=i386 -ffreestanding -fno-builtin -nostdlib -target i586-elf-code16 \
+	-Werror -Wfatal-errors
 
 LDFLAGS = \
 	-nostdlib \
@@ -12,16 +18,18 @@ LDFLAGS = \
 
 
 SRCS = \
-	main.c \
-	term.c \
-	mem.c \
+	bootldr.c \
+	bootldr_str.c \
+	disk.c \
+	fat.c \
+	debug.c \
 	util.c \
-	io.c \
-    debug.c \
-    malloc.c
+	io.c
 
 ASM_SRCS = \
-	stub.asm 
+	bootldr_stub.asm \
+	inb.asm \
+	outb.asm
 
 OBJS := $(patsubst %.c,obj/%.o,$(SRCS))
 ASM_OBJS := $(patsubst %.asm,obj/%.ao,$(ASM_SRCS))
@@ -39,9 +47,8 @@ obj/bootldr.bin: $(ASM_OBJS) $(OBJS)
 
 $(OBJS):
 	@echo "[CC] $<"
-	@ $(CPP) -E $< -o $@.i --std=gnu99
-	@ $(CC) -c -S -flat16 $@.i
-	@ $(AS) -f elf32 -o $@ $@.asm
+	@ $(CC) -S -o $@.S $< $(CFLAGS)
+	@ $(CC) -c -o $@ $< $(CFLAGS)
 	
 obj/%.ao: %.asm
 	@echo "[ASM] $<"
@@ -52,7 +59,7 @@ obj/Makefile.depends: $(SRCS)
 	@for i in $^; do \
 		echo "[DEP] $$i"; \
 		/bin/echo -n "obj/" >> obj/Makefile.depends; \
-		$(CPP) $(CFLAGS) -MM $$i >> obj/Makefile.depends ; \
+		$(CPP) -E $(CFLAGS) -MM $$i >> obj/Makefile.depends ; \
 	done
 
 -include obj/Makefile.depends
