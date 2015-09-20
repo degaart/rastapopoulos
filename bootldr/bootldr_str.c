@@ -68,3 +68,14 @@ void memcpy(void* dst, const void* src, uint32_t siz) {
 		src++;
 	}
 }
+
+void memset(void* buf, int ch, unsigned size) {
+	uint8_t* dst = (uint8_t*)buf;
+	while(size--)
+		*(dst++) = ch;
+}
+
+void bzero(void* buf, unsigned size) {
+	memset(buf, 0, size);
+}
+

@@ -27,34 +27,20 @@ void itoa(char* str, unsigned n) {
 }
 
 void itox(char* str, unsigned n) {
-	if(!n) {
-		str[0] = '0';
-		str[1] = '\0';
-		return;
-	} else if(n < 10) {
-		str[0] = '0' + n;
-		str[1] = '\0';
-		return;
-	} else if(n < 16) {
-		str[0] = 'A' + (n - 10);
-		str[1] = '\0';
-		return;
-	} else {
-		char* out = str;
-		unsigned nibble = 8;
-        
-		while(nibble) {
-            unsigned shift = (nibble - 1) * 4;
-			int digit = (n >> shift) & 0x0F;
-            if(digit < 10)
-                *(out++) = (char)('0' + digit);
-            else
-                *(out++) = (char)('A' + digit - 10);
-           
-            nibble--;
-    	}
-        *out = '\0';
+	char* out = str;
+	unsigned nibble = 8;
+    
+	while(nibble) {
+        unsigned shift = (nibble - 1) * 4;
+		int digit = (n >> shift) & 0x0F;
+        if(digit < 10)
+            *(out++) = (char)('0' + digit);
+        else
+            *(out++) = (char)('A' + digit - 10);
+       
+        nibble--;
 	}
+    *out = '\0';
 }
 
 void format(write_callback_t callback, void* callback_params, const char* format, ...) {

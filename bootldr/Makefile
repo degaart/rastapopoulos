@@ -29,7 +29,8 @@ SRCS = \
 ASM_SRCS = \
 	bootldr_stub.asm \
 	inb.asm \
-	outb.asm
+	outb.asm \
+	bios_memmap.asm
 
 OBJS := $(patsubst %.c,obj/%.o,$(SRCS))
 ASM_OBJS := $(patsubst %.asm,obj/%.ao,$(ASM_SRCS))

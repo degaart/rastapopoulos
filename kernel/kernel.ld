@@ -29,6 +29,13 @@ SECTIONS
 		_DATA_START_ = .;
 	}
 
+	.ctors : 
+	{
+		_CTORS_START_ = .;
+		*(.ctors)
+		_CTORS_END_ = .;
+	}
+
 	.bss :
 	{
 		_BSS_START_ = .;

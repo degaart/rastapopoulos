@@ -277,6 +277,27 @@ _enter_pmode:
 	.gdt_desc_offset: dd 0
 	.gdt_desc_end:
 
+
+global _get_memmap2:
+_get_memmap2:
+		; get memmap using int 0x15, 0xE820
+		; Params:
+		;	EBP+8		DWORD buffer address
+		;	EBP+12		DWORD buffer size
+		; Results:
+		;	0xFFFFFFFF	error
+		;	else		buffer size
+		;
+		push ebp
+		mov ebp, esp
+		pushad
+
+
+	.return:
+		popad
+		pop ebp
+		ret
+
 global _get_memmap
 _get_memmap:
 		; Get memory map using int 0x15,0xE820

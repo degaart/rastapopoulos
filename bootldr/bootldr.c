@@ -70,55 +70,31 @@ struct GDT_ENTRY encode_gdt(uint32_t base, uint32_t limit, uint32_t type) {
     return(entry);
 }
 
+uint32_t _bios_memmap(void*,uint32_t);
 static void get_memmap() {
-	int cookie;
-	int size;
-	uint32_t* buffer;
-	int count;
-	
-	cookie = 0;
-	buffer = kernel_params->memmap;
-	count = 0;
-	while(1) {
-		for(int i=0; i<6; i++)
-			buffer[i] = 0;
-		size = 20;
-		if(!_get_memmap(buffer, &size, &cookie)) {
-			TRACE("ERROR: Could not get memory map");
-			write_string("ERROR: Could not get memory map\r\n");
-			_halt();
-		}
-		if(buffer[2]) {
-			buffer += 6;
-			count++;
-		}
-		
-		if(!cookie)
-			break;
-		
+	//bzero(kernel_params->memmap, sizeof(kernel_params->memmap));
+	uint32_t ret = _bios_memmap(kernel_params->memmap, sizeof(kernel_params->memmap));
+	if(ret == UINT32_MAX) {
+		TRACE("ERROR: Failed to get memory map");
+		_halt();
 	}
-	kernel_params->memmap_size = count;
+	TRACE("_bios_memmap ret: %d", ret);
+	kernel_params->memmap_size = ret;
 }
 
 static void dump_memmap() {
-	uint32_t* buffer = kernel_params->memmap;
+	struct bios_memmap_t* buffer = kernel_params->memmap;
 
 	TRACE("Memory regions:");
 	for(int i=0; i<kernel_params->memmap_size; i++) {
-		TRACE(
-			"BASE: %P LENGTH: 0x%X TYPE: 0x%X", 
-			buffer[0], 
-			buffer[2], 
-			buffer[4]
-		);
-		/*write_string("    BASE: ");
-		write_uint32(buffer[0]);
-		write_string(" LENGTH: ");
-		write_uint32(buffer[2]);
-		write_string(" TYPE: ");
-		write_uint32(buffer[4]);
-		write_string("\r\n");*/
-		buffer += 6;
+		if(buffer[i].base_hi == 0) {
+			TRACE(
+				"\tBASE: 0x%X LENGTH: 0x0x%X TYPE: 0x%X", 
+				buffer[i].base_lo, 
+				buffer[i].size_lo, 
+				buffer[i].flags
+			);	
+		}
 	}
 }
 

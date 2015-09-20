@@ -12,6 +12,7 @@ _kernel_entry:
     ; setup kernel stack
     ; Note: we assume the bootloader has correctly set up
     ; data and stack segments here
+    cli
     mov     esp, 0x7BFF
 
     ; Jump to C entry point

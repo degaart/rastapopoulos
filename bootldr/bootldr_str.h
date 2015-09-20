@@ -9,6 +9,8 @@ void dump_mem(const void* buffer, uint32_t siz);
 
 int memcmp(const void* s0, const void* s1, uint16_t siz);
 void memcpy(void* dst, const void* src, uint32_t siz);
+void memset(void* buf, int ch, unsigned size);
+void bzero(void* buf, unsigned size);
 
 #define DUMP16(s) \
 	write_string(#s ": "); \
