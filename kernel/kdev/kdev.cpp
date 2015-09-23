@@ -10,8 +10,17 @@
 #include "../../bootldr/kernel_params.h"
 #include "idt.h"
 
+unsigned char _TEXT_START_[0];
+
 extern "C"
 int main() {
+    Bitset b0{32480};
+    Bitset b1{159};
+    
+    LinkedList<Bitset> ll;
+    ll.append(b0);
+    exit(0);
+    
     Bitset b{159};
     b.set_range(0, 158);
     assert(b.find() == 158);
@@ -45,7 +54,8 @@ int main() {
 //    memmap[5].flags = 0x00000001;
     
     PMM::init(memmap, sizeof(memmap) / sizeof(*memmap));
-    PMM::dump();
+    PMM::dump_zones();
+    exit(0);
     
     /*
         Total memory: 0x7F7F000 bytes

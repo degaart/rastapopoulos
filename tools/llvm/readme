@@ -1,0 +1,15 @@
+* To compile llvm 3.7 on osx:
+
+    * extract llvm sourcecode
+    * extract clang (cfe) sourcecode into llvm-3.7/tools, rename directory to clang
+    * extract compiler-rt into llvm-3.7/projects, rename directory to compiler-rt
+    * extract lld to llvm-3.7/tools, rename to lld
+    * Run cmake with -DLLVM_TARGETS_TO_BUILD=X86
+    * Run make -j8
+
+* Not tested: lld <-- experimental, please use a cross-binutils for i586-elf
+* Check test for example usage
+
+
+
+

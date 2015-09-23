@@ -18,13 +18,37 @@ void PMM::init(const void* bios_memmap, unsigned bios_memmap_size) {
             add_region(regions[i].base_lo, regions[i].size_lo);
         }
     }
+
+    for(auto region = _regions.iterator(); !region.end(); region.next()) {
+        for(uint32_t page = region->base(); page < region->base() + region->size();page += PAGE_SIZE) {
+            if(region->page_reserved(page)) {
+                TRACE("WARNING: page 0x%X reserved!", page);
+            }
+            assert(!region->page_reserved(page));
+        }
+    }
 }
 
 void PMM::dump() {
-    TRACE("Memmap: ");
-
     for(auto region = _regions.iterator(); !region.end(); region.next()) {
         TRACE("\tbase: 0x%X limit: 0x%X size: 0x%X", region->base(), region->base() + region->size() - 1, region->size());
+    }
+}
+
+void PMM::dump_zones() {
+    for(auto region = _regions.iterator(); !region.end(); region.next()) {
+        uint32_t page = region->base();
+        uint32_t zone = page;
+        bool zone_reserved = region->page_reserved(zone);
+        while(page < region->base() + region->size()) {
+            if(region->page_reserved(page) != zone_reserved) {
+                TRACE("\t0x%X - 0x%X %s", zone, page - 1, zone_reserved ? "reserved" : "free");
+                zone = page;
+                zone_reserved = region->page_reserved(page);
+            }
+            page += PAGE_SIZE;
+        }
+        TRACE("\t0x%X - 0x%X %s", zone, page - 1, zone_reserved ? "reserved" : "free");
     }
 }
 

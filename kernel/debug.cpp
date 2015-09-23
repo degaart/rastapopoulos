@@ -4,6 +4,8 @@
 #include "string.h"
 
 static void trace_write(int ch, void* params) {
+    // while(!(IO::inb(0x3f8 + 5) & 0x20)); /* wait for queue empty */
+    // IO::outb(0x3f8, ch & 0xFF);
     IO::outb(0xE9, ch);
 }
 
@@ -28,4 +30,7 @@ void Debug::panic(const char* file, unsigned line, const char* function, const c
     String::formatv(trace_write, 0, fmt, args);
     va_end(args);
     trace_write('\n', 0);
+
+    halt();
 }
+

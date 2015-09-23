@@ -3,8 +3,14 @@
 
 PMM::MemRegion::MemRegion(uint32_t base, uint32_t size)
 : _base(align(base, PAGE_SIZE)), _size(truncate(size, PAGE_SIZE)), _bitset(size / PAGE_SIZE), _free_size(_size / PAGE_SIZE) {
-    
+
 }
+
+PMM::MemRegion::MemRegion(const MemRegion& region)
+: _base{region._base}, _size{region._size}, _bitset{region._bitset}, _free_size{region._free_size} {
+
+}
+
 
 uint32_t PMM::MemRegion::base() const {
     return _base;
@@ -31,7 +37,7 @@ bool PMM::MemRegion::contains_page(uint32_t page) const {
 bool PMM::MemRegion::page_reserved(uint32_t page) const {
     assert(contains_page(page));
     int idx = indexof(page);
-    return !_bitset.test(idx);
+    return _bitset.test(idx);
 }
 
 /* Reserves given page, throws error if page already reserved, or page outside region */
@@ -48,7 +54,7 @@ void PMM::MemRegion::free(uint32_t page) {
     assert(contains_page(page));
     int idx = indexof(page);
     assert(_bitset.test(idx));
-    _bitset.set(idx);
+    _bitset.clear(idx);
     _free_size++;
 }
 

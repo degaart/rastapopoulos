@@ -9,8 +9,11 @@
 */
 class VMM {
 private:
-	static void map_seg(uint32_t va, uint32_t pa);
+	static void map_seg(uint32_t va, uint32_t pa, uint32_t flags);
 	static void page_fault_handler(const isr_regs_t* regs);
+	static void double_fault_handler(const isr_regs_t* regs);
+
+	static bool _paging_enabled;
 public:
 	static const uint32_t PAGE_SIZE = 0x1000;
 

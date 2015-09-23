@@ -10,6 +10,8 @@
 #include "string.h"
 #include "../bootldr/kernel_params.h"
 
+extern uint32_t isr_stub_table[];
+
 static void int80_handler(const isr_regs_t* regs) {
     TRACE("INT80 called");
 }
@@ -38,7 +40,14 @@ extern "C" void main() {
     TRACE("Initializing VMM");
     VMM::init();
     TRACE("%u pages free (%u Kb)", PMM::pages_free(), (PMM::pages_total() * PMM::PAGE_SIZE) / 1024);
-
+    TRACE("Physical memory zones:");
+    PMM::dump_zones();
+    
+    uint8_t *invalid_addr = (uint8_t *)kheap_start();
+    while(true) {
+        *invalid_addr = 0;
+        invalid_addr++;
+    }
 	halt();
 }
 

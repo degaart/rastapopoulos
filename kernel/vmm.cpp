@@ -5,7 +5,8 @@
 #include "debug.h"
 #include "pmm.h"
 
-static const uint32_t KERNEL_START = 0x100000;
+bool VMM::_paging_enabled = false;
+
 static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
 
 #define PTE_PRESENT             1
@@ -47,9 +48,11 @@ struct pagedir_t {
 };
 
 static pagedir_t* _current_pagedir;
+extern uint32_t isr_stub_table[256];           /* Defined in idt_stub.asm */
 
 /* Initial map implementation, assumes paging disabled, uses kmalloc instead of PMM */
-void VMM::map_seg(uint32_t va, uint32_t pa) {
+void VMM::map_seg(uint32_t va, uint32_t pa, uint32_t flags) {
+    assert(!_paging_enabled);
     assert( va % PAGE_SIZE == 0);
     assert( pa % PAGE_SIZE == 0);
 
@@ -66,7 +69,7 @@ void VMM::map_seg(uint32_t va, uint32_t pa) {
     }
 
     assert(!page_table->entries[pte]);
-    page_table->entries[pte] = pa | PTE_PRESENT | PTE_WRITABLE;
+    page_table->entries[pte] = pa | PTE_PRESENT | flags;
 
     /* Update PMM */
     PMM::reserve(pa);
@@ -81,49 +84,86 @@ void VMM::init() {
         i.e.:   INITIAL_KERNEL_STACK-0x100  -   INITIAL_KERNEL_STACK
                 KERNEL_START                -   kheap_start  
     */
+    TRACE("Initial kernel stack: 0x%X - 0x%X", INITIAL_KERNEL_STACK - 0x100, INITIAL_KERNEL_STACK);
     for(uint32_t page = truncate(INITIAL_KERNEL_STACK - 0x100, PAGE_SIZE);
         page < align(INITIAL_KERNEL_STACK, PAGE_SIZE)+1;
         page += PAGE_SIZE
     ) {
-        map_seg(page, page);
+        map_seg(page, page, PTE_WRITABLE);
     }
 
-    for(uint32_t page = KERNEL_START; page < align((uint32_t)kheap_start(), PAGE_SIZE) + 1; page += PAGE_SIZE) {
-        map_seg(page, page);
+    /*
+        Note: In supervisor mode, all mapped pages are always read-write!
+        That essentially means we cannot write-protect kernel .rodata! Fuck!
+
+        Meh. Ignore this alarmist jerk. We can protect from supervisor writes
+        using WP flag in CR0 just fine.
+    */
+    uint32_t page = (uint32_t)_TEXT_START_;
+    TRACE("_TEXT_START_: %p", _TEXT_START_);
+    TRACE("_DATA_START_: %p", _DATA_START_);
+    while(page < (uint32_t)_DATA_START_) {
+        map_seg(page, page, 0);
+        page += PAGE_SIZE;
     }
-    map_seg(4096 * 1024, 4096 * 1024);
-    map_seg(4096 * 1025, 4096 * 1025);
+
+    while(page < (uint32_t)kheap_start()) {
+        map_seg(page, page, PTE_WRITABLE);
+        page += PAGE_SIZE;
+    }
+
+
+    // while(page < (uint32_t)kheap_start()) {
+    //     map_seg(page, page, PTE_WRITABLE);
+    //     page += PAGE_SIZE;
+    // }
+    TRACE("Kernel end: 0x%X", page);
 
     IDT::install_handler(14, page_fault_handler);
+    IDT::install_handler(8, double_fault_handler);
 
     /* Enable paging */
     TRACE("_current_pagedir: %p", _current_pagedir);
     TRACE("&_current_pagedir: %p", &_current_pagedir);
-    BREAKPOINT();
     write_cr3(_current_pagedir);
     
     uint32_t cr0;
     read_cr0(cr0);
-    cr0 |= 0x80000000;
+    cr0 = cr0 | CR0_PG | CR0_WP;
     write_cr0(cr0);
+
+    _paging_enabled = true;
 }
 
 void VMM::page_fault_handler(const isr_regs_t* regs) {
+    /* Quelque chose ici cause un triple-fault dans qemu et virtualbox mais pas dans bochs */
     uint32_t faulting_addr;
     read_cr2(faulting_addr);
 
-    int present = !(regs->err_code & 0x1);          // Page not present
-    int writeop = regs->err_code & 0x2;             // Write operation?
-    int usermode = regs->err_code & 0x4;            // Processor was in user-mode?
-    int reserved = regs->err_code & 0x8;            // Overwritten CPU-reserved bits of page entry?
-    int fetch = regs->err_code & 0x10;              // Caused by an instruction fetch?
+    int present = regs->err_code & 0x1;
+    int writeop = regs->err_code & 0x2;
+    int usermode = regs->err_code & 0x4;
+    int reserved = regs->err_code & 0x8;
+    int fetch = regs->err_code & 0x10;
 
     PANIC(
         "Page fault at address 0x%X "
-        "(present: %u, writeop: %u, usermode: %u, reserved: %u, fetch: %u)",
+        "(%s %s %s %s %s)",
         faulting_addr,
-        present, writeop, usermode, reserved, fetch
+        present ? "access-violation" : "non-present-page",
+        writeop ? "writeop" : "readop",
+        usermode ? "user-mode" : "kernel-mode",
+        reserved ? "reserved" : "",
+        fetch ? "ifetch" : ""
     );
+}
+
+void VMM::double_fault_handler(const isr_regs_t* regs) {
+    PANIC("Double-fault exception");
+}
+
+bool VMM::paging_enabled() {
+    return _paging_enabled;
 }
 
 

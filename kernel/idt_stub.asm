@@ -1,6 +1,5 @@
 section .text
 %macro ISR_NOERRCODE 1  ; define a macro, taking one parameter
-    ;global isr_stub_%1
     isr_stub_%1:
         cli
         push byte 0
@@ -9,12 +8,41 @@ section .text
 %endmacro
 
 %macro ISR_ERRCODE 1
-    ;global isr_stub_%1
     isr_stub_%1:
         cli
         push dword %1
         jmp isr_common_stub
-%endmacro 
+%endmacro
+
+; Special case for abort class exceptions
+; Disable interrupts, paging, and setup a dedicated stack
+%macro ISR_ABORT 1
+    isr_stub_%1:
+        cli
+
+        mov eax, cr0
+        and eax, ~0x80000000
+        mov cr0, eax
+
+        mov eax, 0x7CFF
+        mov esp, eax
+
+        mov dx, 0xE9
+        mov al, 'X'
+        out dx, al
+    .halt:
+        jmp .halt
+
+        push word 0
+        push word 0
+        pushf
+        push word 0
+        push word 0
+        push byte 0
+        push dword %1
+
+        jmp isr_common_stub
+%endmacro
 
 ; This is our common ISR stub. It saves the processor state, sets
 ; up for kernel mode segments, calls the C-level fault handler,
@@ -49,8 +77,10 @@ isr_common_stub:
 ; Generate the ISR thunks
 %assign isr_index 0
 %rep 256
-    %if (isr_index==8) || ((isr_index>=10) && (isr_index<=14)) || (isr_index==17)
+    %if ((isr_index>=10) && (isr_index<=14)) || (isr_index==17)
         ISR_ERRCODE isr_index
+    %elif isr_index==8
+        ISR_ABORT isr_index
     %else
         ISR_NOERRCODE isr_index
     %endif

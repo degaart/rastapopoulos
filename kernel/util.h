@@ -5,7 +5,6 @@
     while(1) { \
     	asm volatile(	\
     		".intel_syntax noprefix\n" \
-    		"xchg bx, bx\n" \
             "cli\n" \
             "hlt\n" \
     	); \
@@ -36,29 +35,23 @@
     )
 
 
-#ifndef __APPLE__
-#define write_cr3(x)    asm volatile("mov %0, %%cr3" :: "r"(x))
-#define write_cr2(x)    asm volatile("mov %0, %%cr2" :: "r"(x))
-#define write_cr1(x)    asm volatile("mov %0, %%cr1" :: "r"(x))
-#define write_cr0(x)    asm volatile("mov %0, %%cr0" :: "r"(x))
-
-#define read_cr0(x)     asm volatile("mov %%cr0, %0" : "=r"(x))
-#define read_cr1(x)     asm volatile("mov %%cr1, %0" : "=r"(x))
-#define read_cr2(x)     asm volatile("mov %%cr2, %0" : "=r"(x))
-#define read_cr3(x)     asm volatile("mov %%cr3, %0" : "=r"(x))
-#else
-#define write_cr3(x)
-#define write_cr2(x)
-#define write_cr1(x)
-#define write_cr0(x)
-
-#define read_cr0(x)
-#define read_cr1(x)
-#define read_cr2(x)
-#define read_cr3(x)
-#endif
+#include "regs.h"
 
 ;   /* To make sublime text happy */
+
+#define LINKER_SYMBOL(sym) extern unsigned char sym[]
+
+LINKER_SYMBOL(_TEXT_START_);
+LINKER_SYMBOL(_TEXT_START_);
+LINKER_SYMBOL(_RODATA_START_);
+LINKER_SYMBOL(_RODATA_END_);
+LINKER_SYMBOL(_DATA_START_);
+LINKER_SYMBOL(_DATA_END_);
+LINKER_SYMBOL(_CTORS_START_);
+LINKER_SYMBOL(_CTORS_END_);
+LINKER_SYMBOL(_BSS_START_);
+LINKER_SYMBOL(_BSS_END_);
+LINKER_SYMBOL(_KERNEL_END_);
 
 template<typename T> T align(T value, unsigned alignment) {
     unsigned result = (unsigned)value;
@@ -70,5 +63,6 @@ template<typename T> T align(T value, unsigned alignment) {
 template<typename T> T truncate(T value, unsigned alignment) {
     return (value / alignment) * alignment;
 }
+
 
 #endif

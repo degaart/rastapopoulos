@@ -31,7 +31,7 @@ private:
         }
         
         T val(const T& val) {          /* Set value, and returns old value */
-            T tmp{ move(_val) };
+            T tmp{ _val };
             _val = val;
             return tmp;
         }
@@ -53,7 +53,9 @@ private:
         }
         
         void swap(Node* other) {     /* Swap value with the other object */
-            ::swap(_val, other->_val);
+            T tmp{other->_val};
+            other->_val = _val;
+            _val = tmp;
         }
     };
 public:
@@ -223,11 +225,11 @@ private:
         if(node == _tail)
             _tail = node->_prev;
         
-        T val{ move(node->_val) };
+        T val{ node->_val };
         delete node;
         
         _size--;
-        return move(val);
+        return val;
     }
 public:
     LinkedList()

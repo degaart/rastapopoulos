@@ -19,6 +19,8 @@ private:
         uint32_t _free_size;
     public:
         MemRegion(uint32_t base, uint32_t size);
+        MemRegion(const MemRegion&);
+        MemRegion& operator=(const MemRegion&) = delete;
         
         uint32_t base() const;
         uint32_t size() const;          /* size in bytes of region */
@@ -54,6 +56,7 @@ public:
     
 	static void init(const void* bios_memmap, unsigned bios_memmap_size);
     static void dump();
+    static void dump_zones();
 
 	/*
 		Mark a specific physical page as allocated

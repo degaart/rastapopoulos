@@ -1,0 +1,7 @@
+../gdb-7.9.1/configure \
+	--prefix="$PREFIX" \
+	--program-prefix=i586-elf- \
+	--target=i586-elf \
+	--with-libelf="$PREFIX"
+
+

@@ -1,4 +1,4 @@
-memory: guest=64, host=256
+memory: guest=16, host=256
 cpu: count=1, ips=1000000, reset_on_triple_fault=0
 boot: disk
 clock: sync=none

@@ -1,26 +1,25 @@
 #include "kmalloc.h"
 #include "debug.h"
+#include "vmm.h"
 
-extern unsigned char _kernel_end;      /* Put here by linker */
-static bool paging_enabled = false;
-static unsigned char* _kheap_start = &_kernel_end;
+static unsigned char* _kheap_start = _KERNEL_END_;
 
 void* kmalloc(uint32_t size) {
     return kmalloc_ap(size, 1, nullptr);
 }
 
 void kfree(void* ptr) {
-    assert(!paging_enabled);
+    assert(!VMM::paging_enabled());
 }
 
 /*
-    Allocates memory aligned to the specified size, and returns physical location
+    Allocates memory aligned to the specified alignment, and returns physical location
 */
 void* kmalloc_ap(uint32_t size, unsigned alignment, uint32_t* physical) {
-    assert(!paging_enabled);
+    assert(!VMM::paging_enabled());
 
-    unsigned char* ret = align(_kheap_start, alignment ? alignment : 1) + size;
-    _kheap_start = ret + 1;
+    unsigned char* ret = align(_kheap_start, alignment ? alignment : 1);
+    _kheap_start = align(_kheap_start + size, 2);
     if(physical)
         *physical = (uint32_t)ret;
     return ret;

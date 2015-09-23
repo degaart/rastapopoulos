@@ -4,13 +4,16 @@
 #include "cxxutil.h"
 
 Bitset::Bitset(unsigned size)
-: _size(size) {
+: _magic(MAGIC), _size(size) {
     _data_size = (size / BITS_PER_ELEMENT) + 1;
     _data = new unsigned[_data_size];
+    bzero(_data, _data_size * sizeof(unsigned));
 }
 
 Bitset::Bitset(const Bitset& bitset)
 : _size(bitset._size), _data_size(bitset._data_size) {
+    assert(bitset._magic == MAGIC);
+
     _data = new unsigned[_data_size];
     memcpy(_data, bitset._data, _data_size * sizeof(unsigned));
 }

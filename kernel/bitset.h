@@ -6,6 +6,9 @@
 
 class Bitset {
 private:
+    static const int MAGIC = 0xB17537;
+    unsigned _magic;
+    
     static const int BITS_PER_ELEMENT = sizeof(unsigned) * 8;
     
     unsigned *_data;                                    /* data */
@@ -15,7 +18,6 @@ public:
     Bitset(unsigned size);                              /* size: number of bits to store */
     Bitset() = delete;
     Bitset(const Bitset&);
-    Bitset(const Bitset&&);
     ~Bitset();
 
     Bitset& operator=(const Bitset&) = delete;

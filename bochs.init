@@ -1,3 +1,5 @@
 continue
 
+watch read 0x00107C45 32
+continue
 
