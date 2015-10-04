@@ -18,10 +18,12 @@ public:
         return (T*)alloc_impl(size, alignment, physical);
     }
 
-    static void free(void* ptr);           /* free allocated pointer */
+    static void free(void* ptr);                /* free allocated pointer */
 
-    static uint8_t* start();                   /* start of kernel heap */
-    static uint8_t* end();                     /* end of kernel heap */
+    static uint8_t* start();                    /* start of kernel heap */
+    static uint8_t* end();                      /* end of kernel heap */
+
+    static void check();                    /* check integrity */
 
     static void test();
 };

@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "kmalloc.h"
 #include "string.h"
+// #include "kheap.h"
 #include <stddef.h>
 
 void *__dso_handle;
@@ -29,13 +30,16 @@ void *operator new(size_t size) {
 void *operator new[](size_t size) {
     void* buffer = kmalloc(size);
     // TRACE("operator new[](%u) => %p", size, buffer);
+    // KHeap::dump();
     return buffer;
 }
  
 void operator delete(void *p) throw() {
+    // TRACE("operator delete(%p)", p);
     kfree(p);
 }
  
 void operator delete[](void *p) throw() {
+    // TRACE("operator delete[](%p)", p);
     kfree(p);
 }

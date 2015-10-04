@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		F41F342C1BC1439F00D11534 /* util.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F41F342B1BC1439F00D11534 /* util.cpp */; };
 		F41F342F1BC1471000D11534 /* kheap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F41F342E1BC1471000D11534 /* kheap.cpp */; };
+		F41F34311BC1611800D11534 /* kmalloc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F41F34301BC1611800D11534 /* kmalloc.cpp */; };
 		F43597C21BBC62CF00D11534 /* heap_block.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F43597C01BBC62CF00D11534 /* heap_block.cpp */; };
 		F46535301BAEA94E00D11534 /* bitset.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F46535281BAEA94E00D11534 /* bitset.cpp */; };
 		F46535321BAEA94E00D11534 /* pmm.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F465352E1BAEA94E00D11534 /* pmm.cpp */; };
@@ -35,6 +36,7 @@
 		F41F342B1BC1439F00D11534 /* util.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = util.cpp; path = ../util.cpp; sourceTree = "<group>"; };
 		F41F342D1BC146AA00D11534 /* kheap.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = kheap.h; path = ../kheap.h; sourceTree = "<group>"; };
 		F41F342E1BC1471000D11534 /* kheap.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = kheap.cpp; path = ../kheap.cpp; sourceTree = "<group>"; };
+		F41F34301BC1611800D11534 /* kmalloc.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = kmalloc.cpp; path = ../kmalloc.cpp; sourceTree = "<group>"; };
 		F43597C01BBC62CF00D11534 /* heap_block.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = heap_block.cpp; path = ../heap_block.cpp; sourceTree = "<group>"; };
 		F46535051BAEA80100D11534 /* kdev */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = kdev; sourceTree = BUILT_PRODUCTS_DIR; };
 		F46535281BAEA94E00D11534 /* bitset.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = bitset.cpp; path = ../bitset.cpp; sourceTree = "<group>"; };
@@ -97,6 +99,7 @@
 				F465353A1BAEADA700D11534 /* gdt.h */,
 				F465353B1BAEADA700D11534 /* idt.h */,
 				F465353C1BAEADA700D11534 /* io.h */,
+				F41F34301BC1611800D11534 /* kmalloc.cpp */,
 				F465353D1BAEADA700D11534 /* kmalloc.h */,
 				F465353E1BAEADA700D11534 /* stream.h */,
 				F41F342B1BC1439F00D11534 /* util.cpp */,
@@ -176,6 +179,7 @@
 				F46535321BAEA94E00D11534 /* pmm.cpp in Sources */,
 				F4CA455D1BAED7AD00D11534 /* pmm_memregion.cpp in Sources */,
 				F46535351BAEA9A800D11534 /* string.cpp in Sources */,
+				F41F34311BC1611800D11534 /* kmalloc.cpp in Sources */,
 				F46535421BAEAFDF00D11534 /* kdev.cpp in Sources */,
 				F46535301BAEA94E00D11534 /* bitset.cpp in Sources */,
 				F4BCE73F1BB5B92700D11534 /* heap.cpp in Sources */,

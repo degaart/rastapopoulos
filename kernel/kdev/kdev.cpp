@@ -10,14 +10,18 @@
 #include "../../bootldr/kernel_params.h"
 #include "idt.h"
 #include "heap.h"
+#include "kheap.h"
 
 unsigned char _TEXT_START_[0];
 unsigned char _DATA_START_[0];
 
 extern "C"
 void main() {
+    KHeap::init();
+    KHeap::test();
+    
 //    Heap::test_split();
-    Heap::test_alloc();
+//    Heap::test_alloc();
 }
 
 extern "C"
@@ -152,42 +156,6 @@ void Debug::panic(const char* file, unsigned line, const char* function, const c
 uint32_t kheap_start() {
     void* phony = malloc(1);
     return (uint32_t)phony;
-}
-
-void* kmalloc_ap(uint32_t size, unsigned alignment, uint32_t* physical) {
-    assert(alignment == 0 || alignment == 1 || alignment >= sizeof(void*));
-    
-    if(alignment == 1) {
-        void* ret = malloc(size);
-        if(physical)
-            *physical = (uint32_t)ret;
-        return ret;
-    }
-
-    
-    alignment = alignment ? alignment : 0;
-    size = align(size, alignment);
-//    int     posix_memalign(void **memptr, size_t alignment, size_t size);
-    
-    void* memptr;
-    int ret = posix_memalign(&memptr, alignment, size);
-    assert(ret == 0);
-    
-    if(physical)
-        *physical = (uint32_t)memptr;
-    return memptr;
-}
-
-void* kmalloc_ap(uint32_t size, uint32_t* physical) {
-    return kmalloc_ap(size, 1, physical);
-}
-
-void* kmalloc(uint32_t size) {
-    return kmalloc_ap(size, nullptr);
-}
-
-void kfree(void* ptr) {
-//    free(ptr);
 }
 
 void IDT::install_handler(int num, isr_handler_t handler) {

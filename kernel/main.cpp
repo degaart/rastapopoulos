@@ -12,8 +12,6 @@
 #include "heap.h"
 #include "kheap.h"
 
-LINKER_SYMBOL(_KERNEL_END_);
-
 extern uint32_t isr_stub_table[];
 
 static void int80_handler(const isr_regs_t* regs) {
@@ -28,6 +26,14 @@ extern "C" void main() {
 
     TRACE("Initializing kernel heap");
     KHeap::init();
+    KHeap::dump();
+    // uint8_t* p0 = (uint8_t*)kmalloc(20);
+    // uint8_t* p1 = (uint8_t*)kmalloc(36);
+    // halt();
+
+    // TRACE("Testing kernel heap");
+    // KHeap::test();
+    // halt();
 
     TRACE("Initializing GDT");
     GDT::init();
@@ -50,11 +56,11 @@ extern "C" void main() {
     TRACE("Physical memory zones:");
     PMM::dump_zones();
 
-    TRACE("Testing VMM::get_physical");
-    uint32_t isr_stub_physical;
-    bool ret = VMM::get_physical((uint32_t)isr_stub_table, &isr_stub_physical);
-    assert(ret != false);
-    assert(isr_stub_physical == (uint32_t)isr_stub_table);
+    // TRACE("Testing VMM::get_physical");
+    // uint32_t isr_stub_physical;
+    // bool ret = VMM::get_physical((uint32_t)isr_stub_table, &isr_stub_physical);
+    // assert(ret != false);
+    // assert(isr_stub_physical == (uint32_t)isr_stub_table);
 
     // TRACE("Testing VMM::map()");
     // uint8_t *unmapped = (uint8_t *)0x400000;            4 MB in, guaranteed to not be mapped at this point 

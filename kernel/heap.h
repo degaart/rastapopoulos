@@ -74,7 +74,6 @@ private:
     
     Block* _head;
     unsigned _size;         /* total size of this heap (not including header overhead) */
-    unsigned _free;         /* free bytes in heap (including header overhead) */
     
     void* alloc_impl(unsigned size, unsigned alignment);
 public:
@@ -94,13 +93,13 @@ public:
         return _size;
     }
     
-    unsigned free_size() {
-        return _free;
-    }
+    unsigned free_size();
     
     uint8_t* head() {
         return (uint8_t*)_head;
     }
+
+    void check();
     
     static void test_split();
     static void test_alloc();
