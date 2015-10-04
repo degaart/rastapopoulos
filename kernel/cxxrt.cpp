@@ -39,5 +39,3 @@ void operator delete(void *p) throw() {
 void operator delete[](void *p) throw() {
     kfree(p);
 }
-
-

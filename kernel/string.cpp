@@ -14,10 +14,15 @@ void String::itoa(char* str, unsigned n) {
         
         /* max: 65536 */
         unsigned current_divisor = 1000000000;
+        bool zeroes = true;
         while(current_divisor) {
             int digit = n / current_divisor;
-            if(digit || current_divisor == 1)
+            if(digit) {
                 *(out++) = '0' + digit;
+                zeroes = false;
+            } else if(!zeroes)
+                *(out++) = '0' + digit;
+
             
             n %= current_divisor;
             current_divisor /= 10;

@@ -107,6 +107,27 @@ public:
         bool prev() {
             assert(!end());
             _node = _node->_prev;
+            return _node != nullptr;
+        }
+        
+        Iterator prev_iterator() const {
+            Iterator it{ *this };
+            it.prev();
+            return it;
+        }
+        
+        Iterator next_iterator() const {
+            Iterator it { *this };
+            it.next();
+            return it;
+        }
+
+        Iterator get_prev() const {
+            return prev_iterator();
+        }
+
+        Iterator get_next() const {
+            return next_iterator();
         }
         
         const T& val() const {
@@ -140,9 +161,8 @@ public:
             return &_node->_val;
         }
         
-        operator const T&() const {
-            assert(!end());
-            return _node->val();
+        bool operator==(const Iterator& it) const {
+            return it._node == _node;
         }
         
         operator T() {
@@ -419,6 +439,12 @@ public:
     Iterator reverse_iterator() {
         return Iterator(_tail);
     }
+
+    /* Returns an invalid iterator */
+    static Iterator invalid_iterator() {
+        return Iterator{ nullptr };
+    }
+
 };
 
 #endif //_LINKED_LIST_H_

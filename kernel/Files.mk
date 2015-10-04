@@ -10,7 +10,9 @@ SRCS = \
     idt.cpp \
     kmalloc.cpp \
     bitset.cpp \
-    pmm_memregion.cpp
+    pmm_memregion.cpp \
+    heap.cpp \
+    heap_block.cpp
 
 ASM_SRCS = \
     stub.asm \

@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F43597C21BBC62CF00D11534 /* heap_block.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F43597C01BBC62CF00D11534 /* heap_block.cpp */; };
 		F46535301BAEA94E00D11534 /* bitset.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F46535281BAEA94E00D11534 /* bitset.cpp */; };
 		F46535321BAEA94E00D11534 /* pmm.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F465352E1BAEA94E00D11534 /* pmm.cpp */; };
 		F46535351BAEA9A800D11534 /* string.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F46535331BAEA9A800D11534 /* string.cpp */; };
 		F46535421BAEAFDF00D11534 /* kdev.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F46535411BAEAFDF00D11534 /* kdev.cpp */; };
+		F4BCE73F1BB5B92700D11534 /* heap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4BCE73D1BB5B92700D11534 /* heap.cpp */; };
 		F4CA455D1BAED7AD00D11534 /* pmm_memregion.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4CA455C1BAED7AD00D11534 /* pmm_memregion.cpp */; };
 		F4CA455F1BAEF8E900D11534 /* vmm.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F4CA455E1BAEF8E900D11534 /* vmm.cpp */; };
 /* End PBXBuildFile section */
@@ -28,6 +30,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F43597C01BBC62CF00D11534 /* heap_block.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = heap_block.cpp; path = ../heap_block.cpp; sourceTree = "<group>"; };
 		F46535051BAEA80100D11534 /* kdev */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = kdev; sourceTree = BUILT_PRODUCTS_DIR; };
 		F46535281BAEA94E00D11534 /* bitset.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = bitset.cpp; path = ../bitset.cpp; sourceTree = "<group>"; };
 		F46535291BAEA94E00D11534 /* bitset.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = bitset.h; path = ../bitset.h; sourceTree = "<group>"; };
@@ -47,6 +50,8 @@
 		F465353F1BAEADA700D11534 /* util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = util.h; path = ../util.h; sourceTree = "<group>"; };
 		F46535401BAEADA700D11534 /* vmm.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = vmm.h; path = ../vmm.h; sourceTree = "<group>"; };
 		F46535411BAEAFDF00D11534 /* kdev.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = kdev.cpp; sourceTree = "<group>"; };
+		F4BCE73D1BB5B92700D11534 /* heap.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = heap.cpp; path = ../heap.cpp; sourceTree = "<group>"; };
+		F4BCE73E1BB5B92700D11534 /* heap.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = heap.h; path = ../heap.h; sourceTree = "<group>"; };
 		F4CA455C1BAED7AD00D11534 /* pmm_memregion.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = pmm_memregion.cpp; path = ../pmm_memregion.cpp; sourceTree = "<group>"; };
 		F4CA455E1BAEF8E900D11534 /* vmm.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = vmm.cpp; path = ../vmm.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -101,6 +106,9 @@
 				F4CA455C1BAED7AD00D11534 /* pmm_memregion.cpp */,
 				F465352E1BAEA94E00D11534 /* pmm.cpp */,
 				F465352F1BAEA94E00D11534 /* pmm.h */,
+				F4BCE73D1BB5B92700D11534 /* heap.cpp */,
+				F4BCE73E1BB5B92700D11534 /* heap.h */,
+				F43597C01BBC62CF00D11534 /* heap_block.cpp */,
 			);
 			name = kdev;
 			sourceTree = SOURCE_ROOT;
@@ -162,6 +170,8 @@
 				F46535351BAEA9A800D11534 /* string.cpp in Sources */,
 				F46535421BAEAFDF00D11534 /* kdev.cpp in Sources */,
 				F46535301BAEA94E00D11534 /* bitset.cpp in Sources */,
+				F4BCE73F1BB5B92700D11534 /* heap.cpp in Sources */,
+				F43597C21BBC62CF00D11534 /* heap_block.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

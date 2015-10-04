@@ -85,7 +85,6 @@ public:
         Returns number of free pages
      */
     static uint32_t pages_free();
-
 };
 
 #endif

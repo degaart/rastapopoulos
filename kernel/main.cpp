@@ -9,6 +9,10 @@
 #include "kmalloc.h"
 #include "string.h"
 #include "../bootldr/kernel_params.h"
+#include "heap.h"
+
+
+LINKER_SYMBOL(_KERNEL_END_);
 
 extern uint32_t isr_stub_table[];
 
@@ -37,17 +41,28 @@ extern "C" void main() {
     PMM::dump();
     TRACE("%u pages total (%u bytes)", PMM::pages_total(), PMM::pages_total() * PMM::PAGE_SIZE);
 
+    TRACE("Testing Heap");
+    Heap::test_alloc();
+    halt();
+
     TRACE("Initializing VMM");
     VMM::init();
     TRACE("%u pages free (%u Kb)", PMM::pages_free(), (PMM::pages_total() * PMM::PAGE_SIZE) / 1024);
     TRACE("Physical memory zones:");
     PMM::dump_zones();
-    
-    uint8_t *invalid_addr = (uint8_t *)kheap_start();
-    while(true) {
-        *invalid_addr = 0;
-        invalid_addr++;
-    }
+
+    TRACE("Testing VMM::get_physical");
+    uint32_t isr_stub_physical;
+    bool ret = VMM::get_physical((uint32_t)isr_stub_table, &isr_stub_physical);
+    assert(ret != false);
+    assert(isr_stub_physical == (uint32_t)isr_stub_table);
+
+    // TRACE("Testing VMM::map()");
+    // uint8_t *unmapped = (uint8_t *)0x400000;            4 MB in, guaranteed to not be mapped at this point 
+    // VMM::map((uint32_t)unmapped, 0xB8000, VMM::PAGE_PRESENT | VMM::PAGE_WRITABLE, 0);
+    // *unmapped = 'X';
+    // halt();
+
 	halt();
 }
 

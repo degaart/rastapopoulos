@@ -26,6 +26,11 @@ public:
 
 #define ASSERT(conde) assert(cond)
 
+#ifndef __APPLE__
 #define PANIC(...) Debug::panic(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#else
+#include <stdlib.h>
+#define PANIC(...) while(true) { Debug::trace(__FILE__, __LINE__, __func__, __VA_ARGS__); abort(); }
+#endif
 
 #endif //_DEBUG_H_

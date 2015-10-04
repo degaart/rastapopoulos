@@ -9,11 +9,53 @@
 #include "vmm.h"
 #include "../../bootldr/kernel_params.h"
 #include "idt.h"
+#include "heap.h"
 
 unsigned char _TEXT_START_[0];
+unsigned char _DATA_START_[0];
 
 extern "C"
-int main() {
+void main() {
+    Heap::test_split();
+    Heap::test_alloc();
+}
+
+extern "C"
+int main3() {
+    static const int HEAP_SIZE = 4096;
+    uint8_t* heap_start = (uint8_t*)malloc(HEAP_SIZE);
+    TRACE("Heap: %p - %p", heap_start, heap_start + HEAP_SIZE - 1);
+    
+    Heap heap;
+    heap.init(heap_start, HEAP_SIZE);
+    
+    uint8_t* p0 = heap.alloc<uint8_t>(8);
+    TRACE("p0: %p", p0);
+    
+    uint8_t* p1 = heap.alloc<uint8_t>(8);
+    TRACE("p1: %p", p1);
+    
+    TRACE("Freeing %p", p0);
+    heap.free(p0);
+    
+    TRACE("Freeing %p", p1);
+    heap.free(p1);
+    
+    p0 = heap.alloc<uint8_t>(HEAP_SIZE);
+    assert(p0 == nullptr);
+    
+    p0 = heap.alloc<uint8_t>(64);
+    p1 = heap.alloc<uint8_t>(64);
+    heap.free(p0);
+    
+    p0 = heap.alloc<uint8_t>(54);
+    TRACE("p0: %p", p0);
+
+    return 0;
+}
+
+extern "C"
+int main2() {
     Bitset b0{32480};
     Bitset b1{159};
     
@@ -113,6 +155,16 @@ uint32_t kheap_start() {
 }
 
 void* kmalloc_ap(uint32_t size, unsigned alignment, uint32_t* physical) {
+    assert(alignment == 0 || alignment == 1 || alignment >= sizeof(void*));
+    
+    if(alignment == 1) {
+        void* ret = malloc(size);
+        if(physical)
+            *physical = (uint32_t)ret;
+        return ret;
+    }
+
+    
     alignment = alignment ? alignment : 0;
     size = align(size, alignment);
 //    int     posix_memalign(void **memptr, size_t alignment, size_t size);
@@ -120,11 +172,18 @@ void* kmalloc_ap(uint32_t size, unsigned alignment, uint32_t* physical) {
     void* memptr;
     int ret = posix_memalign(&memptr, alignment, size);
     assert(ret == 0);
+    
+    if(physical)
+        *physical = (uint32_t)memptr;
     return memptr;
 }
 
+void* kmalloc_ap(uint32_t size, uint32_t* physical) {
+    return kmalloc_ap(size, 1, physical);
+}
+
 void* kmalloc(uint32_t size) {
-    return kmalloc_ap(size, 1, nullptr);
+    return kmalloc_ap(size, nullptr);
 }
 
 void kfree(void* ptr) {
@@ -134,6 +193,4 @@ void kfree(void* ptr) {
 void IDT::install_handler(int num, isr_handler_t handler) {
     
 }
-
-
 

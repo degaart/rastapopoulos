@@ -4,79 +4,27 @@
 #include "util.h"
 #include "debug.h"
 #include "pmm.h"
+#include "heap.h"
 
 bool VMM::_paging_enabled = false;
-
 static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
-
-#define PTE_PRESENT             1
-#define PTE_WRITABLE            2
-#define PTE_USER                4
-#define PTE_WRITETHOUGH         8
-#define PTE_NOT_CACHEABLE       0x10
-#define PTE_ACCESSED            0x20
-#define PTE_DIRTY               0x40
-#define PTE_PAT                 0x80
-#define PTE_CPU_GLOBAL          0x10
-#define PTE_LV4_GLOBAL          0x200
-#define PTE_FRAME               0x7FFFF000
-typedef uint32_t pte_t;         /* Page table entry */
-
-#define PDE_PRESENT             1
-#define PDE_WRITABLE            2
-#define PDE_USER                4
-#define PDE_PWT                 8
-#define PDE_PCD                 0x10
-#define PDE_ACCESSED            0x20
-#define PDE_DIRTY               0x40
-#define PDE_4MB                 0x80
-#define PDE_CPU_GLOBAL          0x100
-#define PDE_LV4_GLOBAL          0x200
-#define PDE_FRAME               0x7FFFF000
-typedef uint32_t pde_t;         /* Page directory entry */
+VMM::pagedir_t* VMM::_current_pagedir;
 
 #define PAGE_DIRECTORY_INDEX(x) (((x) >> 22) & 0x3ff)
 #define PAGE_TABLE_INDEX(x) (((x) >> 12) & 0x3ff)
 #define PAGE_GET_PHYSICAL_ADDRESS(x) (*x & ~0xfff)
 
-struct pagetable_t {
-    pte_t entries[1024];
-};
-
-struct pagedir_t {
-    pde_t tables[1024];
-};
-
-static pagedir_t* _current_pagedir;
-extern uint32_t isr_stub_table[256];           /* Defined in idt_stub.asm */
-
-/* Initial map implementation, assumes paging disabled, uses kmalloc instead of PMM */
-void VMM::map_seg(uint32_t va, uint32_t pa, uint32_t flags) {
-    assert(!_paging_enabled);
-    assert( va % PAGE_SIZE == 0);
-    assert( pa % PAGE_SIZE == 0);
-
-    pde_t pde = PAGE_DIRECTORY_INDEX(va);
-    pte_t pte = PAGE_TABLE_INDEX(va);
-
-    pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
-    if(!page_table) {
-        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), PAGE_SIZE, nullptr);
-        bzero(page_table, sizeof(pagetable_t));
-
-        assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);
-        _current_pagedir->tables[pde] = (pde_t)page_table | PDE_PRESENT | PDE_WRITABLE;
-    }
-
-    assert(!page_table->entries[pte]);
-    page_table->entries[pte] = pa | PTE_PRESENT | flags;
-
-    /* Update PMM */
-    PMM::reserve(pa);
-}
-
 void VMM::init() {
-    _current_pagedir = (pagedir_t*)kmalloc_ap(sizeof(pagedir_t), PAGE_SIZE, nullptr);
+    /* Must initialize initial heap before we turn on paging */
+    void* initial_heap = kmalloc(PAGE_SIZE * 64);
+//    Heap::init((uint32_t)initial_heap, PAGE_SIZE * 64);
+
+    /* Create initial kernel pagedir */
+    uint32_t pagedir_physical;
+    _current_pagedir = (pagedir_t*)kmalloc_ap(sizeof(pagedir_t), &pagedir_physical);
+    _current_pagedir->physical = pagedir_physical;
+    assert((uint32_t)_current_pagedir->tables == pagedir_physical);
+
     bzero(_current_pagedir, sizeof(sizeof(pagedir_t)));
     
     /*
@@ -90,34 +38,34 @@ void VMM::init() {
         page += PAGE_SIZE
     ) {
         map_seg(page, page, PTE_WRITABLE);
+        PMM::reserve(page);
     }
 
     /*
-        Note: In supervisor mode, all mapped pages are always read-write!
-        That essentially means we cannot write-protect kernel .rodata! Fuck!
-
-        Meh. Ignore this alarmist jerk. We can protect from supervisor writes
-        using WP flag in CR0 just fine.
+        Kernel read-only data mapped as read-only
     */
     uint32_t page = (uint32_t)_TEXT_START_;
     TRACE("_TEXT_START_: %p", _TEXT_START_);
     TRACE("_DATA_START_: %p", _DATA_START_);
     while(page < (uint32_t)_DATA_START_) {
         map_seg(page, page, 0);
+        PMM::reserve(page);
+
         page += PAGE_SIZE;
     }
 
+    /*
+        Rest of kernel mapped read-write
+    */
+    uint32_t last_mapped_page = page;
     while(page < (uint32_t)kheap_start()) {
         map_seg(page, page, PTE_WRITABLE);
+        PMM::reserve(page);
+        last_mapped_page = page;
+
         page += PAGE_SIZE;
     }
-
-
-    // while(page < (uint32_t)kheap_start()) {
-    //     map_seg(page, page, PTE_WRITABLE);
-    //     page += PAGE_SIZE;
-    // }
-    TRACE("Kernel end: 0x%X", page);
+    TRACE("Kernel data end: 0x%X", last_mapped_page);
 
     IDT::install_handler(14, page_fault_handler);
     IDT::install_handler(8, double_fault_handler);
@@ -125,7 +73,8 @@ void VMM::init() {
     /* Enable paging */
     TRACE("_current_pagedir: %p", _current_pagedir);
     TRACE("&_current_pagedir: %p", &_current_pagedir);
-    write_cr3(_current_pagedir);
+    write_cr3(pagedir_physical);
+    //write_cr3(_current_pagedir);
     
     uint32_t cr0;
     read_cr0(cr0);
@@ -136,7 +85,6 @@ void VMM::init() {
 }
 
 void VMM::page_fault_handler(const isr_regs_t* regs) {
-    /* Quelque chose ici cause un triple-fault dans qemu et virtualbox mais pas dans bochs */
     uint32_t faulting_addr;
     read_cr2(faulting_addr);
 
@@ -166,5 +114,90 @@ bool VMM::paging_enabled() {
     return _paging_enabled;
 }
 
+bool VMM::get_physical(uint32_t va, uint32_t* pa) {
+    assert(pa);
+
+    unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
+    if(_current_pagedir->tables[dir_index] & PDE_PRESENT) {
+        pagetable_t* pagetable = (pagetable_t*) (_current_pagedir->tables[dir_index] & PDE_FRAME);
+        unsigned table_index = PAGE_TABLE_INDEX(va);
+        if(pagetable->entries[table_index] & PTE_PRESENT) {
+            uint32_t frame = pagetable->entries[table_index] & PTE_FRAME;
+            uint32_t offset = va & PTE_OFFSET;
+            *pa = frame + offset;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool VMM::is_mapped(uint32_t va) {
+    unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
+    if(!(_current_pagedir->tables[dir_index] & PDE_PRESENT))
+        return false;
+
+    unsigned table_index = PAGE_TABLE_INDEX(va);
+    pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[dir_index] & PDE_FRAME);
+    if(!(page_table->entries[table_index] & PTE_PRESENT))
+        return false;
+    return true;
+}
+ 
+/* Initial map implementation, assumes paging disabled, uses kmalloc instead of PMM */
+void VMM::map_seg(uint32_t va, uint32_t pa, uint32_t flags) {
+    assert(!_paging_enabled);
+    assert( va % PAGE_SIZE == 0);
+    assert( pa % PAGE_SIZE == 0);
+
+    pde_t pde = PAGE_DIRECTORY_INDEX(va);
+    pte_t pte = PAGE_TABLE_INDEX(va);
+
+    pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
+    if(!page_table) {
+        uint32_t table_physical;
+        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), &table_physical);
+        bzero(page_table, sizeof(pagetable_t));
+
+        assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);
+        _current_pagedir->tables[pde] = (pde_t)page_table | PDE_PRESENT | PDE_WRITABLE;
+        _current_pagedir->tables_physical[pde] = table_physical;
+    }
+
+    assert(!page_table->entries[pte]);
+    page_table->entries[pte] = pa | PTE_PRESENT | flags;
+}
+
+void VMM::map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options) {
+    assert(paging_enabled());
+    if(va % PAGE_SIZE)
+        PANIC("Invalid VA: 0x%X", va);
+    if(pa % PAGE_SIZE)
+        PANIC("Invalid PA: 0x%X", pa);
+
+    pde_t pde = PAGE_DIRECTORY_INDEX(va);
+    pte_t pte = PAGE_TABLE_INDEX(va);
+
+    pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
+    if(!page_table || !(page_table->entries[pte] & PTE_PRESENT)) {
+        uint32_t table_physical;
+        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), &table_physical);
+        bzero(page_table, sizeof(pagetable_t));
+
+        assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);
+        _current_pagedir->tables[pde] = (pde_t)page_table | PDE_PRESENT | PDE_WRITABLE;
+        _current_pagedir->tables_physical[pde] = table_physical;
+    }
+
+    if(page_table->entries[pte] && !(options & MAP_REMAP)) {
+        PANIC(
+            "VA 0x%X already mapped to PA 0x%X, flags 0x%X (trying to remap to PA 0x%X, flags 0x%X)",
+            va, pa,
+            page_table->entries[pte] & (~PTE_FRAME),
+            pa, flags
+        );
+    }
+
+    page_table->entries[pte] = pa | flags;
+}
 
 
