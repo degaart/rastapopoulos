@@ -53,6 +53,12 @@ LINKER_SYMBOL(_BSS_START_);
 LINKER_SYMBOL(_BSS_END_);
 LINKER_SYMBOL(_KERNEL_END_);
 
+#ifdef __plusplus
+#define EXPORT extern "C"
+#else
+#define EXPORT
+#endif
+
 template<typename T> T align(T value, unsigned alignment) {
     unsigned result = (unsigned)value;
     result += alignment - 1;
@@ -64,5 +70,15 @@ template<typename T> T truncate(T value, unsigned alignment) {
     return (value / alignment) * alignment;
 }
 
+
+#include <stdint.h>
+
+class Util {
+private:
+    static uint32_t _rand_seed;
+public:
+    static void srand(uint32_t seed);
+    static uint32_t rand();
+};
 
 #endif

@@ -5,7 +5,7 @@
 #include "kmalloc.h"
 
 Heap::Heap()
-: _head(nullptr) {
+: _head(nullptr), _size(0), _free(0) {
     
 }
 
@@ -13,36 +13,15 @@ void Heap::init(void* base, unsigned size) {
     TRACE("sizeof(block_t) == %zu", sizeof(Block));
     _head = Block::create(base, size);
     _head->set_last(true);
-}
-
-void* Heap::alloc_unaligned(unsigned size) {
-    Block* block = nullptr;
-    for(block = _head; block; block = block->next()) {
-        if(!block->used() && (block->size >= size + sizeof(Block))) {
-                break;
-        }
-    }
-    if(!block) {
-        return nullptr;
-    }
     
-    block->set_used(true);
-    if(block->size > (sizeof(Block) * 2) + size) {
-        Block* new_block = Block::create(block->data() + size, block->size - sizeof(Block) - size);
-        new_block->set_last(block->last());
-        block->size = sizeof(Block) + size;
-        block->set_last(false);
-        
-        assert(block->next() == new_block);
-    }
-    
-    return block->data();
+    _size = size;
+    _free = _size - sizeof(Block);
 }
 
 void* Heap::alloc_impl(unsigned size, unsigned alignment) {
-//    if(alignment <= 1)
-//        return alloc_unaligned(size);
-    
+    if(!_head)
+        PANIC("Uninitialized Heap");
+
     if(alignment <= 1)
         alignment = 1;
     
@@ -59,19 +38,29 @@ void* Heap::alloc_impl(unsigned size, unsigned alignment) {
             
             if(offset + size < block->size) {
                 Block* new_block;
+                
                 /* split for alignment */
-                if(offset != 0)
+                if(offset != 0) {
                     new_block = block->split(offset);
-                else
+                    if(new_block)
+                        _free -= sizeof(Block);
+                } else {
                     new_block = block;
+                }
                 
                 if(new_block) {
                     /* Split remaining free space into new block */
                     if(size < sizeof(Block))
                         size = sizeof(Block)+1;
                     
-                    new_block->split(size);
+                    bool was_split = new_block->split(size);
+                    assert(was_split);
+                    
+                    _free -= sizeof(Block);
+
                     new_block->set_used(true);
+                    _free -= size;
+                    
                     return new_block->data();
                 }
             }
@@ -88,11 +77,13 @@ void Heap::free(void* ptr) {
     if(!block->used())
         PANIC("Double-free detected for %p", ptr);
     
+    _free += block->size;
     block->set_used(false);
     for(Block* prev = _head; prev && prev < block; prev = prev->next()) {
         if(prev->next() == block) {
             if(!prev->used()) {
                 prev->merge();
+                _free += sizeof(Block);
                 block = prev;
                 break;
             }
@@ -102,12 +93,18 @@ void Heap::free(void* ptr) {
     Block* next = block->next();
     if(next && !next->used()) {
         block->merge();
+        _free += sizeof(Block);
     }
 }
 
 void Heap::dump() {
     TRACE("------------ HEAP DUMP ------------");
+    unsigned expected_free = _size;
     for(Block* block = _head; block; block = block->next()) {
+        expected_free -= sizeof(Block);
+        if(block->used())
+            expected_free -= block->size;
+        
         uint32_t u32block = (uint32_t)block;
         TRACE("\t0x%X - 0x%X (%d) : %s %s",
               u32block, u32block + block->size - 1, block->size,
@@ -115,6 +112,8 @@ void Heap::dump() {
               block->last() ? "last" : ""
         );
     }
+    TRACE("Total: %u bytes, free: %u bytes", _size, _free);
+    assert(_free == expected_free);
     TRACE("---------- EOF HEAP DUMP ----------");
 }
 
@@ -142,6 +141,7 @@ void Heap::test_split() {
 void Heap::test_alloc() {
     Heap heap;
     heap.init(kmalloc(4096), 4096);
+    heap.dump();
 
     TRACE("Testing simple aligned allocs");
     uint8_t* p0 = heap.alloc<uint8_t>(64, 4);
@@ -191,5 +191,27 @@ void Heap::test_alloc() {
     
     heap.free(p0);
     heap.dump();    
+}
+
+void Heap::grow(unsigned size) {
+    /* find end of heap */
+    Block* last_block = _head;
+    while(!last_block->last())
+        last_block = last_block->next();
+    assert(last_block != nullptr);
+
+    if(last_block->used()) {
+        /* create new block after last_block */
+        Block* new_block = Block::create((uint8_t*)last_block + last_block->size, size);
+        new_block->set_last(true);
+
+        _size += size;
+        _free += size - sizeof(Block);
+    } else {
+        /* grow block */
+        last_block->size += size;
+        _size += size;
+        _free += size;
+    }
 }
 

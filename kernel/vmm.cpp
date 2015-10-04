@@ -4,7 +4,7 @@
 #include "util.h"
 #include "debug.h"
 #include "pmm.h"
-#include "heap.h"
+#include "kheap.h"
 
 bool VMM::_paging_enabled = false;
 static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
@@ -15,13 +15,9 @@ VMM::pagedir_t* VMM::_current_pagedir;
 #define PAGE_GET_PHYSICAL_ADDRESS(x) (*x & ~0xfff)
 
 void VMM::init() {
-    /* Must initialize initial heap before we turn on paging */
-    void* initial_heap = kmalloc(PAGE_SIZE * 64);
-//    Heap::init((uint32_t)initial_heap, PAGE_SIZE * 64);
-
     /* Create initial kernel pagedir */
     uint32_t pagedir_physical;
-    _current_pagedir = (pagedir_t*)kmalloc_ap(sizeof(pagedir_t), &pagedir_physical);
+    _current_pagedir = (pagedir_t*)kmalloc_ap(sizeof(pagedir_t), PAGE_SIZE, &pagedir_physical);
     _current_pagedir->physical = pagedir_physical;
     assert((uint32_t)_current_pagedir->tables == pagedir_physical);
 
@@ -58,7 +54,7 @@ void VMM::init() {
         Rest of kernel mapped read-write
     */
     uint32_t last_mapped_page = page;
-    while(page < (uint32_t)kheap_start()) {
+    while(page < (uint32_t)KHeap::end()) {
         map_seg(page, page, PTE_WRITABLE);
         PMM::reserve(page);
         last_mapped_page = page;
@@ -74,7 +70,6 @@ void VMM::init() {
     TRACE("_current_pagedir: %p", _current_pagedir);
     TRACE("&_current_pagedir: %p", &_current_pagedir);
     write_cr3(pagedir_physical);
-    //write_cr3(_current_pagedir);
     
     uint32_t cr0;
     read_cr0(cr0);
@@ -155,7 +150,7 @@ void VMM::map_seg(uint32_t va, uint32_t pa, uint32_t flags) {
     pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
     if(!page_table) {
         uint32_t table_physical;
-        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), &table_physical);
+        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), PAGE_SIZE, &table_physical);
         bzero(page_table, sizeof(pagetable_t));
 
         assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);
@@ -180,7 +175,7 @@ void VMM::map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options) {
     pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
     if(!page_table || !(page_table->entries[pte] & PTE_PRESENT)) {
         uint32_t table_physical;
-        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), &table_physical);
+        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), PAGE_SIZE, &table_physical);
         bzero(page_table, sizeof(pagetable_t));
 
         assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);

@@ -9,8 +9,6 @@
 LinkedList<PMM::MemRegion> PMM::_regions;
 
 void PMM::init(const void* bios_memmap, unsigned bios_memmap_size) {
-	TRACE("PMM::init called");
-
     /* Init memmap */
     bios_memmap_t* regions = (bios_memmap_t*)bios_memmap;
     for(unsigned i=0; i<bios_memmap_size; i++) {

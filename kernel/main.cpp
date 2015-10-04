@@ -10,7 +10,7 @@
 #include "string.h"
 #include "../bootldr/kernel_params.h"
 #include "heap.h"
-
+#include "kheap.h"
 
 LINKER_SYMBOL(_KERNEL_END_);
 
@@ -26,6 +26,9 @@ extern "C" void main() {
 	TRACE("*** RastapopoulOS kernel loaded ***");
     call_ctors();
 
+    TRACE("Initializing kernel heap");
+    KHeap::init();
+
     TRACE("Initializing GDT");
     GDT::init();
     GDT::dump();
@@ -40,10 +43,6 @@ extern "C" void main() {
 	PMM::init(kparams->memmap, kparams->memmap_size);
     PMM::dump();
     TRACE("%u pages total (%u bytes)", PMM::pages_total(), PMM::pages_total() * PMM::PAGE_SIZE);
-
-    TRACE("Testing Heap");
-    Heap::test_alloc();
-    halt();
 
     TRACE("Initializing VMM");
     VMM::init();

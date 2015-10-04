@@ -5,6 +5,8 @@
 #include "linked_list.h"
 
 /*
+    EDIT: *** Some of this information is incomplete ***
+ 
     kmalloc manages kernel-space memory. We assume kernel-space memory
     is restricted to VA 0x00000000 - 0x08000000
  
@@ -45,8 +47,8 @@ private:
     public:
         uint32_t size;
         
-        static Block* at(void* addr);
-        static Block* create(void* addr, uint32_t size);
+        static Block* at(void* addr);                               /* get block at specified address */
+        static Block* create(void* addr, uint32_t size);            /* Create new (free & !last) block as specified address */
         
         void check();
         bool used();
@@ -71,12 +73,14 @@ private:
     } __attribute__((packed));
     
     Block* _head;
+    unsigned _size;         /* total size of this heap (not including header overhead) */
+    unsigned _free;         /* free bytes in heap (including header overhead) */
     
-    void* alloc_unaligned(unsigned size);
     void* alloc_impl(unsigned size, unsigned alignment);
 public:
     Heap();
     void init(void* base, unsigned size);
+    void grow(unsigned size);                       /* Increase heap size by specified number of bytes */
     
     template<typename T>
     T* alloc(unsigned size, unsigned alignment = 0) { /* Returns 0 if cannot allocate mem */
@@ -85,8 +89,24 @@ public:
     
     void free(void*);
     void dump();
+    
+    unsigned total_size() {
+        return _size;
+    }
+    
+    unsigned free_size() {
+        return _free;
+    }
+    
+    uint8_t* head() {
+        return (uint8_t*)_head;
+    }
+    
     static void test_split();
     static void test_alloc();
 };
 
 #endif /* defined(__kdev__heap__) */
+
+
+

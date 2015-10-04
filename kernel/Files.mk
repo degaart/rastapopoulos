@@ -12,7 +12,9 @@ SRCS = \
     bitset.cpp \
     pmm_memregion.cpp \
     heap.cpp \
-    heap_block.cpp
+    heap_block.cpp \
+    kheap.cpp \
+    util.cpp
 
 ASM_SRCS = \
     stub.asm \

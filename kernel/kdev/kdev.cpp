@@ -16,7 +16,7 @@ unsigned char _DATA_START_[0];
 
 extern "C"
 void main() {
-    Heap::test_split();
+//    Heap::test_split();
     Heap::test_alloc();
 }
 
