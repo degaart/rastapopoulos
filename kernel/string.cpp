@@ -149,7 +149,7 @@ void String::formatv(
 
 void memset(void* buffer, int ch, uint32_t size) {
     uint8_t* ptr = (uint8_t*)buffer;
-    for(int i=0; i<size; i++)
+    for(unsigned i=0; i<size; i++)
         ptr[i] = ch;
 }
 

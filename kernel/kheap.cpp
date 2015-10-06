@@ -1,6 +1,7 @@
 #include "kheap.h"
 #include "util.h"
 #include "vmm.h"
+#include "pmm.h"
 #include "kmalloc.h"
 #include "string.h"
 
@@ -53,8 +54,25 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment, uint32_t* physical) {
         check();
         return ptr;
     } else {
-        PANIC("Not implemented yet");
-        return nullptr;
+        void* ptr = _kheap.alloc<void>(size, alignment);
+        while(!ptr) {
+            unsigned grow_size = align(size, VMM::PAGE_SIZE);
+            unsigned grow_pages = grow_size / VMM::PAGE_SIZE;
+
+            TRACE("Growing kernel heap size by %d pages (%d bytes) ", grow_pages, grow_size);
+
+            /* Map new pages in */
+            assert( reinterpret_cast<uint32_t>(_kheap.limit()) % VMM::PAGE_SIZE == 0);
+            for(unsigned i = 0; i<grow_pages; i++) {
+                uint32_t page = PMM::alloc();
+                VMM::map( reinterpret_cast<uint32_t>(end()) + (i * VMM::PAGE_SIZE), page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE, 0);
+            }
+
+            _kheap.grow(grow_size);
+            ptr = _kheap.alloc<void>(size, alignment);
+        }
+
+        return ptr;
     }
 }
 

@@ -6,6 +6,8 @@
 #include "pmm.h"
 #include "kheap.h"
 
+extern "C" void _flush_tlb(uint32_t);
+
 bool VMM::_paging_enabled = false;
 static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
 VMM::pagedir_t* VMM::_current_pagedir;
@@ -21,7 +23,12 @@ void VMM::init() {
     _current_pagedir->physical = pagedir_physical;
     assert((uint32_t)_current_pagedir->tables == pagedir_physical);
 
-    bzero(_current_pagedir, sizeof(sizeof(pagedir_t)));
+    TRACE("sizeof(pagedir_t) = %u bytes", sizeof(pagedir_t));
+    bzero(_current_pagedir, sizeof(pagedir_t));
+    for(unsigned i = 0; i < 1024; i++) {
+        assert(_current_pagedir->tables[i] == 0x00);
+        assert(_current_pagedir->tables_physical[i] == 0x00);
+    }
     
     /*
         Identity-map currently allocated kernel memory
@@ -52,6 +59,7 @@ void VMM::init() {
 
     /*
         Rest of kernel mapped read-write
+        Except IDT, 'cause I hate it when you change my ID, mmmkay?
     */
     uint32_t last_mapped_page = page;
     while(page < (uint32_t)KHeap::end()) {
@@ -162,18 +170,43 @@ void VMM::map_seg(uint32_t va, uint32_t pa, uint32_t flags) {
     page_table->entries[pte] = pa | PTE_PRESENT | flags;
 }
 
+// static pagedir_t _temp_mappings[10];
+// static unsigned _temp_mappings_index = 0;
+#define KERNEL_LIMIT 0x400000
 void VMM::map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options) {
     assert(paging_enabled());
+
     if(va % PAGE_SIZE)
         PANIC("Invalid VA: 0x%X", va);
     if(pa % PAGE_SIZE)
         PANIC("Invalid PA: 0x%X", pa);
 
+
+    TRACE("Mapping 0x%X to 0x%X", va, pa);
+
     pde_t pde = PAGE_DIRECTORY_INDEX(va);
     pte_t pte = PAGE_TABLE_INDEX(va);
 
     pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
-    if(!page_table || !(page_table->entries[pte] & PTE_PRESENT)) {
+    if(va < KERNEL_LIMIT) {
+        TRACE("pagetable for 0x%X: %p", va, page_table);
+        if(!page_table)
+            PANIC("Why isn't there a pagetable for 0x%X?", va);
+    }
+
+    //if(!page_table || !(page_table->entries[pte] & PTE_PRESENT)) {
+    if(!page_table || !(_current_pagedir->tables[pde] & PTE_PRESENT)) {
+        if(va < KERNEL_LIMIT)
+            PANIC("Why isn't there a pagetable in pagedir for 0x%X?", va);
+
+        /* 
+            We shouldn't call kmalloc here, as kmalloc call VMM::map itself
+        */
+        // assert(_temp_mappings_index < sizeof(_temp_mappings) / sizeof(_temp_mappings[0]));
+
+        // uint32_t table_physical = PMM::alloc();
+        
+
         uint32_t table_physical;
         page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), PAGE_SIZE, &table_physical);
         bzero(page_table, sizeof(pagetable_t));
@@ -181,6 +214,8 @@ void VMM::map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options) {
         assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);
         _current_pagedir->tables[pde] = (pde_t)page_table | PDE_PRESENT | PDE_WRITABLE;
         _current_pagedir->tables_physical[pde] = table_physical;
+
+        // _temp_mappings_used = false;
     }
 
     if(page_table->entries[pte] && !(options & MAP_REMAP)) {
@@ -192,7 +227,18 @@ void VMM::map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options) {
         );
     }
 
+    if(va < KERNEL_LIMIT)
+        TRACE("Setting pagetable entry for 0x%X to 0x%X", va, pa | flags); 
+
     page_table->entries[pte] = pa | flags;
+
+    flush_tlb(va);
+    TRACE("Done mapping 0x%X to 0x%X", va, pa);
 }
+
+void VMM::flush_tlb(uint32_t va) {
+    _flush_tlb(va);
+}
+
 
 

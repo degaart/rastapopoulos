@@ -4,34 +4,6 @@
 #include <stdint.h>
 #include "linked_list.h"
 
-/*
-    EDIT: *** Some of this information is incomplete ***
- 
-    kmalloc manages kernel-space memory. We assume kernel-space memory
-    is restricted to VA 0x00000000 - 0x08000000
- 
-    kmalloc keeps track of memory using units called "Blocks", using an
-    ordered list.
- 
-    A Block:
-        - can be "used" or "unused"
-        - has a "base" and a "size"
-        - we don't care abouts it's location in physical memory, as we only
-            manage kernel-space memory.
- 
-    Initially, we allocate a single free block, before paging is enabled,
-    so we can allocate page frames for VMM::map for kmalloc to use.
-    
-    On allocation:
-        - find smallest unused block that satisfies user request. Shrink block.
-            Create new block the size of requested memory + header. Mark as allocated.
-            Return new block
-    On free:
-        - Mark block as free
-        - Check adjacent blocks, check if they are free. If they are free, merge them with
-            present block
- */
-
 /* Manages blocks of VA space. PA management and mapping by kmalloc */
 class Heap {
 private:
@@ -97,6 +69,10 @@ public:
     
     uint8_t* head() {
         return (uint8_t*)_head;
+    }
+
+    uint8_t* limit() {              /* address of byte immediately after last valid byte in heap */
+        return head() + _size;
     }
 
     void check();

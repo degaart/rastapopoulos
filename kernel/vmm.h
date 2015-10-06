@@ -91,6 +91,11 @@ public:
 		Check if given VA is mapped
 	*/
 	static bool is_mapped(uint32_t va);
+
+	/*
+		Flush TLB cache
+	*/
+	static void flush_tlb(uint32_t va);	
 };
 
 #endif //_VMM_H_

@@ -23,4 +23,5 @@ ASM_SRCS = \
     call_ctors.asm \
     gdt_flush.asm \
     idt_stub.asm \
-    idt_flush.asm
+    idt_flush.asm \
+    flush_tlb.asm
