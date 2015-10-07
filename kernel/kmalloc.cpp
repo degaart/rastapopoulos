@@ -2,13 +2,13 @@
 #include "kheap.h"
 
 EXPORT
-void* kmalloc_ap(uint32_t size, unsigned alignment, uint32_t* physical) {
-    return KHeap::alloc<void>(size, alignment, physical);
+void* kmalloc_a(uint32_t size, unsigned alignment) {
+    return KHeap::alloc<void>(size, alignment);
 }
 
 EXPORT
 void* kmalloc(uint32_t size) {
-    return kmalloc_ap(size, 1, nullptr);
+    return kmalloc_a(size, 1);
 }
 
 EXPORT

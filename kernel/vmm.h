@@ -76,7 +76,7 @@ public:
 	static const uint32_t PAGE_USER		= PTE_USER;
 
 	static const uint32_t MAP_REMAP	= 0x1;										/* Allow remapping of the page if it already mapped */
-	static void map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options);
+	static void map(void* va, uint32_t pa, uint32_t flags, uint32_t options = 0);
 
 	/* Unmap virtual address */
 	static void unmap(uint32_t va);
@@ -90,12 +90,12 @@ public:
 	/*
 		Check if given VA is mapped
 	*/
-	static bool is_mapped(uint32_t va);
+	static bool is_mapped(void* va);
 
 	/*
 		Flush TLB cache
 	*/
-	static void flush_tlb(uint32_t va);	
+	static void flush_tlb(void* va);	
 };
 
 #endif //_VMM_H_

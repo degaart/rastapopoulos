@@ -23,11 +23,8 @@ void KHeap::dump() {
     _kheap.dump();
 }
 
-void* KHeap::alloc_impl(unsigned size, unsigned alignment, uint32_t* physical) {
+void* KHeap::alloc_impl(unsigned size, unsigned alignment) {
     check();
-
-    // TRACE("alloc(%d, %d)", size, alignment);
-    // dump();
 
     if(!VMM::paging_enabled()) {
         void* ptr = _kheap.alloc<void>(size, alignment);
@@ -45,12 +42,6 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment, uint32_t* physical) {
             ptr = _kheap.alloc<void>(size, alignment);
         }
 
-        if(physical)
-            *physical = (uint32_t)ptr;
-
-        // TRACE("alloc(%d, %d) => %p", size, alignment, ptr);
-        // dump();
-
         check();
         return ptr;
     } else {
@@ -65,7 +56,7 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment, uint32_t* physical) {
             assert( reinterpret_cast<uint32_t>(_kheap.limit()) % VMM::PAGE_SIZE == 0 );
             for(unsigned i = 0; i<grow_pages; i++) {
                 uint32_t page = PMM::alloc();
-                VMM::map( reinterpret_cast<uint32_t>(end()) + (i * VMM::PAGE_SIZE), page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE, 0 );
+                VMM::map( end() + (i * VMM::PAGE_SIZE), page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE, 0 );
             }
 
             _kheap.grow(grow_size);
@@ -78,8 +69,7 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment, uint32_t* physical) {
 
 void KHeap::free(void* ptr) {
     check();
-
-    // TRACE("free(%p)", ptr);
+    
     if(ptr)
         _kheap.free(ptr);
 
@@ -109,10 +99,10 @@ void KHeap::test() {
     dump();
     TRACE("p2: %p", p2);
 
-    uint32_t physical = 0xFFFFFFFF;
-    uint8_t* p3 = alloc<uint8_t>(VMM::PAGE_SIZE, 4096, &physical);
+    // uint32_t physical = 0xFFFFFFFF;
+    uint8_t* p3 = alloc<uint8_t>(VMM::PAGE_SIZE, 4096);
     dump();
-    TRACE("p3: %p, phys 0x%X", p3, physical);
+    // TRACE("p3: %p, phys 0x%X", p3, physical);
 
     uint8_t* p4[64];
     Util::srand(0xDEADBEEF);    

@@ -12,8 +12,6 @@
 #include "heap.h"
 #include "kheap.h"
 
-extern uint32_t isr_stub_table[];
-
 static void int80_handler(const isr_regs_t* regs) {
     TRACE("INT80 called");
 }
@@ -27,13 +25,6 @@ extern "C" void main() {
     TRACE("Initializing kernel heap");
     KHeap::init();
     KHeap::dump();
-    // uint8_t* p0 = (uint8_t*)kmalloc(20);
-    // uint8_t* p1 = (uint8_t*)kmalloc(36);
-    // halt();
-
-    // TRACE("Testing kernel heap");
-    // KHeap::test();
-    // halt();
 
     TRACE("Initializing GDT");
     GDT::init();
@@ -56,24 +47,18 @@ extern "C" void main() {
     TRACE("Physical memory zones:");
     PMM::dump_zones();
 
-    // TRACE("Testing VMM::get_physical");
-    // uint32_t isr_stub_physical;
-    // bool ret = VMM::get_physical((uint32_t)isr_stub_table, &isr_stub_physical);
-    // assert(ret != false);
-    // assert(isr_stub_physical == (uint32_t)isr_stub_table);
-
     TRACE("Testing VMM::map()");
-    uint32_t *p0 = (uint32_t*)0x400000;            /* 4 MB in, guaranteed to not be mapped at this point */
-    VMM::map((uint32_t)p0, 0xB8000, VMM::PAGE_PRESENT | VMM::PAGE_WRITABLE, 0);
+    uint8_t *p0 = (uint8_t*)0x400000;            /* 4 MB in, guaranteed to not be mapped at this point */
+    VMM::map(p0, 0xB8000, VMM::PAGE_PRESENT | VMM::PAGE_WRITABLE, 0);
     *p0 = 'X';
 
-    uint32_t *p1 = (uint32_t*)(0x400000 + 4096);  /* has a pagedir but no pagetable entry */
-    VMM::map((uint32_t)p1, 0xB8000, VMM::PAGE_PRESENT, 0);
+    uint8_t *p1 = (uint8_t*)(0x400000 + 4096);  /* has a pagedir but no pagetable entry */
+    VMM::map(p1, 0xB8000, VMM::PAGE_PRESENT);
     assert(*p0 == *p1);
-    *p0 ^= 0xCCCCCCCC;
+    *p0 ^= 0xCC;
     assert(*p0 == *p1);
 
-    *p1 = 0x12345678;
+    *p1 = 120;
 
     halt();
 }

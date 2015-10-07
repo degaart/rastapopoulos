@@ -8,14 +8,14 @@ class KHeap {
 private:
     static Heap _kheap;
     
-    static void* alloc_impl(unsigned size, unsigned alignment, uint32_t* physical);
+    static void* alloc_impl(unsigned size, unsigned alignment);
 public:
     static void init();
     static void dump();
 
     template<typename T>
-    static T* alloc(unsigned size, unsigned alignment = 1, uint32_t* physical = nullptr) { /* alloc memory */
-        return (T*)alloc_impl(size, alignment, physical);
+    static T* alloc(unsigned size, unsigned alignment = 1) { /* alloc memory */
+        return (T*)alloc_impl(size, alignment);
     }
 
     static void free(void* ptr);                /* free allocated pointer */

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "util.h"
 
-EXPORT void* kmalloc_ap(uint32_t size, unsigned alignment, uint32_t* physical);
+EXPORT void* kmalloc_a(uint32_t size, unsigned alignment);
 EXPORT void* kmalloc(uint32_t size);
 EXPORT void kfree(void* ptr);
 
