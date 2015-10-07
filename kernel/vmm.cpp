@@ -20,15 +20,17 @@ void VMM::init() {
     /* Create initial kernel pagedir */
     uint32_t pagedir_physical;
     _current_pagedir = (pagedir_t*)kmalloc_ap(sizeof(pagedir_t), PAGE_SIZE, &pagedir_physical);
+    bzero(_current_pagedir, sizeof(pagedir_t));    
     _current_pagedir->physical = pagedir_physical;
-    assert((uint32_t)_current_pagedir->tables == pagedir_physical);
+    assert((uint32_t)_current_pagedir->entries == pagedir_physical);
 
-    TRACE("sizeof(pagedir_t) = %u bytes", sizeof(pagedir_t));
-    bzero(_current_pagedir, sizeof(pagedir_t));
-    for(unsigned i = 0; i < 1024; i++) {
-        assert(_current_pagedir->tables[i] == 0x00);
-        assert(_current_pagedir->tables_physical[i] == 0x00);
+    for(unsigned i = 0; i<1024; i++) {
+        assert(_current_pagedir->tables[i] == 0);
+        assert(_current_pagedir->entries[i] == 0);
     }
+
+    // TRACE("sizeof(pagedir_t) = %u bytes", sizeof(pagedir_t));
+    // bzero(_current_pagedir, sizeof(pagedir_t));
     
     /*
         Identity-map currently allocated kernel memory
@@ -40,7 +42,7 @@ void VMM::init() {
         page < align(INITIAL_KERNEL_STACK, PAGE_SIZE)+1;
         page += PAGE_SIZE
     ) {
-        map_seg(page, page, PTE_WRITABLE);
+        map(page, page, PAGE_PRESENT | PAGE_WRITABLE, 0);
         PMM::reserve(page);
     }
 
@@ -51,7 +53,7 @@ void VMM::init() {
     TRACE("_TEXT_START_: %p", _TEXT_START_);
     TRACE("_DATA_START_: %p", _DATA_START_);
     while(page < (uint32_t)_DATA_START_) {
-        map_seg(page, page, 0);
+        map(page, page, PAGE_PRESENT, 0);
         PMM::reserve(page);
 
         page += PAGE_SIZE;
@@ -59,11 +61,11 @@ void VMM::init() {
 
     /*
         Rest of kernel mapped read-write
-        Except IDT, 'cause I hate it when you change my ID, mmmkay?
+        Except IDT, 'cause I hate it when you change my IDT, mmmkay?
     */
     uint32_t last_mapped_page = page;
     while(page < (uint32_t)KHeap::end()) {
-        map_seg(page, page, PTE_WRITABLE);
+        map(page, page, PAGE_PRESENT | PAGE_WRITABLE, 0);
         PMM::reserve(page);
         last_mapped_page = page;
 
@@ -77,6 +79,7 @@ void VMM::init() {
     /* Enable paging */
     TRACE("_current_pagedir: %p", _current_pagedir);
     TRACE("&_current_pagedir: %p", &_current_pagedir);
+    TRACE("pagedir_physical: 0x%X", pagedir_physical);
     write_cr3(pagedir_physical);
     
     uint32_t cr0;
@@ -117,16 +120,22 @@ bool VMM::paging_enabled() {
     return _paging_enabled;
 }
 
-bool VMM::get_physical(uint32_t va, uint32_t* pa) {
+bool VMM::get_physical(void* va, uint32_t* pa) {
+    if(!paging_enabled()) {
+        *pa = (uint32_t)va;
+        return true;
+    }
+
     assert(pa);
 
-    unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
-    if(_current_pagedir->tables[dir_index] & PDE_PRESENT) {
-        pagetable_t* pagetable = (pagetable_t*) (_current_pagedir->tables[dir_index] & PDE_FRAME);
-        unsigned table_index = PAGE_TABLE_INDEX(va);
+    uint32_t iva = (uint32_t)va;
+    unsigned dir_index = PAGE_DIRECTORY_INDEX(iva);
+    if(_current_pagedir->entries[dir_index] & PDE_PRESENT) {
+        pagetable_t* pagetable = _current_pagedir->tables[dir_index];
+        unsigned table_index = PAGE_TABLE_INDEX(iva);
         if(pagetable->entries[table_index] & PTE_PRESENT) {
             uint32_t frame = pagetable->entries[table_index] & PTE_FRAME;
-            uint32_t offset = va & PTE_OFFSET;
+            uint32_t offset = iva & PTE_OFFSET;
             *pa = frame + offset;
             return true;
         }
@@ -134,47 +143,24 @@ bool VMM::get_physical(uint32_t va, uint32_t* pa) {
     return false;
 }
 
-bool VMM::is_mapped(uint32_t va) {
-    unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
-    if(!(_current_pagedir->tables[dir_index] & PDE_PRESENT))
-        return false;
+// bool VMM::is_mapped(uint32_t va) {
+//     unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
+//     if(!(_current_pagedir->tables[dir_index] & PDE_PRESENT))
+//         return false;
 
-    unsigned table_index = PAGE_TABLE_INDEX(va);
-    pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[dir_index] & PDE_FRAME);
-    if(!(page_table->entries[table_index] & PTE_PRESENT))
-        return false;
-    return true;
-}
- 
-/* Initial map implementation, assumes paging disabled, uses kmalloc instead of PMM */
-void VMM::map_seg(uint32_t va, uint32_t pa, uint32_t flags) {
-    assert(!_paging_enabled);
-    assert( va % PAGE_SIZE == 0);
-    assert( pa % PAGE_SIZE == 0);
+//     unsigned table_index = PAGE_TABLE_INDEX(va);
+//     pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[dir_index] & PDE_FRAME);
+//     if(!(page_table->entries[table_index] & PTE_PRESENT))
+//         return false;
+//     return true;
+// }
 
-    pde_t pde = PAGE_DIRECTORY_INDEX(va);
-    pte_t pte = PAGE_TABLE_INDEX(va);
-
-    pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
-    if(!page_table) {
-        uint32_t table_physical;
-        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), PAGE_SIZE, &table_physical);
-        bzero(page_table, sizeof(pagetable_t));
-
-        assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);
-        _current_pagedir->tables[pde] = (pde_t)page_table | PDE_PRESENT | PDE_WRITABLE;
-        _current_pagedir->tables_physical[pde] = table_physical;
-    }
-
-    assert(!page_table->entries[pte]);
-    page_table->entries[pte] = pa | PTE_PRESENT | flags;
-}
-
-// static pagedir_t _temp_mappings[10];
-// static unsigned _temp_mappings_index = 0;
 #define KERNEL_LIMIT 0x400000
 void VMM::map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options) {
-    assert(paging_enabled());
+    // if(!paging_enabled()) {
+    //     map_seg(va, pa, flags, options);
+    //     return;
+    // }
 
     if(va % PAGE_SIZE)
         PANIC("Invalid VA: 0x%X", va);
@@ -182,58 +168,36 @@ void VMM::map(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options) {
         PANIC("Invalid PA: 0x%X", pa);
 
 
-    TRACE("Mapping 0x%X to 0x%X", va, pa);
+    uint32_t dir_index = PAGE_DIRECTORY_INDEX(va);
+    uint32_t table_index = PAGE_TABLE_INDEX(va);
 
-    pde_t pde = PAGE_DIRECTORY_INDEX(va);
-    pte_t pte = PAGE_TABLE_INDEX(va);
-
-    pagetable_t* page_table = (pagetable_t*)(_current_pagedir->tables[pde] & PTE_FRAME);
-    if(va < KERNEL_LIMIT) {
-        TRACE("pagetable for 0x%X: %p", va, page_table);
-        if(!page_table)
-            PANIC("Why isn't there a pagetable for 0x%X?", va);
-    }
-
-    //if(!page_table || !(page_table->entries[pte] & PTE_PRESENT)) {
-    if(!page_table || !(_current_pagedir->tables[pde] & PTE_PRESENT)) {
-        if(va < KERNEL_LIMIT)
-            PANIC("Why isn't there a pagetable in pagedir for 0x%X?", va);
-
-        /* 
-            We shouldn't call kmalloc here, as kmalloc call VMM::map itself
-        */
-        // assert(_temp_mappings_index < sizeof(_temp_mappings) / sizeof(_temp_mappings[0]));
-
-        // uint32_t table_physical = PMM::alloc();
-        
-
+    pagetable_t* page_table = _current_pagedir->tables[dir_index];
+    if(!page_table || !(_current_pagedir->entries[dir_index] & PTE_PRESENT)) {
+        /* Kmalloc can't get physical address anymore now. We must do the grunt work of decoding pagetable to get physical address */
         uint32_t table_physical;
-        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), PAGE_SIZE, &table_physical);
+        page_table = (pagetable_t*)kmalloc_ap(sizeof(pagetable_t), PAGE_SIZE, nullptr);
+        assert(get_physical(page_table, &table_physical));
+        TRACE("Allocated new pagetable: %p (physical 0x%X)", page_table, table_physical);
         bzero(page_table, sizeof(pagetable_t));
 
-        assert(( ((pde_t)page_table) & PDE_FRAME) == (pde_t)page_table);
-        _current_pagedir->tables[pde] = (pde_t)page_table | PDE_PRESENT | PDE_WRITABLE;
-        _current_pagedir->tables_physical[pde] = table_physical;
-
-        // _temp_mappings_used = false;
+        _current_pagedir->entries[dir_index] = (table_physical & PDE_FRAME) | PDE_PRESENT | PDE_WRITABLE;
+        _current_pagedir->tables[dir_index] = page_table;
     }
 
-    if(page_table->entries[pte] && !(options & MAP_REMAP)) {
+    if((page_table->entries[table_index] & PDE_PRESENT) && !(options & MAP_REMAP)) {
         PANIC(
             "VA 0x%X already mapped to PA 0x%X, flags 0x%X (trying to remap to PA 0x%X, flags 0x%X)",
             va, pa,
-            page_table->entries[pte] & (~PTE_FRAME),
+            page_table->entries[table_index] & (~PTE_FRAME),
             pa, flags
         );
     }
+    page_table->entries[table_index] = pa | flags;
 
-    if(va < KERNEL_LIMIT)
-        TRACE("Setting pagetable entry for 0x%X to 0x%X", va, pa | flags); 
+    if(paging_enabled())
+        flush_tlb(va);
 
-    page_table->entries[pte] = pa | flags;
-
-    flush_tlb(va);
-    TRACE("Done mapping 0x%X to 0x%X", va, pa);
+    TRACE("Mapped 0x%X to 0x%X", va, pa);
 }
 
 void VMM::flush_tlb(uint32_t va) {

@@ -6,10 +6,12 @@
 
 /*
 	Virtual memory manager
+
+	Assumes all pagedirs are stored in kernel-space
 */
 class VMM {
 private:
-	static void map_seg(uint32_t va, uint32_t pa, uint32_t flags);
+	static void map_seg(uint32_t va, uint32_t pa, uint32_t flags, uint32_t options);
 	static void page_fault_handler(const isr_regs_t* regs);
 	static void double_fault_handler(const isr_regs_t* regs);
 
@@ -41,15 +43,13 @@ private:
 	static const int PDE_LV4_GLOBAL     =     0x200;
 	static const int PDE_FRAME          =     0xFFFFF000;
 
-	typedef uint32_t pte_t;         		/* Page table entry */
 	struct pagetable_t {
-	    pte_t entries[1024];
+	    uint32_t entries[1024];
 	};
 
-	typedef uint32_t pde_t;         		/* Page directory entry */
 	struct pagedir_t {
-	    pde_t tables[1024];
-	    uint32_t tables_physical[1024];		/* Physical address of each entry on tables */
+	    uint32_t entries[1024];				/* Entries of pagedir, with flags etc, for dumping into cr3 */
+	    pagetable_t* tables[1024];			/* Pagetables mapped in kernel-space for manipulation */
 	    uint32_t physical;					/* Physical address of this pagedir */
 	};
 
@@ -85,7 +85,7 @@ public:
 		Get physical address for a virtual address
 		Returns false if the address is unmapped
 	*/
-	static bool get_physical(uint32_t va, uint32_t* pa);
+	static bool get_physical(void* va, uint32_t* pa);
 
 	/*
 		Check if given VA is mapped

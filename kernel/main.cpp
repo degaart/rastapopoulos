@@ -63,11 +63,18 @@ extern "C" void main() {
     // assert(isr_stub_physical == (uint32_t)isr_stub_table);
 
     TRACE("Testing VMM::map()");
-    uint8_t *unmapped = (uint8_t *)0x400000;            /* 4 MB in, guaranteed to not be mapped at this point */
-    VMM::map((uint32_t)unmapped, 0xB8000, VMM::PAGE_PRESENT | VMM::PAGE_WRITABLE, 0);
-    *unmapped = 'X';
-    halt();
+    uint32_t *p0 = (uint32_t*)0x400000;            /* 4 MB in, guaranteed to not be mapped at this point */
+    VMM::map((uint32_t)p0, 0xB8000, VMM::PAGE_PRESENT | VMM::PAGE_WRITABLE, 0);
+    *p0 = 'X';
 
-	halt();
+    uint32_t *p1 = (uint32_t*)(0x400000 + 4096);  /* has a pagedir but no pagetable entry */
+    VMM::map((uint32_t)p1, 0xB8000, VMM::PAGE_PRESENT, 0);
+    assert(*p0 == *p1);
+    *p0 ^= 0xCCCCCCCC;
+    assert(*p0 == *p1);
+
+    *p1 = 0x12345678;
+
+    halt();
 }
 
