@@ -39,6 +39,20 @@ private:
 
 public:
     static void init();
+
+    static const int IRQ_TIMER = 0;
+    static const int IRQ_KEYBOARD = 1;
+    static const int IRQ_SERIAL1 = 4;
+    static const int IRQ_SERIAL2 = 3;
+    static const int IRQ_PARPORT2 = 5;
+    static const int IRQ_FDC = 6;
+    static const int IRQ_PARPORT1 = 7;
+
+    static const int IRQ_CMOSTIMER = 8;
+    static const int IRQ_CGARETRACE = 9;
+    static const int IRQ_AUX = 12;
+    static const int IRQ_FPU = 13;
+    static const int IRQ_HDC = 14;
     
     static void install_irq_handler(int irq, irq_handler handler);
     static void remove_irq_handler(int irq, irq_handler handler);

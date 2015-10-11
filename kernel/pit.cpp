@@ -14,7 +14,7 @@ void PIT::init() {
     outb(PORT_DATA, LOBYTE(divisor));
     outb(PORT_DATA, HIBYTE(divisor));
 
-    PIC::install_irq_handler(0, irq_handler);
+    PIC::install_irq_handler(PIC::IRQ_TIMER, irq_handler);
 }
 
 void PIT::irq_handler(int irq, const isr_regs_t* regs) {

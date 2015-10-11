@@ -26,8 +26,6 @@ extern "C" void main() {
 
     TRACE("Initializing GDT");
     GDT::init();
-    GDT::dump();
-    GDT::flush();
 
     TRACE("Initializing IDT");
     IDT::init();
