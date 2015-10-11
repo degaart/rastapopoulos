@@ -175,7 +175,7 @@ void VMM::map(void* va, uint32_t pa, uint32_t flags, uint32_t options) {
     if(paging_enabled())
         flush_tlb(va);
 
-    TRACE("Mapped 0x%X to 0x%X", iva, pa);
+    // TRACE("Mapped 0x%X to 0x%X", iva, pa);
 }
 
 void VMM::flush_tlb(void* va) {

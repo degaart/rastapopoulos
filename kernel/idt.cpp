@@ -4,15 +4,6 @@
 #include "string.h"
 #include "util.h"
 
-#define IDT_PRESENT         (1 << 7)
-#define IDT_DPL(d)          ( ((d) & 0x3) && 5 )
-#define IDT_LDT             (2)
-#define IDT_TASK_GATE       (5)
-#define IDT_TSS_32_AVL      (9)
-#define IDT_TSS_32_BUSY     (11)
-#define IDT_INT_GATE_32     (14)
-#define IDT_TRAP_GATE_32    (15)
-
 // A struct describing an interrupt gate.
 struct idt_entry_t {
    uint16_t base_lo;             // The lower 16 bits of the address to jump to when this interrupt fires.
@@ -41,7 +32,7 @@ void IDT::init() {
     bzero(isr_handlers, sizeof(isr_handler_t));
     bzero(idt_entries, sizeof(idt_entries));
     for(int i=0; i<256; i++) {
-        set_gate(i, isr_stub_table[i], KERNEL_CODE_SEG, IDT_PRESENT|IDT_DPL(0)|IDT_INT_GATE_32);
+        set_gate(i, isr_stub_table[i], KERNEL_CODE_SEG, IDT_PRESENT|IDT_DPL0|IDT_INT_GATE_32);
     }
 }
 

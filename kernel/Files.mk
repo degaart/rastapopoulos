@@ -14,7 +14,9 @@ SRCS = \
     heap.cpp \
     heap_block.cpp \
     kheap.cpp \
-    util.cpp
+    util.cpp \
+    pic.cpp \
+    pit.cpp
 
 ASM_SRCS = \
     stub.asm \

@@ -1,13 +1,14 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
-#define halt()  \
-    while(1) { \
-    	asm volatile(	\
-    		".intel_syntax noprefix\n" \
-            "cli\n" \
-            "hlt\n" \
-    	); \
+#include <stdint.h>
+
+#define yield() asm volatile("hlt")
+
+#define halt()      \
+    cli();          \
+    while(1) {      \
+    	yield();    \
     }
 
 #define pushf() \
@@ -70,6 +71,8 @@ template<typename T> T truncate(T value, unsigned alignment) {
     return (value / alignment) * alignment;
 }
 
+#define LOBYTE(i) ((i) & 0xFF)
+#define HIBYTE(i) (((i) & 0xFF00) >> 8)
 
 #include <stdint.h>
 
@@ -78,7 +81,7 @@ private:
     static uint32_t _rand_seed;
 public:
     static void srand(uint32_t seed);
-    static uint32_t rand();
+    static uint32_t rand();    
 };
 
 #endif

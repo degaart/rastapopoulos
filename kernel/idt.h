@@ -18,6 +18,16 @@ public:
 
     typedef void (*isr_handler_t)(const isr_regs_t* regs);
     static void install_handler(int num, isr_handler_t handler);
+
+    static const int IDT_PRESENT        = 1 << 7;
+    static const int IDT_DPL0           = 0;
+    static const int IDT_DPL1           = 1 << 5;
+    static const int IDT_DPL2           = 2 << 5;
+    static const int IDT_TASK_GATE      = 5;
+    static const int IDT_TSS_32_AVL     = 9;
+    static const int IDT_TSS_32_BUSY    = 11;
+    static const int IDT_INT_GATE_32    = 14;
+    static const int IDT_TRAP_GATE_32   = 15;
 private:
     static void set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags);
 };
