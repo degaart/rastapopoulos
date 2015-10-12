@@ -2,7 +2,7 @@ section .text
 
 %macro ISR_NOERRCODE 1  ; define a macro, taking one parameter
     isr_stub_%1:
-        cli
+        ;cli
         push byte 0
         push dword %1
         jmp isr_common_stub
@@ -10,7 +10,7 @@ section .text
 
 %macro ISR_ERRCODE 1
     isr_stub_%1:
-        cli
+       ; cli
         push dword %1
         jmp isr_common_stub
 %endmacro
@@ -19,7 +19,7 @@ section .text
 ; Disable interrupts, paging, and setup a dedicated stack
 %macro ISR_ABORT 1
     isr_stub_%1:
-        cli
+        ;cli
 
         mov eax, cr0
         and eax, ~0x80000000
@@ -72,7 +72,7 @@ isr_common_stub:
 
    popa                     ; Pops edi,esi,ebp...
    add esp, 8     ; Cleans up the pushed error code and pushed ISR number
-   sti
+   ;sti
    iret           ; pops 5 things at once: CS, EIP, EFLAGS, SS, and ESP 
 
 ; Generate the ISR thunks

@@ -136,7 +136,7 @@ void GDT::dump() {
 
 extern "C" void gdt_flush(gdt_ptr_t*);
 void GDT::flush() {
-  gdt_flush(&gdt_ptr);
+    gdt_flush(&gdt_ptr);
 }
 
 void GDT::tss_flush() {
@@ -148,3 +148,14 @@ void GDT::tss_flush() {
         ::: "ax"
     );
 }
+
+void GDT::set_kernel_stack(const void* stack) {
+    tss.esp0 = (uint32_t) stack;
+}
+
+
+extern "C" 
+void set_kernel_stack(const void* stack) {
+    GDT::set_kernel_stack(stack);
+}
+

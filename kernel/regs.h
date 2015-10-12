@@ -11,6 +11,8 @@
 #define read_cr1(x)     asm volatile("mov %%cr1, %0" : "=r"(x))
 #define read_cr2(x)     asm volatile("mov %%cr2, %0" : "=r"(x))
 #define read_cr3(x)     asm volatile("mov %%cr3, %0" : "=r"(x))
+
+#define read_esp(x)     asm volatile("mov %%esp, %0" : "=r"(x))
 #else
 #define write_cr3(x)
 #define write_cr2(x)
@@ -21,6 +23,8 @@
 #define read_cr1(x)
 #define read_cr2(x)
 #define read_cr3(x)
+
+#define read_esp(x)
 #endif
 
 #define CR0_PG  (1 << 31)

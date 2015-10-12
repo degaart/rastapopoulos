@@ -56,6 +56,7 @@ private:
 	static pagedir_t* _current_pagedir;
 public:
 	static const uint32_t PAGE_SIZE = 0x1000;
+	static const uint8_t* INITIAL_KERNEL_STACK;
 
 	static void init();
 

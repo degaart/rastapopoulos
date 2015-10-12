@@ -19,10 +19,12 @@ public:
     typedef void (*isr_handler_t)(const isr_regs_t* regs);
     static void install_handler(int num, isr_handler_t handler);
 
+
     static const int IDT_PRESENT        = 1 << 7;
     static const int IDT_DPL0           = 0;
     static const int IDT_DPL1           = 1 << 5;
     static const int IDT_DPL2           = 2 << 5;
+    static const int IDT_DPL3           = 3 << 5;
     static const int IDT_TASK_GATE      = 5;
     static const int IDT_TSS_32_AVL     = 9;
     static const int IDT_TSS_32_BUSY    = 11;

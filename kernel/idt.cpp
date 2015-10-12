@@ -56,7 +56,7 @@ void IDT::set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
     idt_entries[num].always0 = 0;
     // We must uncomment the OR below when we get to using user-mode.
     // It sets the interrupt gate's privilege level to 3.
-    idt_entries[num].flags   = flags /* | 0x60 */;
+    idt_entries[num].flags   = flags | IDT_DPL3 ;
 }
 
 extern "C" void isr_handler(isr_regs_t regs) {
@@ -65,12 +65,12 @@ extern "C" void isr_handler(isr_regs_t regs) {
     } else {
         TRACE(
             "Unhandled interrupt: %d\n"
-            "\tds: 0x%X\n"
+            "\tds:  0x%X\n"
             "\teax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X\n"
             "\tesi: 0x%X edi: 0x%X\n"
             "\terr: 0x%X\n"
-            "\tcs: 0x%X eip: 0x%X eflags: 0x%X\n"
-            "\tss: 0x%X esp: 0x%X\n",
+            "\tcs:  0x%X eip: 0x%X eflags: 0x%X\n"
+            "\tss:  0x%X esp: 0x%X\n",
             regs.int_no,
             regs.ds,
             regs.eax, regs.ebx, regs.ecx, regs.edx,
@@ -89,5 +89,3 @@ void IDT::install_handler(int num, isr_handler_t handler) {
     isr_handlers[num] = handler;
     popf();
 }
-
-

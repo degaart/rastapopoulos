@@ -13,6 +13,18 @@
 #include "kheap.h"
 #include "pic.h"
 #include "pit.h"
+#include "regs.h"
+
+extern "C"
+void switch_to_usermode();
+
+static void syscall_handler(const isr_regs_t* regs) {
+    TRACE("Inside syscall handler");
+}
+
+static void gpf_handler(const isr_regs_t* regs) {
+    PANIC("General Protection Fault at 0x%X:0x%X", regs->cs, regs->eip);
+}
 
 extern "C" void main() {
     static const kernel_params* kparams = (kernel_params*)0x500;
@@ -48,10 +60,28 @@ extern "C" void main() {
     TRACE("Physical memory zones:");
     PMM::dump_zones();
 
-    sti();
-    while(1) {
-        yield();
-    }
+    TRACE("Testing context switching");
+    IDT::install_handler(0x80, syscall_handler);
+    IDT::install_handler(13, gpf_handler);
+
+    void* esp;
+    read_esp(esp);
+    TRACE("ESP before entering user-mode: %p", esp);
+    GDT::set_kernel_stack(esp);
+
+    switch_to_usermode();
+    BREAKPOINT();
+    asm(
+        ".intel_syntax noprefix\n"
+        "int 0x80\n"
+    );
+
+    TRACE("Outside of syscall handler. ESP: %p", esp);
+
+    // sti();
+    // while(1) {
+    //     yield();
+    // }
 
     halt();
 }

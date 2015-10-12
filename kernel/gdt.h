@@ -9,9 +9,13 @@ public:
     static void dump();
     static void flush();
     static void tss_flush();
+    static void set_kernel_stack(const void* stack);
 private:
     static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran);
 };
+
+extern "C" 
+void set_kernel_stack(const void* stack);
 
 #define KERNEL_CODE_SEG     0x08
 #define KERNEL_DATA_SEG     0x10

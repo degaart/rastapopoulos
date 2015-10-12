@@ -26,4 +26,5 @@ ASM_SRCS = \
     gdt_flush.asm \
     idt_stub.asm \
     idt_flush.asm \
-    flush_tlb.asm
+    flush_tlb.asm \
+    switch_to_usermode.asm

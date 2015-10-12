@@ -9,7 +9,8 @@
 extern "C" void _flush_tlb(uint32_t);
 
 bool VMM::_paging_enabled = false;
-static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
+// static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
+const uint8_t* VMM::INITIAL_KERNEL_STACK = reinterpret_cast<uint8_t*>(0x7BFF);
 VMM::pagedir_t* VMM::_current_pagedir;
 
 #define PAGE_DIRECTORY_INDEX(x) (((x) >> 22) & 0x3ff)
@@ -27,9 +28,9 @@ void VMM::init() {
         i.e.:   INITIAL_KERNEL_STACK-0x100  -   INITIAL_KERNEL_STACK
                 KERNEL_START                -   kheap_start  
     */
-    TRACE("Initial kernel stack: 0x%X - 0x%X", INITIAL_KERNEL_STACK - 0x100, INITIAL_KERNEL_STACK);
-    for(uint32_t page = truncate(INITIAL_KERNEL_STACK - 0x100, PAGE_SIZE);
-        page < align(INITIAL_KERNEL_STACK, PAGE_SIZE)+1;
+    TRACE("Initial kernel stack: %p - %p", INITIAL_KERNEL_STACK - 0x100, INITIAL_KERNEL_STACK);
+    for(uint32_t page = truncate((uint32_t)INITIAL_KERNEL_STACK - 0x100, PAGE_SIZE);
+        page < align((uint32_t)INITIAL_KERNEL_STACK, PAGE_SIZE)+1;
         page += PAGE_SIZE
     ) {
         map((void*)page, page, PAGE_PRESENT | PAGE_WRITABLE);
@@ -158,7 +159,7 @@ void VMM::map(void* va, uint32_t pa, uint32_t flags, uint32_t options) {
         TRACE("Allocated new pagetable: %p (physical 0x%X)", page_table, table_physical);
         bzero(page_table, sizeof(pagetable_t));
 
-        _current_pagedir->entries[dir_index] = (table_physical & PDE_FRAME) | PDE_PRESENT | PDE_WRITABLE;
+        _current_pagedir->entries[dir_index] = (table_physical & PDE_FRAME) | PDE_PRESENT | PDE_WRITABLE | PDE_USER; /* TODO: Remove PDE_USER for kernel code & heap */
         _current_pagedir->tables[dir_index] = page_table;
     }
 
@@ -170,7 +171,7 @@ void VMM::map(void* va, uint32_t pa, uint32_t flags, uint32_t options) {
             pa, flags
         );
     }
-    page_table->entries[table_index] = pa | flags;
+    page_table->entries[table_index] = pa | flags | PTE_USER; /* TODO: Remove PTE_USER for kernel code & heap */
 
     if(paging_enabled())
         flush_tlb(va);
