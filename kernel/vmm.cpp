@@ -91,8 +91,9 @@ void VMM::page_fault_handler(const isr_regs_t* regs) {
     int fetch = regs->err_code & 0x10;
 
     PANIC(
-        "Page fault at address 0x%X "
+        "Page fault at address 0x%X:0x%X, referencing address 0x%X "
         "(%s %s %s %s %s)",
+        regs->cs, regs->eip,
         faulting_addr,
         present ? "access-violation" : "non-present-page",
         writeop ? "writeop" : "readop",

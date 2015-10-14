@@ -2,30 +2,42 @@
 #define _REGS_H_
 
 #ifndef __APPLE__
-#define write_cr3(x)    asm volatile("mov %0, %%cr3" :: "r"(x))
-#define write_cr2(x)    asm volatile("mov %0, %%cr2" :: "r"(x))
-#define write_cr1(x)    asm volatile("mov %0, %%cr1" :: "r"(x))
-#define write_cr0(x)    asm volatile("mov %0, %%cr0" :: "r"(x))
-
-#define read_cr0(x)     asm volatile("mov %%cr0, %0" : "=r"(x))
-#define read_cr1(x)     asm volatile("mov %%cr1, %0" : "=r"(x))
-#define read_cr2(x)     asm volatile("mov %%cr2, %0" : "=r"(x))
-#define read_cr3(x)     asm volatile("mov %%cr3, %0" : "=r"(x))
-
-#define read_esp(x)     asm volatile("mov %%esp, %0" : "=r"(x))
+#define     __READ_REG__(reg, val) asm volatile("mov %%" #reg ", %0" : "=r"(val))
+#define     __WRITE_REG__(reg, val) asm volatile("mov %0, %%" #reg :: "r"(val))
 #else
-#define write_cr3(x)
-#define write_cr2(x)
-#define write_cr1(x)
-#define write_cr0(x)
-
-#define read_cr0(x)
-#define read_cr1(x)
-#define read_cr2(x)
-#define read_cr3(x)
-
-#define read_esp(x)
+#define     __READ_REG__(reg, val)
+#define     __WRITE_REG__(reg, val)
 #endif
+
+#define read_cr3(x) __READ_REG__(cr3, x)
+#define read_cr2(x) __READ_REG__(cr2, x)
+#define read_cr1(x) __READ_REG__(cr1, x)
+#define read_cr0(x) __READ_REG__(cr0, x)
+#define read_esp(x) __READ_REG__(esp, x)
+
+#define write_cr3(x) __WRITE_REG__(cr3, x)
+#define write_cr2(x) __WRITE_REG__(cr2, x)
+#define write_cr1(x) __WRITE_REG__(cr1, x)
+#define write_cr0(x) __WRITE_REG__(cr0, x)
+#define write_esp(x) __WRITE_REG__(esp, x)
+
+#define read_eflags(x)      \
+    asm volatile(           \
+        "pushf\n"           \
+        "popl %0\n"         \
+        : "=r" (x)          \
+    )
+#define write_eflags(x)     \
+    asm volatile(           \
+        "pushl %0\n"        \
+        "popf\n"            \
+        :: "r"(x)           \
+    )
+
+
+
+
+
 
 #define CR0_PG  (1 << 31)
 #define CR0_CD  (1 << 30)

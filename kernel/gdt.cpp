@@ -103,6 +103,7 @@ void GDT::init() {
     tss.ss0 = KERNEL_DATA_SEG;
     tss.cs = KERNEL_CODE_SEG | 3;
     tss.ss = tss.es = tss.ds = tss.fs = tss.gs = KERNEL_DATA_SEG | 3;
+    tss.iomap_base = ((uint32_t)&tss) + sizeof(tss);
     set_descriptor(
         5,
         (uint32_t)&tss,
@@ -113,6 +114,18 @@ void GDT::init() {
 
     flush();
     tss_flush();
+
+    /*
+     * Set IOPL to ring0
+     *  IOPL is stored in bis 12-13 of EFLAGS. Mask them out
+     * */
+    uint32_t eflags;
+    read_eflags(eflags);
+    TRACE("EFLAGS: 0x%X", eflags);
+
+    eflags &= ~(3 << 12);
+    assert( (eflags & 0x3000) == 0);
+    write_eflags(eflags);
 }
 
 void GDT::set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran) {

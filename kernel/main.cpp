@@ -14,9 +14,13 @@
 #include "pic.h"
 #include "pit.h"
 #include "regs.h"
+#include "io.h"
 
 extern "C"
 void switch_to_usermode();
+
+extern "C"
+void usermode_program();
 
 static void syscall_handler(const isr_regs_t* regs) {
     TRACE("Inside syscall handler");
@@ -64,19 +68,19 @@ extern "C" void main() {
     IDT::install_handler(0x80, syscall_handler);
     IDT::install_handler(13, gpf_handler);
 
-    void* esp;
+    uint8_t* esp;
     read_esp(esp);
     TRACE("ESP before entering user-mode: %p", esp);
-    GDT::set_kernel_stack(esp);
-
+    GDT::set_kernel_stack(esp-4);                           /* Take into account stack layout when calling usermode_program() */
     switch_to_usermode();
-    BREAKPOINT();
-    asm(
-        ".intel_syntax noprefix\n"
-        "int 0x80\n"
-    );
+    TRACE("Entered user-mode. ESP: %p. Executing user program", esp); /* This only works here because port e9 access is permitted by qemu and bochs on all privilege levels */
 
-    TRACE("Outside of syscall handler. ESP: %p", esp);
+    /*
+        So, when we call this function, the stack pointer points to ESP before entering it. So it doesn't work
+        cause we don't fucking have the correct return address
+    */
+    usermode_program();
+    TRACE("After executing user program. ESP: %p", esp);
 
     // sti();
     // while(1) {
