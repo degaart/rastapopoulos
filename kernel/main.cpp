@@ -42,6 +42,7 @@ extern "C" void main() {
 
     TRACE("Initializing GDT");
     GDT::init();
+    GDT::clear_iomap(0xE9);     /* Allow access to port e9 for ring3 programs */
 
     TRACE("Initializing IDT");
     IDT::init();

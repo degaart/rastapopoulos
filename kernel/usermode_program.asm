@@ -2,7 +2,7 @@ section .text
 
     global usermode_program
     usermode_program:
-        xchg bx, bx
+        ;xchg bx, bx
         int 0x80
         ret
 

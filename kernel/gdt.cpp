@@ -22,33 +22,45 @@
 #define GDT_GRAN4K         (1 << 7)
 
 struct tss_entry_t {
-   uint32_t prev_tss;   // The previous TSS - if we used hardware task switching this would form a linked list.
-   uint32_t esp0;       // The stack pointer to load when we change to kernel mode.
-   uint32_t ss0;        // The stack segment to load when we change to kernel mode.
-   uint32_t esp1;       // Unused...
-   uint32_t ss1;
-   uint32_t esp2;
-   uint32_t ss2;
-   uint32_t cr3;
-   uint32_t eip;
-   uint32_t eflags;
-   uint32_t eax;
-   uint32_t ecx;
-   uint32_t edx;
-   uint32_t ebx;
-   uint32_t esp;
-   uint32_t ebp;
-   uint32_t esi;
-   uint32_t edi;
-   uint32_t es;         // The value to load into ES when we change to kernel mode.
-   uint32_t cs;         // The value to load into CS when we change to kernel mode.
-   uint32_t ss;         // The value to load into SS when we change to kernel mode.
-   uint32_t ds;         // The value to load into DS when we change to kernel mode.
-   uint32_t fs;         // The value to load into FS when we change to kernel mode.
-   uint32_t gs;         // The value to load into GS when we change to kernel mode.
-   uint32_t ldt;        // Unused...
-   uint16_t trap;
-   uint16_t iomap_base;
+    uint16_t prev_tss;
+    uint16_t reserved0;
+    uint32_t esp0;
+    uint16_t ss0;
+    uint16_t reserved1;
+    uint32_t esp1;
+    uint16_t ss1;
+    uint16_t reserved2;
+    uint32_t esp2;
+    uint16_t ss2;
+    uint16_t reserved3;
+    uint32_t cr3;
+    uint32_t eip;
+    uint32_t eflags;
+    uint32_t eax;
+    uint32_t ecx;
+    uint32_t edx;
+    uint32_t ebx;
+    uint32_t esp;
+    uint32_t ebp;
+    uint32_t esi;
+    uint32_t edi;
+    uint16_t es;
+    uint16_t reserved4;
+    uint16_t cs;
+    uint16_t reserved5;
+    uint16_t ss;
+    uint16_t reserved6;
+    uint16_t ds;
+    uint16_t reserved7;
+    uint16_t fs;
+    uint16_t reserved8;
+    uint16_t gs;
+    uint16_t reserved9;
+    uint16_t ldt;
+    uint16_t reserved10;
+    uint16_t trap;
+    uint16_t iomap_base;
+    uint8_t iomap[(65536 / 8) + 1];
 } __attribute__((packed));
 
 struct gdt_entry_t {
@@ -99,18 +111,29 @@ void GDT::init() {
         GDT_32BIT|GDT_GRAN4K
     );  /* User data */
 
+
+    /*
+     * I/O permissions checking
+     * If CPL>IOPL, the processor checks iomap in the current TSS
+     * If a bit is set in the iomap, the corresponding port causes a GPF on access in ring3
+     * iomap must be terminated by a 0xFF
+     */
     bzero(&tss, sizeof(tss));
     tss.ss0 = KERNEL_DATA_SEG;
     tss.cs = KERNEL_CODE_SEG | 3;
     tss.ss = tss.es = tss.ds = tss.fs = tss.gs = KERNEL_DATA_SEG | 3;
-    tss.iomap_base = ((uint32_t)&tss) + sizeof(tss);
+    tss.iomap_base = tss.iomap - (uint8_t*)&tss;
+    memset(tss.iomap, 0xFF, sizeof(tss.iomap));
     set_descriptor(
         5,
         (uint32_t)&tss,
-        ((uint32_t)&tss) + sizeof(tss),
+        sizeof(tss),
         GDT_DPL(3)|GDT_CODE|GDT_ACCESSED|GDT_PRESENT,
         0
     ); /* TSS */
+
+    TRACE("sizeof(tss) = %d bytes", sizeof(tss));
+    assert(sizeof(tss) >= 103);
 
     flush();
     tss_flush();
@@ -121,7 +144,6 @@ void GDT::init() {
      * */
     uint32_t eflags;
     read_eflags(eflags);
-    TRACE("EFLAGS: 0x%X", eflags);
 
     eflags &= ~(3 << 12);
     assert( (eflags & 0x3000) == 0);
@@ -162,10 +184,27 @@ void GDT::tss_flush() {
     );
 }
 
+void GDT::set_iomap(int port) {
+    int idx = port / (sizeof(uint8_t)*8);
+    int off = port % (sizeof(uint8_t)*8);
+    uint8_t mask = 1 << off;
+    tss.iomap[idx] |= mask;
+}
+
+void GDT::clear_iomap(int port) {
+    int idx = port / (sizeof(uint8_t)*8);
+    int off = port % (sizeof(uint8_t)*8);
+    uint8_t mask = ~(1 << off);
+    tss.iomap[idx] &= mask;
+}
+
+bool GDT::test_iomap(int port) {
+    return tss.iomap[port / sizeof(uint8_t)] & (1 << (port % sizeof(uint8_t)));
+}
+
 void GDT::set_kernel_stack(const void* stack) {
     tss.esp0 = (uint32_t) stack;
 }
-
 
 extern "C" 
 void set_kernel_stack(const void* stack) {

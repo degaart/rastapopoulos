@@ -8,8 +8,12 @@ public:
     static void init();
     static void dump();
     static void flush();
-    static void tss_flush();
     static void set_kernel_stack(const void* stack);
+
+    static void tss_flush();
+    static void set_iomap(int port);
+    static void clear_iomap(int port);
+    static bool test_iomap(int port);
 private:
     static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran);
 };
