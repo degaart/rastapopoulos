@@ -19,6 +19,9 @@ Pagedir* Pagedir::alloc() {
     Pagedir* dir = (Pagedir*)kmalloc_a(sizeof(Pagedir), PAGE_SIZE);
     bzero(dir->_entries, sizeof(dir->_entries));
     bzero(dir->_tables, sizeof(dir->_tables));
+
+    bool got_pysical = VMM::get_physical(dir, &dir->_physical);
+    assert(got_pysical);
     return dir;
 }
 
@@ -101,6 +104,17 @@ void Pagedir::set_physical(uint32_t physical) {
 }
 
 uint32_t Pagedir::get_physical(uint32_t physical) {
+    return _physical;
+}
+
+void Pagedir::copy_kernel_mappings(Pagedir* pagedir) {
+    _entries[0] = pagedir->_entries[0];                 /* first entry guaranteed to be mapped */
+    _tables[0] = pagedir->_tables[0];
+
+    /* TODO: Handle remaining maps > 3Gb */
+}
+
+uint32_t Pagedir::physical() {
     return _physical;
 }
 

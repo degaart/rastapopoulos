@@ -129,7 +129,7 @@ void VMM::flush_tlb(void* va) {
     _flush_tlb((uint32_t)va);
 }
 
-Pagedir* VMM::new_pagedir() {
+Pagedir* VMM::create_pagedir() {
     return Pagedir::alloc();
 }
 
@@ -138,6 +138,10 @@ void VMM::free_pagedir(Pagedir* pagedir) {
 }
 
 void VMM::switch_pagedir(Pagedir* pagedir) {
+    /* Copy current kernel mappings before switching */
+    pagedir->copy_kernel_mappings(_current_pagedir);
+
+    /* Switch to new pagedir */
     _current_pagedir = pagedir;
-    write_cr3((uint32_t)_current_pagedir);
+    write_cr3((uint32_t)_current_pagedir->physical());
 }

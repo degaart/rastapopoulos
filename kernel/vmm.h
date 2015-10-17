@@ -28,7 +28,7 @@ public:
 	static bool paging_enabled();
 
 	/* Create new Pagedir */
-	static Pagedir* new_pagedir();
+	static Pagedir* create_pagedir();
 
 	/* destroy Pagedir */
 	static void free_pagedir(Pagedir* pagedir);

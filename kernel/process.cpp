@@ -10,7 +10,7 @@ void switch_to_usermode();
 
 Process::Process(uint32_t pid)
 : _pid(pid) {
-    _pagedir = VMM::new_pagedir();
+    _pagedir = VMM::create_pagedir();
     memset(_kernel_stack, 0xCC, sizeof(_kernel_stack));
 }
 
