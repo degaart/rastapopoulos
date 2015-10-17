@@ -4,6 +4,7 @@
 #include "io.h"
 #include "debug.h"
 #include "util.h"
+#include "timer.h"
 
 uint32_t PIT::_ticks = 0;
 
@@ -18,11 +19,9 @@ void PIT::init() {
 }
 
 void PIT::irq_handler(int irq, const isr_regs_t* regs) {
-    _ticks++;
-    if(_ticks % (FREQ * 1) == 0) {
-        TRACE("PIT: %u ticks", _ticks);
-    }
+    // _ticks++;
+    // if(_ticks % (FREQ * 1) == 0) {
+    //     TRACE("PIT: %u ticks", _ticks);
+    // }
+    Timer::on_tick();
 }
-
-
-

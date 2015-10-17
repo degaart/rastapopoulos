@@ -18,7 +18,9 @@ SRCS = \
     pic.cpp \
     pit.cpp \
     pagedir.cpp \
-    process.cpp
+    process.cpp \
+    timer.cpp
+    
 
 ASM_SRCS = \
     stub.asm \

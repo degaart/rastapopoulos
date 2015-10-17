@@ -15,13 +15,15 @@
 #include "pit.h"
 #include "regs.h"
 #include "io.h"
-#include "process.h"
+#include "timer.h"
 
 extern "C"
 void switch_to_usermode();
 
 extern "C"
 void usermode_program();
+
+static void run_tests();
 
 #define SYSCALL_HALT    0x0
 #define SYSCALL_WRITE   0x1
@@ -65,6 +67,7 @@ extern "C" void main() {
     TRACE("Initializing IDT");
     IDT::init();
     IDT::flush();
+    IDT::install_handler(13, gpf_handler);
 
     TRACE("Initializing PIC");
     PIC::init();
@@ -83,79 +86,50 @@ extern "C" void main() {
     TRACE("Physical memory zones:");
     PMM::dump_zones();
 
-    TRACE("Testing context switching");
-    IDT::install_handler(0x80, syscall_handler);
-    IDT::install_handler(13, gpf_handler);
-
-    /*
-        Testing adress-space switching
-        We assume kernel-space is 0x0 - 0x3FFFFF and 0xC0000000 - 0xFFFFFFFF
-        And 0x00100000 - KERNEL_END is identity-mapped
-
-        Procedure:
-            - Create new pagedir -> dir0
-            - Copy current kernel pages into new pagedir
-            - Map TEST_ADDRESS to page frame
-            - Switch to this pagedir
-            - Write some data into TEST_ADDRESS
-
-            - Create another pagedir -> dir1
-            - Copy current kernel pages into new pagedir
-            - Map TEST_ADDRESS to new pageframe
-            - Switch to this pagedir
-            - Write some data into TEST_ADDRESS
-
-            - Switch to dir0
-            - Written data at TEST_ADDRESS should not have changed
-    */
-    char* p0 = (char*)0x400000;
-    char* p1 = p0 + 4096;
-
-    Pagedir* dir0 = VMM::create_pagedir();
-    uint32_t frame0 = PMM::alloc();
-    dir0->map(p0, frame0, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    VMM::switch_pagedir(dir0);
-    strcpy(p0, "Pagedir #0");
-
-    Pagedir* dir1 = VMM::create_pagedir();
-    uint32_t frame1 = PMM::alloc();
-    dir1->map(p0, frame1, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    dir1->map(p1, frame0, VMM::PAGE_PRESENT);
-
-    VMM::switch_pagedir(dir1);
-    strcpy(p0, "Pagedir #1");
-
-    TRACE("frame0: %s", p1);
-    TRACE("frame1: %s", p0);
-
-    VMM::switch_pagedir(dir0);
-    TRACE("frame0: %s", p0);
-
-#if 0
-    Process process(1);
-    process.execute();
-    halt();
-
-    uint8_t* esp;
-    read_esp(esp);
-    TRACE("ESP before entering user-mode: %p", esp);
-    GDT::set_kernel_stack(esp-4);                           /* Take into account stack layout when calling usermode_program() */
-    switch_to_usermode();
-    TRACE("Entered user-mode. ESP: %p. Executing user program", esp); /* This only works here because port e9 access is permitted by qemu and bochs on all privilege levels */
-
-    /*
-        So, when we call this function, the stack pointer points to ESP before entering it. So it doesn't work
-        cause we don't fucking have the correct return address
-    */
-    usermode_program();
-    TRACE("After executing user program. ESP: %p", esp);
-
-    // sti();
-    // while(1) {
-    //     yield();
-    // }
-#endif
-
+    run_tests();
     halt();
 }
 
+static uint32_t _timer1 = 0;
+static void timer1(void* args) {
+    _timer1++;
+    TRACE(" timer1: %u", _timer1);
+}
+
+
+static uint32_t _timer2 = 0;
+static void timer2(void* args) {
+    _timer2++;
+    TRACE("timer2: %u", _timer2);
+}
+
+static void timer3(void* args) {
+    uint32_t timer1_id = (uint32_t)args;
+    TRACE("timer3: unscheduling timer1");
+    Timer::unschedule(timer1_id);
+}
+
+static void timer5(void* args) {
+    TRACE("Hello, I'm timer5. Nice to meet you");
+}
+
+static void timer4(void* args) {
+    uint32_t timer2_id = (uint32_t)args;
+    TRACE("timer4: unscheduling timer2");
+    Timer::unschedule(timer2_id);
+    Timer::schedule(timer5, nullptr, 2000);
+}
+
+static void run_tests() {
+    TRACE("Testing Timer");
+    sti();
+
+    uint32_t timer1_id = Timer::schedule(timer1, nullptr, 1000);
+    uint32_t timer2_id = Timer::schedule(timer2, nullptr, 2250);
+    Timer::schedule(timer3, (void*)timer1_id, 5000, false);
+    Timer::schedule(timer4, (void*)timer2_id, 10000, false);
+
+    while(true) {
+        yield();
+    }
+}

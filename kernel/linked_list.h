@@ -3,6 +3,7 @@
 
 #include "debug.h"
 #include "cxxutil.h"
+#include "string.h"
 
 template<typename T>
 class LinkedList {
@@ -274,6 +275,11 @@ public:
         remove(i.node());
         i.invalidate();
     }
+
+    void remove(unsigned index) {
+        Iterator it = get_iterator_at(index);
+        remove(it);
+    }
     
     Iterator insert_before(Iterator i, const T& val) {
         assert(i.valid());
@@ -310,6 +316,16 @@ public:
     
     /* Get node at specified index, or throws error if invalid index */
     Iterator get_iterator_at(unsigned index) const {
+        unsigned current_index = 0;
+        for(Iterator i = iterator(); !i.end(); i.next()) {
+            if(current_index == index)
+                return i;
+            current_index++;
+        }
+        assert(false);
+    }
+
+    Iterator get_iterator_at(unsigned index) {
         unsigned current_index = 0;
         for(Iterator i = iterator(); !i.end(); i.next()) {
             if(current_index == index)
