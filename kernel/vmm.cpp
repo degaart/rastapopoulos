@@ -119,10 +119,10 @@ bool VMM::is_mapped(void* va) {
     return _current_pagedir->is_mapped((uint32_t)va);
 }
 
-void VMM::map(void* va, uint32_t pa, uint32_t flags) {
-    _current_pagedir->map((uint32_t)va, pa, flags);
+void VMM::map(uint32_t va, uint32_t pa, uint32_t flags) {
+    _current_pagedir->map(va, pa, flags);
     if(paging_enabled())
-        flush_tlb(va);
+        flush_tlb((void*)va);
 }
 
 void VMM::flush_tlb(void* va) {

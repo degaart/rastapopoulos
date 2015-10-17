@@ -45,10 +45,16 @@ public:
 	static const uint32_t PAGE_PRESENT	= Pagedir::PTE_PRESENT;
 	static const uint32_t PAGE_WRITABLE	= Pagedir::PTE_WRITABLE;
 	static const uint32_t PAGE_USER		= Pagedir::PTE_USER;
-	static void map(void* va, uint32_t pa, uint32_t flags);
+	static void map(uint32_t va, uint32_t pa, uint32_t flags);
+	static void map(void* va, uint32_t pa, uint32_t flags) {
+		map((uint32_t)va, pa, flags);
+	}
 
 	/* Unmap virtual address */
 	static void unmap(uint32_t va);
+	static void unmap(void* va) {
+		unmap((uint32_t)va);
+	}
 
 	/* 
 		Get physical address for a virtual address

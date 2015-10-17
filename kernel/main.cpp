@@ -108,20 +108,19 @@ extern "C" void main() {
             - Switch to dir0
             - Written data at TEST_ADDRESS should not have changed
     */
-    static const uint32_t TEST_ADDRESS = 0x400000;
+    char* p0 = (char*)0x400000;
+    char* p1 = p0 + 4096;
+
     Pagedir* dir0 = VMM::create_pagedir();
     uint32_t frame0 = PMM::alloc();
-    dir0->map(TEST_ADDRESS, frame0, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    dir0->map(p0, frame0, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
     VMM::switch_pagedir(dir0);
-
-    char* p0 = (char*)TEST_ADDRESS;
-    char* p1 = p0 + 4096;
     strcpy(p0, "Pagedir #0");
 
     Pagedir* dir1 = VMM::create_pagedir();
     uint32_t frame1 = PMM::alloc();
-    dir1->map(TEST_ADDRESS, frame1, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    dir1->map(TEST_ADDRESS + 4096, frame0, VMM::PAGE_PRESENT);
+    dir1->map(p0, frame1, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    dir1->map(p1, frame0, VMM::PAGE_PRESENT);
 
     VMM::switch_pagedir(dir1);
     strcpy(p0, "Pagedir #1");
