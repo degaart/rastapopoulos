@@ -50,11 +50,14 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment) {
             unsigned grow_size = align(size, VMM::PAGE_SIZE);
             unsigned grow_pages = grow_size / VMM::PAGE_SIZE;
 
-            TRACE("Growing kernel heap size by %d pages (%d bytes) ", grow_pages, grow_size);
+            // TRACE("Growing kernel heap by %d pages (end: %p) ", grow_pages, end());
 
             /* Map new pages in */
             assert( reinterpret_cast<uint32_t>(_kheap.limit()) % VMM::PAGE_SIZE == 0 );
             for(unsigned i = 0; i<grow_pages; i++) {
+                if(end() + grow_size >= (uint8_t*)VMM::USERSPACE_START) {
+                    return nullptr;
+                }
                 uint32_t page = PMM::alloc();
                 VMM::map( end() + (i * VMM::PAGE_SIZE), page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
             }

@@ -43,7 +43,7 @@ void Pagedir::map(uint32_t va, uint32_t pa, uint32_t flags) {
         bool got_pysical = VMM::get_physical(page_table, &table_physical);
         assert(got_pysical);
 
-        TRACE("Allocated new pagetable: %p (physical 0x%X)", page_table, table_physical);
+        // TRACE("Allocated new pagetable: %p (physical 0x%X)", page_table, table_physical);
         bzero(page_table, sizeof(pagetable_t));
 
         _entries[dir_index] = (table_physical & PDE_FRAME) | PDE_PRESENT | PDE_WRITABLE | PDE_USER; /* TODO: Remove PDE_USER for kernel code & heap */

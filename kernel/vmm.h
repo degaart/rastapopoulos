@@ -21,6 +21,7 @@ private:
 public:
 	static const uint32_t PAGE_SIZE = 0x1000;
 	static const uint8_t* INITIAL_KERNEL_STACK;
+	static const uint32_t USERSPACE_START = 0x400000;
 
 	static void init();
 
