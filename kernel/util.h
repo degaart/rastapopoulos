@@ -74,6 +74,8 @@ template<typename T> T truncate(T value, unsigned alignment) {
 #define LOBYTE(i) ((i) & 0xFF)
 #define HIBYTE(i) (((i) & 0xFF00) >> 8)
 
+#define MAKE_UINT64(lo, hi)  ( ((uint64_t)(lo)) | ((uint64_t)(hi) << 32) )
+
 #include <stdint.h>
 
 class Util {

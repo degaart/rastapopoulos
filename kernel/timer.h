@@ -15,12 +15,12 @@ private:
     void* const _callback_data;
     const uint32_t _period;
     const bool _recurring;
-    uint32_t _last_run;
+    uint64_t _last_run;
 
     static LinkedList<Timer> _timers;
     static uint32_t _ticks;
-    static uint32_t _current_time;
     static uint32_t _current_id;
+    static uint64_t _current_timestamp;
 
     Timer(uint32_t id, timer_callback_t callback, void* callback_data, uint32_t period, bool recurring);
     static void on_tick();
@@ -28,6 +28,7 @@ private:
 public:
     static uint32_t schedule(timer_callback_t callback, void* data, uint32_t period, bool recurring = true);
     static void unschedule(uint32_t id);
+    static uint64_t current_timestamp();
 };
 
 #endif

@@ -90,46 +90,69 @@ extern "C" void main() {
     halt();
 }
 
-static uint32_t _timer1 = 0;
-static void timer1(void* args) {
-    _timer1++;
-    TRACE(" timer1: %u", _timer1);
+static void do_funky_things() {
+    /*
+        NOTE: Interrupts aren't enabled here, so we can't be preempted
+        Make it so we CAN be preempted here
+    */
+    char* pagedir_name = (char*)VMM::USERSPACE_START;
+    TRACE("Doing funky things with %s ...", pagedir_name);
+
+    if(!kmalloc(65536)) {
+        TRACE("There you go, exhausting kernel VA space");
+    }
 }
 
+static Pagedir* p0;
+static Pagedir* p1;
+static Pagedir* current_pagedir;
 
-static uint32_t _timer2 = 0;
-static void timer2(void* args) {
-    _timer2++;
-    TRACE("timer2: %u", _timer2);
-}
+static void schedule(void* args) {
+    do_funky_things();
 
-static void timer3(void* args) {
-    uint32_t timer1_id = (uint32_t)args;
-    TRACE("timer3: unscheduling timer1");
-    Timer::unschedule(timer1_id);
-}
-
-static void timer5(void* args) {
-    TRACE("Hello, I'm timer5. Nice to meet you");
-}
-
-static void timer4(void* args) {
-    uint32_t timer2_id = (uint32_t)args;
-    TRACE("timer4: unscheduling timer2");
-    Timer::unschedule(timer2_id);
-    Timer::schedule(timer5, nullptr, 2000);
+    if(current_pagedir == p0)
+        current_pagedir = p1;
+    else
+        current_pagedir = p0;
+    VMM::switch_pagedir(current_pagedir);
 }
 
 static void run_tests() {
-    TRACE("Testing Timer");
+    TRACE("Testing address-space switching with an active timer");
+
+    char* str = (char*)VMM::USERSPACE_START;
+    p0 = VMM::create_pagedir();
+    p0->map(str, PMM::alloc(), VMM::PAGE_WRITABLE|VMM::PAGE_PRESENT);
+    
+    p1 = VMM::create_pagedir();
+    p1->map(str, PMM::alloc(), VMM::PAGE_WRITABLE|VMM::PAGE_PRESENT);
+
+    VMM::switch_pagedir(p0);
+    strcpy(str, "pagedir p0");
+
+    VMM::switch_pagedir(p1);
+    strcpy(str, "pagedir p1");
+
+    VMM::switch_pagedir(p0);
+    current_pagedir = p0;
+
+    Timer::schedule(schedule, nullptr, 250);
+
     sti();
-
-    uint32_t timer1_id = Timer::schedule(timer1, nullptr, 1000);
-    uint32_t timer2_id = Timer::schedule(timer2, nullptr, 2250);
-    Timer::schedule(timer3, (void*)timer1_id, 5000, false);
-    Timer::schedule(timer4, (void*)timer2_id, 10000, false);
-
     while(true) {
         yield();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
