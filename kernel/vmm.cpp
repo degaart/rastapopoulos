@@ -5,23 +5,18 @@
 #include "debug.h"
 #include "pmm.h"
 #include "kheap.h"
+#include "pagedir.h"
 
 extern "C" void _flush_tlb(uint32_t);
 
 bool VMM::_paging_enabled = false;
-// static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
 const uint8_t* VMM::INITIAL_KERNEL_STACK = reinterpret_cast<uint8_t*>(0x7BFF);
-VMM::pagedir_t* VMM::_current_pagedir;
-
-#define PAGE_DIRECTORY_INDEX(x) (((x) >> 22) & 0x3ff)
-#define PAGE_TABLE_INDEX(x) (((x) >> 12) & 0x3ff)
-#define PAGE_GET_PHYSICAL_ADDRESS(x) (*x & ~0xfff)
+Pagedir* VMM::_current_pagedir;
 
 void VMM::init() {
     /* Create initial kernel pagedir */
-    _current_pagedir = (pagedir_t*)kmalloc_a(sizeof(pagedir_t), PAGE_SIZE);
-    bzero(_current_pagedir, sizeof(pagedir_t));    
-    _current_pagedir->physical = (uint32_t)_current_pagedir;
+    _current_pagedir = Pagedir::alloc();
+    _current_pagedir->set_physical((uint32_t)_current_pagedir);
     
     /*
         Identity-map currently allocated kernel memory
@@ -74,7 +69,7 @@ void VMM::init() {
     
     uint32_t cr0;
     read_cr0(cr0);
-    cr0 = cr0 | CR0_PG | CR0_WP;
+    cr0 = cr0 | CR0_PG | CR0_WP; /* CR0_WP: ring0 cannot write to write-protected pages */
     write_cr0(cr0);
 
     _paging_enabled = true;
@@ -117,72 +112,32 @@ bool VMM::get_physical(void* va, uint32_t* pa) {
             *pa = (uint32_t)va;
         return true;
     }
-
-    assert(pa);
-
-    uint32_t iva = (uint32_t)va;
-    unsigned dir_index = PAGE_DIRECTORY_INDEX(iva);
-    if(_current_pagedir->entries[dir_index] & PDE_PRESENT) {
-        pagetable_t* pagetable = _current_pagedir->tables[dir_index];
-        unsigned table_index = PAGE_TABLE_INDEX(iva);
-        if(pagetable->entries[table_index] & PTE_PRESENT) {
-            uint32_t frame = pagetable->entries[table_index] & PTE_FRAME;
-            uint32_t offset = iva & PTE_OFFSET;
-            if(pa)
-                *pa = frame + offset;
-            return true;
-        }
-    }
-    return false;
+    return _current_pagedir->get_physical((uint32_t)va, pa);
 }
 
 bool VMM::is_mapped(void* va) {
-    return get_physical(va, nullptr);
+    return _current_pagedir->is_mapped((uint32_t)va);
 }
 
-void VMM::map(void* va, uint32_t pa, uint32_t flags, uint32_t options) {
-    uint32_t iva = (uint32_t)va;
-    if(iva % PAGE_SIZE)
-        PANIC("Invalid VA: 0x%X", iva);
-    if(pa % PAGE_SIZE)
-        PANIC("Invalid PA: 0x%X", pa);
-
-
-    uint32_t dir_index = PAGE_DIRECTORY_INDEX(iva);
-    uint32_t table_index = PAGE_TABLE_INDEX(iva);
-
-    pagetable_t* page_table = _current_pagedir->tables[dir_index];
-    if(!page_table || !(_current_pagedir->entries[dir_index] & PTE_PRESENT)) {
-        /* Kmalloc can't get physical address anymore now. We must do the grunt work of decoding pagetable to get physical address */
-        uint32_t table_physical;
-        page_table = (pagetable_t*)kmalloc_a(sizeof(pagetable_t), PAGE_SIZE);
-        assert(get_physical(page_table, &table_physical));
-        TRACE("Allocated new pagetable: %p (physical 0x%X)", page_table, table_physical);
-        bzero(page_table, sizeof(pagetable_t));
-
-        _current_pagedir->entries[dir_index] = (table_physical & PDE_FRAME) | PDE_PRESENT | PDE_WRITABLE | PDE_USER; /* TODO: Remove PDE_USER for kernel code & heap */
-        _current_pagedir->tables[dir_index] = page_table;
-    }
-
-    if((page_table->entries[table_index] & PDE_PRESENT) && !(options & MAP_REMAP)) {
-        PANIC(
-            "VA 0x%X already mapped to PA 0x%X, flags 0x%X (trying to remap to PA 0x%X, flags 0x%X)",
-            iva, pa,
-            page_table->entries[table_index] & (~PTE_FRAME),
-            pa, flags
-        );
-    }
-    page_table->entries[table_index] = pa | flags | PTE_USER; /* TODO: Remove PTE_USER for kernel code & heap */
-
+void VMM::map(void* va, uint32_t pa, uint32_t flags) {
+    _current_pagedir->map((uint32_t)va, pa, flags);
     if(paging_enabled())
         flush_tlb(va);
-
-    // TRACE("Mapped 0x%X to 0x%X", iva, pa);
 }
 
 void VMM::flush_tlb(void* va) {
     _flush_tlb((uint32_t)va);
 }
 
+Pagedir* VMM::new_pagedir() {
+    return Pagedir::alloc();
+}
 
+void VMM::free_pagedir(Pagedir* pagedir) {
+    delete pagedir;
+}
 
+void VMM::switch_pagedir(Pagedir* pagedir) {
+    _current_pagedir = pagedir;
+    write_cr3((uint32_t)_current_pagedir);
+}

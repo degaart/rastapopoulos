@@ -57,6 +57,7 @@ void PMM::reserve(uint32_t page) {
     for (auto region = _regions.iterator(); !region.end(); region.next()) {
         if (region->contains_page(page)) {
             region->reserve(page);
+            return;
         }
     }
 }
@@ -77,6 +78,20 @@ uint32_t PMM::alloc() {
     PANIC("Physical memory exhaustion");
     return 0;
 }
+
+void PMM::free(uint32_t page) {
+    assert((page % PAGE_SIZE) == 0);
+    
+    /* Find region containing page */
+    for (auto region = _regions.iterator(); !region.end(); region.next()) {
+        if (region->contains_page(page)) {
+            region->free(page);
+            return;
+        }
+    }
+    PANIC("Invalid PA: 0x%X", page);
+}
+
 
 uint32_t PMM::pages_total() {
     uint32_t total = 0;

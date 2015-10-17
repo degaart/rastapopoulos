@@ -73,34 +73,10 @@ void Heap::Block::merge() {
     next_block->destroy();
 }
 
-//Heap::Block* Heap::Block::split(Heap::Block** block, Heap::Block* prev, uint32_t offset) {
-//    assert(offset < (*block)->size);
-//    
-//    if(prev && (prev->used() == (*block)->used())) {
-//        Block* new_block = create( (uint8_t*)(*block) + offset, (*block)->size - offset);
-//        new_block->set_last((*block)->last());
-//        
-//        prev->size += offset;
-//        prev->set_last(false);
-//        (*block)->destroy();
-//        *block = prev;
-//
-//        return new_block;
-//    } else {
-//        if(offset <= sizeof(Block))
-//            return nullptr;
-//        
-//        Block* new_block = create( (uint8_t*)(*block) + offset, (*block)->size - offset );
-//        new_block->set_last((*block)->last());
-//        (*block)->size = offset;
-//        (*block)->set_last(false);
-//        return new_block;
-//    }
-//    return nullptr;
-//}
-
 Heap::Block* Heap::Block::split(uint32_t offset) {
-    assert(offset < size);
+    if(offset >= size) {
+        PANIC("Invalid split offset: offset: %u, size: %u", offset, size);
+    }
     if(offset <= sizeof(Block))
         return nullptr;
     

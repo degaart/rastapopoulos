@@ -56,7 +56,7 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment) {
             assert( reinterpret_cast<uint32_t>(_kheap.limit()) % VMM::PAGE_SIZE == 0 );
             for(unsigned i = 0; i<grow_pages; i++) {
                 uint32_t page = PMM::alloc();
-                VMM::map( end() + (i * VMM::PAGE_SIZE), page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE, 0 );
+                VMM::map( end() + (i * VMM::PAGE_SIZE), page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
             }
 
             _kheap.grow(grow_size);

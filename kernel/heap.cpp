@@ -35,7 +35,7 @@ void* Heap::alloc_impl(unsigned size, unsigned alignment) {
                 }
             }
             
-            if(offset + size < block->size) {
+            if(offset + size + sizeof(Block) < block->size) {
                 Block* new_block;
                 
                 /* split for alignment */
@@ -44,16 +44,20 @@ void* Heap::alloc_impl(unsigned size, unsigned alignment) {
                 } else {
                     new_block = block;
                 }
+                if(!(new_block->size >= sizeof(Block) + size)) {
+                    PANIC("new_block->size: %u, size: %u", new_block->size, size);
+                }
                 
                 if(new_block) {
                     /* Split remaining free space into new block (if applicable) */
                     unsigned split_offset = sizeof(Block) + size;
-                    unsigned free_space_size = new_block->size - split_offset;
-                    
-                    if(free_space_size > sizeof(Block)) {
-                        new_block->split(split_offset);
+                    if(new_block->size > split_offset) {
+                        unsigned free_space_size = new_block->size - split_offset;
+                        if(free_space_size > sizeof(Block)) {
+                            new_block->split(split_offset);
+                        }    
                     }
-
+                    
                     new_block->set_used(true);
                     
                     void* ptr = new_block->data();

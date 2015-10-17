@@ -15,6 +15,7 @@
 #include "pit.h"
 #include "regs.h"
 #include "io.h"
+#include "process.h"
 
 extern "C"
 void switch_to_usermode();
@@ -22,8 +23,25 @@ void switch_to_usermode();
 extern "C"
 void usermode_program();
 
+#define SYSCALL_HALT    0x0
+#define SYSCALL_WRITE   0x1
+
+static void syscall_write(const char* str) {
+    TRACE("<ring3>: %s", str);
+}
+
 static void syscall_handler(const isr_regs_t* regs) {
-    TRACE("Inside syscall handler");
+    TRACE("syscall: 0x%X", regs->eax);
+    switch(regs->eax) {
+        case SYSCALL_HALT:
+            halt();
+            break;
+        case SYSCALL_WRITE:
+            syscall_write((const char*)regs->ecx);
+            break;
+        default:
+            PANIC("Unhandled syscall 0x%X", regs->eax);
+    }
 }
 
 static void gpf_handler(const isr_regs_t* regs) {
@@ -69,6 +87,41 @@ extern "C" void main() {
     IDT::install_handler(0x80, syscall_handler);
     IDT::install_handler(13, gpf_handler);
 
+    /*
+        Testing adress-space switching
+        We assume kernel-space is 0x0 - 0x3FFFFF and 0xC0000000 - 0xFFFFFFFF
+        And 0x00100000 - KERNEL_END is identity-mapped
+
+        Procedure:
+            - Create new pagedir -> dir0
+            - Copy current kernel pages into new pagedir
+            - Map TEST_ADDRESS to page frame
+            - Switch to this pagedir
+            - Write some data into TEST_ADDRESS
+
+            - Create another pagedir -> dir1
+            - Copy current kernel pages into new pagedir
+            - Map TEST_ADDRESS to new pageframe
+            - Switch to this pagedir
+            - Write some data into TEST_ADDRESS
+
+            - Switch to dir0
+            - Written data at TEST_ADDRESS should not have changed
+    */
+    static const uint32_t TEST_ADDRESS = 0x400000;
+    Pagedir* dir0 = VMM::new_pagedir();
+    uint32_t frame = PMM::alloc();
+    dir0->map(TEST_ADDRESS, frame, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::switch_pagedir(dir0);
+
+    char* test_pointer = (char*)TEST_ADDRESS;
+    strcpy(test_pointer, "Pagedir #0");
+
+#if 0
+    Process process(1);
+    process.execute();
+    halt();
+
     uint8_t* esp;
     read_esp(esp);
     TRACE("ESP before entering user-mode: %p", esp);
@@ -87,6 +140,7 @@ extern "C" void main() {
     // while(1) {
     //     yield();
     // }
+#endif
 
     halt();
 }

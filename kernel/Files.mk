@@ -16,7 +16,9 @@ SRCS = \
     kheap.cpp \
     util.cpp \
     pic.cpp \
-    pit.cpp
+    pit.cpp \
+    pagedir.cpp \
+    process.cpp
 
 ASM_SRCS = \
     stub.asm \
