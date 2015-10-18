@@ -48,12 +48,12 @@ class Pagedir {
 
     void set_physical(uint32_t physical);
     uint32_t get_physical(uint32_t physical);
-    uint32_t physical();                        /* Get physical address of this pagedir */
 public:
     void map(uint32_t va, uint32_t pa, uint32_t flags);
     void unmap(uint32_t va);
     bool get_physical(uint32_t va, uint32_t* pa);
     bool is_mapped(uint32_t va);
+    uint32_t physical();                        /* Get physical address of this pagedir */
 
     
     void map(void* va, uint32_t pa, uint32_t flags) {

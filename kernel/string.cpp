@@ -1,4 +1,5 @@
 #include "string.h"
+#include "kmalloc.h"
 
 void String::itoa(char* str, unsigned n) {
     if(n == 0) {
@@ -147,19 +148,16 @@ void String::formatv(
     } // while(fmt)
 }
 
-extern "C"
 void memset(void* buffer, int ch, uint32_t size) {
     uint8_t* ptr = (uint8_t*)buffer;
     for(unsigned i=0; i<size; i++)
         ptr[i] = ch;
 }
 
-extern "C"
 void bzero(void* buffer, uint32_t size) {
     memset(buffer, 0, size);
 }
 
-extern "C"
 void memcpy(void* dest, const void* source, size_t size) {
     uint8_t* src = (uint8_t*)source;
     uint8_t* dst = (uint8_t*)dest;
@@ -168,9 +166,25 @@ void memcpy(void* dest, const void* source, size_t size) {
         *(dst++) = *(src++);
 }
 
-extern "C"
 void strcpy(char* dst, const char* src) {
     for(; *src; src++)
         *(dst++) = *src;
+    *(dst) = '\0';
 }
+
+char* strdup(const char* str) {
+    char* s = (char*)kmalloc(strlen(str) + 1);
+    strcpy(s, str);
+    return s;
+}
+
+size_t strlen(const char* str) {
+    size_t len = 0;
+    while(*str)
+        len++;
+    return len;
+}
+
+
+
 

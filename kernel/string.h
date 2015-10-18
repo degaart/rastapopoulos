@@ -26,9 +26,13 @@ public:
 	);
 };
 
-extern "C" void memset(void* buffer, int ch, uint32_t size);
-extern "C" void bzero(void* buffer, uint32_t size);
-extern "C" void memcpy(void* dest, const void* src, size_t size);
-extern "C" void strcpy(char* dest, const char* src);
+extern "C" {
+	void memset(void* buffer, int ch, uint32_t size);
+	void bzero(void* buffer, uint32_t size);
+	void memcpy(void* dest, const void* src, size_t size);
+	void strcpy(char* dest, const char* src);	
+	char* strdup(const char* str);
+	size_t strlen(const char* str);
+}
 
 #endif // _STRING_H_

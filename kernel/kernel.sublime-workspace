@@ -4,20 +4,72 @@
 		"selected_items":
 		[
 			[
+				"kernel",
+				"kernel_stack"
+			],
+			[
+				"SYSCALL_",
+				"SYSCALL_YIELD"
+			],
+			[
+				"ring3",
+				"ring3_program"
+			],
+			[
+				"kern",
+				"kernel_stack"
+			],
+			[
+				"switch",
+				"switch_pagedir"
+			],
+			[
+				"program",
+				"program_name"
+			],
+			[
+				"_current",
+				"_current_timestamp"
+			],
+			[
+				"un",
+				"unscheduling"
+			],
+			[
+				"_call",
+				"_callback_data"
+			],
+			[
+				"callba",
+				"callback_data"
+			],
+			[
+				"call",
+				"_callback_data"
+			],
+			[
+				"u",
+				"unmap"
+			],
+			[
+				"swit",
+				"switch_pagedir"
+			],
+			[
+				"spli",
+				"split_offset"
+			],
+			[
+				"uint",
+				"uint32_t"
+			],
+			[
 				"SYSCAL",
 				"SYSCALL_WRITE"
 			],
 			[
-				"uint",
-				"uint8_t"
-			],
-			[
 				"uin",
 				"uint8_t"
-			],
-			[
-				"swit",
-				"switch_to_user_mode"
 			],
 			[
 				"GDT_",
@@ -292,10 +344,6 @@
 				"prototype"
 			],
 			[
-				"u",
-				"url"
-			],
-			[
 				"download",
 				"download_file"
 			],
@@ -347,39 +395,39 @@
 			"file": "main.cpp",
 			"settings":
 			{
-				"buffer_size": 2874,
+				"buffer_size": 4926,
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "usermode_program.asm",
+			"file": "vmm.cpp",
 			"settings":
 			{
-				"buffer_size": 329,
+				"buffer_size": 4105,
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "gdt.h",
+			"file": "string.cpp",
 			"settings":
 			{
-				"buffer_size": 698,
+				"buffer_size": 4147,
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "gdt.cpp",
+			"file": "util.h",
 			"settings":
 			{
-				"buffer_size": 5813,
+				"buffer_size": 1896,
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"contents": "struct tss_entry_t {\n    uint16_t reserved0;\n    uint16_t prev_tss;   // The previous TSS - if we used hardware task switching this would form a linked list.\n    uint32_t esp0;       // The stack pointer to load when we change to kernel mode.\n    uint16_t reserved1;\n    uint16_t ss0;        // The stack segment to load when we change to kernel mode.\n    uint32_t esp1;       // Unused...\n    uint16_t reserved2;\n    uint16_t ss1;\n    uint32_t esp2;\n    uint16_t reserved3;\n    uint16_t ss2;\n    uint32_t cr3;\n    uint32_t eip;\n    uint32_t eflags;\n    uint32_t eax;\n    uint32_t ecx;\n    uint32_t edx;\n    uint32_t ebx;\n    uint32_t esp;\n    uint32_t ebp;\n    uint32_t esi;\n    uint32_t edi;\n    uint16_t reserved4;\n    uint16_t es;         // The value to load into ES when we change to kernel mode.\n    uint16_t reserved5;\n    uint16_t cs;         // The value to load into CS when we change to kernel mode.\n    uint16_t reserved6;\n    uint16_t ss;         // The value to load into SS when we change to kernel mode.\n    uint16_t reserved7;\n    uint16_t ds;         // The value to load into DS when we change to kernel mode.\n    uint16_t reserved8;\n    uint16_t fs;         // The value to load into FS when we change to kernel mode.\n    uint16_t reserved9;\n    uint16_t gs;         // The value to load into GS when we change to kernel mode.\n    uint16_t reserved10;\n    uint16_t ldt;        // Unused...\n    uint16_t trap;\n    uint16_t iomap_base;\n} __attribute__((packed));\n\n\nstruct tss_entry_t2 {\n   uint32_t prev_tss;   // The previous TSS - if we used hardware task switching this would form a linked list.\n   uint32_t esp0;       // The stack pointer to load when we change to kernel mode.\n   uint32_t ss0;        // The stack segment to load when we change to kernel mode.\n   uint32_t esp1;       // Unused...\n   uint32_t ss1;\n   uint32_t esp2;\n   uint32_t ss2;\n   uint32_t cr3;\n   uint32_t eip;\n   uint32_t eflags;\n   uint32_t eax;\n   uint32_t ecx;\n   uint32_t edx;\n   uint32_t ebx;\n   uint32_t esp;\n   uint32_t ebp;\n   uint32_t esi;\n   uint32_t edi;\n   uint32_t es;         // The value to load into ES when we change to kernel mode.\n   uint32_t cs;         // The value to load into CS when we change to kernel mode.\n   uint32_t ss;         // The value to load into SS when we change to kernel mode.\n   uint32_t ds;         // The value to load into DS when we change to kernel mode.\n   uint32_t fs;         // The value to load into FS when we change to kernel mode.\n   uint32_t gs;         // The value to load into GS when we change to kernel mode.\n   uint32_t ldt;        // Unused...\n   uint16_t trap;\n   uint16_t iomap_base;\n} __attribute__((packed));",
+			"file": "switch_to_usermode.asm",
 			"settings":
 			{
-				"buffer_size": 2674,
+				"buffer_size": 522,
 				"line_ending": "Unix"
 			}
 		}
@@ -420,9 +468,17 @@
 	"command_palette":
 	{
 		"height": 392.0,
-		"last_filter": "gdb",
+		"last_filter": "sub",
 		"selected_items":
 		[
+			[
+				"sub",
+				"Preferences: SublimeGDB Settings – Default"
+			],
+			[
+				"subli",
+				"Preferences: SublimeGDB Settings – User"
+			],
 			[
 				"gdb",
 				"Preferences: SublimeGDB Settings – User"
@@ -462,19 +518,41 @@
 	],
 	"file_history":
 	[
-		"/Volumes/Kratos/VM/apt-cacher-ng/apt-cacher-ng/mirror.malagasy.com/debian/dists/stable/Release.head",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/usermode_program.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/switch_to_usermode.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/linked_list.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/main.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/regs.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/main.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap_block.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/usermode_program.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel.sublime-project",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/SublimeGDB/SublimeGDB.sublime-settings",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/SublimeGDB.sublime-settings",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm_memregion.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.h",
+		"/Volumes/Kratos/VM/apt-cacher-ng/apt-cacher-ng/mirror.malagasy.com/debian/dists/stable/Release.head",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/switch_to_usermode.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/debug.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/io.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt_stub.asm",
@@ -482,26 +560,12 @@
 		"/Volumes/Kratos/Projects/ZBackup/src/scripts/backup-kratos.sh",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pic.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pic.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/io.cpp",
 		"/private/tmp/Mass Effect 1/GAME/Mass Effect 1/# Installation Guide.txt",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/flush_tlb.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cxxrt.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm_memregion.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/linked_list.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap_block.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.cpp",
-		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/SublimeGDB.sublime-settings",
 		"/Volumes/Kratos/Games/Mass Effect 1/INSTALLATION.txt",
 		"/Users/zorro/Desktop/Games/RE5 EnglishISO Upload/do not READ ME.txt",
 		"/Volumes/Kratos/Software/zpkg/packages.json",
@@ -581,15 +645,7 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/hello.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/obj/bootldr.o.S",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/boot/bootsect.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/Makefile",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitmap.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitmap.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/hello.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/obj/Makefile.depends",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/makedeps.sh",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/makeobjects.sh",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/gdt.h"
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/Makefile"
 	],
 	"find":
 	{
@@ -610,6 +666,8 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"Node",
+			"memcpy",
 			"INITIAL_KERNEL_STACK",
 			"va",
 			"is_mapped",
@@ -696,7 +754,7 @@
 	"groups":
 	[
 		{
-			"selected": 1,
+			"selected": 0,
 			"sheets":
 			[
 				{
@@ -705,15 +763,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2874,
+						"buffer_size": 4926,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								366,
-								366
+								4189,
+								4123
 							]
 						],
 						"settings":
@@ -723,83 +781,27 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 285.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 1,
-					"type": "text"
-				},
-				{
-					"buffer": 1,
-					"file": "usermode_program.asm",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 329,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								219,
-								219
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Sublime-NASM/Syntaxes/NASM.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
+						"translation.y": 876.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,
 					"type": "text"
 				},
 				{
-					"buffer": 2,
-					"file": "gdt.h",
+					"buffer": 1,
+					"file": "vmm.cpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 698,
+						"buffer_size": 4105,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								323,
-								323
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/C++/C++.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 3,
-					"type": "text"
-				},
-				{
-					"buffer": 3,
-					"file": "gdt.cpp",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 5813,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								3703,
-								3703
+								4103,
+								4103
 							]
 						],
 						"settings":
@@ -809,26 +811,57 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 1063.0,
+						"translation.y": 1751.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "string.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 4147,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								3921,
+								3921
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 2211.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 2,
 					"type": "text"
 				},
 				{
-					"buffer": 4,
+					"buffer": 3,
+					"file": "util.h",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2674,
+						"buffer_size": 1896,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								2674,
-								2674
+								1486,
+								1486
 							]
 						],
 						"settings":
@@ -838,7 +871,37 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 426.0,
+						"translation.y": 801.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "switch_to_usermode.asm",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 522,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								394,
+								394
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Sublime-NASM/Syntaxes/NASM.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 4,

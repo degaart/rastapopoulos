@@ -1,0 +1,7 @@
+* Clang inline assembly access params:
+    param0: ebp+8
+    param1: ebp+12
+    etc
+
+
+    

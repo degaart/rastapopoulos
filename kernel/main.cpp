@@ -17,32 +17,106 @@
 #include "io.h"
 #include "timer.h"
 
-extern "C"
-void switch_to_usermode();
+// extern "C"
+// void switch_to_usermode(void (*entry_point)(), uint8_t* ring3_esp);
 
 extern "C"
-void usermode_program();
+void switch_to_usermode(
+    uint32_t esp, uint32_t eflags, uint32_t eip,
+    uint32_t edi, uint32_t esi,
+    uint32_t edx, uint32_t ecx, uint32_t ebx, uint32_t eax,
+    uint32_t ebp
+);
 
 static void run_tests();
 
+struct process_t {
+    uint8_t* kernel_stack;
+    uint8_t* user_stack;
+    
+    uint32_t kernel_esp;
+
+    uint32_t esp;
+    uint32_t eflags;
+    uint32_t eip;
+    uint32_t edi;
+    uint32_t esi;
+    uint32_t edx;
+    uint32_t ecx;
+    uint32_t ebx;
+    uint32_t eax;
+    uint32_t ebp;
+};
+process_t _process0;
+process_t _process1;
+process_t* _current_process = nullptr;
+
 #define SYSCALL_HALT    0x0
 #define SYSCALL_WRITE   0x1
+#define SYSCALL_YIELD   0x2
+
+static void switch_process(process_t* process) {
+    TRACE("Switching to process %p, ESP3: 0x%X, ESP0: 0x%X", process, process->esp, process->kernel_esp);
+    _current_process = process;
+    GDT::set_kernel_stack((void*)process->kernel_esp);
+    switch_to_usermode(
+        process->esp, process->eflags, process->eip,
+        process->edi, process->esi,
+        process->edx, process->ecx, process->ebx, process->eax,
+        process->ebp
+    );    
+}
+
+static void syscall_yield(const isr_regs_t* regs) {
+    /* save current process state */
+    assert((regs->cs & 0x3) == 3);                      /* Interrupt must originate from ring3 */
+    
+    _current_process->kernel_esp = regs->esp + 0x1C;    /* State of kernel ESP before the pusha in isr_stub */
+    _current_process->esp = regs->useresp;              /* bad if interrupt originated in kernel mode */
+    _current_process->eflags = regs->eflags;
+    _current_process->eip = regs->eip;
+    _current_process->edi = regs->edi;
+    _current_process->esi = regs->esi;
+    _current_process->edx = regs->edx;
+    _current_process->ecx = regs->ecx;
+    _current_process->ebx = regs->ebx;
+    _current_process->eax = regs->eax;
+    _current_process->ebp = regs->ebp;
+
+    /* resume next process */
+    process_t* next_process = (_current_process == &_process0 ? &_process1 : &_process0);
+    switch_process(next_process);
+}
 
 static void syscall_write(const char* str) {
     TRACE("<ring3>: %s", str);
 }
 
 static void syscall_handler(const isr_regs_t* regs) {
-    TRACE("syscall: 0x%X", regs->eax);
-    switch(regs->eax) {
+    // TRACE(
+    //     "syscall:\n"
+    //     "\teax: 0x%X, ebx: 0x%X\n"
+    //     "\tecx: 0x%X, edx: 0x%X\n",
+    //     regs->eax, regs->ebx,
+    //     regs->ecx, regs->edx
+    // );
+    uint32_t func = regs->eax;
+    uint32_t param0 = regs->ebx;
+    uint32_t param1 = regs->ecx;
+    uint32_t param2 = regs->edx;
+
+    switch(func) {
         case SYSCALL_HALT:
             halt();
             break;
         case SYSCALL_WRITE:
-            syscall_write((const char*)regs->ecx);
+            syscall_write((const char*)param0);
+            break;
+        case SYSCALL_YIELD:
+            syscall_yield(regs);
             break;
         default:
-            PANIC("Unhandled syscall 0x%X", regs->eax);
+            PANIC("Unhandled syscall 0x%X", func);
     }
 }
 
@@ -86,73 +160,62 @@ extern "C" void main() {
     TRACE("Physical memory zones:");
     PMM::dump_zones();
 
+    IDT::install_handler(0x80, syscall_handler);
     run_tests();
     halt();
 }
 
-static void do_funky_things() {
-    /*
-        NOTE: Interrupts aren't enabled here, so we can't be preempted
-        Make it so we CAN be preempted here
-    */
-    char* pagedir_name = (char*)VMM::USERSPACE_START;
-    TRACE("Doing funky things with %s ...", pagedir_name);
-
-    if(!kmalloc(65536)) {
-        TRACE("There you go, exhausting kernel VA space");
-    }
+static void ring3_syscall(uint32_t function, uint32_t param0 = 0, uint32_t param1 = 0, uint32_t param2 = 0) {
+    asm(
+        ".intel_syntax noprefix\n"
+        "mov eax, [ebp+8]\n"
+        "mov ebx, [ebp+12]\n"
+        "mov ecx, [ebp+16]\n"
+        "mov edx, [ebp+20]\n"
+        "int 0x80\n"
+        ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory"
+    );
 }
 
-static Pagedir* p0;
-static Pagedir* p1;
-static Pagedir* current_pagedir;
+static void process0_entry() {
+    TRACE("Process0 started");
+    for(unsigned i=0;; i++) {
+        TRACE("Process0: %u", i);
+        ring3_syscall(SYSCALL_YIELD);
+    }
+    ring3_syscall(SYSCALL_HALT);
+}
 
-static void schedule(void* args) {
-    do_funky_things();
-
-    if(current_pagedir == p0)
-        current_pagedir = p1;
-    else
-        current_pagedir = p0;
-    VMM::switch_pagedir(current_pagedir);
+static void process1_entry() {
+    TRACE("Process1 started");
+    for(unsigned i=0;; i++) {
+        TRACE("Process1: %u", i);
+        ring3_syscall(SYSCALL_YIELD);
+    }
+    ring3_syscall(SYSCALL_HALT);
 }
 
 static void run_tests() {
-    TRACE("Testing address-space switching with an active timer");
+    TRACE("Testing User-mode");
 
-    char* str = (char*)VMM::USERSPACE_START;
-    p0 = VMM::create_pagedir();
-    p0->map(str, PMM::alloc(), VMM::PAGE_WRITABLE|VMM::PAGE_PRESENT);
-    
-    p1 = VMM::create_pagedir();
-    p1->map(str, PMM::alloc(), VMM::PAGE_WRITABLE|VMM::PAGE_PRESENT);
+    uint32_t eflags;
+    read_eflags(eflags);
 
-    VMM::switch_pagedir(p0);
-    strcpy(str, "pagedir p0");
+    bzero(&_process0, sizeof(_process0));
+    _process0.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process0.user_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process0.esp = (uint32_t)_process0.user_stack + 4095;
+    _process0.eflags = eflags;
+    _process0.eip = (uint32_t)process0_entry;
+    _process0.kernel_esp = (uint32_t) _process0.kernel_stack + 4095;
 
-    VMM::switch_pagedir(p1);
-    strcpy(str, "pagedir p1");
+    bzero(&_process1, sizeof(_process1));
+    _process1.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process1.user_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process1.esp = (uint32_t)_process1.user_stack + 4095;
+    _process1.eflags = eflags;
+    _process1.eip = (uint32_t)process1_entry;
+    _process1.kernel_esp = (uint32_t) _process1.kernel_stack + 4095;
 
-    VMM::switch_pagedir(p0);
-    current_pagedir = p0;
-
-    Timer::schedule(schedule, nullptr, 250);
-
-    sti();
-    while(true) {
-        yield();
-    }
+    switch_process(&_process0);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

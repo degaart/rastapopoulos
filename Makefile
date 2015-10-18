@@ -6,13 +6,13 @@ debug: floppy.img
 	@/opt/bochs/bin/bochs -q -f bochsrc -rc bochs.init
 
 run: floppy.img
-	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 128 -debugcon file:/tmp/rastapopoulos.log -nographic
+	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 128 -debugcon file:/tmp/rastapopoulos.log -nographic -no-reboot
 
 gdb: floppy.img
-	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 128 -debugcon file:/tmp/rastapopoulos.log -nographic -s -S
+	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 128 -debugcon file:/tmp/rastapopoulos.log -nographic -s -S -no-reboot
 
 run_graphic: floppy.img
-	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log 
+	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log -no-reboot
 
 floppy.img:
 	@echo "[MAKE] bootsect"
