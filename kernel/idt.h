@@ -19,6 +19,7 @@ public:
     typedef void (*isr_handler_t)(const isr_regs_t* regs);
     static void install_handler(int num, isr_handler_t handler);
 
+    const isr_regs_t* current_int_regs();
 
     static const int IDT_PRESENT        = 1 << 7;
     static const int IDT_DPL0           = 0;

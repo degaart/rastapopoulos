@@ -23,5 +23,5 @@ void PIT::irq_handler(int irq, const isr_regs_t* regs) {
     // if(_ticks % (FREQ * 1) == 0) {
     //     TRACE("PIT: %u ticks", _ticks);
     // }
-    Timer::on_tick();
+    Timer::on_tick(regs);
 }

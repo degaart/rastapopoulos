@@ -36,7 +36,14 @@ void PIC::init() {
 }
 
 void PIC::irq_stub(const isr_regs_t* regs) {
+    /*
+        TODO: Check that this function is really reentrant, 
+        as the IRQ is acknowledged before calling the handler function
+        (so the handler function need not to return)
+    */
     int irq = regs->int_no - 0x20;
+    eoi(irq);
+
     if(_irq_handlers[irq]) {
         _irq_handlers[irq](irq, regs);
     } else {
@@ -44,7 +51,6 @@ void PIC::irq_stub(const isr_regs_t* regs) {
     }
 
     // TRACE("IRQ%d triggerred", regs->int_no - 0x20);
-    eoi(irq);
 }
 
 void PIC::eoi(unsigned irq) {

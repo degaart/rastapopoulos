@@ -3,12 +3,13 @@
 
 #include <stdint.h>
 #include "linked_list.h"
+#include "idt.h"
 #include "pit.h"
 
 class Timer {
     friend PIT;
 public:
-    typedef void (*timer_callback_t)(void*);
+    typedef void (*timer_callback_t)(void* data, const isr_regs_t* regs);
 private:
     const uint32_t _id;
     const timer_callback_t _callback;
@@ -23,7 +24,7 @@ private:
     static uint64_t _current_timestamp;
 
     Timer(uint32_t id, timer_callback_t callback, void* callback_data, uint32_t period, bool recurring);
-    static void on_tick();
+    static void on_tick(const isr_regs_t* regs);
     static uint32_t next_id();
 public:
     static uint32_t schedule(timer_callback_t callback, void* data, uint32_t period, bool recurring = true);

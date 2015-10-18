@@ -52,6 +52,10 @@ extern isr_handler
 isr_common_stub:
    pusha                    ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
 
+   ;mov dx, 0xE9
+   ;mov al, '*'
+   ;out dx, al
+
    xor eax, eax
    mov ax, ds               ; Lower 16-bits of eax = ds.
    push eax                 ; save the data segment descriptor

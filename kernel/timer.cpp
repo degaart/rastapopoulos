@@ -34,25 +34,30 @@ void Timer::unschedule(uint32_t id) {
 }
 
 static const int TICKS_PER_MS = 1000 / PIT::FREQ;
-void Timer::on_tick() {
+void Timer::on_tick(const isr_regs_t* regs) {
     _ticks++;
     _current_timestamp += TICKS_PER_MS;
     
-    TRACE("Current timestamp: 0x%X%X", (uint32_t)(_current_timestamp >> 32), (uint32_t)(_current_timestamp & 0xFFFFFFFF));
-
+    /* Make copy of triggered counters, so timers can be reentrant */
+    LinkedList<Timer> triggered_timers;
     LinkedList<uint32_t> invalidated_timers;
     for(auto timer = _timers.iterator(); timer.valid(); timer.next()) {
         if(_current_timestamp >= timer->_last_run + timer->_period) {
-            timer->_callback(timer->_callback_data);
             timer->_last_run = _current_timestamp;
-            if(!timer->_recurring) {
+            if(!timer->_recurring)
                 invalidated_timers.push(timer->_id);
-            }
-        }
+
+            triggered_timers.append(*timer);        }
     }
 
+    /* Remove triggered counters from list */
     for(auto it = invalidated_timers.iterator(); it.valid(); it.next()) {
         unschedule(*it);
+    }
+
+    /* Call handlers */
+    for(auto timer = triggered_timers.iterator(); timer.valid(); timer.next()) {
+        timer->_callback(timer->_callback_data, regs);
     }
 }
 
