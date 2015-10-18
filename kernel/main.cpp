@@ -33,6 +33,7 @@ static void run_tests();
 struct process_t {
     uint8_t* kernel_stack;
     uint8_t* user_stack;
+    Pagedir* pagedir;
     
     uint32_t kernel_esp;
 
@@ -59,6 +60,7 @@ static void switch_process(process_t* process) {
     TRACE("Switching to process %p, ESP3: 0x%X, ESP0: 0x%X", process, process->esp, process->kernel_esp);
     _current_process = process;
     GDT::set_kernel_stack((void*)process->kernel_esp);
+    VMM::switch_pagedir(process->pagedir);
     switch_to_usermode(
         process->esp, process->eflags, process->eip,
         process->edi, process->esi,
@@ -179,8 +181,12 @@ static void ring3_syscall(uint32_t function, uint32_t param0 = 0, uint32_t param
 
 static void process0_entry() {
     TRACE("Process0 started");
-    for(unsigned i=0;; i++) {
-        TRACE("Process0: %u", i);
+
+    volatile uint32_t* counter = (uint32_t*)VMM::USERSPACE_START;
+    *counter = 0;
+    for(unsigned i=0; i < 10; i++) {
+        TRACE("Process0: %u", *counter);
+        (*counter)++;
         ring3_syscall(SYSCALL_YIELD);
     }
     ring3_syscall(SYSCALL_HALT);
@@ -188,8 +194,12 @@ static void process0_entry() {
 
 static void process1_entry() {
     TRACE("Process1 started");
-    for(unsigned i=0;; i++) {
-        TRACE("Process1: %u", i);
+
+    volatile uint32_t* counter = (uint32_t*)VMM::USERSPACE_START;
+    *counter = 10;
+    for(unsigned i=0; i < 10; i++) {
+        TRACE("Process1: %u", *counter);
+        (*counter)++;
         ring3_syscall(SYSCALL_YIELD);
     }
     ring3_syscall(SYSCALL_HALT);
@@ -204,18 +214,24 @@ static void run_tests() {
     bzero(&_process0, sizeof(_process0));
     _process0.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
     _process0.user_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process0.pagedir = VMM::create_pagedir();
     _process0.esp = (uint32_t)_process0.user_stack + 4095;
     _process0.eflags = eflags;
     _process0.eip = (uint32_t)process0_entry;
     _process0.kernel_esp = (uint32_t) _process0.kernel_stack + 4095;
+    VMM::switch_pagedir(_process0.pagedir);
+    VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 
     bzero(&_process1, sizeof(_process1));
     _process1.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
     _process1.user_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process1.pagedir = VMM::create_pagedir();
     _process1.esp = (uint32_t)_process1.user_stack + 4095;
     _process1.eflags = eflags;
     _process1.eip = (uint32_t)process1_entry;
     _process1.kernel_esp = (uint32_t) _process1.kernel_stack + 4095;
+    VMM::switch_pagedir(_process1.pagedir);
+    VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 
     switch_process(&_process0);
 }
