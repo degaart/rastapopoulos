@@ -9,6 +9,7 @@ public:
     static void dump();
     static void flush();
     static void set_kernel_stack(const void* stack);
+    static uint8_t* get_kernel_stack();
 
     static void tss_flush();
     static void set_iomap(int port);

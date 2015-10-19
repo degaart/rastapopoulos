@@ -206,6 +206,10 @@ void GDT::set_kernel_stack(const void* stack) {
     tss.esp0 = (uint32_t) stack;
 }
 
+uint8_t* GDT::get_kernel_stack() {
+    return (uint8_t*)tss.esp0;
+}
+
 extern "C" 
 void set_kernel_stack(const void* stack) {
     GDT::set_kernel_stack(stack);

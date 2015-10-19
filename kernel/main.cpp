@@ -17,6 +17,8 @@
 #include "io.h"
 #include "timer.h"
 
+uint32_t* COOKIE = (uint32_t*)0x7BFF;
+
 extern "C"
 void switch_to_usermode(
     uint32_t esp, uint32_t eflags, uint32_t eip,
@@ -25,12 +27,29 @@ void switch_to_usermode(
     uint32_t ebp
 );
 
+extern "C"
+void resume_from_interrupt(
+    uint32_t esp, uint32_t eflags, uint32_t eip,
+    uint32_t edi, uint32_t esi,
+    uint32_t edx, uint32_t ecx, uint32_t ebx, uint32_t eax,
+    uint32_t ebp
+);
+
 static void test_usermode();
 
+enum Ring {
+    RING0,
+    RING1,
+    RING2,
+    RING3
+};
+
 struct process_t {
+    char name[32];
     uint8_t* kernel_stack;
     uint8_t* user_stack;
     Pagedir* pagedir;
+    Ring current_ring;
     
     uint32_t kernel_esp;
 
@@ -56,37 +75,38 @@ process_t* _current_process = nullptr;
 static void switch_process(process_t* process) {
     assert(process->eflags & EFLAGS_IF);
 
-    // TRACE("Switching to process %p, ESP3: 0x%X, ESP0: 0x%X", process, process->esp, process->kernel_esp);
     _current_process = process;
     GDT::set_kernel_stack((void*)process->kernel_esp);
-    // VMM::switch_pagedir(process->pagedir);
-    switch_to_usermode(
-        process->esp, process->eflags, process->eip,
-        process->edi, process->esi,
-        process->edx, process->ecx, process->ebx, process->eax,
-        process->ebp
-    );    
+
+    TRACE("Resuming %s in ring %u", process->name, process->current_ring);
+    if(process->current_ring == RING3) {
+        switch_to_usermode(
+            process->esp, process->eflags, process->eip,
+            process->edi, process->esi,
+            process->edx, process->ecx, process->ebx, process->eax,
+            process->ebp
+        );
+    } else {
+        TRACE("ESP: 0x%X, EIP: 0x%X", process->esp, process->eip);
+        resume_from_interrupt(
+            process->esp, process->eflags, process->eip,
+            process->edi, process->esi,
+            process->edx, process->ecx, process->ebx, process->eax,
+            process->ebp  
+        );
+    }
 }
 
 static void syscall_yield(const isr_regs_t* regs) {
-    /* save current process state */
-    assert((regs->cs & 0x3) == 3);                      /* Interrupt must originate from ring3 */
-    
-    _current_process->kernel_esp = regs->esp + 0x1C;    /* State of kernel ESP before the pusha in isr_stub */
-    _current_process->esp = regs->useresp;              /* bad if interrupt originated in kernel mode */
-    _current_process->eflags = regs->eflags;
-    _current_process->eip = regs->eip;
-    _current_process->edi = regs->edi;
-    _current_process->esi = regs->esi;
-    _current_process->edx = regs->edx;
-    _current_process->ecx = regs->ecx;
-    _current_process->ebx = regs->ebx;
-    _current_process->eax = regs->eax;
-    _current_process->ebp = regs->ebp;
+    uint32_t esp;
+    read_esp(esp);
 
-    /* resume next process */
-    process_t* next_process = (_current_process == &_process0 ? &_process1 : &_process0);
-    switch_process(next_process);
+    uint32_t eip = read_eip();
+
+    TRACE("Yield in %s: ESP = 0x%X, EIP: 0x%X", _current_process->name, esp, eip);
+    BREAKPOINT();
+    sti();
+    yield();
 }
 
 static void syscall_write(const char* str) {
@@ -127,6 +147,7 @@ static void gpf_handler(const isr_regs_t* regs) {
 
 extern "C" void main() {
     static const kernel_params* kparams = (kernel_params*)0x500;
+    *COOKIE = 0;
 
 	TRACE("*** RastapopoulOS kernel loaded ***");
     call_ctors();
@@ -167,28 +188,43 @@ extern "C" void main() {
 }
 
 static void scheduler_timer(void* args, const isr_regs_t* regs) {
-    /*
-        Kernel-mode, ints disabled
-        current executing process in _current_process
-        Yeah baby! We can't fucking switch to usermode here, because
-        we're in an irq handler. And if an irq handler doesn't acknowledge an interrupt....
-    */
-    /* save current process state */
-    assert((regs->cs & 0x3) == 3);                      /* Interrupt must originate from ring3 */
-    
-    _current_process->kernel_esp = regs->esp + 0x1C;    /* State of kernel ESP before the pusha in isr_stub */
-    _current_process->esp = regs->useresp;              /* bad if interrupt originated in kernel mode */
-    _current_process->eflags = regs->eflags;
-    _current_process->eip = regs->eip;
-    _current_process->edi = regs->edi;
-    _current_process->esi = regs->esi;
-    _current_process->edx = regs->edx;
-    _current_process->ecx = regs->ecx;
-    _current_process->ebx = regs->ebx;
-    _current_process->eax = regs->eax;
-    _current_process->ebp = regs->ebp;
+    Ring current_ring = (regs->cs & 0x3) ? RING3 : RING0;
+    TRACE("%s preempted in ring %u", _current_process->name, (unsigned)current_ring);
 
-    /* resume next process */
+    if(current_ring == RING3) {
+        /* Interrupt originated from ring3 */
+        /* Magic: 0x1C */
+        _current_process->current_ring = current_ring;
+        _current_process->kernel_esp = (uint32_t)GDT::get_kernel_stack();
+        _current_process->esp = regs->useresp;
+        _current_process->eflags = regs->eflags;
+        _current_process->eip = regs->eip;
+        _current_process->edi = regs->edi;
+        _current_process->esi = regs->esi;
+        _current_process->edx = regs->edx;
+        _current_process->ecx = regs->ecx;
+        _current_process->ebx = regs->ebx;
+        _current_process->eax = regs->eax;
+        _current_process->ebp = regs->ebp;
+    } else {
+        /* Interrupt originated from ring0 */
+        _current_process->current_ring = current_ring;
+        _current_process->kernel_esp = regs->esp + 0x14;        /* State of ESP before the pusha in isr_stub */
+        _current_process->esp = regs->esp + 0x14;
+        _current_process->eflags = regs->eflags;
+        _current_process->eip = regs->eip;
+        _current_process->edi = regs->edi;
+        _current_process->esi = regs->esi;
+        _current_process->edx = regs->edx;
+        _current_process->ecx = regs->ecx;
+        _current_process->ebx = regs->ebx;
+        _current_process->eax = regs->eax;
+        _current_process->ebp = regs->ebp;
+    }
+
+    /*
+        resume next process
+    */
     process_t* next_process = (_current_process == &_process0 ? &_process1 : &_process0);
     switch_process(next_process);
 }
@@ -217,10 +253,8 @@ static void process0_entry() {
         if(*counter == sizeof(chars))
             *counter = 0;
 
-        IO::outb(0xE9, chars[*counter]);
-        for(unsigned j=0; j<(UINT32_MAX >> 12); j++) {
-            asm volatile("pause");
-        }
+        //IO::outb(0xE9, chars[*counter]);
+        ring3_syscall(SYSCALL_YIELD);
     }
     ring3_syscall(SYSCALL_HALT);
 }
@@ -237,10 +271,8 @@ static void process1_entry() {
         if(*counter == sizeof(chars))
             *counter = 0;
 
-        IO::outb(0xE9, chars[*counter]);
-        for(unsigned j=0; j<(UINT32_MAX >> 12); j++) {
-            asm volatile("pause");
-        }
+        //IO::outb(0xE9, chars[*counter]);
+        ring3_syscall(SYSCALL_YIELD);
     }
     ring3_syscall(SYSCALL_HALT);
 }
@@ -252,7 +284,10 @@ static void test_usermode() {
     read_eflags(eflags);
     eflags |= EFLAGS_IF;
 
+    /* TODO: Implement yield (make sure kernel stack saving is correct) */
+
     bzero(&_process0, sizeof(_process0));
+    strcpy(_process0.name, "Process 0");
     _process0.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
     _process0.user_stack = (uint8_t*)kmalloc_a(4096, 4);
     _process0.pagedir = VMM::create_pagedir();
@@ -260,10 +295,12 @@ static void test_usermode() {
     _process0.eflags = eflags;
     _process0.eip = (uint32_t)process0_entry;
     _process0.kernel_esp = (uint32_t) _process0.kernel_stack + 4095;
+    _process0.current_ring = RING3;
     // VMM::switch_pagedir(_process0.pagedir);
     // VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 
     bzero(&_process1, sizeof(_process1));
+    strcpy(_process1.name, "Process 1");
     _process1.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
     _process1.user_stack = (uint8_t*)kmalloc_a(4096, 4);
     _process1.pagedir = VMM::create_pagedir();
@@ -271,6 +308,7 @@ static void test_usermode() {
     _process1.eflags = eflags;
     _process1.eip = (uint32_t)process1_entry;
     _process1.kernel_esp = (uint32_t) _process1.kernel_stack + 4095;
+    _process1.current_ring = RING3;
     // VMM::switch_pagedir(_process1.pagedir);
     // VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 

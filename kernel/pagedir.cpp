@@ -112,7 +112,7 @@ uint32_t Pagedir::get_physical(uint32_t physical) {
 void Pagedir::copy_kernel_mappings(Pagedir* pagedir) {
     _entries[0] = pagedir->_entries[0];                 /* first entry guaranteed to be mapped */
     _tables[0] = pagedir->_tables[0];
-    TRACE("_physical: 0x%X, pagedir->_physical: 0x%X", _physical, pagedir->_physical);
+    // TRACE("_physical: 0x%X, pagedir->_physical: 0x%X", _physical, pagedir->_physical);
 
     /* TODO: Handle remaining maps > 3Gb */
 }

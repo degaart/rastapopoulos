@@ -47,7 +47,8 @@ void Timer::on_tick(const isr_regs_t* regs) {
             if(!timer->_recurring)
                 invalidated_timers.push(timer->_id);
 
-            triggered_timers.append(*timer);        }
+            triggered_timers.append(*timer);        
+        }
     }
 
     /* Remove triggered counters from list */

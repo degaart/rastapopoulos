@@ -32,4 +32,7 @@ ASM_SRCS = \
     idt_flush.asm \
     flush_tlb.asm \
     switch_to_usermode.asm \
-    usermode_program.asm
+    usermode_program.asm \
+    resume_from_interrupt.asm \
+    read_eip.asm
+    

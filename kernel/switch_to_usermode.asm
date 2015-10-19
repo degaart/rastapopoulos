@@ -25,10 +25,8 @@ switch_to_usermode:
     mov gs, ax
 
     push 0x23           ; SS (USER_DATA_SEG|RPL3)
-    push dword [ebp+8] ; ESP
-    
-    push dword [ebp+12] ; EFLAGS (todo: enable ifs)
-
+    push dword [ebp+8]  ; ESP
+    push dword [ebp+12] ; EFLAGS
     push 0x1b           ; CS (USER_CODE_SEG|RPL3)
     push dword [ebp+16] ; EIP
 

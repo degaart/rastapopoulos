@@ -1,4 +1,4 @@
-.PHONY: all bootsect bootldr kernel floppy.img
+.PHONY: all clean debug run gdb run_graphic bootsect/obj/bootsect.bin bootldr/obj/bootldr.bin kernel/obj/kernel.bin
 
 all: floppy.img
 
@@ -14,7 +14,7 @@ gdb: floppy.img
 run_graphic: floppy.img
 	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log -no-reboot
 
-floppy.img:
+floppy.img: bootsect/obj/bootsect.bin bootldr/obj/bootldr.bin kernel/obj/kernel.bin
 	@echo "[MAKE] bootsect"
 	@make bootsect
 
@@ -38,14 +38,14 @@ floppy.img:
 	@echo "[CP] kernel.bin"
 	@mcopy -D o -i floppy.img kernel/obj/kernel.bin ::KERNEL
 
-bootsect:
+bootsect/obj/bootsect.bin:
 	@( cd bootsect && make ; )
 
-bootldr:
-	@( cd bootldr && make ; )
+bootldr/obj/bootldr.bin:
+	@( cd bootldr && make; )
 
-kernel:
-	@( cd kernel && make ; )
+kernel/obj/kernel.bin:
+	@( cd kernel && make; )
 
 clean:
 	@( cd bootsect && make clean; )

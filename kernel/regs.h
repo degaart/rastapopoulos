@@ -35,10 +35,6 @@
     )
 
 
-
-
-
-
 #define CR0_PG  (1 << 31)
 #define CR0_CD  (1 << 30)
 #define CR0_NW  (1 << 29)
@@ -88,5 +84,7 @@
 #define EFLAGS_VIF      (1 << 19)
 #define EFLAGS_VIP      (1 << 20)
 #define EFLAGS_ID       (1 << 21)
+
+    extern "C" uint32_t read_eip(void);
 
 #endif
