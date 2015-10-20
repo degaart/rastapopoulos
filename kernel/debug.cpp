@@ -34,3 +34,13 @@ void Debug::panic(const char* file, unsigned line, const char* function, const c
     halt();
 }
 
+void Debug::write_string(const char* str) {
+    while(*str) {
+        IO::outb(0xE9, *str);
+        str++;
+    }
+}
+
+void Debug::write_char(int ch) {
+    IO::outb(0xE9, ch);
+}

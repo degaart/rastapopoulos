@@ -9,6 +9,8 @@ public:
 	static void tracev(const char* file, unsigned line, const char* function, const char* format, va_list args);
 	static void trace(const char* file, unsigned line, const char* function, const char* fmt, ...) __attribute__ ((format (printf, 4, 5)));
     static void panic(const char* file, unsigned line, const char* function, const char* fmt, ...) __attribute__((format (printf, 4, 5)));
+    static void write_string(const char* str);
+    static void write_char(int ch);
 };
 
 #define TRACE(...) Debug::trace(__FILE__, __LINE__, __func__, __VA_ARGS__)

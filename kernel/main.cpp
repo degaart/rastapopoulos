@@ -75,10 +75,24 @@ process_t* _current_process = nullptr;
 static void switch_process(process_t* process) {
     assert(process->eflags & EFLAGS_IF);
 
+    // if(_current_process) {
+    //     if(_current_process->current_ring == RING0) {
+    //         if(process->current_ring == RING0)
+    //             Debug::write_string(" RING0 -> RING0 ");
+    //         else
+    //             Debug::write_string(" RING0 -> RING3 ");
+    //     } else {
+    //         if(process->current_ring == RING0)
+    //             Debug::write_string(" RING3 -> RING0 ");
+    //         else
+    //             Debug::write_string(" RING0 -> RING3 ");
+    //     }
+    // }
+
     _current_process = process;
     GDT::set_kernel_stack((void*)process->kernel_esp);
 
-    TRACE("Resuming %s in ring %u", process->name, process->current_ring);
+    // TRACE("Resuming %s in ring %u", process->name, process->current_ring);
     if(process->current_ring == RING3) {
         switch_to_usermode(
             process->esp, process->eflags, process->eip,
@@ -87,7 +101,7 @@ static void switch_process(process_t* process) {
             process->ebp
         );
     } else {
-        TRACE("ESP: 0x%X, EIP: 0x%X", process->esp, process->eip);
+        // TRACE("ESP: 0x%X, EIP: 0x%X", process->esp, process->eip);
         resume_from_interrupt(
             process->esp, process->eflags, process->eip,
             process->edi, process->esi,
@@ -103,8 +117,8 @@ static void syscall_yield(const isr_regs_t* regs) {
 
     uint32_t eip = read_eip();
 
-    TRACE("Yield in %s: ESP = 0x%X, EIP: 0x%X", _current_process->name, esp, eip);
-    BREAKPOINT();
+    // TRACE("Yield in %s: ESP = 0x%X, EIP: 0x%X", _current_process->name, esp, eip);
+    // BREAKPOINT();
     sti();
     yield();
 }
@@ -189,7 +203,7 @@ extern "C" void main() {
 
 static void scheduler_timer(void* args, const isr_regs_t* regs) {
     Ring current_ring = (regs->cs & 0x3) ? RING3 : RING0;
-    TRACE("%s preempted in ring %u", _current_process->name, (unsigned)current_ring);
+    // TRACE("%s preempted in ring %u", _current_process->name, (unsigned)current_ring);
 
     if(current_ring == RING3) {
         /* Interrupt originated from ring3 */
@@ -242,6 +256,7 @@ static void ring3_syscall(uint32_t function, uint32_t param0 = 0, uint32_t param
     );
 }
 
+#define SQUELCH (1<<20)
 static void process0_entry() {
     TRACE("Process0 started");
 
@@ -249,13 +264,19 @@ static void process0_entry() {
     uint32_t dat_counter = 0;
     volatile uint32_t* counter = &dat_counter; /*(uint32_t*)VMM::USERSPACE_START;*/
     *counter = 0;
+    char array[1024];
+    bzero(array, sizeof(array));
     for(unsigned i=0;; i++) {
         ++(*counter);
-        if(*counter == sizeof(chars))
+        if(*counter == sizeof(chars) - 1)
             *counter = 0;
 
-        //IO::outb(0xE9, chars[*counter]);
-        ring3_syscall(SYSCALL_YIELD);
+        IO::outb(0xE9, chars[*counter]);
+        for(unsigned j=0; j<SQUELCH; j++)
+            array[j % sizeof(array)] ^= (array[j % sizeof(array)] ^ i);
+
+        if((*counter % 5) == 0)
+            ring3_syscall(SYSCALL_YIELD);
     }
     ring3_syscall(SYSCALL_HALT);
 }
@@ -267,13 +288,19 @@ static void process1_entry() {
     uint32_t dat_counter = 0;
     volatile uint32_t* counter = &dat_counter; /*(uint32_t*)VMM::USERSPACE_START;*/
     *counter = 0;
+    char array[1024];
+    bzero(array, sizeof(array));
     for(unsigned i=0;; i++) {
         ++(*counter);
-        if(*counter == sizeof(chars))
+        if(*counter == sizeof(chars) - 1)
             *counter = 0;
 
-        //IO::outb(0xE9, chars[*counter]);
-        ring3_syscall(SYSCALL_YIELD);
+        IO::outb(0xE9, chars[*counter]);
+        for(unsigned j=0; j<SQUELCH; j++)
+            array[j % sizeof(array)] ^= (array[j % sizeof(array)] ^ i);
+
+        if((*counter % 6) == 0)
+            ring3_syscall(SYSCALL_YIELD);
     }
     ring3_syscall(SYSCALL_HALT);
 }
