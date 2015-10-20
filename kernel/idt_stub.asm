@@ -2,7 +2,6 @@ section .text
 
 %macro ISR_NOERRCODE 1  ; define a macro, taking one parameter
     isr_stub_%1:
-        ;cli
         push byte 0
         push dword %1
         jmp isr_common_stub

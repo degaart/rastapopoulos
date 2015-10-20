@@ -209,8 +209,8 @@ static void scheduler_timer(void* args, const isr_regs_t* regs) {
     } else {
         /* Interrupt originated from ring0 */
         _current_process->current_ring = current_ring;
-        _current_process->kernel_esp = regs->esp + 0x14;        /* State of ESP before the pusha in isr_stub */
-        _current_process->esp = regs->esp + 0x14;
+        _current_process->kernel_esp = (uint32_t)GDT::get_kernel_stack();        /* Restored on kernel process switch in switch_process() */
+        _current_process->esp = regs->esp + 0x14;       /* State of ESP before the pusha in isr_stub */
         _current_process->eflags = regs->eflags;
         _current_process->eip = regs->eip;
         _current_process->edi = regs->edi;
@@ -224,6 +224,7 @@ static void scheduler_timer(void* args, const isr_regs_t* regs) {
 
     /*
         resume next process
+        which, interrestingly, causes a kernel stack leak, as we aren't returning from this function
     */
     process_t* next_process = (_current_process == &_process0 ? &_process1 : &_process0);
     switch_process(next_process);
@@ -284,30 +285,46 @@ static void test_usermode() {
     read_eflags(eflags);
     eflags |= EFLAGS_IF;
 
-    /* TODO: Implement yield (make sure kernel stack saving is correct) */
+    /*
+        TODO: Implement yield (make sure kernel stack saving is correct)
+        Address-space layout:
+            0x3FE000 - 0x3FFFFF: invalid page
+            0x3FD000 - 0x3FDFFF: kernel stack 1
+            0x3FC000 - 0x3FCFFF: invalid page
+            0x3FB000 - 0x3FBFFF: user stack 1
+            0x3FA000 - 0x3FAFFF: invalid page
+            0x3F9000 - 0x3F9FFF: kernel stack 2
+            0x3F8000 - 0x3F8FFF: invalid page
+            0x3F7000 - 0x3F7FFF: user stack 2
+            0x3F6000 - 0x3F6FFF: invalid page
+    */
+    VMM::map(0x3FD000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::map(0x3FB000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::map(0x3F9000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::map(0x3F7000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 
     bzero(&_process0, sizeof(_process0));
     strcpy(_process0.name, "Process 0");
-    _process0.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
-    _process0.user_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process0.kernel_stack = (uint8_t*)0x3FDFFF;
+    _process0.user_stack = (uint8_t*)0x3FBFFF;
     _process0.pagedir = VMM::create_pagedir();
-    _process0.esp = (uint32_t)_process0.user_stack + 4095;
+    _process0.esp = (uint32_t)_process0.user_stack;
     _process0.eflags = eflags;
     _process0.eip = (uint32_t)process0_entry;
-    _process0.kernel_esp = (uint32_t) _process0.kernel_stack + 4095;
+    _process0.kernel_esp = (uint32_t) _process0.kernel_stack;
     _process0.current_ring = RING3;
     // VMM::switch_pagedir(_process0.pagedir);
     // VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 
     bzero(&_process1, sizeof(_process1));
     strcpy(_process1.name, "Process 1");
-    _process1.kernel_stack = (uint8_t*)kmalloc_a(4096, 4);
-    _process1.user_stack = (uint8_t*)kmalloc_a(4096, 4);
+    _process1.kernel_stack = (uint8_t*)0x3F9FFF;
+    _process1.user_stack = (uint8_t*)0x3F7FFF;
     _process1.pagedir = VMM::create_pagedir();
-    _process1.esp = (uint32_t)_process1.user_stack + 4095;
+    _process1.esp = (uint32_t)_process1.user_stack;
     _process1.eflags = eflags;
     _process1.eip = (uint32_t)process1_entry;
-    _process1.kernel_esp = (uint32_t) _process1.kernel_stack + 4095;
+    _process1.kernel_esp = (uint32_t) _process1.kernel_stack;
     _process1.current_ring = RING3;
     // VMM::switch_pagedir(_process1.pagedir);
     // VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);

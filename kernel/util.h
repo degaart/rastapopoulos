@@ -74,11 +74,7 @@ LINKER_SYMBOL(_BSS_START_);
 LINKER_SYMBOL(_BSS_END_);
 LINKER_SYMBOL(_KERNEL_END_);
 
-#ifdef __plusplus
 #define EXPORT extern "C"
-#else
-#define EXPORT
-#endif
 
 template<typename T> T align(T value, unsigned alignment) {
     unsigned result = (unsigned)value;
@@ -109,7 +105,8 @@ private:
     static uint32_t _rand_seed;
 public:
     static void srand(uint32_t seed);
-    static uint32_t rand();    
+    static uint32_t rand();
+    static uint32_t crc32(const void *s, unsigned len, uint32_t startval = 0);
 };
 
 #endif

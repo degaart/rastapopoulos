@@ -19,13 +19,12 @@ resume_from_interrupt:
     push ebp
     mov ebp, esp
 
+    ; IRET stack layout: EFLAGS CS EIP
+    cli
     mov esp, [ebp+8]
-
     push dword [ebp+12]
-    popf
-
-    mov eax, [ebp+16]           ; for eazy debugging
-    push eax
+    push dword 0x08
+    push dword [ebp+16]
 
     mov edi, [ebp+20]
     mov esi, [ebp+24]
@@ -35,4 +34,4 @@ resume_from_interrupt:
     mov eax, [ebp+40]
     mov ebp, [ebp+44]
 
-    ret
+    iret
