@@ -195,7 +195,7 @@ extern "C" void main() {
     TRACE("Physical memory zones:");
     PMM::dump_zones();
 
-    IDT::install_handler(0x80, syscall_handler);
+    IDT::install_handler(0x80, syscall_handler, true);
     test_usermode();
     halt();
 }
@@ -321,9 +321,10 @@ static void test_usermode() {
     _process0.eip = 0x400000;
     _process0.kernel_esp = (uint32_t) _process0.kernel_stack;
     _process0.current_ring = RING3;
+    _process1.eax = 0;
     VMM::switch_pagedir(_process0.pagedir);
-    VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+    VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
     memcpy((void*)0x400000, ___hello_obj_hello_bin, ___hello_obj_hello_bin_size);
 
     bzero(&_process1, sizeof(_process1));
@@ -336,9 +337,10 @@ static void test_usermode() {
     _process1.eip = 0x400000;
     _process1.kernel_esp = (uint32_t) _process1.kernel_stack;
     _process1.current_ring = RING3;
+    _process1.eax = 1;
     VMM::switch_pagedir(_process1.pagedir);
-    VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+    VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
     memcpy((void*)0x400000, ___hello_obj_hello_bin, ___hello_obj_hello_bin_size);
 
     Timer::schedule(scheduler_timer, nullptr, 250);

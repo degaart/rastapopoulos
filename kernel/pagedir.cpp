@@ -48,7 +48,8 @@ void Pagedir::map(uint32_t va, uint32_t pa, uint32_t flags) {
         // TRACE("Allocated new pagetable: %p (physical 0x%X)", page_table, table_physical);
         bzero(page_table, sizeof(pagetable_t));
 
-        _entries[dir_index] = (table_physical & PDE_FRAME) | PDE_PRESENT | PDE_WRITABLE | PDE_USER; /* TODO: Remove PDE_USER for kernel code & heap */
+        // TODO: If flags contains PTE_USER, then enfore PDE_USER in pagedir entry too
+        _entries[dir_index] = (table_physical & PDE_FRAME) | PDE_PRESENT | PDE_WRITABLE | PDE_USER;
         _tables[dir_index] = page_table;
     }
 
@@ -60,7 +61,7 @@ void Pagedir::map(uint32_t va, uint32_t pa, uint32_t flags) {
             pa, flags
         );
     }
-    page_table->entries[table_index] = pa | flags | PTE_USER; /* TODO: Remove PTE_USER for kernel code & heap */
+    page_table->entries[table_index] = pa | flags;
 }
 
 void Pagedir::unmap(uint32_t va) {

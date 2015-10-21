@@ -54,9 +54,8 @@ void IDT::set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
 
     idt_entries[num].sel     = sel;
     idt_entries[num].always0 = 0;
-    // We must uncomment the OR below when we get to using user-mode.
-    // It sets the interrupt gate's privilege level to 3.
-    idt_entries[num].flags   = flags | IDT_DPL3 ;
+
+    idt_entries[num].flags   = flags;
 }
 
 extern "C" void isr_handler(isr_regs_t regs) {
@@ -83,9 +82,13 @@ extern "C" void isr_handler(isr_regs_t regs) {
     }
 }
 
-void IDT::install_handler(int num, isr_handler_t handler) {
+void IDT::install_handler(int num, isr_handler_t handler, bool usermode) {
     pushf();
     cli();
     isr_handlers[num] = handler;
+    if(usermode)
+        idt_entries[num].flags |= IDT_DPL3;
+    else
+        idt_entries[num].flags &= ~IDT_DPL3;
     popf();
 }
