@@ -16,13 +16,7 @@
 #include "regs.h"
 #include "io.h"
 #include "timer.h"
-
-const long int ___hello_obj_hello_exe_size = 45;
-const unsigned char ___hello_obj_hello_exe[45] = {
-    0xB0, 0x58, 0x66, 0xBA, 0xE9, 0x00, 0xEE, 0xB8, 0x01, 0x00, 0x00, 0x00, 0xBB, 0x19, 0x00, 0x40,
-    0x00, 0x31, 0xC9, 0x31, 0xD2, 0xCD, 0x80, 0xEB, 0xFE, 0x43, 0x41, 0x4E, 0x20, 0x48, 0x41, 0x5A,
-    0x20, 0x43, 0x48, 0x45, 0x45, 0x42, 0x55, 0x52, 0x47, 0x45, 0x52, 0x3F, 0x00
-};
+#include "hello.h"
 
 extern "C"
 void switch_to_usermode(
@@ -98,7 +92,7 @@ static void switch_process(process_t* process) {
     GDT::set_kernel_stack((void*)process->kernel_esp);
     VMM::switch_pagedir(_current_process->pagedir);
 
-    // TRACE("Resuming %s in ring %u", process->name, process->current_ring);
+    TRACE("Resuming %s in ring %u", process->name, process->current_ring);
     if(process->current_ring == RING3) {
         switch_to_usermode(
             process->esp, process->eflags, process->eip,
@@ -208,7 +202,7 @@ extern "C" void main() {
 
 static void scheduler_timer(void* args, const isr_regs_t* regs) {
     Ring current_ring = (regs->cs & 0x3) ? RING3 : RING0;
-    // TRACE("%s preempted in ring %u", _current_process->name, (unsigned)current_ring);
+    TRACE("%s preempted in ring %u", _current_process->name, (unsigned)current_ring);
 
     if(current_ring == RING3) {
         /* Interrupt originated from ring3 */
@@ -324,21 +318,13 @@ static void test_usermode() {
     _process0.pagedir = VMM::create_pagedir();
     _process0.esp = (uint32_t)_process0.user_stack;
     _process0.eflags = eflags;
-    // _process0.eip = (uint32_t)process_entry;
     _process0.eip = 0x400000;
     _process0.kernel_esp = (uint32_t) _process0.kernel_stack;
     _process0.current_ring = RING3;
     VMM::switch_pagedir(_process0.pagedir);
     VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
     VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    memcpy((void*)0x400000, ___hello_obj_hello_exe, ___hello_obj_hello_exe_size);
-
-    /*process_data* proc_data = (process_data*)0x400000;
-    bzero(proc_data, sizeof(process_data));
-    strcpy(proc_data->name, _process0.name);
-    strcpy(proc_data->chars, "ABCD");
-    proc_data->seed = PMM::alloc();
-    proc_data->symbol = '*';*/
+    memcpy((void*)0x400000, ___hello_obj_hello_bin, ___hello_obj_hello_bin_size);
 
     bzero(&_process1, sizeof(_process1));
     strcpy(_process1.name, "Process 1");
@@ -347,20 +333,13 @@ static void test_usermode() {
     _process1.pagedir = VMM::create_pagedir();
     _process1.esp = (uint32_t)_process1.user_stack;
     _process1.eflags = eflags;
-    // _process1.eip = (uint32_t)process_entry;
-    _process0.eip = 0x400000;
+    _process1.eip = 0x400000;
     _process1.kernel_esp = (uint32_t) _process1.kernel_stack;
     _process1.current_ring = RING3;
     VMM::switch_pagedir(_process1.pagedir);
     VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
     VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    memcpy((void*)0x400000, ___hello_obj_hello_exe, ___hello_obj_hello_exe_size);
-
-    /*bzero(proc_data, sizeof(process_data));
-    strcpy(proc_data->name, _process1.name);
-    strcpy(proc_data->chars, "abcd");
-    proc_data->seed = PMM::alloc();
-    proc_data->symbol = '-';*/
+    memcpy((void*)0x400000, ___hello_obj_hello_bin, ___hello_obj_hello_bin_size);
 
     Timer::schedule(scheduler_timer, nullptr, 250);
     switch_process(&_process0);

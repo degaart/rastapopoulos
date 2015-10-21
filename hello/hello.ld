@@ -1,7 +1,5 @@
-/*STARTUP(obj/kernel_stub.ao)*/
-/*OUTPUT_FORMAT("binary")*/
-ENTRY(main);
 OUTPUT_FORMAT("elf32-i386");
+ENTRY(_startup)
 
 SECTIONS
 {

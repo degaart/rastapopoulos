@@ -16,13 +16,13 @@ run_graphic: floppy.img
 
 floppy.img: bootsect/obj/bootsect.bin bootldr/obj/bootldr.bin kernel/obj/kernel.bin
 	@echo "[MAKE] bootsect"
-	@make bootsect
+	@make -C bootsect
 
 	@echo "[MAKE] bootldr"
-	@make bootldr
+	@make -C bootldr
 
 	@echo "[MAKE] kernel"
-	@make kernel
+	@make -C kernel
 
 	@echo "[INIT] floppy.img"
 	@[ -f floppy.img ] || dd if=/dev/zero of=floppy.img bs=512 count=2880 > /dev/null
@@ -48,8 +48,9 @@ kernel/obj/kernel.bin:
 	@( cd kernel && make; )
 
 clean:
-	@( cd bootsect && make clean; )
-	@( cd bootldr && make clean; )
-	@( cd kernel && make clean; )
+	@make -C bootsect clean
+	@make -C bootldr clean
+	@make -C kernel clean
+	@make -C hello clean
 	@rm -vf *.o *.bin *.tmp *.img
 
