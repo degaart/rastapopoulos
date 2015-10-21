@@ -17,7 +17,12 @@
 #include "io.h"
 #include "timer.h"
 
-uint32_t* COOKIE = (uint32_t*)0x7BFF;
+const long int ___hello_obj_hello_exe_size = 45;
+const unsigned char ___hello_obj_hello_exe[45] = {
+    0xB0, 0x58, 0x66, 0xBA, 0xE9, 0x00, 0xEE, 0xB8, 0x01, 0x00, 0x00, 0x00, 0xBB, 0x19, 0x00, 0x40,
+    0x00, 0x31, 0xC9, 0x31, 0xD2, 0xCD, 0x80, 0xEB, 0xFE, 0x43, 0x41, 0x4E, 0x20, 0x48, 0x41, 0x5A,
+    0x20, 0x43, 0x48, 0x45, 0x45, 0x42, 0x55, 0x52, 0x47, 0x45, 0x52, 0x3F, 0x00
+};
 
 extern "C"
 void switch_to_usermode(
@@ -91,6 +96,7 @@ static void switch_process(process_t* process) {
 
     _current_process = process;
     GDT::set_kernel_stack((void*)process->kernel_esp);
+    VMM::switch_pagedir(_current_process->pagedir);
 
     // TRACE("Resuming %s in ring %u", process->name, process->current_ring);
     if(process->current_ring == RING3) {
@@ -161,7 +167,6 @@ static void gpf_handler(const isr_regs_t* regs) {
 
 extern "C" void main() {
     static const kernel_params* kparams = (kernel_params*)0x500;
-    *COOKIE = 0;
 
 	TRACE("*** RastapopoulOS kernel loaded ***");
     call_ctors();
@@ -257,50 +262,32 @@ static void ring3_syscall(uint32_t function, uint32_t param0 = 0, uint32_t param
 }
 
 #define SQUELCH (1<<20)
-static void process0_entry() {
-    TRACE("Process0 started");
-
-    const char chars[] = "ABCD";
-    uint32_t dat_counter = 0;
-    volatile uint32_t* counter = &dat_counter; /*(uint32_t*)VMM::USERSPACE_START;*/
-    *counter = 0;
+struct process_data {
+    char name[32];
+    uint32_t counter;
+    char chars[5];
     char array[1024];
-    bzero(array, sizeof(array));
+    uint32_t seed;
+    int symbol;
+};
+
+static void process_entry() {
+    volatile process_data* data = (process_data*)VMM::USERSPACE_START;
+    TRACE("%s started (seed: 0x%X)", data->name, data->seed);
+
+    Random rand(data->seed);
     for(unsigned i=0;; i++) {
-        ++(*counter);
-        if(*counter == sizeof(chars) - 1)
-            *counter = 0;
+        ++data->counter;
+        if(data->counter == 4)
+            data->counter = 0;
 
-        IO::outb(0xE9, chars[*counter]);
+        // IO::outb(0xE9, data->chars[data->counter]);
+        IO::outb(0xE9, data->symbol);
+        uint32_t delay = (1 << (rand.next() % 24));
         for(unsigned j=0; j<SQUELCH; j++)
-            array[j % sizeof(array)] ^= (array[j % sizeof(array)] ^ i);
+            data->array[j % sizeof(data->array)] ^= (data->array[j % sizeof(data->array)] ^ i);
 
-        if((*counter % 5) == 0)
-            ring3_syscall(SYSCALL_YIELD);
-    }
-    ring3_syscall(SYSCALL_HALT);
-}
-
-static void process1_entry() {
-    TRACE("Process1 started");
-
-    const char chars[] = "abcd";
-    uint32_t dat_counter = 0;
-    volatile uint32_t* counter = &dat_counter; /*(uint32_t*)VMM::USERSPACE_START;*/
-    *counter = 0;
-    char array[1024];
-    bzero(array, sizeof(array));
-    for(unsigned i=0;; i++) {
-        ++(*counter);
-        if(*counter == sizeof(chars) - 1)
-            *counter = 0;
-
-        IO::outb(0xE9, chars[*counter]);
-        for(unsigned j=0; j<SQUELCH; j++)
-            array[j % sizeof(array)] ^= (array[j % sizeof(array)] ^ i);
-
-        if((*counter % 6) == 0)
-            ring3_syscall(SYSCALL_YIELD);
+        ring3_syscall(SYSCALL_YIELD);
     }
     ring3_syscall(SYSCALL_HALT);
 }
@@ -313,50 +300,70 @@ static void test_usermode() {
     eflags |= EFLAGS_IF;
 
     /*
-        TODO: Implement yield (make sure kernel stack saving is correct)
         Address-space layout:
+            Ring3:
+            0x403000 - 0x403FFF: invalid page
+            0x402000 - 0x402FFF: user stack
+            0x401000 - 0x401FFF: invalid page
+            0x400000 - 0x400FFF: user data
+
+            Ring0:
             0x3FE000 - 0x3FFFFF: invalid page
             0x3FD000 - 0x3FDFFF: kernel stack 1
             0x3FC000 - 0x3FCFFF: invalid page
-            0x3FB000 - 0x3FBFFF: user stack 1
+            0x3FB000 - 0x3FBFFF: kernel stack 2
             0x3FA000 - 0x3FAFFF: invalid page
-            0x3F9000 - 0x3F9FFF: kernel stack 2
-            0x3F8000 - 0x3F8FFF: invalid page
-            0x3F7000 - 0x3F7FFF: user stack 2
-            0x3F6000 - 0x3F6FFF: invalid page
     */
     VMM::map(0x3FD000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
     VMM::map(0x3FB000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    VMM::map(0x3F9000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    VMM::map(0x3F7000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 
     bzero(&_process0, sizeof(_process0));
     strcpy(_process0.name, "Process 0");
     _process0.kernel_stack = (uint8_t*)0x3FDFFF;
-    _process0.user_stack = (uint8_t*)0x3FBFFF;
+    _process0.user_stack = (uint8_t*)0x402FFF;
     _process0.pagedir = VMM::create_pagedir();
     _process0.esp = (uint32_t)_process0.user_stack;
     _process0.eflags = eflags;
-    _process0.eip = (uint32_t)process0_entry;
+    // _process0.eip = (uint32_t)process_entry;
+    _process0.eip = 0x400000;
     _process0.kernel_esp = (uint32_t) _process0.kernel_stack;
     _process0.current_ring = RING3;
-    // VMM::switch_pagedir(_process0.pagedir);
-    // VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::switch_pagedir(_process0.pagedir);
+    VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    memcpy((void*)0x400000, ___hello_obj_hello_exe, ___hello_obj_hello_exe_size);
+
+    /*process_data* proc_data = (process_data*)0x400000;
+    bzero(proc_data, sizeof(process_data));
+    strcpy(proc_data->name, _process0.name);
+    strcpy(proc_data->chars, "ABCD");
+    proc_data->seed = PMM::alloc();
+    proc_data->symbol = '*';*/
 
     bzero(&_process1, sizeof(_process1));
     strcpy(_process1.name, "Process 1");
-    _process1.kernel_stack = (uint8_t*)0x3F9FFF;
-    _process1.user_stack = (uint8_t*)0x3F7FFF;
+    _process1.kernel_stack = (uint8_t*)0x3FBFFF;
+    _process1.user_stack = (uint8_t*)0x402FFF;
     _process1.pagedir = VMM::create_pagedir();
     _process1.esp = (uint32_t)_process1.user_stack;
     _process1.eflags = eflags;
-    _process1.eip = (uint32_t)process1_entry;
+    // _process1.eip = (uint32_t)process_entry;
+    _process0.eip = 0x400000;
     _process1.kernel_esp = (uint32_t) _process1.kernel_stack;
     _process1.current_ring = RING3;
-    // VMM::switch_pagedir(_process1.pagedir);
-    // VMM::map(VMM::USERSPACE_START, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::switch_pagedir(_process1.pagedir);
+    VMM::map(0x400000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    VMM::map(0x402000, PMM::alloc(), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    memcpy((void*)0x400000, ___hello_obj_hello_exe, ___hello_obj_hello_exe_size);
+
+    /*bzero(proc_data, sizeof(process_data));
+    strcpy(proc_data->name, _process1.name);
+    strcpy(proc_data->chars, "abcd");
+    proc_data->seed = PMM::alloc();
+    proc_data->symbol = '-';*/
 
     Timer::schedule(scheduler_timer, nullptr, 250);
-
     switch_process(&_process0);
 }
+
+

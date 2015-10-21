@@ -100,9 +100,21 @@ template<typename T> T truncate(T value, unsigned alignment) {
 
 #include <stdint.h>
 
+class Util;
+
+class Random {
+private:
+    friend Util;
+    
+    uint32_t _seed;
+public:
+    Random(uint32_t seed);
+    uint32_t next();
+};
+
 class Util {
 private:
-    static uint32_t _rand_seed;
+    static Random _shared_random;
 public:
     static void srand(uint32_t seed);
     static uint32_t rand();

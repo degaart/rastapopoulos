@@ -2,13 +2,13 @@
 .PHONY: all clean
 
 AS=nasm
-CC=clang++
-CPP=clang++
+CC=clang
+CPP=clang
 LD=i586-elf-ld
 OBJCOPY=i586-elf-objcopy
 
 CFLAGS = \
-	-std=gnu++11 -O0 \
+	-std=gnu99 -O0 \
 	-masm=intel \
 	-march=i386 -target i586-elf-unknown -ffreestanding -fno-builtin -nostdlib \
 	-fno-exceptions -fno-rtti \
@@ -22,20 +22,20 @@ LDFLAGS = \
 
 include Files.mk
 
-OBJS := $(patsubst %.cpp,obj/%.o,$(SRCS))
+OBJS := $(patsubst %.c,obj/%.o,$(SRCS))
 ASM_OBJS := $(patsubst %.asm,obj/%.ao,$(ASM_SRCS))
 
-all: obj/Makefile.depends obj/kernel.bin
+all: obj/Makefile.depends obj/hello.exe
 
-obj/kernel.bin: obj/kernel.elf
+obj/hello.exe: obj/hello.elf
 	@echo "[CONV] $^"
 	@$(OBJCOPY) -O binary $^ $@
 
-obj/kernel.elf: $(ASM_OBJS) $(OBJS)
+obj/hello.elf: $(ASM_OBJS) $(OBJS) 
 	@echo "[LD] $^"
 	@$(LD) \
-		-T kernel.ld -o $@ \
-		-Map obj/kernel.map \
+		-T hello.ld -o $@ \
+		-Map obj/hello.map \
 		$(LDFLAGS) \
 		$^
 
