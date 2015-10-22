@@ -2,7 +2,6 @@ global syscall
 syscall:
     push ebp
     mov ebp, esp
-
     push ebx
 
     mov eax, [ebp+8]
@@ -11,8 +10,8 @@ syscall:
     mov edx, [ebp+20]
     int 0x80
 
-    pop ebp
     pop ebx
+    pop ebp
     ret
 
 

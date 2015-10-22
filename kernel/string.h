@@ -30,7 +30,8 @@ extern "C" {
 	void memset(void* buffer, int ch, uint32_t size);
 	void bzero(void* buffer, uint32_t size);
 	void memcpy(void* dest, const void* src, size_t size);
-	void strcpy(char* dest, const char* src);	
+	unsigned strlcpy(char* dst, const char* src, unsigned size);
+	unsigned strlcat(char* dst, const char* src, unsigned size);
 	char* strdup(const char* str);
 	size_t strlen(const char* str);
 }

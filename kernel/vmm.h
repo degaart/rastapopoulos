@@ -57,6 +57,22 @@ public:
 		unmap((uint32_t)va);
 	}
 
+	/*
+		Allocates page frame and map to specified virtual address
+	*/
+	static uint32_t alloc(uint32_t va, uint32_t flags);
+	static uint32_t alloc(void* va, uint32_t flags) {
+		return alloc((uint32_t)va, flags);
+	}
+
+	/*
+		Unmaps specified virtual address and frees page-frame as well
+	*/
+	static void dealloc(uint32_t va);
+	static void dealloc(void* va) {
+		dealloc((uint32_t)va);
+	}
+
 	/* 
 		Get physical address for a virtual address
 		Returns false if the address is unmapped
@@ -71,7 +87,7 @@ public:
 	/*
 		Flush TLB cache
 	*/
-	static void flush_tlb(void* va);	
+	static void flush_tlb(void* va);
 };
 
 #endif //_VMM_H_

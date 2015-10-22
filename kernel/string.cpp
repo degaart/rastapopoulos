@@ -166,15 +166,62 @@ void memcpy(void* dest, const void* source, size_t size) {
         *(dst++) = *(src++);
 }
 
-void strcpy(char* dst, const char* src) {
-    for(; *src; src++)
-        *(dst++) = *src;
-    *(dst) = '\0';
+/* Stolen from FreeBSD 10 */
+unsigned strlcpy(char* dst, const char* src, unsigned siz) {
+    char *d = dst;
+    const char *s = src;
+    unsigned n = siz;
+
+    /* Copy as many bytes as will fit */
+    if (n != 0) {
+        while (--n != 0) {
+            if ((*d++ = *s++) == '\0')
+                break;
+        }
+    }
+
+    /* Not enough room in dst, add NUL and traverse rest of src */
+    if (n == 0) {
+        if (siz != 0)
+            *d = '\0';      /* NUL-terminate dst */
+        while (*s++)
+            ;
+    }
+
+    return(s - src - 1);    /* count does not include NUL */
+}
+
+/* Stolen from FreeBSD 10 */
+unsigned strlcat(char* dst, const char* src, unsigned siz) {
+    char *d = dst;
+    const char *s = src;
+    unsigned n = siz;
+    unsigned dlen;
+
+    /* Find the end of dst and adjust bytes left but don't go past end */
+    while (n-- != 0 && *d != '\0')
+        d++;
+    dlen = d - dst;
+    n = siz - dlen;
+
+    if (n == 0)
+        return(dlen + strlen(s));
+    while (*s != '\0') {
+        if (n != 1) {
+            *d++ = *s;
+            n--;
+        }
+        s++;
+    }
+    *d = '\0';
+
+    return(dlen + (s - src));   /* count does not include NUL */
 }
 
 char* strdup(const char* str) {
-    char* s = (char*)kmalloc(strlen(str) + 1);
-    strcpy(s, str);
+    unsigned len = strlen(str) + 1;
+    char* s = (char*)kmalloc(len);
+    memcpy(s, str, len);
     return s;
 }
 

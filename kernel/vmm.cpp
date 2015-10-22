@@ -145,3 +145,17 @@ void VMM::switch_pagedir(Pagedir* pagedir) {
     _current_pagedir = pagedir;
     write_cr3((uint32_t)_current_pagedir->physical());
 }
+
+uint32_t VMM::alloc(uint32_t va, uint32_t flags) {
+    uint32_t page_frame = PMM::alloc();
+    map(va, page_frame, flags);
+    return page_frame;
+}
+
+// void VMM::dealloc(uint32_t va) {
+//     uint32_t page_frame;
+//     bool got_physical = get_physical((void*)va, &page_frame);
+//     assert(got_physical);
+//     PMM::free(page_frame);
+//     unmap(va);
+// }

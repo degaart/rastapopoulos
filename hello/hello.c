@@ -7,7 +7,7 @@
         :: "d"(port), "a"(ch)   \
     )
 
-void syscall(uint32_t function, uint32_t param0, uint32_t param1, uint32_t param2);
+uint32_t syscall(uint32_t function, uint32_t param0, uint32_t param1, uint32_t param2);
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419,
@@ -85,12 +85,12 @@ uint32_t crc32(const void *s, unsigned len, uint32_t startval) {
  */
 int main(int pid) {
     // syscall(0x1, (uint32_t) "CAN HAZ CHEEZBURGER?", 0, 0);
-    int ch = (pid == 0 ? '*' : '-');
+    int ch = (pid == 1 ? '*' : '-');
     //volatile uint8_t* invalid = (uint8_t*)0x3FD000;
     while(1) {
         outb(0xE9, ch);
         crc32((const void*)USERSPACE_START, 0x1000, 0);
-
+        
         //*invalid = 0xC0;
         syscall(0x2, 0, 0, 0);
     }
