@@ -8,6 +8,7 @@ LD=i586-elf-ld
 OBJCOPY=i586-elf-objcopy
 
 CFLAGS = \
+	-I../libc/include \
 	-std=gnu99 -Os \
 	-masm=intel \
 	-march=i386 -target i586-elf-unknown -ffreestanding -fno-builtin -nostdlib \
@@ -15,10 +16,12 @@ CFLAGS = \
 
 LDFLAGS = \
 	-nostdlib \
-	-static
+	-static \
+	-L ../libc/obj \
+	-lc
 
 SRCS = hello.c
-ASM_SRCS = startup.asm syscall.asm
+ASM_SRCS = 
 
 OBJS = $(patsubst %.c,obj/%.o,$(SRCS))
 ASM_OBJS = $(patsubst %.asm,obj/%.ao,$(ASM_SRCS))
@@ -34,8 +37,9 @@ obj/hello.elf: $(ASM_OBJS) $(OBJS)
 	@$(LD) \
 		-T hello.ld -o $@ \
 		-Map obj/hello.map \
-		$(LDFLAGS) \
-		$^
+		$^ \
+		$(LDFLAGS)
+		
 
 obj/%.o: %.c
 	@echo "[CC] $<"

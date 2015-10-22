@@ -1,5 +1,6 @@
 OUTPUT_FORMAT("elf32-i386");
-ENTRY(_startup)
+/*ENTRY(_startup)*/
+STARTUP(../libc/obj/startup.asm.o)
 
 SECTIONS
 {

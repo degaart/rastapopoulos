@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <syscall.h>
 
 #define outb(port, ch) \
     asm(    \
@@ -6,8 +7,6 @@
         "out dx, al"    \
         :: "d"(port), "a"(ch)   \
     )
-
-uint32_t syscall(uint32_t function, uint32_t param0, uint32_t param1, uint32_t param2);
 
 static uint32_t crc32_tab[] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419,
