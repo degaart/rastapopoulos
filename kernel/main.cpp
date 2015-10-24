@@ -75,7 +75,7 @@ static void test_usermode() {
     Process* p0 = Process::create("Process #0");
     Process* p1 = Process::create("Process #1");
 
-    p0->resume();
+    Process::switch_process(p0);
 }
 
 

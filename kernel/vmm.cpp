@@ -134,6 +134,7 @@ Pagedir* VMM::create_pagedir() {
 }
 
 void VMM::free_pagedir(Pagedir* pagedir) {
+    assert(pagedir != _current_pagedir);
     delete pagedir;
 }
 
@@ -147,9 +148,10 @@ void VMM::switch_pagedir(Pagedir* pagedir) {
 }
 
 uint32_t VMM::alloc(uint32_t va, uint32_t flags) {
-    uint32_t page_frame = PMM::alloc();
-    map(va, page_frame, flags);
-    return page_frame;
+    // uint32_t page_frame = PMM::alloc();
+    // map(va, page_frame, flags);
+    // return page_frame;
+    return _current_pagedir->alloc(va, flags);
 }
 
 // void VMM::dealloc(uint32_t va) {
@@ -159,3 +161,8 @@ uint32_t VMM::alloc(uint32_t va, uint32_t flags) {
 //     PMM::free(page_frame);
 //     unmap(va);
 // }
+
+Pagedir* VMM::current_pagedir() {
+    return _current_pagedir;
+}
+

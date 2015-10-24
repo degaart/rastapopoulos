@@ -3,6 +3,7 @@
 #include "io.h"
 #include "debug.h"
 #include "syscall_nums.h"
+#include "process.h"
 
 void Syscall::syscall_handler(const isr_regs_t* regs) {
     uint32_t func = regs->eax;
@@ -19,6 +20,9 @@ void Syscall::syscall_handler(const isr_regs_t* regs) {
             break;
         case SYSCALL_YIELD:
             syscall_yield(param0, param1, param2);
+            break;
+        case SYSCALL_EXIT:
+            syscall_exit(param0, param1, param2);
             break;
         default:
             PANIC("Unhandled syscall 0x%X", func);
@@ -45,5 +49,7 @@ uint32_t Syscall::syscall_write(uint32_t param0, uint32_t param1, uint32_t param
     return 0;
 }
 
-
-
+uint32_t Syscall::syscall_exit(uint32_t, uint32_t, uint32_t) {
+    Process::exit_current_process();
+    return 0;
+}

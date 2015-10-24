@@ -122,3 +122,18 @@ uint32_t Pagedir::physical() {
     return _physical;
 }
 
+uint32_t Pagedir::alloc(uint32_t va, uint32_t flags) {
+    uint32_t page_frame = PMM::alloc();
+    map(va, page_frame, flags);
+    return page_frame;
+}
+
+void Pagedir::free(uint32_t va) {
+    uint32_t page_frame;
+    bool got_physical = get_physical((void*)va, &page_frame);
+    assert(got_physical);
+    PMM::free(page_frame);
+}
+
+
+

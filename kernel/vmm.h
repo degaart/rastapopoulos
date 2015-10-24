@@ -37,6 +37,9 @@ public:
 	/* set current page directory */
 	static void switch_pagedir(Pagedir*);
 
+	/* get current page directory */
+	static Pagedir* current_pagedir();
+
 	/*
 		Map physical address into virtual address
 		PAGE_PRESENT is not implied in flags, so need to supply it when calling this function

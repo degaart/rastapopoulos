@@ -7,10 +7,9 @@
 #include "timer.h"
 #include "hello.h"
 
-Process* Process::_processes[100];            /* FUCK THE POLICE! */
-uint32_t Process::_process_count = 0;
-uint32_t Process::_current_pid = 0;
+Process::ProcessList_t Process::_processes;
 Process* Process::_current_process = nullptr;
+uint32_t Process::_current_pid = 0;
 
 extern "C"
 void switch_to_usermode(
@@ -33,17 +32,18 @@ Process::Process(uint32_t pid, const char* name)
     strlcpy(_name, name, sizeof(_name));
     bzero(&_regs, sizeof(_regs));
 
-    _current_ring   = RING3;
-    _kernel_esp     = (uint32_t)(_kernel_stack + sizeof(_kernel_stack) - 1);
-    _regs.esp       = USER_STACK_END;
-    _regs.eax       = pid;
+    _current_ring       = RING3;
+    _kernel_esp         = (uint32_t)(_kernel_stack + sizeof(_kernel_stack) - 1);
+    _regs.esp           = USER_STACK_END;
+    _regs.eax           = pid;
     
     read_eflags(_regs.eflags);
-    _regs.eflags    |= EFLAGS_IF;
-    _regs.eip       = PROCESS_ENTRY;
+    _regs.eflags        |= EFLAGS_IF;
+    _regs.eip           = PROCESS_ENTRY;
 
-    _user_stack     = (uint8_t*)USER_STACK_END - 4095;  /* gives a nice page-aligned stack */
-    assert(((uint32_t)_user_stack % 4096) == 0);
+    _user_stack         = USER_STACK_END - VMM::PAGE_SIZE + 1;  /* gives a nice page-aligned stack */
+    assert((_user_stack % VMM::PAGE_SIZE) == 0);
+    _workingset_size    = VMM::PAGE_SIZE;
 
     _pagedir = VMM::create_pagedir();
     VMM::switch_pagedir(_pagedir);
@@ -55,31 +55,38 @@ Process::Process(uint32_t pid, const char* name)
 Process::~Process() {
     /*
         - Free any allocated Page-frames, keeping shared pages
-        - Switch to another known-good Pagedir before detroying this process's pagedir
-    */
-    PANIC("Not implemented yet");
-}
+        - Switch to another known-good Pagedir before destroying this process's pagedir
 
-void Process::resume() {
-    switch_process(this);
+        For now: we assume user pages can't be shared
+        Note: Pagedir's destructor does not free any pageframes, we must do it ourselves
+    */
+    TRACE("Destroying process %u", _pid);
+    for(uint32_t va = PROCESS_ENTRY; va < PROCESS_ENTRY + _workingset_size; va += VMM::PAGE_SIZE) {
+        TRACE("Freeing page 0x%X", va);
+        _pagedir->free(va);
+    }
+    for(uint32_t va = _user_stack; va < USER_STACK_END; va += VMM::PAGE_SIZE) {
+        TRACE("Freeing page 0x%X", va);
+        _pagedir->free(va);
+    }
+
+    VMM::free_pagedir(_pagedir);
 }
 
 Process* Process::create(const char* name) {
-    assert(_process_count != 10);
-
     Process* proc = new Process(++_current_pid, name);
-    _processes[_process_count] = proc;
-    _process_count++;
-
+    _processes.append(proc);
     return proc;
 }
 
 void Process::switch_process(Process* process) {
     assert(process->_regs.eflags & EFLAGS_IF);
 
+    assert(_processes.contains(process));
     _current_process = process;
+    
     GDT::set_kernel_stack((void*)process->_kernel_esp);
-    VMM::switch_pagedir(_current_process->_pagedir);
+    VMM::switch_pagedir(process->_pagedir);
 
     if(process->_current_ring == RING3) {
         switch_to_usermode(
@@ -100,12 +107,13 @@ void Process::switch_process(Process* process) {
 }
 
 void Process::resume_next_process(void* args, const isr_regs_t* regs) {
+    assert(_current_process != nullptr);
+
     Ring current_ring = (regs->cs & 0x3) ? RING3 : RING0;
     // TRACE("%s preempted in ring %u", _current_process->name, (unsigned)current_ring);
 
     if(current_ring == RING3) {
         /* Interrupt originated from ring3 */
-        /* Magic: 0x1C */
         _current_process->_current_ring = current_ring;
         _current_process->_kernel_esp = (uint32_t)GDT::get_kernel_stack();
         _current_process->_regs.esp = regs->useresp;
@@ -134,19 +142,48 @@ void Process::resume_next_process(void* args, const isr_regs_t* regs) {
         _current_process->_regs.ebp = regs->ebp;
     }
 
-    for(unsigned i = 0; i<_process_count; i++) {
-        if(_processes[i] == _current_process) {
-            unsigned next_process_idx = (i + 1) % _process_count;
-            switch_process(_processes[next_process_idx]);
-        }
-    }
-
+    /* Switch to next process */
+    switch_process(next_process());
     PANIC("Should not happen");
 }
 
 void Process::init() {
-    bzero(_processes, sizeof(_processes));
     Timer::schedule(resume_next_process, nullptr, 250);
+}
+
+void Process::exit_current_process() {
+    Process* proc = _current_process;
+    _current_process = next_process();
+    if(_current_process == proc) {
+        PANIC("No more processes to run!");
+    }
+
+    _processes.remove_val(proc);
+
+    VMM::switch_pagedir(_current_process->_pagedir);
+    delete(proc);
+    proc = nullptr;
+
+    switch_process(_current_process);
+    PANIC("Should not happen");
+}
+
+Process* Process::next_process() {
+    assert(_processes.size() != 0);
+
+    /* If no current process, return first process */
+    if(_current_process == nullptr)
+        return *_processes.iterator();
+    
+    /* Else return process immediately following current process */
+    ProcessList_t::Iterator it = _processes.find(_current_process);
+    assert(it.valid());
+    it.next();
+    if(it.valid())
+        return *it;
+    
+    /* Else return first process */
+    return *_processes.iterator();
 }
 
 

@@ -16,6 +16,7 @@ private:
     static uint32_t syscall_halt(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_yield(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_write(uint32_t, uint32_t, uint32_t);
+    static uint32_t syscall_exit(uint32_t, uint32_t, uint32_t);
 };
 
 #endif //_SYSCAL_H_

@@ -3,5 +3,6 @@
 
 void* malloc(unsigned size);
 void free(void* ptr);
+void exit(int status);
 
 #endif 

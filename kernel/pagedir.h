@@ -54,8 +54,9 @@ public:
     bool get_physical(uint32_t va, uint32_t* pa);
     bool is_mapped(uint32_t va);
     uint32_t physical();                        /* Get physical address of this pagedir */
+    uint32_t alloc(uint32_t va, uint32_t flags);
+    void free(uint32_t va);
 
-    
     void map(void* va, uint32_t pa, uint32_t flags) {
         map((uint32_t)va, pa, flags);
     }
@@ -70,6 +71,14 @@ public:
 
     bool is_mapped(void* va) {
         return is_mapped((uint32_t)va);
+    }
+
+    uint32_t alloc(void* va, uint32_t flags) {
+        return alloc((uint32_t)va, flags);
+    }
+
+    void free(void* va) {
+        free((uint32_t)va);
     }
 
     void copy_kernel_mappings(Pagedir* pagedir);            /* Copy kernel mappings from specified Pagedir */

@@ -2,6 +2,7 @@
 #define _PROCESS_H_
 
 #include <stdint.h>
+#include "linked_list.h"
 #include "pagedir.h"
 #include "regs.h"
 #include "idt.h"
@@ -10,31 +11,29 @@ class Process {
 public:
     enum Ring {
         RING0,
-        RING1,
-        RING2,
         RING3
     };
 
-    const uint32_t  USER_STACK_END = 0xBFFFFFFF;    /* Last useable byte of user stack */
-    const uint32_t  PROCESS_ENTRY = 0x400000;       /* 4mb mark */
+    const uint32_t          USER_STACK_END = 0xBFFFFFFF;    /* Last useable byte of user stack */
+    const uint32_t          PROCESS_ENTRY = 0x400000;       /* 4mb mark */
 
 private:
-    uint32_t        _pid;
-    char            _name[32];
+    typedef LinkedList<Process*> ProcessList_t;
 
-    Pagedir*        _pagedir;
-    uint8_t         _kernel_stack[0x1000];      /* 4k kernel stack (in kernel-space) */
-    uint8_t*        _user_stack;                /* start of user stack (in this process's address space). Top of stack is always USER_STACK_END */
-    Ring            _current_ring;
-    uint32_t        _kernel_esp;
-    regs_t          _regs;
+    uint32_t                _pid;
+    char                    _name[32];
 
-    static Process* _processes[100];            /* FUCK THE POLICE! */
-    static uint32_t _process_count;
-    static uint32_t _current_pid;
-    static Process* _current_process;
-    static void     switch_process(Process* proc);
-    static void     resume_next_process(void* args, const isr_regs_t* regs);
+    Pagedir*                _pagedir;
+    uint8_t                 _kernel_stack[0x1000];      /* 4k kernel stack (in kernel-space) */
+    uint32_t                _user_stack;                /* start of user stack (in this process's address space). End of stack is always USER_STACK_END */
+    uint32_t                _workingset_size;           /* Size of process's working-set */
+    Ring                    _current_ring;
+    uint32_t                _kernel_esp;
+    regs_t                  _regs;
+
+    static ProcessList_t    _processes;
+    static Process*         _current_process;
+    static uint32_t         _current_pid;
 
     Process(uint32_t pid, const char* name);
     ~Process();
@@ -43,11 +42,13 @@ private:
     Process& operator=(const Process&) = delete;
     Process& operator=(const Process&&) = delete;
 
+    static Process* next_process();
+    static void resume_next_process(void* args, const isr_regs_t* regs);
 public:
     static void init();
     static Process* create(const char* name);
-
-    void resume();
+    static void switch_process(Process* proc);
+    static void exit_current_process();
 };
 
 #endif
