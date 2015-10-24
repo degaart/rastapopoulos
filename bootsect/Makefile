@@ -10,5 +10,5 @@ objdir:
 	@mkdir -p obj/
 
 clean:
-	@rm -vf obj/*
+	@rm -f obj/*
 

@@ -43,18 +43,6 @@ obj/kernel.elf: $(ASM_OBJS) $(OBJS)
 		$(LDFLAGS) \
 		$^
 
-obj/bin2c: ../util/bin2c.c
-	@echo "[CC] $<"
-	@$(CC) -o $@ -Wno-format-security $<
-
-hello.h: obj/bin2c ../hello/obj/hello.bin
-	@echo "[GEN] $@"
-	@obj/bin2c -o $@ ../hello/obj/hello.bin
-
-../hello/obj/hello.bin:
-	@echo "[MAKE] $@"
-	@make -C ../hello
-
 $(OBJS):
 	@echo "[CC] $<"
 	@$(CXX) -S -o $@.S $(CPPFLAGS) $(CXXFLAGS) $<
@@ -64,16 +52,8 @@ obj/%.ao: %.asm
 	@echo "[ASM] $<"
 	@ $(AS) -f elf32 -o $@ $<
 
-obj/Makefile.depends: hello.h $(SRCS)
-	@echo > obj/Makefile.depends
-	@for i in $^; do \
-		if [ $$i != hello.h ]; then \
-			echo "[DEP] $$i"; \
-			/bin/echo -n "obj/" >> obj/Makefile.depends; \
-			$(CPP) -E $(CPPFLAGS) -MM $$i >> obj/Makefile.depends || rm obj/Makefile.depends ; \
-		fi; \
-	done
-
+obj/Makefile.depends: $(SRCS)
+	@ CPP="$(CPP)" CPPFLAGS="$(CPPFLAGS)" ./makedepend.sh $^
 
 clean:
 	@rm -f obj/*

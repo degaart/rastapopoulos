@@ -14,8 +14,8 @@ public:
         RING3
     };
 
-    const uint32_t          USER_STACK_END = 0xBFFFFFFF;    /* Last useable byte of user stack */
-    const uint32_t          PROCESS_ENTRY = 0x400000;       /* 4mb mark */
+    static const uint32_t   USER_STACK_END = 0xBFFFFFFF;    /* Last useable byte of user stack */
+    static const uint32_t   PROCESS_ENTRY = 0x400000;       /* 4mb mark */
 
 private:
     typedef LinkedList<Process*> ProcessList_t;
@@ -49,6 +49,9 @@ public:
     static Process* create(const char* name);
     static void switch_process(Process* proc);
     static void exit_current_process();
+
+    // Load process image from Initrd
+    void load_image(const char* filename);
 };
 
 #endif

@@ -125,6 +125,11 @@ void VMM::map(uint32_t va, uint32_t pa, uint32_t flags) {
         flush_tlb((void*)va);
 }
 
+void VMM::unmap(uint32_t va) {
+    _current_pagedir->unmap(va);
+}
+
+
 void VMM::flush_tlb(void* va) {
     _flush_tlb((uint32_t)va);
 }

@@ -30,10 +30,13 @@ extern "C" {
 	void memset(void* buffer, int ch, uint32_t size);
 	void bzero(void* buffer, uint32_t size);
 	void memcpy(void* dest, const void* src, size_t size);
+	int memcmp(const void* p0, const void* p1, size_t size);
+
 	unsigned strlcpy(char* dst, const char* src, unsigned size);
 	unsigned strlcat(char* dst, const char* src, unsigned size);
 	char* strdup(const char* str);
 	size_t strlen(const char* str);
+	int strcmp(const char* s0, const char* s1);
 }
 
 #endif // _STRING_H_

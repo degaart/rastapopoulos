@@ -1,6 +1,8 @@
 #include "pmm.h"
 #include "debug.h"
 #include "../bootldr/kernel_params.h"
+#include "vmm.h"
+#include "util.h"
 
 #define REGION_USABLE 1
 #define REGION_RESERVED 2
@@ -25,6 +27,25 @@ void PMM::init(const void* bios_memmap, unsigned bios_memmap_size) {
             assert(!region->page_reserved(page));
         }
     }
+
+    /* Reserve specified areas of conventional memory */
+    static const kernel_params* kparams = (kernel_params*)KERNEL_PARAMS;
+
+    reserve(0x00000000);                                                            /* BDA at 0x00000400 - 0x000004FF */
+    for(uint32_t page = 0x00080000; page < 0x0010000; page += VMM::PAGE_SIZE) {       /* EBDA & other stuffs */
+        reserve(page);
+    }
+    reserve(align(KERNEL_PARAMS, VMM::PAGE_SIZE));
+
+    // initrd reservation by Initrd class
+    // for(
+    //     uint32_t page = align(kparams->initrd_address, VMM::PAGE_SIZE); 
+    //     page < kparams->initrd_address + kparams->initrd_size; 
+    //     page += VMM::PAGE_SIZE
+    // ) {
+    //     reserve(page);
+    // }
+
 }
 
 void PMM::dump() {

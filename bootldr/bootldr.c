@@ -6,13 +6,12 @@
 	Call kernel
 
  Memory layout:
-	 0x0500 - 0x05FF		: kernel params
-	 	0x500				: boot device (BYTE)
-	 	0x502				: memmap_size (uint16_t)
-	 	0x504				: kernel load area (uint32_t)
+	 0x0500 - 0x05FF		; kernel params (see struct kernel_params)
 	 0x05FF - 0x7BFF		; bootloader stack
-	 0x7C00 - 0x7DFF		: BPB of boot drive
-	 0x100000 - ?			: kernel load area
+	 0x6BFF	- 0x7BFF		; kernel stack
+	 0x7C00 - 0x7DFF		; BPB of boot drive
+	 0x70000 - 0x7FFFF	; Initial ramdrive load area (size in kernel_params) 
+	 0x100000 - ?			; kernel load area
 */
 #include <stdint.h>
 #include "bootldr_stub.h"
@@ -22,6 +21,7 @@
 #include "debug.h"
 #include "kernel_params.h"
 
+#define INITRD_START 0x70000
 struct kernel_params* kernel_params = (struct kernel_params*)0x500; /* boot_drive set by bootsect */
 uint8_t workmem[512];
 uint8_t* kernel_load_area = (uint8_t*)0x100000;
@@ -174,6 +174,39 @@ void cstart() {
 		memcpy(kernel_pointer, workmem, 512);
 		
 		kernel_pointer += 512;
+	}
+
+	/*
+		Read initial ramdisk if it exists
+	*/
+	struct FAT_FILE initrd_file;
+	TRACE("Loading initrd");
+	ret = fat_fopen(&initrd_file, &fat, "INITRD  ");
+	if(ret != FAT_OK) {
+		TRACE("No initrd found");
+		kernel_params->initrd_size = 0;
+		kernel_params->initrd_address = 0;
+	} else {
+		kernel_params->initrd_size = 0;
+		kernel_params->initrd_address = INITRD_START;
+
+		uint8_t* initrd_pointer = (uint8_t*)INITRD_START;
+		while(1) {
+			ret = fat_fread(workmem, &fat, &initrd_file);
+
+			if(ret == FAT_EOF)
+				break;
+			else if(ret != FAT_OK) {
+				TRACE("Error loading initrd: %s", fat_error(ret));
+				write_string("Error loading initrd: ");
+				write_string(fat_error(ret));
+				_halt();
+			}
+
+			memcpy(initrd_pointer, workmem, 512);
+			initrd_pointer += 512;
+			kernel_params->initrd_size += 512;
+		}
 	}
 
 	/*

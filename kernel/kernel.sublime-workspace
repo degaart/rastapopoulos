@@ -4,6 +4,22 @@
 		"selected_items":
 		[
 			[
+				"__",
+				"___hello_obj_hello_bin_size"
+			],
+			[
+				"_he",
+				"___hello_obj_hello_bin_size"
+			],
+			[
+				"swt",
+				"switch_pagedir"
+			],
+			[
+				"init",
+				"initrd_address"
+			],
+			[
 				"next_pro",
 				"next_process_idx"
 			],
@@ -174,10 +190,6 @@
 			[
 				"page",
 				"PAGE_SIZE"
-			],
-			[
-				"init",
-				"initial_heap"
 			],
 			[
 				"kml",
@@ -447,35 +459,24 @@
 			"file": "main.cpp",
 			"settings":
 			{
-				"buffer_size": 1845,
+				"buffer_size": 2250,
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "syscall_nums.h",
+			"file": "Makefile",
 			"settings":
 			{
-				"buffer_size": 163,
-				"line_ending": "Unix",
-				"name": "#ifndef _SYSCALL_NUMS_H_"
+				"buffer_size": 1062,
+				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "syscall.h",
+			"file": "makedepend.sh",
 			"settings":
 			{
-				"buffer_size": 581,
-				"line_ending": "Unix",
-				"name": "#ifndef _SYSCALL_H_"
-			}
-		},
-		{
-			"file": "syscall.cpp",
-			"settings":
-			{
-				"buffer_size": 1147,
-				"line_ending": "Unix",
-				"name": "#include \"syscall.h\""
+				"buffer_size": 370,
+				"line_ending": "Unix"
 			}
 		}
 	],
@@ -565,29 +566,36 @@
 	],
 	"file_history":
 	[
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/makedepend.sh",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/main.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/hello.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/hello.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd_header.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall_nums.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/regs.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pic.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/hello.c",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel.ld",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/debug.cpp",
@@ -685,14 +693,7 @@
 		"/Users/zorro/Desktop/System/unix-v7/usr/src/libc/gen/pkon.c",
 		"/Users/zorro/Desktop/System/unix-v7/usr/src/libc/gen/l3.c",
 		"/Users/zorro/Desktop/System/unix-v7/usr/src/libc/stdio/printf.c",
-		"/Users/zorro/Desktop/System/unix-v7/usr/src/libc/stdio/putw.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.10/bootldr/bootldr_stub.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/term.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/stub.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/obj/main.o.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/obj/bootldr.map",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/main.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/obj/term.o.asm"
+		"/Users/zorro/Desktop/System/unix-v7/usr/src/libc/stdio/putw.c"
 	],
 	"find":
 	{
@@ -713,6 +714,7 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"kernel_params",
 			"sti(",
 			"sti",
 			"sti()",
@@ -808,7 +810,7 @@
 	"groups":
 	[
 		{
-			"selected": 3,
+			"selected": 2,
 			"sheets":
 			[
 				{
@@ -817,15 +819,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 1845,
+						"buffer_size": 2250,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								1631,
-								1631
+								438,
+								438
 							]
 						],
 						"settings":
@@ -835,7 +837,7 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 789.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 1,
@@ -843,86 +845,55 @@
 				},
 				{
 					"buffer": 1,
-					"file": "syscall_nums.h",
+					"file": "Makefile",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 163,
+						"buffer_size": 1062,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								163,
-								163
+								1061,
+								1061
 							]
 						],
 						"settings":
 						{
-							"auto_name": "#ifndef _SYSCALL_NUMS_H_",
-							"syntax": "Packages/C++/C++.tmLanguage"
+							"syntax": "Packages/Makefile/Makefile.tmLanguage"
 						},
 						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 3,
-					"type": "text"
-				},
-				{
-					"buffer": 2,
-					"file": "syscall.h",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 581,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								579,
-								579
-							]
-						],
-						"settings":
-						{
-							"auto_name": "#ifndef _SYSCALL_H_",
-							"syntax": "Packages/C++/C++.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
+						"translation.y": 306.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 2,
 					"type": "text"
 				},
 				{
-					"buffer": 3,
-					"file": "syscall.cpp",
+					"buffer": 2,
+					"file": "makedepend.sh",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 1147,
+						"buffer_size": 370,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								499,
-								501
+								345,
+								345
 							]
 						],
 						"settings":
 						{
-							"auto_name": "#include \"syscall.h\"",
-							"syntax": "Packages/C++/C++.tmLanguage"
+							"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage"
 						},
 						"translation.x": 0.0,
-						"translation.y": 111.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,

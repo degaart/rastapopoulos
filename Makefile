@@ -1,4 +1,4 @@
-.PHONY: all clean debug run gdb run_graphic bootsect/obj/bootsect.bin bootldr/obj/bootldr.bin kernel/obj/kernel.bin
+.PHONY: all clean debug run gdb run_graphic bootsect bootldr kernel initrd.img
 
 all: floppy.img
 
@@ -14,16 +14,7 @@ gdb: floppy.img
 run_graphic: floppy.img
 	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log -no-reboot
 
-floppy.img: bootsect/obj/bootsect.bin bootldr/obj/bootldr.bin kernel/obj/kernel.bin
-	@echo "[MAKE] bootsect"
-	@make -C bootsect
-
-	@echo "[MAKE] bootldr"
-	@make -C bootldr
-
-	@echo "[MAKE] kernel"
-	@make -C kernel
-
+floppy.img: bootsect bootldr kernel initrd.img
 	@echo "[INIT] floppy.img"
 	@[ -f floppy.img ] || dd if=/dev/zero of=floppy.img bs=512 count=2880 > /dev/null
 	@mformat -i floppy.img -t 80 -h 2 -n 18
@@ -38,19 +29,30 @@ floppy.img: bootsect/obj/bootsect.bin bootldr/obj/bootldr.bin kernel/obj/kernel.
 	@echo "[CP] kernel.bin"
 	@mcopy -D o -i floppy.img kernel/obj/kernel.bin ::KERNEL
 
-bootsect/obj/bootsect.bin:
-	@( cd bootsect && make ; )
+	@echo "[CP] initrd.img"
+	@mcopy -D o -i floppy.img initrd.img ::INITRD
 
-bootldr/obj/bootldr.bin:
-	@( cd bootldr && make; )
+initrd.img:
+	@make -C libc
+	@make -C hello
+	@make -C mkinitrd
+	@mkinitrd/obj/mkinitrd initrd.img hello/obj/*
 
-kernel/obj/kernel.bin:
-	@( cd kernel && make; )
+bootsect:
+	@make -C bootsect
+
+bootldr:
+	@make -C bootldr
+
+kernel:
+	@make -C kernel
 
 clean:
-	@make -C bootsect clean
-	@make -C bootldr clean
-	@make -C kernel clean
-	@make -C hello clean
-	@rm -vf *.o *.bin *.tmp *.img
+	make -C bootsect clean
+	make -C bootldr clean
+	make -C kernel clean
+	make -C hello clean
+	make -C libc clean
+	make -C mkinitrd clean
+	@rm -f *.o *.bin *.tmp *.img
 

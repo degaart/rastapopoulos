@@ -166,6 +166,22 @@ void memcpy(void* dest, const void* source, size_t size) {
         *(dst++) = *(src++);
 }
 
+int memcmp(const void* p0, const void* p1, size_t size) {
+    if(!size)
+        return 0;
+
+    uint8_t* ptr0 = (uint8_t*)p0;
+    uint8_t* ptr1 = (uint8_t*)p1;
+
+    while(size--) {
+        if(*ptr0 != *ptr1)
+            return *ptr1 - *ptr0;
+        ptr0++;
+        ptr1++;
+    }
+    return 0;
+}
+
 /* Stolen from FreeBSD 10 */
 unsigned strlcpy(char* dst, const char* src, unsigned siz) {
     char *d = dst;
@@ -232,6 +248,16 @@ size_t strlen(const char* str) {
     return len;
 }
 
-
+int strcmp(const char* s0, const char* s1) {
+    while(1) {
+        if(!*s0 || !*s0)
+            return *s1 - *s0;
+        if(*s0 != *s1)
+            return *s1 - *s0;
+        s1++;
+        s0++;
+    }
+    return 0;
+}
 
 

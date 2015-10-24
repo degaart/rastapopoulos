@@ -3,9 +3,12 @@
 #include "util.h"
 #include "debug.h"
 #include "vmm.h"
+#include "pmm.h"
 #include "gdt.h"
 #include "timer.h"
-#include "hello.h"
+#include "initrd.h"
+
+#define EXE_MAGIC "Rasta Executable"
 
 Process::ProcessList_t Process::_processes;
 Process* Process::_current_process = nullptr;
@@ -43,13 +46,14 @@ Process::Process(uint32_t pid, const char* name)
 
     _user_stack         = USER_STACK_END - VMM::PAGE_SIZE + 1;  /* gives a nice page-aligned stack */
     assert((_user_stack % VMM::PAGE_SIZE) == 0);
-    _workingset_size    = VMM::PAGE_SIZE;
+    _workingset_size    = 0;
 
     _pagedir = VMM::create_pagedir();
     VMM::switch_pagedir(_pagedir);
-    VMM::alloc(PROCESS_ENTRY, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
     VMM::alloc(_user_stack, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
-    memcpy((void*)PROCESS_ENTRY, ___hello_obj_hello_bin, ___hello_obj_hello_bin_size);
+
+    // VMM::alloc(PROCESS_ENTRY, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+    // memcpy((void*)PROCESS_ENTRY, ___hello_obj_hello_bin, ___hello_obj_hello_bin_size);
 }
 
 Process::~Process() {
@@ -80,6 +84,7 @@ Process* Process::create(const char* name) {
 }
 
 void Process::switch_process(Process* process) {
+    assert(process->_workingset_size >= VMM::PAGE_SIZE);
     assert(process->_regs.eflags & EFLAGS_IF);
 
     assert(_processes.contains(process));
@@ -186,4 +191,28 @@ Process* Process::next_process() {
     return *_processes.iterator();
 }
 
+void Process::load_image(const char* filename) {
+    if(_workingset_size != 0) {
+        PANIC("Process image alread loaded");
+    }
 
+    Initrd::File* file = Initrd::get().open(filename);
+    if(!file) {
+        PANIC("File not found in initrd: %s", filename);
+    }
+    if(memcmp((uint8_t*)file->data() + 2, EXE_MAGIC, sizeof(EXE_MAGIC))) {
+        PANIC("Invalid executable (bad magic): %s", filename);
+    }
+
+    VMM::switch_pagedir(_pagedir);
+    for(uint32_t page = PROCESS_ENTRY; page < PROCESS_ENTRY + file->size(); page += VMM::PAGE_SIZE) {
+        VMM::alloc(page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+        _workingset_size += VMM::PAGE_SIZE;
+        
+        int read_bytes = file->read((uint8_t*)page, VMM::PAGE_SIZE);
+        if(read_bytes == 0 || read_bytes < VMM::PAGE_SIZE) {
+            break;
+        }
+    }
+    delete file;
+}

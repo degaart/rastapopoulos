@@ -20,7 +20,8 @@ SRCS = \
     pagedir.cpp \
     process.cpp \
     timer.cpp \
-    syscall.cpp
+    syscall.cpp \
+    initrd.cpp
 
 ASM_SRCS = \
     stub.asm \

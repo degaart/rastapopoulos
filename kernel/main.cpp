@@ -18,6 +18,7 @@
 #include "timer.h"
 #include "process.h"
 #include "syscall.h"
+#include "initrd.h"
 
 static void test_usermode();
 
@@ -26,7 +27,7 @@ static void gpf_handler(const isr_regs_t* regs) {
 }
 
 extern "C" void main() {
-    static const kernel_params* kparams = (kernel_params*)0x500;
+    static const kernel_params* kparams = (kernel_params*)KERNEL_PARAMS;
 
 	TRACE("*** RastapopoulOS kernel loaded ***");
     call_ctors();
@@ -34,6 +35,8 @@ extern "C" void main() {
     TRACE("Initializing kernel heap");
     KHeap::init();
     KHeap::dump();
+
+    // test_initrd(kparams);
 
     TRACE("Initializing GDT");
     GDT::init();
@@ -61,10 +64,15 @@ extern "C" void main() {
     TRACE("Physical memory zones:");
     PMM::dump_zones();
 
+    uint32_t kparams_page = truncate((uint32_t)kparams, VMM::PAGE_SIZE);
+    TRACE("kparams page: 0x%X", kparams_page);
+    VMM::map(kparams_page, kparams_page, VMM::PAGE_PRESENT);
+
     TRACE("Initializing syscall handler");
     Syscall::init();
 
     test_usermode();
+    TRACE("Tests done. Halting");
     halt();
 }
 
@@ -73,10 +81,12 @@ static void test_usermode() {
     Process::init();
 
     Process* p0 = Process::create("Process #0");
+    p0->load_image("HELLO.BIN");
+    uint8_t* p = (uint8_t*)Process::PROCESS_ENTRY;
+
     Process* p1 = Process::create("Process #1");
+    p1->load_image("HELLO.BIN");
 
     Process::switch_process(p0);
 }
-
-
 
