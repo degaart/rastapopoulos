@@ -2,6 +2,7 @@
 #define _PAGEDIR_H_
 
 #include <stdint.h>
+#include <stddef.h>
 
 class VMM;
 
@@ -54,8 +55,11 @@ public:
     bool get_physical(uint32_t va, uint32_t* pa);
     bool is_mapped(uint32_t va);
     uint32_t physical();                        /* Get physical address of this pagedir */
+    uint32_t get_page_attr(uint32_t va, uint32_t* dir_attr);
     uint32_t alloc(uint32_t va, uint32_t flags);
     void free(uint32_t va);
+    bool check_readable_block(const void* va, size_t size, uint32_t* first_unreadable, uint32_t* first_invalid);
+    bool check_writable_block(const void* va, size_t size, uint32_t* first_readonly, uint32_t* first_invalid);
 
     void map(void* va, uint32_t pa, uint32_t flags) {
         map((uint32_t)va, pa, flags);

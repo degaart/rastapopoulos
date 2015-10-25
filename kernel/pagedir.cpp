@@ -135,5 +135,67 @@ void Pagedir::free(uint32_t va) {
     PMM::free(page_frame);
 }
 
+bool Pagedir::check_readable_block(const void* va, size_t size, uint32_t* first_unreadable, uint32_t* first_invalid) {
+    uint32_t first_page = truncate((uint32_t)va, PAGE_SIZE);
+    uint32_t last_page = truncate( ((uint32_t)va) + size, PAGE_SIZE );
+
+    if(first_unreadable)
+        *first_unreadable = 0;
+    if(first_invalid)
+        *first_invalid = 0;
+
+    for(uint32_t page = first_page; page <= last_page; page += PAGE_SIZE) {
+        uint32_t dir_attr;
+        uint32_t attr = get_page_attr(page, &dir_attr);
+        if(!(dir_attr & PDE_PRESENT) || !(attr & PTE_PRESENT)) {
+            if(first_invalid)
+                *first_invalid = page;
+            return false;
+        } else if(!(dir_attr & PDE_USER) || !(attr & PTE_USER)) {
+            if(first_unreadable)
+                *first_unreadable = page;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Pagedir::check_writable_block(const void* va, size_t size, uint32_t* first_readonly, uint32_t* first_invalid) {
+    uint32_t first_page = truncate((uint32_t)va, PAGE_SIZE);
+    uint32_t last_page = truncate( ((uint32_t)va) + size, PAGE_SIZE );
+
+    if(first_readonly)
+        *first_readonly = 0;
+    if(first_invalid)
+        *first_invalid = 0;
+
+    for(uint32_t page = first_page; page <= last_page; page += PAGE_SIZE) {
+        uint32_t dir_attr;
+        uint32_t attr = get_page_attr(page, &dir_attr);
+        if(!(dir_attr & PDE_PRESENT) || !(attr & PTE_PRESENT)) {
+            if(first_invalid)
+                *first_invalid = page;
+            return false;
+        } else if(!(dir_attr & PDE_USER) || !(attr & PTE_USER) || !(dir_attr & PDE_WRITABLE) || !(attr & PTE_WRITABLE)) {
+            if(first_readonly)
+               *first_readonly = page;
+            return false;
+        }
+    }
+
+    return true;
+}
 
 
+uint32_t Pagedir::get_page_attr(uint32_t va, uint32_t* dir_attr) {
+    unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
+    if(dir_attr)
+        *dir_attr = _entries[dir_index];
+
+    if(!(_entries[dir_index] & PDE_PRESENT))
+        return 0;
+
+    pagetable_t* pagetable = _tables[dir_index];
+    unsigned table_index = PAGE_TABLE_INDEX(va);
+    return pagetable->entries[table_index];
+}

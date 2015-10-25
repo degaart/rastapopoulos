@@ -96,6 +96,17 @@ uint32_t Syscall::syscall_port_send(uint32_t param0, uint32_t param1, uint32_t p
     uint32_t port_number = param0;
     const Message_t* msg = (const Message_t*)param1;
 
+    /* Check message validity */
+    assert(Process::current_process() != nullptr);
+    Process* current_process = Process::current_process();
+    if(!msg) {
+        TRACE("Process %s: Invalid message at %p. Terminated", current_process->name(), msg);
+        Process::exit_current_process();
+        PANIC("Should not get here!");
+    }
+    current_process->check_readable_block(msg, sizeof(Message_t));
+    current_process->check_readable_block(msg->payload, msg->payload_size);
+    
     Process* proc = Process::process_for_port(port_number);
     if(proc == nullptr)
         return false;
@@ -111,8 +122,17 @@ uint32_t Syscall::syscall_port_send(uint32_t param0, uint32_t param1, uint32_t p
 uint32_t Syscall::syscall_port_read(uint32_t param0, uint32_t param1, uint32_t param2) {
     uint32_t port_number = param0;
     Message_t* buffer = (Message_t*)param1;
-
     Process* proc = Process::current_process();
+    assert(proc != nullptr);
+
+    if(!buffer) {
+        TRACE("Process %s: Invalid message at %p", proc->name(), buffer);
+        Process::exit_current_process();
+        PANIC("Should not get here");
+    }
+    proc->check_writable_block(buffer, sizeof(Message_t));
+    proc->check_writable_block(buffer->payload, buffer->payload_size);
+
     Port* port = proc->get_port(port_number);
     if(!port) {
         return false;

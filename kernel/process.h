@@ -71,6 +71,8 @@ public:
     uint32_t open_port(uint32_t port);                  
     bool close_port(uint32_t port);                              /* Close port */
     Port* get_port(uint32_t port_number);
+    void check_readable_block(const void* buffer, size_t size);
+    void check_writable_block(const void* buffer, size_t size);
 };
 
 #endif

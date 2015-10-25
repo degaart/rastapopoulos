@@ -66,17 +66,15 @@ Process::~Process() {
         For now: we assume user pages can't be shared
         Note: Pagedir's destructor does not free any pageframes, we must do it ourselves
     */
-    TRACE("Destroying process %u", _pid);
+    TRACE("Destroying %s (pid %u)", _name, _pid);
     for(auto i = _ports.iterator(); i.valid(); i.next()) {
         delete *i;
     }
 
     for(uint32_t va = PROCESS_ENTRY; va < PROCESS_ENTRY + _workingset_size; va += VMM::PAGE_SIZE) {
-        TRACE("Freeing page 0x%X", va);
         _pagedir->free(va);
     }
     for(uint32_t va = _user_stack; va < USER_STACK_END; va += VMM::PAGE_SIZE) {
-        TRACE("Freeing page 0x%X", va);
         _pagedir->free(va);
     }
 
@@ -294,5 +292,34 @@ LinkedList<Port*>::Iterator Process::port_iterator(uint32_t port_number) {
     return LinkedList<Port*>::Iterator();
 }
 
+void Process::check_readable_block(const void* buffer, size_t size) {
+    assert(this == _current_process);
+
+    uint32_t first_unreadable, first_invalid;
+    if(!_pagedir->check_readable_block(buffer, size, &first_unreadable, &first_invalid)) {
+        if(first_unreadable) {
+            TRACE("Process %s: Access violation (unreadable page) at page 0x%X. Terminated", _name, first_unreadable);
+            exit_current_process();
+        } else {
+            TRACE("Process %s: Unmapped page at 0x%X. Terminated", _name, first_invalid);
+            exit_current_process();
+        }
+    }
+}
+
+void Process::check_writable_block(const void* buffer, size_t size) {
+    assert(this == _current_process);
+
+    uint32_t first_readonly, first_invalid;
+    if(!_pagedir->check_writable_block(buffer, size, &first_readonly, &first_invalid)) {
+        if(first_readonly) {
+            TRACE("Process %s: Access violation (read-only) at page at 0x%X. Terminated", _name, first_readonly);
+            exit_current_process();
+        } else {
+            TRACE("Process %s: Unmapped page at 0x%X. Terminated", _name, first_invalid);
+            exit_current_process();
+        }
+    }
+}
 
 
