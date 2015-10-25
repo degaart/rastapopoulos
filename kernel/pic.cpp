@@ -35,7 +35,7 @@ void PIC::init() {
     IDT::install_handler(0x20, irq_stub);
 }
 
-void PIC::irq_stub(const isr_regs_t* regs) {
+void PIC::irq_stub(isr_regs_t* regs) {
     /*
         TODO: Check that this function is really reentrant, 
         as the IRQ is acknowledged before calling the handler function

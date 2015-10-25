@@ -43,12 +43,17 @@ Initrd::File* Initrd::open(const char* name) {
     if(!_header)
         return nullptr;
 
-    for(InitrdHeader_t* hdr = _header;; hdr = hdr + sizeof(*hdr) + hdr->size) {
+    InitrdHeader_t* hdr = _header;
+    while(1) {
+        assert(hdr < _header + _size);
+
         if(!strcmp(hdr->name, name)) {
             return new File((uint8_t*)hdr+sizeof(*hdr), hdr->size);
         }
         if(hdr->last)
             break;
+
+        hdr = (InitrdHeader_t*)((uint8_t*)hdr + sizeof(InitrdHeader_t) + hdr->size);
     }
 
     return nullptr;

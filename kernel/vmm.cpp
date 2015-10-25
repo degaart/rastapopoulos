@@ -75,7 +75,7 @@ void VMM::init() {
     _paging_enabled = true;
 }
 
-void VMM::page_fault_handler(const isr_regs_t* regs) {
+void VMM::page_fault_handler(isr_regs_t* regs) {
     uint32_t faulting_addr;
     read_cr2(faulting_addr);
 
@@ -98,7 +98,7 @@ void VMM::page_fault_handler(const isr_regs_t* regs) {
     );
 }
 
-void VMM::double_fault_handler(const isr_regs_t* regs) {
+void VMM::double_fault_handler(isr_regs_t* regs) {
     PANIC("Double-fault exception");
 }
 

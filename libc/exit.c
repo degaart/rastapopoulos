@@ -2,5 +2,5 @@
 #include <syscall.h>
 
 void exit(int status) {
-    syscall(SYSCALL_EXIT, status, 0, 0);
+    rs_syscall(SYSCALL_EXIT, status, 0, 0);
 }

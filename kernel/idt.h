@@ -16,7 +16,7 @@ public:
     static void flush();
     static void dump();
 
-    typedef void (*isr_handler_t)(const isr_regs_t* regs);
+    typedef void (*isr_handler_t)(isr_regs_t* regs);
     static void install_handler(int num, isr_handler_t handler, bool usermode = false);
 
     const isr_regs_t* current_int_regs();

@@ -9,10 +9,12 @@
 #include "initrd.h"
 
 #define EXE_MAGIC "Rasta Executable"
+#define EPHEMERAL_PORT_START 65536
 
 Process::ProcessList_t Process::_processes;
 Process* Process::_current_process = nullptr;
 uint32_t Process::_current_pid = 0;
+uint32_t Process::_current_ephemeral_port = EPHEMERAL_PORT_START;
 
 extern "C"
 void switch_to_usermode(
@@ -65,6 +67,10 @@ Process::~Process() {
         Note: Pagedir's destructor does not free any pageframes, we must do it ourselves
     */
     TRACE("Destroying process %u", _pid);
+    for(auto i = _ports.iterator(); i.valid(); i.next()) {
+        delete *i;
+    }
+
     for(uint32_t va = PROCESS_ENTRY; va < PROCESS_ENTRY + _workingset_size; va += VMM::PAGE_SIZE) {
         TRACE("Freeing page 0x%X", va);
         _pagedir->free(va);
@@ -216,3 +222,77 @@ void Process::load_image(const char* filename) {
     }
     delete file;
 }
+
+Process* Process::current_process() {
+    return _current_process;
+}
+
+const char* Process::name() {
+    return _name;
+}
+
+uint32_t Process::open_port(uint32_t port_number) {
+    if(port_number != INVALID_PORT) {
+        /* Check if another process hasn't opened that port */
+        if(process_for_port(port_number) != nullptr) {
+            return INVALID_PORT;
+        }
+    } else if(port_number >= EPHEMERAL_PORT_START) {
+        return INVALID_PORT;
+    } else {
+        port_number = ephemeral_port_number();
+    }
+
+    Port* port = new Port();
+    port->number = port_number;
+    _ports.append(port);
+    return port_number;
+}
+
+bool Process::close_port(uint32_t port_number) {
+    assert(port_number != INVALID_PORT);
+
+    /* Check if port is really opened by current process */
+    auto port = port_iterator(port_number);
+    if(!port.valid())
+        PANIC("Process %s (PID %d) tried to close invalid port %u", _name, _pid, port_number);
+
+    Port* p = *port;
+    _ports.remove(port);
+    delete p;
+    return true;
+}
+
+uint32_t Process::ephemeral_port_number() {
+    if(_current_ephemeral_port == UINT32_MAX)
+        PANIC("Ephemeral ports number exhaustion");
+
+    return _current_ephemeral_port++;
+}
+
+Port* Process::get_port(uint32_t port_number) {
+    auto i = port_iterator(port_number);
+    if(i.valid())
+        return *i;
+    return nullptr;
+}
+
+Process* Process::process_for_port(uint32_t port_number) {
+    for(auto i = _processes.iterator(); i.valid(); i.next()) {
+        Port* port = (*i)->get_port(port_number);
+        if(port)
+            return *i;
+    }
+    return nullptr;
+}
+
+LinkedList<Port*>::Iterator Process::port_iterator(uint32_t port_number) {
+    for(auto i = _ports.iterator(); i.valid(); i.next()) {
+        if((*i)->number == port_number)
+            return i;
+    }
+    return LinkedList<Port*>::Iterator();
+}
+
+
+

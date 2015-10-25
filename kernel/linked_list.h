@@ -82,6 +82,11 @@ public:
             return _node;
         }
     public:
+        Iterator()
+        : _node(nullptr) {
+
+        }
+
         bool end() const {
             return _node == nullptr;
         }

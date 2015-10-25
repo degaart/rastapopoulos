@@ -21,7 +21,8 @@ SRCS = \
     process.cpp \
     timer.cpp \
     syscall.cpp \
-    initrd.cpp
+    initrd.cpp \
+    port.cpp
 
 ASM_SRCS = \
     stub.asm \

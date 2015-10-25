@@ -12,8 +12,8 @@
 */
 class VMM {
 private:
-	static void page_fault_handler(const isr_regs_t* regs);
-	static void double_fault_handler(const isr_regs_t* regs);
+	static void page_fault_handler(isr_regs_t* regs);
+	static void double_fault_handler(isr_regs_t* regs);
 
 	static bool _paging_enabled;
 

@@ -1,5 +1,5 @@
-global syscall
-syscall:
+global rs_syscall
+rs_syscall:
     push ebp
     mov ebp, esp
     push ebx

@@ -455,30 +455,6 @@
 	},
 	"buffers":
 	[
-		{
-			"file": "main.cpp",
-			"settings":
-			{
-				"buffer_size": 2250,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "Makefile",
-			"settings":
-			{
-				"buffer_size": 1062,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "makedepend.sh",
-			"settings":
-			{
-				"buffer_size": 370,
-				"line_ending": "Unix"
-			}
-		}
 	],
 	"build_system": "Packages/User/rasta-build.sublime-build",
 	"build_system_choices":
@@ -566,9 +542,17 @@
 	],
 	"file_history":
 	[
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/call_ctors.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/build.sh",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/makedepend.sh",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/main.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.h",
@@ -579,16 +563,12 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd_header.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall_nums.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/regs.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pic.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.h",
@@ -632,12 +612,10 @@
 		"/private/tmp/Mass Effect 1/GAME/Mass Effect 1/# Installation Guide.txt",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/flush_tlb.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cxxrt.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.cpp",
 		"/Volumes/Kratos/Games/Mass Effect 1/INSTALLATION.txt",
 		"/Users/zorro/Desktop/Games/RE5 EnglishISO Upload/do not READ ME.txt",
 		"/Volumes/Kratos/Software/zpkg/packages.json",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/main.o.S",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cxxutil.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt_flush.asm",
 		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
@@ -645,7 +623,6 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/memmap.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/kernel_params.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt_flush.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/build.sh",
 		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/rasta-build.sublime-build",
 		"/Volumes/Kratos/Sybase/SYBASE.lic 15.0 solaris x64",
 		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/Default/Preferences.sublime-settings",
@@ -653,7 +630,6 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cpprt.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cpprt.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/call_ctors.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cppsup.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/inb.asm",
@@ -810,95 +786,8 @@
 	"groups":
 	[
 		{
-			"selected": 2,
 			"sheets":
 			[
-				{
-					"buffer": 0,
-					"file": "main.cpp",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 2250,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								438,
-								438
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/C++/C++.tmLanguage",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 1,
-					"type": "text"
-				},
-				{
-					"buffer": 1,
-					"file": "Makefile",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 1062,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								1061,
-								1061
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/Makefile/Makefile.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 306.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 2,
-					"type": "text"
-				},
-				{
-					"buffer": 2,
-					"file": "makedepend.sh",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 370,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								345,
-								345
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 0.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 0,
-					"type": "text"
-				}
 			]
 		}
 	],

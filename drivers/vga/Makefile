@@ -8,10 +8,10 @@ CC=clang
 CPP=clang
 LD=i586-elf-ld
 OBJCOPY=i586-elf-objcopy
-PROGRAM=hello
+PROGRAM=vgadrv
 
 CPPFLAGS = \
-	-I../libc/include \
+	-I../../libc/include \
 	-std=gnu99 \
 	-masm=intel \
 	-ffreestanding -fno-builtin -nostdlib
@@ -24,7 +24,7 @@ CFLAGS = \
 LDFLAGS = \
 	-nostdlib \
 	-static \
-	-L ../libc/obj \
+	-L ../../libc/obj \
 	-lc
 
 SRCS = $(wildcard *.c)

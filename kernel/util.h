@@ -6,23 +6,7 @@
 #define yield() \
     asm volatile(   \
         ".intel_syntax noprefix\n"      \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
         "hlt\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
-        "nop\n"                         \
     )
 
 #define halt()      \

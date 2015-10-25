@@ -21,8 +21,9 @@
 #include "initrd.h"
 
 static void test_usermode();
+static void test_vga();
 
-static void gpf_handler(const isr_regs_t* regs) {
+static void gpf_handler(isr_regs_t* regs) {
     PANIC("General Protection Fault at 0x%X:0x%X", regs->cs, regs->eip);
 }
 
@@ -35,8 +36,6 @@ extern "C" void main() {
     TRACE("Initializing kernel heap");
     KHeap::init();
     KHeap::dump();
-
-    // test_initrd(kparams);
 
     TRACE("Initializing GDT");
     GDT::init();
@@ -65,28 +64,42 @@ extern "C" void main() {
     PMM::dump_zones();
 
     uint32_t kparams_page = truncate((uint32_t)kparams, VMM::PAGE_SIZE);
-    TRACE("kparams page: 0x%X", kparams_page);
     VMM::map(kparams_page, kparams_page, VMM::PAGE_PRESENT);
 
     TRACE("Initializing syscall handler");
     Syscall::init();
 
-    test_usermode();
+    TRACE("Initializing process manager");
+    Process::init();
+
+    test_vga();
+    // test_usermode();
     TRACE("Tests done. Halting");
     halt();
 }
 
 static void test_usermode() {
     TRACE("Testing Process manager");
-    Process::init();
 
     Process* p0 = Process::create("Process #0");
     p0->load_image("HELLO.BIN");
-    uint8_t* p = (uint8_t*)Process::PROCESS_ENTRY;
 
     Process* p1 = Process::create("Process #1");
     p1->load_image("HELLO.BIN");
 
     Process::switch_process(p0);
+}
+
+static void test_vga() {
+    TRACE("Testing vgadrv");
+
+    Process* hello_proc = Process::create("HELLO.BIN");
+    hello_proc->load_image("HELLO.BIN");
+
+    Process* proc = Process::create("VGADRV.BIN");
+    proc->load_image("VGADRV.BIN");
+    Process::switch_process(proc);
+    
+    TRACE("Tests done");
 }
 

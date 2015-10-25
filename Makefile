@@ -36,7 +36,8 @@ initrd.img:
 	@make -C libc
 	@make -C hello
 	@make -C mkinitrd
-	@mkinitrd/obj/mkinitrd initrd.img hello/obj/*
+	@make -C drivers/vga
+	@mkinitrd/obj/mkinitrd initrd.img hello/obj/hello.bin drivers/vga/obj/vgadrv.bin
 
 bootsect:
 	@make -C bootsect
@@ -48,11 +49,12 @@ kernel:
 	@make -C kernel
 
 clean:
-	make -C bootsect clean
-	make -C bootldr clean
-	make -C kernel clean
-	make -C hello clean
-	make -C libc clean
-	make -C mkinitrd clean
+	@make -C bootsect clean
+	@make -C bootldr clean
+	@make -C kernel clean
+	@make -C hello clean
+	@make -C libc clean
+	@make -C mkinitrd clean
+	@make -C drivers/vga clean
 	@rm -f *.o *.bin *.tmp *.img
 

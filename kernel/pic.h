@@ -29,7 +29,7 @@ private:
     static const uint8_t DATA_ICW4_BUF_MASTER = 0x0C;        /* Buffered mode/master */
     static const uint8_t DATA_ICW4_SFNM = 0x10;              /* Special fully nested (not) */
 
-    static void irq_stub(const isr_regs_t* regs);
+    static void irq_stub(isr_regs_t* regs);
     static void eoi(unsigned irq);
 public:
     typedef void (*irq_handler)(int irq, const isr_regs_t* regs);

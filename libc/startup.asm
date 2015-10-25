@@ -7,6 +7,11 @@ _startup:
 
 .entry:
     push eax
+
+    ;mov al, '*'
+    ;mov dx, 0xE9
+    ;out dx, al
+
     call main
 
 .loop:

@@ -1,2 +1,0 @@
-SRCS = hello.c
-
