@@ -4,15 +4,13 @@
 int main() {
     rs_trace("Hello started");
 
-    
-
-
-
     struct Message_t msg;
     bzero(&msg, sizeof(msg));
 
     msg.id = RS_MSG_VGA_WRITE_STRING;
-    strlcpy((char*)msg.payload, "HELLO", sizeof(msg.payload));
+    msg.payload = "HELLO";
+    msg.payload_size = 6;
+
     uint32_t ret = rs_port_send(RS_PORT_VGA, &msg);
     if(!ret)
         rs_trace("Failed to send message");

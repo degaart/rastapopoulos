@@ -266,6 +266,14 @@ public:
     ~LinkedList() {
         clear();
     }
+
+    Iterator head() {
+        return Iterator(_head);
+    }
+
+    Iterator tail() {
+        return Iterator(_tail);
+    }
     
     Iterator push(const T& val) {
         return(insert_before(_head, val));

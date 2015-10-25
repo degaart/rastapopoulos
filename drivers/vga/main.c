@@ -13,18 +13,22 @@ int main() {
         return 1;
     }
 
+    char buffer[512];
     struct Message_t msg;
     while(1) {
+        msg.payload = buffer;
+        msg.payload_size = sizeof(buffer);
+
         ret = rs_port_read(RS_PORT_VGA, &msg);
-        if(!ret) {
-            rs_trace("rs_port_read() failed");
+        if(ret) {
+            rs_trace("rs_port_read() failed: need %u bytes, have %u bytes", ret, sizeof(buffer));
             return 1;
         }
 
         switch(msg.id) {
             case RS_MSG_VGA_WRITE_STRING:
-                msg.payload[sizeof(msg.payload) - 1] = '\0';
-                write_string_attr((char*)msg.payload, COLOR_WHITE);
+                buffer[msg.payload_size - 1] = '\0';
+                write_string_attr(buffer, COLOR_WHITE);
                 write_string_attr("\n", COLOR_WHITE);
                 break;
             default:

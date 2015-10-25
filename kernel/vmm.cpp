@@ -6,6 +6,7 @@
 #include "pmm.h"
 #include "kheap.h"
 #include "pagedir.h"
+#include "process.h"
 
 extern "C" void _flush_tlb(uint32_t);
 
@@ -85,9 +86,14 @@ void VMM::page_fault_handler(isr_regs_t* regs) {
     int reserved = regs->err_code & 0x8;
     int fetch = regs->err_code & 0x10;
 
+    const char* process_name = "NULL";
+    if(Process::current_process())
+        process_name = Process::current_process()->name();
+
     PANIC(
-        "Page fault at address 0x%X:0x%X, referencing address 0x%X "
+        "Page fault in process %s, at address 0x%X:0x%X, referencing address 0x%X "
         "(%s %s %s %s %s)",
+        process_name,
         regs->cs, regs->eip,
         faulting_addr,
         present ? "access-violation" : "non-present-page",

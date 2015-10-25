@@ -123,9 +123,10 @@ uint32_t Syscall::syscall_port_read(uint32_t param0, uint32_t param1, uint32_t p
         yield();
         cli();
     }
-    bool got_message = port->read(buffer);
-    assert(got_message);
-    return true;
+
+    int32_t ret = port->read(buffer);
+    assert(ret >= 0);
+    return ret;
 }
 
 uint32_t Syscall::syscall_port_open(uint32_t param0, uint32_t, uint32_t) {

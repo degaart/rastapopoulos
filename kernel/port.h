@@ -11,7 +11,7 @@ public:
     LinkedList<Message_t>   messages;
 
     void send(const Message_t& message);
-    bool read(Message_t* message);
+    int32_t read(Message_t* message);
     bool empty();
 };
 

@@ -7,7 +7,8 @@ struct Message_t {
     uint32_t    id;                 /* Action to perform */
     uint32_t    result_port;        /* Port to write results to */
     uint32_t    result;             /* Result of action */
-    uint8_t     payload[32];        /* Application-defined */
+    uint32_t    payload_size;       /* Payload size */
+    void*       payload; 
 };
 
 #endif //_MESSAGE_H_
