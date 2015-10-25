@@ -1,9 +1,12 @@
 #include <string.h>
+#include <rasta.h>
 
 size_t strlen(const char *s) {
     size_t len = 0;
-    while(*s)
+    while(*s) {
         len++;
+        s++;
+    }
     return len;
 }
 

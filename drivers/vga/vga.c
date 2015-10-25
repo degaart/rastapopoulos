@@ -76,17 +76,17 @@ void scroll_screen() {
 /*
     Write string at current cursor position, and update cursor position
 */
-void write_string_attr(const char* str, enum VGA_COLOR attr) {
-    for(const char* p=str; *p; p++) {
-        if(*p == '\n') {
+void write_string_attr(const char* str, unsigned size, enum VGA_COLOR attr) {
+    while(size--) {
+        if(*str == '\n') {
             cursor_x = 0;
             cursor_y++;
             if(cursor_y>24) {
                 scroll_screen();
             }
         } else {
-            VGA_WRITE_CHAR(cursor_x,cursor_y,*p);
-            VGA_WRITE_ATTR(cursor_x,cursor_y,attr);
+            VGA_WRITE_CHAR(cursor_x,cursor_y, *str);
+            VGA_WRITE_ATTR(cursor_x,cursor_y, attr);
             
             cursor_x++;
             if(cursor_x == 80) {
@@ -97,6 +97,7 @@ void write_string_attr(const char* str, enum VGA_COLOR attr) {
                 cursor_x = 0;
             }
         }
+        str++;
     }
     set_cursor_pos(cursor_x, cursor_y);
 }

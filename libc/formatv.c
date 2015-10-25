@@ -1,4 +1,5 @@
 #include <string.h>
+#include <rasta.h>
 
 void formatv(
     format_callback_t callback, 

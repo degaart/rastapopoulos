@@ -27,9 +27,7 @@ int main() {
 
         switch(msg.id) {
             case RS_MSG_VGA_WRITE_STRING:
-                buffer[msg.payload_size - 1] = '\0';
-                write_string_attr(buffer, COLOR_WHITE);
-                write_string_attr("\n", COLOR_WHITE);
+                write_string_attr(buffer, msg.payload_size, COLOR_WHITE);
                 break;
             default:
                 rs_trace("Unhandled message id: 0x%X", msg.id);

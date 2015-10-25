@@ -17,7 +17,7 @@ CPPFLAGS = \
 	-ffreestanding -fno-builtin -nostdlib
 
 CFLAGS = \
-	-Os \
+	-O0 \
 	-march=i386 -target i586-elf-unknown  \
 	-Werror -Wfatal-errors
 

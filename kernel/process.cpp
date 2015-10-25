@@ -46,13 +46,16 @@ Process::Process(uint32_t pid, const char* name)
     _regs.eflags        |= EFLAGS_IF;
     _regs.eip           = PROCESS_ENTRY;
 
-    _user_stack         = USER_STACK_END - VMM::PAGE_SIZE + 1;  /* gives a nice page-aligned stack */
+    _user_stack         = USER_STACK_END - (VMM::PAGE_SIZE*4) + 1;  /* gives a nice page-aligned stack */
     assert((_user_stack % VMM::PAGE_SIZE) == 0);
     _workingset_size    = 0;
 
     _pagedir = VMM::create_pagedir();
     VMM::switch_pagedir(_pagedir);
     VMM::alloc(_user_stack, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+    VMM::alloc(_user_stack + VMM::PAGE_SIZE, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+    VMM::alloc(_user_stack + (VMM::PAGE_SIZE*2), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+    VMM::alloc(_user_stack + (VMM::PAGE_SIZE*3), VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
 
     // VMM::alloc(PROCESS_ENTRY, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
     // memcpy((void*)PROCESS_ENTRY, ___hello_obj_hello_bin, ___hello_obj_hello_bin_size);

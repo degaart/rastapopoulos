@@ -33,7 +33,7 @@
     void set_cursor_pos(unsigned x, unsigned y);
     void set_char_attr_at(unsigned x, unsigned y, int ch, enum VGA_COLOR attr);
     void scroll_screen();
-    void write_string_attr(const char* str, enum VGA_COLOR attr);
+    void write_string_attr(const char* str, unsigned size, enum VGA_COLOR attr);
     void clear_screen();
     void vga_init();
     
