@@ -32,7 +32,8 @@ void PIC::init() {
     outb(PIC1_DATA, 0);
 
     /* Install interrupt handler */
-    IDT::install_handler(0x20, irq_stub);
+    for(unsigned irq = 0x20; irq < 0x29; irq++)
+        IDT::install_handler(irq, irq_stub);
 }
 
 void PIC::irq_stub(isr_regs_t* regs) {

@@ -26,8 +26,6 @@ SRCS = \
 
 ASM_SRCS = \
     stub.asm \
-    outb.asm \
-    inb.asm \
     call_ctors.asm \
     gdt_flush.asm \
     idt_stub.asm \

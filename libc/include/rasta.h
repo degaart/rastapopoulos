@@ -13,8 +13,10 @@
 void rs_yield();
 void rs_trace(const char* str, ...);
 void rs_mmap(const void* addr, uint32_t physical, uint32_t flags);
-void rs_outb(int port, int ch);
-int rs_inb(int port);
+void rs_outb(unsigned port, unsigned ch);
+unsigned rs_inb(unsigned port);
+void rs_outw(unsigned port, unsigned val);
+unsigned rs_inw(unsigned port);
 
 uint32_t rs_port_open(uint32_t port_number);
 uint32_t rs_port_close(uint32_t port_number);

@@ -5,6 +5,9 @@ all: floppy.img
 debug: floppy.img
 	@/opt/bochs/bin/bochs -q -f bochsrc -rc bochs.init
 
+debug_graphic: floppy.img
+	@/opt/bochs/bin/bochs -q -f bochsrc_graphic -rc bochs.init
+
 run: floppy.img
 	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 128 -debugcon file:/tmp/rastapopoulos.log -nographic -no-reboot
 
@@ -12,7 +15,31 @@ gdb: floppy.img
 	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 128 -debugcon file:/tmp/rastapopoulos.log -nographic -s -S -no-reboot
 
 run_graphic: floppy.img
-	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log -no-reboot
+	@qemu-system-i386 -drive file=floppy.img,if=floppy,format=raw -boot a -m 128 -debugcon file:/tmp/rastapopoulos.log -no-reboot -vga std
+
+debug_usb: usb.img
+	@/opt/bochs/bin/bochs -q -f bochsrc_usb -rc bochs.init
+
+run_usb: usb.img
+	@qemu-system-i386 -drive file=usb.img,if=floppy,format=raw -boot a -m 16 -debugcon file:/tmp/rastapopoulos.log -no-reboot	
+
+usb.img: bootsect bootldr kernel initrd.img
+	@echo "[INIT] $@"
+	@[ -f $@ ] || dd if=/dev/zero of=$@ bs=512 count=2880 > /dev/null
+	@mformat -i $@ -t 80 -h 2 -n 18
+
+	@echo "[CP] bootsect_usb.bin"
+	@dd if=bootsect/obj/bootsect_usb.bin of=$@ conv=notrunc bs=1 count=3 &> /dev/null
+	@dd if=bootsect/obj/bootsect_usb.bin of=$@ conv=notrunc seek=61 skip=61 bs=1 &> /dev/null
+	
+	@echo "[CP] bootldr.bin"
+	@mcopy -D o -i $@ bootldr/obj/bootldr.bin ::BOOTLDR
+	
+	@echo "[CP] kernel.bin"
+	@mcopy -D o -i $@ kernel/obj/kernel.bin ::KERNEL
+
+	@echo "[CP] initrd.img"
+	@mcopy -D o -i $@ initrd.img ::INITRD
 
 floppy.img: bootsect bootldr kernel initrd.img
 	@echo "[INIT] floppy.img"
@@ -37,6 +64,7 @@ initrd.img:
 	@make -C hello
 	@make -C mkinitrd
 	@make -C drivers/vga
+	@echo "[CREATE] $@"
 	@mkinitrd/obj/mkinitrd initrd.img hello/obj/hello.bin drivers/vga/obj/vgadrv.bin
 
 bootsect:

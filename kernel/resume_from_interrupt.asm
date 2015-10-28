@@ -15,7 +15,6 @@ resume_from_interrupt:
     ;   44  ebp
 
     ; THIS WORKS, BUT SHOULD USE IRET OR WE RISK BEING PREEMPTED AFTER LOADING FLAGS
-    xchg bx, bx
     push ebp
     mov ebp, esp
 

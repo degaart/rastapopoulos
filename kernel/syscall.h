@@ -20,6 +20,8 @@ private:
     static uint32_t syscall_mmap(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_outb(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_inb(uint32_t, uint32_t, uint32_t);
+    static uint32_t syscall_outw(uint32_t, uint32_t, uint32_t);
+    static uint32_t syscall_inw(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_port_send(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_port_read(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_port_open(uint32_t, uint32_t, uint32_t);

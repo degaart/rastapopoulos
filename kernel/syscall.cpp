@@ -27,6 +27,8 @@ void Syscall::syscall_handler(isr_regs_t* regs) {
         SYSCALL(SYSCALL_MMAP, syscall_mmap);
         SYSCALL(SYSCALL_OUTB, syscall_outb);
         SYSCALL(SYSCALL_INB, syscall_inb);
+        SYSCALL(SYSCALL_OUTW, syscall_outw);
+        SYSCALL(SYSCALL_INW, syscall_inw);
         SYSCALL(SYSCALL_PORT_OPEN, syscall_port_open);
         SYSCALL(SYSCALL_PORT_CLOSE, syscall_port_close);
         SYSCALL(SYSCALL_PORT_SEND, syscall_port_send);
@@ -76,7 +78,11 @@ uint32_t Syscall::syscall_mmap(uint32_t va, uint32_t pa, uint32_t flags) {
     }
 
     flags |= VMM::PAGE_PRESENT | VMM::PAGE_USER;
-    VMM::map(va, pa, flags);
+
+    if(pa != 0)
+        VMM::map(va, pa, flags);
+    else
+        VMM::alloc(va, flags);
     return 0;
 }
 
@@ -87,8 +93,18 @@ uint32_t Syscall::syscall_outb(uint32_t port, uint32_t ch, uint32_t) {
 }
 
 uint32_t Syscall::syscall_inb(uint32_t port, uint32_t, uint32_t) {
-    uint32_t ret = inb(port);
+    uint32_t ret = inb(port & 0xFFFF);
     // TRACE("inb(0x%X) -> 0x%X", port, ret);
+    return ret;
+}
+
+uint32_t Syscall::syscall_outw(uint32_t port, uint32_t val, uint32_t) {
+    outw(port & 0xFFFF, val & 0xFFFF);
+    return 0;
+}
+
+uint32_t Syscall::syscall_inw(uint32_t port, uint32_t, uint32_t) {
+    uint32_t ret = inw(port & 0xFFFF);
     return ret;
 }
 

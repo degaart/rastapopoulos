@@ -18,16 +18,32 @@ global _enter_pmode
 extern isr0
 extern cstart
 extern write_string
+	
+	; this magic lets the bootsector verify we're correctly loaded
+	jmp short _start
+	db 'BTAY'
+
+str:
+		.loaded: db `Second-stage bootloader starting\r\n`, 0
+		.setup_unreal: db `Entering unreal mode\r\n`, 0
+		.cstart: db `Running C code\r\n`, 0
 
 _start:
 	; setup registers
 	cli
+	jmp 0:.setupregs
+
+
+.setupregs:
 	mov ax, 0
 	mov ds, ax
 	mov es, ax
 	mov ss, ax
 	and esp, 0xFFFF
-	
+
+	mov ax, sp
+	call print_hex
+
 	; install interrupt handlers
 	push es
 	mov ax, 0
@@ -36,20 +52,72 @@ _start:
 	mov word [es:0], _isr0
 	mov ax, cs
 	mov word [es:2], ax
-	
+
 	pop es
-	sti
 	
 	; Setup big unreal mode
+	; TODO: don't use this. Just enable A20 line and use peek/poke functions
 	call setup_unreal
-	
-	; Call C startup
+
+	; call C entry-point
 	call cstart
 
 _halt:
-	cli
 	hlt
 	jmp _halt
+
+; Output char at current cursor pos, and advance cursor
+; Params: al: char to output
+; bios int 0x10, ah=0xE, al=char_to_write,bh=0
+; This is here because I can't make _write_string & _write_char work
+print_char:
+    push bx
+    mov ah, 0xE
+    xor bh, bh
+    int 0x10
+    pop bx
+    ret
+
+;
+; write hex number into current cursor pos, with a leading 0x, and advance cursor
+; Params: ax: number to write
+; si: orig number
+; ax: scratch
+; bx: byte mask
+; cl: shift
+;
+print_hex:
+    push si
+    push bx
+
+    mov si, ax      ; save
+    mov bx, 0xF000
+    mov cl, 12
+
+.loop:
+    mov ax, si
+    and ax, bx
+    shr ax, cl
+    cmp ax, 0xA
+    jae .letter
+    add ax, '0'
+    jmp .emit
+.letter:
+    add ax, 'A'
+    sub ax, 0xA
+.emit:
+    call print_char
+
+    shr bx, 4
+    sub cl, 4
+    test bx, bx
+    jz .return
+    jmp .loop
+
+.return:
+    pop bx
+    pop si
+    ret
 
 _write_char:
 		; write char at current cursor position and advance cursor
@@ -213,7 +281,6 @@ _isr0:
 
 
 setup_unreal:
-		cli                    ; no interrupts
 		push ds                ; save real mode
 		
 		lgdt [.gdtinfo]         ; load gdt register
@@ -232,7 +299,6 @@ setup_unreal:
 		mov  cr0, eax          ; by toggling bit again
 		
 		pop ds                 ; get back old segment
-		sti
 		
 		ret
 	.gdtinfo:
@@ -263,7 +329,6 @@ _enter_pmode:
 		mov eax, [ebp+8]
 		mov [.gdt_desc_offset], eax
 		
-		cli
 		lgdt [.gdt_desc]
 		mov eax, cr0
 		or al, 1
@@ -352,6 +417,9 @@ entry32:
 		jmp 0x100000
 		jmp halt32
 halt32:
-		cli
 		hlt
 		jmp halt32
+
+
+
+

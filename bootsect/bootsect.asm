@@ -156,7 +156,7 @@ start:
 		add byte [current_sect],1
 		jmp short .readloop
 	.notfound:
-		mov di,str.notfound
+		mov di,str.bootldr
 		call write_string
 		jmp halt
 
@@ -168,13 +168,22 @@ start:
 		mov ax, [bx]
 		mov bx, load_area
 		call read_file
+
+		; check magic of bootldr
+		mov eax, [load_area+2]
+		cmp eax, 0x59415442			; BTAY
+		jne .bad_magic
 		
-		; bootldr expects to start at 0x000
-		; so we need to adjust cs
-		;jmp 0x7E0:0
+		; bootldr expects to start at 0x7e00
+		; we assume cs is 0
 		mov di, str.loading
 		call write_string
 		jmp load_area
+
+	.bad_magic:
+		mov di, str.bad_magic
+		call write_string
+		jmp halt
 
 read_file:
 		; read file from disk
@@ -245,16 +254,22 @@ write_string:
 		; write null terminated string and advance cursor
 		; di: string to write
 		push bx
+		xor bx, bx
 	.loop:
 		mov al,[di]
 		test al,al
 		jz .exit
 		mov ah,0xE
-		xor bh,bh
+		;xor bh,bh
 		int 0x10
 		inc di
 		jmp short .loop
 	.exit:
+		mov al, 0x0D
+		int 0x10
+		mov al, 0x0A
+		int 0x10
+
 		pop bx
 		ret
 		
@@ -317,13 +332,13 @@ halt:
 		jmp short halt
 
 str:
-		.ioerror: db 'ERR',0x0D,0x0A,0
+		.ioerror: db 'ERR',0
 		.bootldr: db 'BOOTLDR    '
 		.end_bootldr:
-		.notfound: db 'BOOTLDR missing',0x0D,0x0A,0
-		.found: db 'BOOTLDR found',0x0D,0x0A,0
-		.unsupported: db 'Unsuported',0x0D,0x0A,0
-		.loading: db 'Loading',0x0D,0x0A,0
+		.notfound: db 'missing',0				; to get this string, use .bootldr! ahahahahaha
+		.unsupported: db 'Unsuported',0
+		.loading: db 'Loading',0
+		.bad_magic: db 'Bad magic',0
 
 		; padding for bios
 		times 510-($-$$) db 0

@@ -8,10 +8,12 @@
 #define SYSCALL_MMAP            0x04
 #define SYSCALL_OUTB            0x05
 #define SYSCALL_INB             0x06
-#define SYSCALL_PORT_OPEN       0x07
-#define SYSCALL_PORT_CLOSE      0x08
-#define SYSCALL_PORT_SEND       0x09
-#define SYSCALL_PORT_READ       0x10
+#define SYSCALL_OUTW            0x07
+#define SYSCALL_INW             0x08
+#define SYSCALL_PORT_OPEN       0x09
+#define SYSCALL_PORT_CLOSE      0x10
+#define SYSCALL_PORT_SEND       0x11
+#define SYSCALL_PORT_READ       0x12
 
 #endif //_SYSCALL_NUMS_H_
 
