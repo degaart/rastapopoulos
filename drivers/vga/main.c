@@ -6,11 +6,11 @@
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
-#define COLOR_RED 0xFF0000
-#define COLOR_GREEN 0x00FF00
-#define COLOR_BLUE 0x0000FF
-#define COLOR_BLACK 0x000000
-#define COLOR_WHITE 0xFFFFFF
+#define BGA_COLOR_RED 0xFF0000
+#define BGA_COLOR_GREEN 0x00FF00
+#define BGA_COLOR_BLUE 0x0000FF
+#define BGA_COLOR_BLACK 0x000000
+#define BGA_COLOR_WHITE 0xFFFFFF
 
 static void run_vga(uint32_t port) {
     rs_trace("Initializing standard VGA textmode");
@@ -141,9 +141,11 @@ static void run_bga(uint32_t port) {
     if(!bga_set_res(SCREEN_WIDTH, SCREEN_HEIGHT, BGA_DISPI_BPP_32))
         return;
 
-    for(uint32_t page = BGA_DISPI_BANK_ADDRESS; page <= BGA_DISPI_BANK_ADDRESS + (BGA_DISPI_BANK_SIZE_KB * 1024); page += 4096) {
+    uint32_t page;
+    for(page = BGA_DISPI_BANK_ADDRESS; page <= BGA_DISPI_BANK_ADDRESS + (BGA_DISPI_BANK_SIZE_KB * 1024); page += 4096) {
         rs_mmap((void*)page, page, MMAP_WRITABLE);
     }
+    rs_trace("Mapped 0x%X - 0x%X", BGA_DISPI_BANK_ADDRESS, page);
 
     rs_mmap((void*)0x800000, 0, MMAP_WRITABLE);
 
@@ -155,14 +157,14 @@ static void run_bga(uint32_t port) {
     int delta_x = 1, delta_y = 1;
     while(true) {
         if(delta_x > 0)
-            fillrect(x, y, 1, img_height, COLOR_BLACK);
+            fillrect(x, y, 1, img_height, BGA_COLOR_BLACK);
         else if(delta_x < 0)
-            fillrect(x + img_width, y, 1, img_height + 1, COLOR_BLACK);
+            fillrect(x + img_width, y, 1, img_height + 1, BGA_COLOR_BLACK);
 
         if(delta_y > 0)
-            fillrect(x, y, img_width, 1, COLOR_BLACK);
+            fillrect(x, y, img_width, 1, BGA_COLOR_BLACK);
         else if(delta_y < 0)
-            fillrect(x, y + img_height, img_width + 1, 1, COLOR_BLACK);
+            fillrect(x, y + img_height, img_width + 1, 1, BGA_COLOR_BLACK);
 
         x += delta_x;
         y += delta_y;
@@ -186,7 +188,6 @@ static void run_bga(uint32_t port) {
 
         //rs_yield();
     }
-
 }
 
 int main() {
@@ -198,16 +199,14 @@ int main() {
         return 1;
     }
 
-    unsigned enabled = bga_read_reg(BGA_DISPI_INDEX_ENABLE);
-    rs_trace("BGA enabled: 0x%X", enabled);
-
-    unsigned result = bga_read_reg(BGA_DISPI_INDEX_ID);
-    rs_trace("dispid: 0x%X", result);
-    if(result >= BGA_DISPI_ID0 && result <= BGA_DISPI_ID5) {
-        run_bga(port);
-    } else {
+    /* For now, we disable BGA until we get PCI for LFB */
+    // unsigned result = bga_read_reg(BGA_DISPI_INDEX_ID);
+    // rs_trace("BGA_DISPI_INDEX_ID: 0x%X", result);
+    // if(result >= BGA_DISPI_ID0 && result <= BGA_DISPI_ID5) {
+    //     run_bga(port);
+    // } else {
         run_vga(port);
-    }
+    // }
 
     rs_port_close(port);
     return 0;

@@ -16,7 +16,7 @@ void bga_disable() {
 }
 
 void bga_enable() {
-    bga_write_reg(BGA_DISPI_INDEX_ENABLE, BGA_DISPI_ENABLED|BGA_DISPI_LFB_ENABLED);
+    bga_write_reg(BGA_DISPI_INDEX_ENABLE, BGA_DISPI_ENABLED);
 }
 
 bool bga_set_res(uint32_t width, uint32_t height, uint32_t bpp) {
