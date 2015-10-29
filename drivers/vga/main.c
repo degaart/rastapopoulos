@@ -6,6 +6,12 @@
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
+#define COLOR_RED 0xFF0000
+#define COLOR_GREEN 0x00FF00
+#define COLOR_BLUE 0x0000FF
+#define COLOR_BLACK 0x000000
+#define COLOR_WHITE 0xFFFFFF
+
 static void run_vga(uint32_t port) {
     rs_trace("Initializing standard VGA textmode");
     rs_mmap((void*)VGA_BASE, VGA_BASE, MMAP_WRITABLE);  /* Todo: this should be mapped into userspace */
@@ -91,7 +97,7 @@ static void display_image(unsigned dest_x, unsigned dest_y) {
 
     int bpl = hdr->NPlanes * hdr->BytesPerLine;
     uint8_t* buf = (uint8_t*)0x800000;
-    for(int y = dest_y; y < dest_y+hdr->Ymax; y++) {
+    for(int y = dest_y; y <= dest_y + hdr->Ymax; y++) {
         uint8_t ch = '\0';
         unsigned count = 0;
         for(unsigned i = 0; i<bpl; i++) {
@@ -110,14 +116,22 @@ static void display_image(unsigned dest_x, unsigned dest_y) {
         
         /* de-interlace planes */
         unsigned r, g, b;
-        for(int x = dest_x; x < dest_x+hdr->Xmax; x++) {
+        for(int x = dest_x; x <= dest_x + hdr->Xmax; x++) {
             if((x>=0 && x<SCREEN_WIDTH) && (y>=0 && y<SCREEN_HEIGHT)) {
-                r = buf[x];
-                g = buf[x + hdr->BytesPerLine];
-                b = buf[x + (hdr->BytesPerLine * 2)];
+                r = buf[x - dest_x];
+                g = buf[x - dest_x + hdr->BytesPerLine];
+                b = buf[x - dest_x + (hdr->BytesPerLine * 2)];
                 unsigned col = (r << 16) | (g << 8) | b;
                 putpixel(x, y, col);
             }
+        }
+    }
+}
+
+static void fillrect(unsigned x, unsigned y, unsigned width, unsigned height, unsigned color) {
+    for(unsigned j = y; j < y + height; j++) {
+        for(unsigned i = x; i < x + width; i++) {
+            putpixel(i, j, color);
         }
     }
 }
@@ -134,12 +148,22 @@ static void run_bga(uint32_t port) {
     rs_mmap((void*)0x800000, 0, MMAP_WRITABLE);
 
     struct PCXheader* hdr = (struct PCXheader*)MORTY;
-    int img_width = hdr->Xmax - hdr->Xmin + 1;
-    int img_height = hdr->Ymax - hdr->Ymin + 1;
+    int img_width = (hdr->Xmax - hdr->Xmin) + 1;
+    int img_height = (hdr->Ymax - hdr->Ymin) + 1;
 
-    int x = 0, y = 0;
+    int x = 320, y = 240;
     int delta_x = 1, delta_y = 1;
     while(true) {
+        if(delta_x > 0)
+            fillrect(x, y, 1, img_height, COLOR_BLACK);
+        else if(delta_x < 0)
+            fillrect(x + img_width, y, 1, img_height + 1, COLOR_BLACK);
+
+        if(delta_y > 0)
+            fillrect(x, y, img_width, 1, COLOR_BLACK);
+        else if(delta_y < 0)
+            fillrect(x, y + img_height, img_width + 1, 1, COLOR_BLACK);
+
         x += delta_x;
         y += delta_y;
 
@@ -158,11 +182,9 @@ static void run_bga(uint32_t port) {
             y = SCREEN_HEIGHT - img_height;
             delta_y = -delta_y;
         }
-
         display_image(x, y);
 
-
-        rs_yield();
+        //rs_yield();
     }
 
 }
