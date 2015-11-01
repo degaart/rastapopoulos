@@ -30,7 +30,7 @@ public:
 
 	/* Create new Pagedir */
 	static Pagedir* create_pagedir();
-
+	
 	/* destroy Pagedir */
 	static void free_pagedir(Pagedir* pagedir);
 

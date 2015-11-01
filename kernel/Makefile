@@ -5,13 +5,13 @@ AS=nasm
 CXX=clang++
 CC=clang
 CPP=clang++
-LD=i586-elf-ld
-OBJCOPY=i586-elf-objcopy
+LD=i686-pc-elf-ld
+OBJCOPY=i686-pc-elf-objcopy
 
 CPPFLAGS = \
 	-O0	\
 	-masm=intel \
-	-march=i386 -target i586-elf-unknown -ffreestanding -fno-builtin -nostdlib \
+	-march=i386 -target i686-pc-elf -ffreestanding -fno-builtin -nostdlib \
 	-Werror -Wfatal-errors \
 	-g
 

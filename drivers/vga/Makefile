@@ -2,12 +2,12 @@
 .PHONY: all clean
 
 AS=nasm
-AR=i586-elf-ar
-RANLIB=i586-elf-ranlib
+AR=i686-pc-elf-ar
+RANLIB=i686-pc-elf-ranlib
 CC=clang
 CPP=clang
-LD=i586-elf-ld
-OBJCOPY=i586-elf-objcopy
+LD=i686-pc-elf-ld
+OBJCOPY=i686-pc-elf-objcopy
 PROGRAM=vgadrv
 
 CPPFLAGS = \
@@ -18,7 +18,7 @@ CPPFLAGS = \
 
 CFLAGS = \
 	-O0 \
-	-march=i386 -target i586-elf-unknown  \
+	-march=i386 -target i686-pc-elf  \
 	-Werror -Wfatal-errors
 
 LDFLAGS = \

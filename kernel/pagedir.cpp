@@ -11,11 +11,22 @@
 #define PAGE_GET_PHYSICAL_ADDRESS(x) (*x & ~0xfff)
 
 Pagedir::~Pagedir() {
-    for(unsigned i = 0; i < 1024; i++)
-        kfree(_tables[i]);
+    /*
+        Free any pageframes with flag PTE_ALLOCATED
+    */
+    for(unsigned table = 0; table < 1024; table++) {
+        for(uint32_t entry = 0; entry < 1024; entry++) {
+            if(_tables[table]->entries[entry] & PTE_ALLOCATED) {
+                uint32_t pageframe = _tables[table]->entries[entry] & PTE_FRAME;
+                TRACE("Freeing pageframe 0x%X", pageframe);
+                PMM::free(pageframe);
+            }
+        }
+        kfree(_tables[table]);
+    }
 }
 
-Pagedir* Pagedir::alloc() {
+Pagedir* Pagedir::create() {
     Pagedir* dir = (Pagedir*)kmalloc_a(sizeof(Pagedir), PAGE_SIZE);
     bzero(dir->_entries, sizeof(dir->_entries));
     bzero(dir->_tables, sizeof(dir->_tables));
@@ -75,11 +86,10 @@ void Pagedir::unmap(uint32_t va) {
 
     if(!(page_table->entries[table_index] & PTE_PRESENT)) {
         PANIC("VA 0x%X not mapped", va);
+    } else if(page_table->entries[table_index] & PTE_ALLOCATED) {
+        PANIC("Please use dealloc() to unmap this page");
     }
-
-    uint32_t pa = get_physical(va);
     page_table->entries[table_index] &= ~PTE_PRESENT;
-    PMM::free(pa);
 }
 
 bool Pagedir::get_physical(uint32_t va, uint32_t* pa) {
@@ -123,16 +133,25 @@ uint32_t Pagedir::physical() {
 }
 
 uint32_t Pagedir::alloc(uint32_t va, uint32_t flags) {
+    assert(!(flags & PTE_ALLOCATED));
+
     uint32_t page_frame = PMM::alloc();
-    map(va, page_frame, flags);
+    map(va, page_frame, flags | PTE_ALLOCATED);
     return page_frame;
 }
 
-void Pagedir::free(uint32_t va) {
+void Pagedir::dealloc(uint32_t va) {
+    uint32_t attr = get_page_attr(va, nullptr);
+    if(!(attr & PTE_ALLOCATED))
+        PANIC("Pageframe 0x%X was not allocated!", va);
+
     uint32_t page_frame;
     bool got_physical = get_physical((void*)va, &page_frame);
     assert(got_physical);
     PMM::free(page_frame);
+
+    set_page_attr(va, attr & (~PTE_ALLOCATED));
+    unmap(va);
 }
 
 bool Pagedir::check_readable_block(const void* va, size_t size, uint32_t* first_unreadable, uint32_t* first_invalid) {
@@ -186,7 +205,6 @@ bool Pagedir::check_writable_block(const void* va, size_t size, uint32_t* first_
     return true;
 }
 
-
 uint32_t Pagedir::get_page_attr(uint32_t va, uint32_t* dir_attr) {
     unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
     if(dir_attr)
@@ -199,3 +217,13 @@ uint32_t Pagedir::get_page_attr(uint32_t va, uint32_t* dir_attr) {
     unsigned table_index = PAGE_TABLE_INDEX(va);
     return pagetable->entries[table_index];
 }
+
+void Pagedir::set_page_attr(uint32_t va, uint32_t attr) {
+    unsigned dir_index = PAGE_DIRECTORY_INDEX(va);
+    assert(_entries[dir_index] & PDE_PRESENT);
+
+    pagetable_t* pagetable = _tables[dir_index];
+    unsigned table_index = PAGE_TABLE_INDEX(va);
+    pagetable->entries[table_index] = attr;
+}
+

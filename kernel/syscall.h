@@ -26,6 +26,7 @@ private:
     static uint32_t syscall_port_read(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_port_open(uint32_t, uint32_t, uint32_t);
     static uint32_t syscall_port_close(uint32_t, uint32_t, uint32_t);
+    static uint32_t syscall_fork(uint32_t, uint32_t, uint32_t);
 };
 
 #endif //_SYSCAL_H_

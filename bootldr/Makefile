@@ -3,7 +3,7 @@
 
 AS=nasm
 CC=clang
-LD=i586-elf-ld
+LD=i686-pc-elf-ld
 CPP=clang
 
 CFLAGS = \

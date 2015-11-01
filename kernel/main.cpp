@@ -64,6 +64,7 @@ extern "C" void main() {
     PMM::dump_zones();
 
     uint32_t kparams_page = truncate((uint32_t)kparams, VMM::PAGE_SIZE);
+    PMM::reserve(kparams_page);
     VMM::map(kparams_page, kparams_page, VMM::PAGE_PRESENT);
 
     TRACE("Initializing syscall handler");

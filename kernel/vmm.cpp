@@ -16,7 +16,7 @@ Pagedir* VMM::_current_pagedir;
 
 void VMM::init() {
     /* Create initial kernel pagedir */
-    _current_pagedir = Pagedir::alloc();
+    _current_pagedir = Pagedir::create();
     _current_pagedir->set_physical((uint32_t)_current_pagedir);
     
     /*
@@ -133,6 +133,8 @@ void VMM::map(uint32_t va, uint32_t pa, uint32_t flags) {
 
 void VMM::unmap(uint32_t va) {
     _current_pagedir->unmap(va);
+    if(paging_enabled())
+        flush_tlb((void*)va);
 }
 
 
@@ -141,7 +143,7 @@ void VMM::flush_tlb(void* va) {
 }
 
 Pagedir* VMM::create_pagedir() {
-    return Pagedir::alloc();
+    return Pagedir::create();
 }
 
 void VMM::free_pagedir(Pagedir* pagedir) {
@@ -159,19 +161,17 @@ void VMM::switch_pagedir(Pagedir* pagedir) {
 }
 
 uint32_t VMM::alloc(uint32_t va, uint32_t flags) {
-    // uint32_t page_frame = PMM::alloc();
-    // map(va, page_frame, flags);
-    // return page_frame;
-    return _current_pagedir->alloc(va, flags);
+    uint32_t pageframe = _current_pagedir->alloc(va, flags);
+    if(paging_enabled())
+        flush_tlb((void*)va);
+    return pageframe;
 }
 
-// void VMM::dealloc(uint32_t va) {
-//     uint32_t page_frame;
-//     bool got_physical = get_physical((void*)va, &page_frame);
-//     assert(got_physical);
-//     PMM::free(page_frame);
-//     unmap(va);
-// }
+void VMM::dealloc(uint32_t va) {
+    _current_pagedir->dealloc(va);
+    if(paging_enabled())
+        flush_tlb((void*)va);
+}
 
 Pagedir* VMM::current_pagedir() {
     return _current_pagedir;

@@ -14,6 +14,7 @@
 #define SYSCALL_PORT_CLOSE      0x10
 #define SYSCALL_PORT_SEND       0x11
 #define SYSCALL_PORT_READ       0x12
+#define SYSCALL_FORK            0x13
 
 #endif //_SYSCALL_NUMS_H_
 

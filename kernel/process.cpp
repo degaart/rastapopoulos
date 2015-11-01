@@ -55,26 +55,41 @@ Process::Process(uint32_t pid, const char* name)
     VMM::alloc(_user_stack, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
 }
 
-Process::~Process() {
-    /*
-        - Free any allocated Page-frames, keeping shared pages
-        - Switch to another known-good Pagedir before destroying this process's pagedir
+Process::Process(uint32_t pid, const Process& proc)
+: _pid(pid) {
+    strlcpy(_name, proc._name, sizeof(_name));
+    _regs = proc._regs;
 
-        For now: we assume user pages can't be shared
-        Note: Pagedir's destructor does not free any pageframes, we must do it ourselves
+    _current_ring       = RING3;
+    _kernel_esp         = (uint32_t)(_kernel_stack + sizeof(_kernel_stack) - 1);
+    _user_stack         = proc._user_stack;
+    _workingset_size    = proc._workingset_size;
+
+    /*
+        Things to take into account:
+            - program text should ideally be shared (TODO, because program text isn't write-protected yet)
+            - pages mapped with VMM::map (should point to same physical pageframe)
+            - pages mapped via VMM::alloc (should point to new pageframe, but with copied content)
     */
+    _pagedir = VMM::create_pagedir();
+    PANIC("Not implemented yet");
+
+    /*
+        Port list is empty. Might be an incorret assumption.
+        Maybe we need to share ports between parent and child?
+    */
+}
+
+Process::~Process() {
     TRACE("Destroying %s (pid %u)", _name, _pid);
     for(auto i = _ports.iterator(); i.valid(); i.next()) {
         delete *i;
     }
 
-    for(uint32_t va = PROCESS_ENTRY; va < PROCESS_ENTRY + _workingset_size; va += VMM::PAGE_SIZE) {
-        _pagedir->free(va);
-    }
-    for(uint32_t va = _user_stack; va < USER_STACK_END; va += VMM::PAGE_SIZE) {
-        _pagedir->free(va);
-    }
-
+    /*
+        - Switch to another known-good Pagedir before destroying this process's pagedir
+        - Pagedir's destructor now frees any allocated frames, keeping mapped frames
+    */
     VMM::free_pagedir(_pagedir);
 }
 
@@ -317,6 +332,19 @@ void Process::check_writable_block(const void* buffer, size_t size) {
             exit_current_process();
         }
     }
+}
+
+uint32_t Process::fork(Process* process) {
+    assert(process == _current_process);
+
+    /*
+        so, let's see
+        a fork is a copy of the address-space of the parent
+        any modifications of memory inside parent after fork is invisible to the child
+        any modifications of memory inside child after fork is invisible to parent
+    */
+    PANIC("Not implemented yet");
+    return 0;
 }
 
 

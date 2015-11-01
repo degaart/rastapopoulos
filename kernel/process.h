@@ -39,6 +39,7 @@ private:
     static uint32_t         _current_ephemeral_port;
 
     Process(uint32_t pid, const char* name);
+    Process(uint32_t pid, const Process& proc);
     ~Process();
     Process(const Process&) = delete;
     Process(const Process&&) = delete;
@@ -56,6 +57,7 @@ public:
     static void exit_current_process();
     static Process* current_process();
     static Process* process_for_port(uint32_t port);
+    static uint32_t fork(Process* process);
 
     void load_image(const char* filename);          /* Load process image from Initrd */
     const char* name();
