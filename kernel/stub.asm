@@ -7,27 +7,28 @@
 ;   0x6BFF	    - 0x7BFF    : initial kernel stack
 ;   0x100000	- ?         : kernel code
 ;
+
+section .text
 extern _BSS_START_
 extern _BSS_END_
 extern _DATA_START_
 extern _DATA_END_
 
-
 extern main
 
 global _kernel_entry
 _kernel_entry:
-    ; setup kernel stack
-    ; Note: we assume the bootloader has correctly set up
-    ; data and stack segments here
-    mov al, '*'
-    mov dx, 0xE9
-    out dx, al
-    hlt
+    ; Setup kernel stack
+    ; NOTE: The bootloader has already disabled interrupts
+    ; Caveat: do not use the stack before BSS zeroed (as the stack is stored in the bss)
+    xchg bx, bx
+    mov esp, _initial_kernel_stack + 4096
 
-    cli
-    mov     esp, 0x7BFF
+    ; Check multiboot bootloader
+    cmp eax, 0x2BADB002
+    jne .not_multiboot
 
+    ; 
     ; zero kernel BSS
     mov     eax, _BSS_START_
 .loop:
@@ -38,9 +39,25 @@ _kernel_entry:
     jmp    .loop
 
 .start_kernel:
-    ; Jump to C entry point
-    jmp main
-    
+    ; Call C entry point, with pushed ebx as entry-point
+    push ebx
+    call main
+
+.not_multiboot:
+    mov esi, str.not_multiboot
+    mov dx, 0xE9
+.print_loop:
+    mov al, [esi]
+    test al, al
+    jz .halt
+    out dx, al
+    inc esi
+    jmp .print_loop
+
+.halt:
+    cli
+    hlt
+
 ; multiboot header
 align 4
 multiboot_header:
@@ -68,8 +85,12 @@ multiboot_header:
     dd MB_MAGIC
     dd FLAGS
     dd -(MB_MAGIC + FLAGS)
-    dd 0x00100000
-    dd _DATA_END_
-    dd _BSS_END_
-    dd _kernel_entry
+
+section .bss
+_initial_kernel_stack:
+    resb 4096
+
+section .rodata
+str:
+    .not_multiboot: db `Bootloader not multiboot-compliant\r\n\0`
 

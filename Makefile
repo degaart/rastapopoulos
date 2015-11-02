@@ -3,10 +3,10 @@
 all: usb.img
 
 debug: usb.img
-	@/opt/bochs/bin/bochs -q -f bochsrc -rc bochs.init
+	@bochs -q -f bochsrc -rc bochs.init
 
 debug_graphic: usb.img
-	@/opt/bochs/bin/bochs -q -f bochsrc_graphic -rc bochs.init
+	@bochs -q -f bochsrc_graphic -rc bochs.init
 
 run: usb.img
 	@qemu-system-i386 -drive file=usb.img,format=raw -boot c -m 128 -debugcon file:/tmp/rastapopoulos.log -nographic -no-reboot
