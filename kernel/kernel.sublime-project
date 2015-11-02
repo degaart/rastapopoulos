@@ -7,7 +7,7 @@
 	],
     "settings" : {
         "sublimegdb_workingdir": "/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/",
-        "sublimegdb_commandline": "/Volumes/Kratos/Projects/RastapopoulOS/bin/i586-elf-gdb --interpreter=mi kernel/obj/kernel.elf",
+        "sublimegdb_commandline": "/Volumes/Kratos/Projects/RastapopoulOS/bin/i686-pc-elf-gdb --interpreter=mi kernel/obj/kernel.elf",
         "sublimegdb_run_after_init": true,
         "sublimegdb_attach_cmd": "target remote :1234"
     }

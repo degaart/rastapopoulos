@@ -21,23 +21,18 @@ SECTIONS
 		_RODATA_START_ = .;
 		*(.rodata*)
 		*(.eh_frame)
+		_CTORS_START_ = .;
+		*(.ctors)
+		_CTORS_END_ = .;
 		_RODATA_END_ = .;
 	}
-
+	
 	. = ALIGN(4096);
 	.data :
 	{
 		_DATA_START_ = .;	
 		*(.data)
 		_DATA_END_ = .;
-	}
-
-	. = ALIGN(4096);
-	.ctors : 
-	{
-		_CTORS_START_ = .;
-		*(.ctors)
-		_CTORS_END_ = .;
 	}
 
 	. = ALIGN(4096);
