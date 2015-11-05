@@ -75,6 +75,7 @@ public:
     Port* get_port(uint32_t port_number);
     void check_readable_block(const void* buffer, size_t size);
     void check_writable_block(const void* buffer, size_t size);
+    uint8_t* kernel_stack();
 };
 
 #endif

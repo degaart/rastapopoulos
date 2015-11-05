@@ -8,7 +8,6 @@
 #include "idt.h"
 #include "kmalloc.h"
 #include "string.h"
-#include "../bootldr/kernel_params.h"
 #include "heap.h"
 #include "kheap.h"
 #include "pic.h"
@@ -20,20 +19,18 @@
 #include "syscall.h"
 #include "initrd.h"
 #include "multiboot.h"
+#include "backtrace.h"
 
 static void test_usermode();
 static void test_vga();
+void test_backtrace(struct multiboot_info* multiboot_info);
 
 static void gpf_handler(isr_regs_t* regs) {
     PANIC("General Protection Fault at 0x%X:0x%X", regs->cs, regs->eip);
 }
 
 extern "C" void main(struct multiboot_info* multiboot_info) {
-    static const kernel_params* kparams = (kernel_params*)KERNEL_PARAMS;
-
 	TRACE("*** RastapopoulOS kernel loaded ***");
-    // call_ctors();
-
     TRACE("Multiboot INFO (0x%X):", multiboot_info->flags);
     if(multiboot_info->flags & MULTIBOOT_INFO_BOOT_LOADER_NAME) {
         TRACE("\tLoader: %s", (char*)multiboot_info->boot_loader_name);
@@ -54,11 +51,25 @@ extern "C" void main(struct multiboot_info* multiboot_info) {
             TRACE("\t\t0x%X - 0x%X %s", (uint32_t)mmap[i].addr, (uint32_t)(mmap[i].addr + mmap[i].len), mmap[i].type == MULTIBOOT_MEMORY_AVAILABLE ? "avail" : "reserved");
         }
     }
-    halt();
 
     TRACE("Initializing kernel heap");
     KHeap::init();
     KHeap::dump();
+
+    TRACE("Loading symbols");
+    load_symbols(multiboot_info);
+
+    /* Copy initrd into an allocated region of memory */
+    if(!(multiboot_info->flags & MULTIBOOT_INFO_MODS) || !multiboot_info->mods_count) {
+        PANIC("No initrd supplied!");
+    }
+    multiboot_mod_list* initrd = (multiboot_mod_list*)multiboot_info->mods_addr;
+    void* initrd_mem = kmalloc(initrd->mod_end - initrd->mod_start);
+    memcpy(initrd_mem, (void*)initrd->mod_start, initrd->mod_end - initrd->mod_start);
+    Initrd::init(initrd_mem, initrd->mod_end - initrd->mod_start);
+
+    TRACE("Calling global constructors");
+    call_ctors();
 
     TRACE("Initializing GDT");
     GDT::init();
@@ -76,7 +87,19 @@ extern "C" void main(struct multiboot_info* multiboot_info) {
     PIT::init();
 
 	TRACE("Initializing PMM");
-	PMM::init(kparams->memmap, kparams->memmap_size);
+	PMM::init((multiboot_memory_map_t*)multiboot_info->mmap_addr, multiboot_info->mmap_length);
+
+    /* Reserve specified areas of conventional memory */
+    PMM::reserve(0x00000000);                                                            /* BDA at 0x00000400 - 0x000004FF */
+    for(uint32_t page = 0x00080000; page < 0x0010000; page += VMM::PAGE_SIZE) {       /* EBDA & other stuffs */
+        PMM::reserve(page);
+    }
+    for(
+        uint32_t page = truncate((uint32_t)multiboot_info, VMM::PAGE_SIZE); 
+        page < (uint32_t)multiboot_info + sizeof(*multiboot_info); 
+        page += VMM::PAGE_SIZE) {
+        PMM::reserve(page);
+    }
     PMM::dump();
     TRACE("%u pages total (%u bytes)", PMM::pages_total(), PMM::pages_total() * PMM::PAGE_SIZE);
 
@@ -85,10 +108,6 @@ extern "C" void main(struct multiboot_info* multiboot_info) {
     TRACE("%u pages free (%u Kb)", PMM::pages_free(), (PMM::pages_total() * PMM::PAGE_SIZE) / 1024);
     TRACE("Physical memory zones:");
     PMM::dump_zones();
-
-    uint32_t kparams_page = truncate((uint32_t)kparams, VMM::PAGE_SIZE);
-    PMM::reserve(kparams_page);
-    VMM::map(kparams_page, kparams_page, VMM::PAGE_PRESENT);
 
     TRACE("Initializing syscall handler");
     Syscall::init();

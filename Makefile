@@ -23,6 +23,9 @@ usb.img: kernel initrd
 	@echo "[COPY] kernel.elf"
 	@./copyfile.sh usb.img kernel/obj/kernel.elf L:/
 
+	@echo "[COPY] kernel.sym"
+	@./copyfile.sh usb.img kernel/obj/kernel.sym L:/	
+
 	@echo "[COPY] initrd.img"
 	@./copyfile.sh usb.img initrd.img L:/
 
@@ -36,6 +39,8 @@ usb.img: kernel initrd
 kernel:
 	@echo "[MAKE] $@"
 	@make -C kernel
+	@make -C gensyms
+	@gensyms/obj/gensyms kernel/obj/kernel.elf kernel/obj/kernel.sym
 
 initrd:
 	@make -C libc

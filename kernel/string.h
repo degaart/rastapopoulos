@@ -10,6 +10,8 @@ public:
 	static void itoa(char* str, unsigned n);
 	
 	static void itox(char* str, unsigned n);
+
+	static uint32_t xtoa(const char* str);
 	
 	typedef void (*format_callback)(int, void*);
 	static void format(

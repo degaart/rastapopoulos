@@ -14,6 +14,7 @@
 #define read_cr1(x) __READ_REG__(cr1, x)
 #define read_cr0(x) __READ_REG__(cr0, x)
 #define read_esp(x) __READ_REG__(esp, x)
+#define read_ebp(x) __READ_REG__(ebp, x)
 
 #define write_cr3(x) __WRITE_REG__(cr3, x)
 #define write_cr2(x) __WRITE_REG__(cr2, x)

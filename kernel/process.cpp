@@ -347,4 +347,7 @@ uint32_t Process::fork(Process* process) {
     return 0;
 }
 
+uint8_t* Process::kernel_stack() {
+    return _kernel_stack;
+}
 

@@ -63,6 +63,25 @@ void String::itox(char* str, unsigned n) {
 	/*}*/
 }
 
+uint32_t String::xtoa(const char* str) {
+    const char* p = str;
+    
+    uint32_t res = 0;
+    while(*p && (p < str + 8)) {
+        if(*p >= '0' && *p <= '9') {
+            res = (res << 4)|(*p - '0');
+        } else if(*p >= 'a' && *p <= 'f') {
+            res = (res << 4)|(*p - 'a' + 0xA);
+        } else if(*p >= 'A' && *p <= 'F') {
+            res = (res << 4)|(*p - 'A' + 0xA);
+        } else {
+            break;
+        }
+        p++;
+    }
+    return res;
+}
+
 void String::format(
     String::format_callback callback, 
     void* callback_params,

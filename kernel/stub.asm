@@ -87,6 +87,7 @@ multiboot_header:
     dd -(MB_MAGIC + FLAGS)
 
 section .bss
+global _initial_kernel_stack
 _initial_kernel_stack:
     resb 4096
 

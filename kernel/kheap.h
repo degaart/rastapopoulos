@@ -6,7 +6,7 @@
 
 class KHeap {
 private:
-    static Heap _kheap;
+    static Heap* _kheap;    /* Can't be a global object (as heap is initialized before global constructors are called) */
     
     static void* alloc_impl(unsigned size, unsigned alignment);
 public:

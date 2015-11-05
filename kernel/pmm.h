@@ -2,6 +2,7 @@
 #define _PMM_H_
 
 #include <stdint.h>
+#include "multiboot.h"
 #include "linked_list.h"
 #include "bitset.h"
 
@@ -54,7 +55,7 @@ private:
 public:
     static const int PAGE_SIZE = 4096;
     
-	static void init(const void* bios_memmap, unsigned bios_memmap_size);
+	static void init(const multiboot_memory_map_t* bios_memmap, unsigned bios_memmap_size);
     static void dump();
     static void dump_zones();
 

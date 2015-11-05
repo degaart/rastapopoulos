@@ -11,7 +11,7 @@ private:
     unsigned            _size;
     static Initrd*      _instance;
 
-    Initrd();
+    Initrd(void* buffer, unsigned size);
     ~Initrd();
 public:
     class File {
@@ -30,6 +30,7 @@ public:
         signed read(void* buffer, unsigned size);
     };
 
+    static void init(void* buffer, unsigned size);
     static Initrd& get();
     static void free();
 

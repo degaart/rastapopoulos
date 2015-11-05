@@ -10,7 +10,13 @@
         "sublimegdb_commandline": "/Volumes/Kratos/Projects/RastapopoulOS/bin/i686-pc-elf-gdb --interpreter=mi kernel/obj/kernel.elf",
         "sublimegdb_run_after_init": true,
         "sublimegdb_attach_cmd": "target remote :1234"
-    }
+    },
+    "build_systems": [
+        {
+            "name": "rasta-build",
+            "cmd": ["/Volumes/Kratos/Projects/RastapopoulOS/src/rasta-build.sh"]
+        }
+    ]
 }
 
 

@@ -10,15 +10,15 @@
 
 LinkedList<PMM::MemRegion> PMM::_regions;
 
-void PMM::init(const void* bios_memmap, unsigned bios_memmap_size) {
+void PMM::init(const multiboot_memory_map_t* bios_memmap, unsigned bios_memmap_size) {
     /* Init memmap */
-    bios_memmap_t* regions = (bios_memmap_t*)bios_memmap;
-    for(unsigned i=0; i<bios_memmap_size; i++) {
-        if(regions[i].base_hi == 0 && regions[i].flags == REGION_USABLE) {
-            add_region(regions[i].base_lo, regions[i].size_lo);
+    for(unsigned i = 0; i < bios_memmap_size / sizeof(multiboot_memory_map_t); i++) {
+        if(!(bios_memmap[i].addr & 0xFFFFFFFF00000000ULL) && bios_memmap[i].type == MULTIBOOT_MEMORY_AVAILABLE) {
+            add_region((uint32_t)(bios_memmap[i].addr & 0xFFFFFFFF), (uint32_t)(bios_memmap[i].len));
         }
     }
 
+    /* Assertion checking */
     for(auto region = _regions.iterator(); !region.end(); region.next()) {
         for(uint32_t page = region->base(); page < region->base() + region->size();page += PAGE_SIZE) {
             if(region->page_reserved(page)) {
@@ -27,25 +27,6 @@ void PMM::init(const void* bios_memmap, unsigned bios_memmap_size) {
             assert(!region->page_reserved(page));
         }
     }
-
-    /* Reserve specified areas of conventional memory */
-    static const kernel_params* kparams = (kernel_params*)KERNEL_PARAMS;
-
-    reserve(0x00000000);                                                            /* BDA at 0x00000400 - 0x000004FF */
-    for(uint32_t page = 0x00080000; page < 0x0010000; page += VMM::PAGE_SIZE) {       /* EBDA & other stuffs */
-        reserve(page);
-    }
-    reserve(align(KERNEL_PARAMS, VMM::PAGE_SIZE));
-
-    // initrd reservation by Initrd class
-    // for(
-    //     uint32_t page = align(kparams->initrd_address, VMM::PAGE_SIZE); 
-    //     page < kparams->initrd_address + kparams->initrd_size; 
-    //     page += VMM::PAGE_SIZE
-    // ) {
-    //     reserve(page);
-    // }
-
 }
 
 void PMM::dump() {

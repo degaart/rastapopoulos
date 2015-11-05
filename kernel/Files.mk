@@ -22,7 +22,9 @@ SRCS = \
     timer.cpp \
     syscall.cpp \
     initrd.cpp \
-    port.cpp
+    port.cpp \
+    backtrace.cpp \
+    test_backtrace.cpp 
 
 ASM_SRCS = \
     stub.asm \

@@ -10,21 +10,9 @@
 static const kernel_params* _kparams = (const kernel_params*)KERNEL_PARAMS;
 Initrd* Initrd::_instance = nullptr;
 
-Initrd::Initrd() {
-    /* identity map initrd pages RO */
-    uint32_t aligned_start = truncate(_kparams->initrd_address, VMM::PAGE_SIZE);
-    for(
-        uint32_t page = aligned_start;
-        page < _kparams->initrd_address + _kparams->initrd_size;
-        page += VMM::PAGE_SIZE)
-    {
-        PMM::reserve(page);
-        VMM::map(page, page, VMM::PAGE_PRESENT);
-    }
-    TRACE("Initrd: 0x%X - 0x%X", _kparams->initrd_address, _kparams->initrd_address + _kparams->initrd_size);
-
-    _header = (InitrdHeader_t*)_kparams->initrd_address;
-    _size = _kparams->initrd_size;
+Initrd::Initrd(void* buffer, unsigned size) {
+    _header = (InitrdHeader_t*)buffer;
+    _size = size;
 }
 
 Initrd::~Initrd() {
@@ -68,6 +56,11 @@ Initrd::File::~File() {
 
 }
 
+void Initrd::init(void* buffer, unsigned size) {
+    assert(!_instance);
+    _instance = new Initrd(buffer, size);
+}
+
 uint32_t Initrd::File::size() {
     return _size;
 }
@@ -89,8 +82,7 @@ signed Initrd::File::read(void* buffer, unsigned size) {
 }
 
 Initrd& Initrd::get() {
-    if(_instance == nullptr)
-        _instance = new Initrd();
+    assert(_instance != nullptr);
     return *_instance;
 }
 

@@ -46,10 +46,10 @@ private:
     
     Block* _head;
     unsigned _size;         /* total size of this heap (not including header overhead) */
-    
+
     void* alloc_impl(unsigned size, unsigned alignment);
 public:
-    Heap();
+    Heap() = delete;
     void init(void* base, unsigned size);
     void grow(unsigned size);                       /* Increase heap size by specified number of bytes */
     

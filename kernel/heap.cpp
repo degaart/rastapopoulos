@@ -4,11 +4,6 @@
 #include "string.h"
 #include "kmalloc.h"
 
-Heap::Heap()
-: _head(nullptr), _size(0) {
-    
-}
-
 void Heap::init(void* base, unsigned size) {
     TRACE("sizeof(block_t) == %zu", sizeof(Block));
     _head = Block::create(base, size);
@@ -108,82 +103,6 @@ void Heap::dump() {
     }
     TRACE("Total: %u bytes, free: %u bytes", _size, free_size());
     TRACE("---------- EOF HEAP DUMP ----------");
-}
-
-void Heap::test_split() {
-    TRACE("Testing Heap::split");
-    Heap heap;
-    heap.init(kmalloc(4096), 4096);
-    
-    Block* block = heap._head;
-    Block* new_block = block->split(1024);
-    
-    assert(block->size == 1024);
-    assert((uint8_t*)new_block == ((uint8_t*)block) + 1024);
-    assert(new_block->size == 4096 - 1024);
-    assert(block->size + new_block->size == 4096);
-    heap.dump();
-    assert(block->next() == new_block);
-    
-    new_block = block->split(sizeof(Block));
-    heap.dump();
-    assert(new_block == nullptr);
-    assert(block->size == 1024);
-}
-
-void Heap::test_alloc() {
-    Heap heap;
-    heap.init(kmalloc(4096), 4096);
-    heap.dump();
-
-    TRACE("Testing simple aligned allocs");
-    uint8_t* p0 = heap.alloc<uint8_t>(64, 4);
-    heap.dump();
-    assert(p0 != nullptr);
-    assert(  (uint32_t)p0 % 4 == 0);
-    
-    uint8_t* p1 = heap.alloc<uint8_t>(64, 4);
-    heap.dump();
-    assert(p1 != nullptr);
-    assert( (uint32_t)p1 % 4 == 0 );
-    
-    uint8_t* p2 = heap.alloc<uint8_t>(64, 64);
-    heap.dump();
-    assert(p2 != nullptr);
-    assert( (uint32_t)p2 % 64 == 0);
-    
-    uint8_t* p3 = heap.alloc<uint8_t>(64, 64);
-    heap.dump();
-    assert(p3 != nullptr);
-    assert( (uint32_t)p3 % 64 == 0);
-    
-    uint8_t* p4 = heap.alloc<uint8_t>(2, 2);
-    heap.dump();
-    assert(p4 != nullptr);
-    assert( (uint32_t)p4 % 2 == 0);
-    
-    uint8_t* p5  = heap.alloc<uint8_t>(20);
-    heap.dump();
-    assert(p5 != nullptr);
-    
-    heap.free(p5);
-    heap.dump();
-    
-    heap.free(p4);
-    heap.dump();
-    
-    heap.free(p3);
-    heap.dump();
-    
-    heap.free(p2);
-    heap.dump();
-    
-    heap.free(p1);
-    heap.dump();
-    
-    
-    heap.free(p0);
-    heap.dump();    
 }
 
 void Heap::grow(unsigned size) {
