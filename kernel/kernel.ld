@@ -21,6 +21,8 @@ SECTIONS
 		_RODATA_START_ = .;
 		*(.rodata*)
 		*(.eh_frame)
+
+		. = ALIGN(8);
 		_CTORS_START_ = .;
 		*(.ctors)
 		_CTORS_END_ = .;

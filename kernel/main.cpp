@@ -25,12 +25,20 @@ static void test_usermode();
 static void test_vga();
 void test_backtrace(struct multiboot_info* multiboot_info);
 
+typedef void (*ctor_t)(void);
+static void call_global_ctors() {
+    for(ctor_t* c = (ctor_t*)_CTORS_START_; c < (ctor_t*)_CTORS_END_; c++) {
+        (*c)();
+    }
+}
+
 static void gpf_handler(isr_regs_t* regs) {
     PANIC("General Protection Fault at 0x%X:0x%X", regs->cs, regs->eip);
 }
 
 extern "C" void main(struct multiboot_info* multiboot_info) {
 	TRACE("*** RastapopoulOS kernel loaded ***");
+
     TRACE("Multiboot INFO (0x%X):", multiboot_info->flags);
     if(multiboot_info->flags & MULTIBOOT_INFO_BOOT_LOADER_NAME) {
         TRACE("\tLoader: %s", (char*)multiboot_info->boot_loader_name);
@@ -69,7 +77,7 @@ extern "C" void main(struct multiboot_info* multiboot_info) {
     Initrd::init(initrd_mem, initrd->mod_end - initrd->mod_start);
 
     TRACE("Calling global constructors");
-    call_ctors();
+    call_global_ctors();
 
     TRACE("Initializing GDT");
     GDT::init();
