@@ -2,7 +2,7 @@
 #define _RASTA_H_
 
 #include <stdint.h>
-#include "../../kernel/message.h"
+#include "../../../kernel/message.h"
 
 #define RS_PORT_VGA                0x1
 

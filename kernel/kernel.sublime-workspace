@@ -520,18 +520,10 @@
 	"buffers":
 	[
 		{
-			"file": "main.cpp",
+			"file": "initrd.cpp",
 			"settings":
 			{
-				"buffer_size": 4798,
-				"line_ending": "Unix"
-			}
-		},
-		{
-			"file": "/Users/zorro/Desktop/Build/wxformbuilder/src/wxformbuilder/output/wxFormBuilder.app/Contents/SharedSupport/plugins/forms/xml/forms.cppcode",
-			"settings":
-			{
-				"buffer_size": 34666,
+				"buffer_size": 1559,
 				"line_ending": "Unix"
 			}
 		}
@@ -626,24 +618,29 @@
 	],
 	"file_history":
 	[
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/stub.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/main.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/backtrace.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
+		"/Users/zorro/Desktop/Build/wxformbuilder/src/wxformbuilder/output/wxFormBuilder.app/Contents/SharedSupport/plugins/forms/xml/forms.cppcode",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/stub.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel.ld",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/kernel.map",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/call_ctors.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test_backtrace.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/backtrace.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/backtrace.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/multiboot.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.h",
@@ -654,9 +651,6 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm_memregion.cpp",
 		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/SublimeGDB.sublime-settings",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/regs.h",
@@ -679,7 +673,6 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap_block.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cxxrt.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd_header.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.cpp",
@@ -752,8 +745,7 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/srclib/printf.c",
 		"/Volumes/Kratos/Documentation/osdev/smallerc/SmallerC.wiki/Smaller-C-Core-Compiler-Wiki.md",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/tests/vesalfb.c",
-		"/Volumes/Kratos/Documentation/osdev/smallerc/SmallerC.wiki/Smaller-C-Compiler-Driver-Wiki.md",
-		"/Users/zorro/Desktop/System/xv6-public-master/vm.c"
+		"/Volumes/Kratos/Documentation/osdev/smallerc/SmallerC.wiki/Smaller-C-Compiler-Driver-Wiki.md"
 	],
 	"find":
 	{
@@ -893,24 +885,24 @@
 	"groups":
 	[
 		{
-			"selected": 1,
+			"selected": 0,
 			"sheets":
 			[
 				{
 					"buffer": 0,
-					"file": "main.cpp",
+					"file": "initrd.cpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 4798,
+						"buffer_size": 1559,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								685,
-								685
+								303,
+								303
 							]
 						],
 						"settings":
@@ -920,35 +912,7 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 182.0,
-						"zoom_level": 1.0
-					},
-					"stack_index": 1,
-					"type": "text"
-				},
-				{
-					"buffer": 1,
-					"file": "/Users/zorro/Desktop/Build/wxformbuilder/src/wxformbuilder/output/wxFormBuilder.app/Contents/SharedSupport/plugins/forms/xml/forms.cppcode",
-					"semi_transient": false,
-					"settings":
-					{
-						"buffer_size": 34666,
-						"regions":
-						{
-						},
-						"selection":
-						[
-							[
-								0,
-								0
-							]
-						],
-						"settings":
-						{
-							"syntax": "Packages/XML/XML.tmLanguage"
-						},
-						"translation.x": 0.0,
-						"translation.y": 2526.0,
+						"translation.y": 651.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,

@@ -2,12 +2,10 @@
 #include "debug.h"
 #include "util.h"
 #include "string.h"
-#include "../bootldr/kernel_params.h"
 #include "vmm.h"
 #include "pmm.h"
 #include "initrd_header.h"
 
-static const kernel_params* _kparams = (const kernel_params*)KERNEL_PARAMS;
 Initrd* Initrd::_instance = nullptr;
 
 Initrd::Initrd(void* buffer, unsigned size) {
@@ -16,15 +14,7 @@ Initrd::Initrd(void* buffer, unsigned size) {
 }
 
 Initrd::~Initrd() {
-    uint32_t aligned_start = truncate(_kparams->initrd_address, VMM::PAGE_SIZE);
-    for(
-        uint32_t page = aligned_start;
-        page < _kparams->initrd_address + _kparams->initrd_size;
-        page += VMM::PAGE_SIZE)
-    {
-        PMM::free(page);
-        VMM::unmap(page);
-    }    
+
 }
 
 Initrd::File* Initrd::open(const char* name) {

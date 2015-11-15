@@ -1,6 +1,5 @@
 #include "pmm.h"
 #include "debug.h"
-#include "../bootldr/kernel_params.h"
 #include "vmm.h"
 #include "util.h"
 

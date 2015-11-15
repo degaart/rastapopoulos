@@ -20,7 +20,7 @@ Pagedir::~Pagedir() {
                 if(_tables[table]->entries[entry] & PTE_PRESENT) {
                     if(_tables[table]->entries[entry] & PTE_ALLOCATED) {
                         uint32_t pageframe = _tables[table]->entries[entry] & PTE_FRAME;
-                        TRACE("Freeing pageframe 0x%X", pageframe);
+                        TRACE("Freeing pageframe 0x%X (VA 0x%X)", pageframe, (table*4096*1024)+(entry*4096));
                         PMM::free(pageframe);
                     }
                 }

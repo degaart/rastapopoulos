@@ -43,18 +43,14 @@ kernel:
 	@gensyms/obj/gensyms kernel/obj/kernel.elf kernel/obj/kernel.sym
 
 initrd:
-	@make -C libc
-	@make -C hello
 	@make -C mkinitrd
-	@make -C drivers/vga
+	@make -C userland
 	@echo "[INIT] $@"
-	@mkinitrd/obj/mkinitrd initrd.img hello/obj/hello.bin drivers/vga/obj/vgadrv.bin
+	@mkinitrd/obj/mkinitrd initrd.img userland/hello/obj/hello.bin userland/vga/obj/vgadrv.bin
 
 clean:
 	@make -C kernel clean
-	@make -C kernel clean
-	@make -C hello clean
-	@make -C libc clean
+	@make -C userland clean
 	@make -C mkinitrd clean
-	@make -C drivers/vga clean
 	@rm -f *.o *.bin *.tmp *.img
+
