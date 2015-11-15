@@ -7,6 +7,7 @@
 #include "kheap.h"
 #include "pagedir.h"
 #include "process.h"
+#include "backtrace.h"
 
 extern "C" void _flush_tlb(uint32_t);
 

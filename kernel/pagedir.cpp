@@ -15,14 +15,18 @@ Pagedir::~Pagedir() {
         Free any pageframes with flag PTE_ALLOCATED
     */
     for(unsigned table = 0; table < 1024; table++) {
-        for(uint32_t entry = 0; entry < 1024; entry++) {
-            if(_tables[table]->entries[entry] & PTE_ALLOCATED) {
-                uint32_t pageframe = _tables[table]->entries[entry] & PTE_FRAME;
-                TRACE("Freeing pageframe 0x%X", pageframe);
-                PMM::free(pageframe);
+        if(_entries[table] & PDE_PRESENT) {
+            for(uint32_t entry = 0; entry < 1024; entry++) {
+                if(_tables[table]->entries[entry] & PTE_PRESENT) {
+                    if(_tables[table]->entries[entry] & PTE_ALLOCATED) {
+                        uint32_t pageframe = _tables[table]->entries[entry] & PTE_FRAME;
+                        TRACE("Freeing pageframe 0x%X", pageframe);
+                        PMM::free(pageframe);
+                    }
+                }
             }
+            kfree(_tables[table]);
         }
-        kfree(_tables[table]);
     }
 }
 
