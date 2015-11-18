@@ -71,6 +71,10 @@ signed Initrd::File::read(void* buffer, unsigned size) {
     return size;
 }
 
+void Initrd::File::seek(unsigned offset) {
+    _offset = offset;
+}
+
 Initrd& Initrd::get() {
     assert(_instance != nullptr);
     return *_instance;

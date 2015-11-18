@@ -22,6 +22,7 @@ public:
 	static const uint32_t PAGE_SIZE = 0x1000;
 	static const uint8_t* INITIAL_KERNEL_STACK;
 	static const uint32_t USERSPACE_START = 0x400000;
+	static const uint32_t USERSPACE_END = 	0xBFFFFFFF;
 
 	static void init();
 
@@ -62,18 +63,27 @@ public:
 
 	/*
 		Allocates page frame and map to specified virtual address
+		Physical addresses not guaranteed to be contiguous	
 	*/
-	static uint32_t alloc(uint32_t va, uint32_t flags);
-	static uint32_t alloc(void* va, uint32_t flags) {
-		return alloc((uint32_t)va, flags);
+	static bool alloc(uint32_t va, uint32_t size, uint32_t flags);
+	static bool alloc(uint32_t va , uint32_t flags) {
+		return alloc(va, VMM::PAGE_SIZE, flags);
+	}
+
+	static bool alloc(void* va, uint32_t size, uint32_t flags) {
+		return alloc((uint32_t)va, size, flags);
+	}
+
+	static bool alloc(void* va, uint32_t flags) {
+		return alloc(va, VMM::PAGE_SIZE, flags);
 	}
 
 	/*
 		Unmaps specified virtual address and frees page-frame as well
 	*/
-	static void dealloc(uint32_t va);
-	static void dealloc(void* va) {
-		dealloc((uint32_t)va);
+	static void dealloc(uint32_t va, uint32_t size = VMM::PAGE_SIZE);
+	static void dealloc(void* va, uint32_t size = VMM::PAGE_SIZE) {
+		dealloc((uint32_t)va, size);
 	}
 
 	/* 

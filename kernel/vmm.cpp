@@ -138,7 +138,6 @@ void VMM::unmap(uint32_t va) {
         flush_tlb((void*)va);
 }
 
-
 void VMM::flush_tlb(void* va) {
     _flush_tlb((uint32_t)va);
 }
@@ -161,17 +160,28 @@ void VMM::switch_pagedir(Pagedir* pagedir) {
     write_cr3((uint32_t)_current_pagedir->physical());
 }
 
-uint32_t VMM::alloc(uint32_t va, uint32_t flags) {
-    uint32_t pageframe = _current_pagedir->alloc(va, flags);
-    if(paging_enabled())
-        flush_tlb((void*)va);
-    return pageframe;
+bool VMM::alloc(uint32_t va, uint32_t size, uint32_t flags) {
+    if(!size)
+        return true;
+
+    for(uint32_t page = va; page < va + align(size, VMM::PAGE_SIZE); page += VMM::PAGE_SIZE) {
+        uint32_t pageframe = _current_pagedir->alloc(page, flags);
+        if(!pageframe) {
+            dealloc(va, page - va);
+            return false;
+        }
+        if(paging_enabled())
+            flush_tlb((void*)page);
+    }
+    return true;
 }
 
-void VMM::dealloc(uint32_t va) {
-    _current_pagedir->dealloc(va);
-    if(paging_enabled())
-        flush_tlb((void*)va);
+void VMM::dealloc(uint32_t va, uint32_t size) {
+    for(uint32_t page = va; page < va + align(size, VMM::PAGE_SIZE); page += VMM::PAGE_SIZE) {
+        _current_pagedir->dealloc(page);
+        if(paging_enabled())
+            flush_tlb((void*)page);
+    }
 }
 
 Pagedir* VMM::current_pagedir() {

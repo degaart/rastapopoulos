@@ -27,6 +27,7 @@ public:
         ~File();
         uint32_t size();
         void* data();
+        void seek(unsigned offset);
         signed read(void* buffer, unsigned size);
     };
 

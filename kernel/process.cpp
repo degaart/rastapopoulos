@@ -7,6 +7,7 @@
 #include "gdt.h"
 #include "timer.h"
 #include "initrd.h"
+#include "elf.h"
 
 #define EXE_MAGIC "Rasta Executable"
 #define EPHEMERAL_PORT_START 65536
@@ -231,6 +232,49 @@ void Process::load_image(const char* filename) {
         }
     }
     delete file;
+}
+
+void Process::load_elf(const char* filename) {
+    if(_workingset_size != 0) {
+        PANIC("Process image already loaded");
+    }
+
+    Initrd::File* file = Initrd::get().open(filename);
+    if(!file) {
+        PANIC("File not found: %s", filename);
+    }
+
+    const Elf32_Ehdr* hdr = elf_validate(file->data(), file->size());
+    if(!hdr) {
+        PANIC("Invalid ELF file: %s", filename);
+    }
+
+    VMM::switch_pagedir(_pagedir);
+    for(unsigned i = 0; i < hdr->e_phnum; i++) {
+        const Elf32_Phdr* phdr = elf_segment_header(hdr, i);
+        if(phdr && phdr->p_type == PT_LOAD) {
+            if(phdr->p_vaddr < VMM::USERSPACE_START || phdr->p_vaddr > VMM::USERSPACE_END) {
+                PANIC("Invalid start address: 0x%X", phdr->p_vaddr);
+            }
+
+            VMM::alloc(phdr->p_vaddr, phdr->p_memsz, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+            _workingset_size = align(phdr->p_memsz, VMM::PAGE_SIZE);
+
+            file->seek(phdr->p_offset);
+            int read_bytes = file->read((uint8_t*)phdr->p_vaddr, phdr->p_filesz);
+            if(read_bytes != phdr->p_filesz) {
+                PANIC("Short read in file %s", filename);
+            }
+
+            for(uint8_t* bss = (uint8_t*)phdr->p_vaddr + phdr->p_filesz; bss < (uint8_t*)phdr->p_vaddr + phdr->p_memsz; bss++)
+                *bss = 0;
+
+            TRACE("Loaded segment %d at 0x%X - 0x%X", i, phdr->p_vaddr, phdr->p_memsz);
+        }
+    }
+    delete file;
+
+    _regs.eip = hdr->e_entry;
 }
 
 Process* Process::current_process() {

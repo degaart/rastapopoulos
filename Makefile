@@ -46,7 +46,11 @@ initrd:
 	@make -C mkinitrd
 	@make -C userland
 	@echo "[INIT] $@"
-	@mkinitrd/obj/mkinitrd initrd.img userland/hello/obj/hello.bin userland/vga/obj/vgadrv.bin
+	@mkinitrd/obj/mkinitrd initrd.img \
+		userland/hello/obj/hello.bin \
+		userland/vga/obj/vgadrv.bin \
+		userland/hello/obj/hello.elf \
+		userland/vga/obj/vgadrv.elf
 
 clean:
 	@make -C kernel clean

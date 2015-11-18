@@ -24,7 +24,11 @@ SRCS = \
     initrd.cpp \
     port.cpp \
     backtrace.cpp \
-    test_backtrace.cpp 
+    test_backtrace.cpp \
+    test_vmm.cpp
+
+C_SRCS = \
+    elf.c
 
 ASM_SRCS = \
     stub.asm \

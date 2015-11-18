@@ -140,6 +140,9 @@ uint32_t Pagedir::alloc(uint32_t va, uint32_t flags) {
     assert(!(flags & PTE_ALLOCATED));
 
     uint32_t page_frame = PMM::alloc();
+    if(!page_frame)
+        return 0;
+    
     map(va, page_frame, flags | PTE_ALLOCATED);
     return page_frame;
 }

@@ -60,6 +60,7 @@ public:
     static uint32_t fork(Process* process);
 
     void load_image(const char* filename);          /* Load process image from Initrd */
+    void load_elf(const char* filename);
     const char* name();
 
     /*

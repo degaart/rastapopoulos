@@ -4,6 +4,18 @@
 		"selected_items":
 		[
 			[
+				"uint",
+				"uint8_t"
+			],
+			[
+				"PAGE_",
+				"PAGE_WRITABLE"
+			],
+			[
+				"uin",
+				"uint32_t"
+			],
+			[
 				"ct",
 				"ctor_t"
 			],
@@ -168,10 +180,6 @@
 				"_process0"
 			],
 			[
-				"uint",
-				"uint32_t"
-			],
-			[
 				"_pro",
 				"_process0"
 			],
@@ -234,10 +242,6 @@
 			[
 				"SYSCAL",
 				"SYSCALL_WRITE"
-			],
-			[
-				"uin",
-				"uint8_t"
 			],
 			[
 				"GDT_",
@@ -510,20 +514,40 @@
 			[
 				"tmp",
 				"tmpdir"
-			],
-			[
-				"Extra",
-				"Extracting"
 			]
 		]
 	},
 	"buffers":
 	[
 		{
-			"file": "initrd.cpp",
+			"file": "main.cpp",
 			"settings":
 			{
-				"buffer_size": 1559,
+				"buffer_size": 5017,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "process.h",
+			"settings":
+			{
+				"buffer_size": 2985,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "process.cpp",
+			"settings":
+			{
+				"buffer_size": 12590,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "initrd.h",
+			"settings":
+			{
+				"buffer_size": 775,
 				"line_ending": "Unix"
 			}
 		}
@@ -618,6 +642,14 @@
 	],
 	"file_history":
 	[
+		"/Users/zorro/Applications/Wineskin/MDK.app/Wineskin.app/Contents/Resources/winetricks",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/makedepend.sh",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/Makefile.depends",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/elf.c",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/elf.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/main.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
@@ -629,7 +661,6 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
 		"/Users/zorro/Desktop/Build/wxformbuilder/src/wxformbuilder/output/wxFormBuilder.app/Contents/SharedSupport/plugins/forms/xml/forms.cppcode",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/stub.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel.ld",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/kernel.map",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/call_ctors.asm",
@@ -641,7 +672,6 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/multiboot.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel.sublime-project",
@@ -679,8 +709,6 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/build.sh",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/makedepend.sh",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/hello.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.cpp",
@@ -741,11 +769,7 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/bootldr_stub.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/io.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/srclib/istdio.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/srclib/doprint.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/srclib/printf.c",
-		"/Volumes/Kratos/Documentation/osdev/smallerc/SmallerC.wiki/Smaller-C-Core-Compiler-Wiki.md",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/tests/vesalfb.c",
-		"/Volumes/Kratos/Documentation/osdev/smallerc/SmallerC.wiki/Smaller-C-Compiler-Driver-Wiki.md"
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/srclib/doprint.c"
 	],
 	"find":
 	{
@@ -890,19 +914,19 @@
 			[
 				{
 					"buffer": 0,
-					"file": "initrd.cpp",
+					"file": "main.cpp",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 1559,
+						"buffer_size": 5017,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								303,
-								303
+								4983,
+								4983
 							]
 						],
 						"settings":
@@ -912,10 +936,100 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 651.0,
+						"translation.y": 534.0,
 						"zoom_level": 1.0
 					},
 					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "process.h",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 2985,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								2262,
+								2226
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 607.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "process.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 12590,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								8823,
+								8823
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 1223.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "initrd.h",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 775,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								556,
+								556
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.tmLanguage",
+							"tab_size": 4,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
 					"type": "text"
 				}
 			]

@@ -20,9 +20,11 @@
 #include "initrd.h"
 #include "multiboot.h"
 #include "backtrace.h"
+#include "test_vmm.h"
 
 static void test_usermode();
 static void test_vga();
+static void test_elf();
 void test_backtrace(struct multiboot_info* multiboot_info);
 
 typedef void (*ctor_t)(void);
@@ -123,8 +125,10 @@ extern "C" void main(struct multiboot_info* multiboot_info) {
     TRACE("Initializing process manager");
     Process::init();
 
-    test_vga();
+    // test_vga();
+    test_elf();
     // test_usermode();
+    // test_vmm();
     TRACE("Tests done. Halting");
     halt();
 }
@@ -153,4 +157,20 @@ static void test_vga() {
     
     TRACE("Tests done");
 }
+
+static void test_elf() {
+    TRACE("Testing elf");
+    
+    Process* hello_proc = Process::create("HELLO.ELF");
+    hello_proc->load_elf("HELLO.ELF");
+
+    Process* proc = Process::create("VGADRV.ELF");
+    proc->load_elf("VGADRV.ELF");
+    Process::switch_process(proc);
+
+
+    TRACE("Tests done");
+}
+
+
 
