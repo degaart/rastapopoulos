@@ -35,7 +35,6 @@ ASM_SRCS = \
     gdt_flush.asm \
     idt_stub.asm \
     idt_flush.asm \
-    flush_tlb.asm \
     switch_to_usermode.asm \
     usermode_program.asm \
     resume_from_interrupt.asm \

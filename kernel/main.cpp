@@ -126,9 +126,9 @@ extern "C" void main(struct multiboot_info* multiboot_info) {
     Process::init();
 
     // test_vga();
-    test_elf();
+    // test_elf();
     // test_usermode();
-    // test_vmm();
+    test_vmm();
     TRACE("Tests done. Halting");
     halt();
 }

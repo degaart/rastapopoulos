@@ -9,8 +9,6 @@
 #include "process.h"
 #include "backtrace.h"
 
-extern "C" void _flush_tlb(uint32_t);
-
 bool VMM::_paging_enabled = false;
 const uint8_t* VMM::INITIAL_KERNEL_STACK = reinterpret_cast<uint8_t*>(0x7BFF);
 Pagedir* VMM::_current_pagedir;
@@ -139,7 +137,7 @@ void VMM::unmap(uint32_t va) {
 }
 
 void VMM::flush_tlb(void* va) {
-    _flush_tlb((uint32_t)va);
+    asm volatile("invlpg (%0)" ::"r" (va) : "memory");
 }
 
 Pagedir* VMM::create_pagedir() {
@@ -187,4 +185,54 @@ void VMM::dealloc(uint32_t va, uint32_t size) {
 Pagedir* VMM::current_pagedir() {
     return _current_pagedir;
 }
+
+Pagedir* VMM::clone_pagedir() {
+    Pagedir* pagedir = create_pagedir();
+
+    /* Create scratch memory in kernel space */
+    uint32_t* scratch = (uint32_t*)kmalloc_a(PAGE_SIZE, PAGE_SIZE);
+    if(!scratch)
+        return nullptr;
+
+    /* Unmap scratch */
+    unmap(scratch);
+
+    /* Now walk user pages in current pagedir */
+    for(unsigned t = 1; t < (USERSPACE_END+1)/(VMM::PAGE_SIZE*1024); t++) {
+        if(_current_pagedir->_entries[t] & Pagedir::PDE_PRESENT) {
+            Pagedir::pagetable_t* table = _current_pagedir->_tables[t];
+            assert(table);
+
+            for(unsigned e = 0; e < 1024; e++) {
+                if((table->entries[e] & Pagedir::PTE_PRESENT) && (table->entries[e] & Pagedir::PTE_USER)) {
+                    uint32_t* va = (uint32_t*) ((t*VMM::PAGE_SIZE*1024) + (e*VMM::PAGE_SIZE));
+
+                    uint32_t flags = table->entries[e] & (~Pagedir::PTE_FRAME) & (~Pagedir::PTE_ALLOCATED);
+                    bool allocated = table->entries[e] & Pagedir::PTE_ALLOCATED;
+
+                    /* Alloc new pageframe and map to scratch space */
+                    uint32_t frame = PMM::alloc();
+
+                    assert(frame != 0);
+                    map(scratch, frame, flags);
+
+                    /* Copy data into scratch space */
+                    memcpy(scratch, va, VMM::PAGE_SIZE);
+
+                    /* Map dat frame into new new pagedir and unmap from scratch */
+                    pagedir->map(va, frame, allocated ? (flags | Pagedir::PTE_ALLOCATED) : flags);
+                    unmap(scratch);
+                }
+            }
+        }
+    }
+
+    /* Remap back scratch */
+    alloc(scratch, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+
+    /* And free it */
+    kfree(scratch);
+    return pagedir;
+}
+
 

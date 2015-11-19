@@ -101,6 +101,12 @@ public:
 		Flush TLB cache
 	*/
 	static void flush_tlb(void* va);
+
+	/*
+		Clone current pagedir
+		(Note: only clones user-pages, kernel pages are left unmapped)
+	*/
+	static Pagedir* clone_pagedir();
 };
 
 #endif //_VMM_H_
