@@ -42,5 +42,6 @@ ASM_SRCS = \
     usermode_program.asm \
     resume_from_interrupt.asm \
     read_eip.asm \
-    perform_iret.asm
+    perform_iret.asm \
+    call_int81.asm
     

@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "io.h"
 #include "string.h"
+#include "backtrace.h"
 
 static void trace_write(int ch, void* params) {
     // while(!(IO::inb(0x3f8 + 5) & 0x20)); /* wait for queue empty */
@@ -30,6 +31,7 @@ void Debug::panic(const char* file, unsigned line, const char* function, const c
     String::formatv(trace_write, 0, fmt, args);
     va_end(args);
     trace_write('\n', 0);
+    backtrace();
 
     halt();
 }

@@ -31,7 +31,7 @@ void backtrace() {
     uint32_t* ebp;
     read_ebp(ebp);
 
-    TRACE("Initial kernel stack: %p", &_initial_kernel_stack);
+    //TRACE("Initial kernel stack: %p", &_initial_kernel_stack);
     TRACE("Backtrace:");
     while(1) {
         uint32_t* prev_ebp = (uint32_t*) *ebp;

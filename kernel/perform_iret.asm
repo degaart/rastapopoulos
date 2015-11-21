@@ -24,7 +24,7 @@ perform_iret:
     ;
 
     ; This function is not reentrant
-    xchg bx, bx
+    ;xchg bx, bx
     cli
 
     ; save parameters in static space as we are going to switch pagedir
@@ -40,6 +40,9 @@ perform_iret:
     ; switch to process's stack already (as we can't trust our own stack anymore)
     mov esp, [iret_data + iret_t.i_esp]
 
+    ; Switch to temporary static stack (we don't wanna touch the context's stack)
+    ;mov esp, iret_stack + (256*4) - 1
+
     ; segment regs
     mov eax, [iret_data + iret_t.i_ds]
     mov ds, ax
@@ -48,8 +51,11 @@ perform_iret:
     mov gs, ax
 
     ; setup iret stack layout
-    push dword [iret_data + iret_t.i_ss]        ; SS (USER_DATA_SEG|RPL3)
-    push dword [iret_data + iret_t.i_esp]       ; ESP
+
+    ; pop ss & esp only if there's a privilege change (cs & 0x3 == 3)
+
+    ;push dword [iret_data + iret_t.i_ss]        ; SS (USER_DATA_SEG|RPL3)
+    ;push dword [iret_data + iret_t.i_esp]       ; ESP
     push dword [iret_data + iret_t.i_eflags]    ; EFLAGS
     push dword [iret_data + iret_t.i_cs]        ; CS (USER_CODE_SEG|RPL3)
     push dword [iret_data + iret_t.i_eip]       ; EIP
@@ -63,9 +69,12 @@ perform_iret:
     mov eax, [iret_data + iret_t.i_eax]
     mov ebp, [iret_data + iret_t.i_ebp]
 
-    xchg bx, bx
+    ;xchg bx, bx
     iret
 
 
 section .bss
-    iret_data: resb iret_t_size    
+    iret_data: resb iret_t_size
+    iret_stack: resd 256
+
+

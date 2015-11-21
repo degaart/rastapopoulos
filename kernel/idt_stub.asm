@@ -9,7 +9,6 @@ section .text
 
 %macro ISR_ERRCODE 1
     isr_stub_%1:
-       ; cli
         push dword %1
         jmp isr_common_stub
 %endmacro
@@ -51,10 +50,6 @@ extern isr_handler
 isr_common_stub:
    pusha                    ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
 
-   ;mov dx, 0xE9
-   ;mov al, '*'
-   ;out dx, al
-
    xor eax, eax
    mov ax, ds               ; Lower 16-bits of eax = ds.
    push eax                 ; save the data segment descriptor
@@ -75,7 +70,6 @@ isr_common_stub:
 
    popa                     ; Pops edi,esi,ebp...
    add esp, 8     ; Cleans up the pushed error code and pushed ISR number
-   ;sti
    iret           ; pops 5 things at once: CS, EIP, EFLAGS, SS, and ESP 
 
 ; Generate the ISR thunks

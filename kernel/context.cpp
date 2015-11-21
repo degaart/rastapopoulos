@@ -1,6 +1,7 @@
 #include "context.h"
 #include "string.h"
 #include "util.h"
+#include "process.h"
 
 struct iret_t {
     uint32_t cs;
@@ -22,6 +23,7 @@ void switch_context(context_t* ctx) {
     params.cr3 = ctx->pagedir->physical();
     params.regs = ctx->regs;
     VMM::set_pagedir(ctx->pagedir);
+
     perform_iret(&params);
     halt();
 }

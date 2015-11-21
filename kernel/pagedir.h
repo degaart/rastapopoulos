@@ -65,6 +65,7 @@ public:
     void dealloc(uint32_t va);
     bool check_readable_block(const void* va, size_t size, uint32_t* first_unreadable, uint32_t* first_invalid);
     bool check_writable_block(const void* va, size_t size, uint32_t* first_readonly, uint32_t* first_invalid);
+    bool allocated(void* va);   /* was page allocated with Pagedir::alloc() */
 
     void map(void* va, uint32_t pa, uint32_t flags) {
         map((uint32_t)va, pa, flags);

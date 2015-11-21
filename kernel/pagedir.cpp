@@ -234,3 +234,7 @@ void Pagedir::set_page_attr(uint32_t va, uint32_t attr) {
     pagetable->entries[table_index] = attr;
 }
 
+bool Pagedir::allocated(void* va) {
+    uint32_t attr = get_page_attr((uint32_t)va, nullptr);
+    return attr & PTE_ALLOCATED;
+}

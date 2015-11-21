@@ -119,6 +119,14 @@ bool VMM::get_physical(void* va, uint32_t* pa) {
     return _current_pagedir->get_physical((uint32_t)va, pa);
 }
 
+uint32_t VMM::get_page_attr(uint32_t va, uint32_t* dir_attr) {
+    return _current_pagedir->get_page_attr(va, dir_attr);
+}
+
+bool VMM::allocated(void* va) {
+    return _current_pagedir->allocated(va);
+}
+
 bool VMM::is_mapped(void* va) {
     return _current_pagedir->is_mapped((uint32_t)va);
 }
@@ -189,8 +197,20 @@ Pagedir* VMM::clone_pagedir() {
     if(!scratch)
         return nullptr;
 
-    /* Unmap scratch */
-    unmap(scratch);
+    /*
+        Unmap scratch
+        NOTE: We cant unmap it blindly, as we don't know
+        if it was allocated with VMM::map() or VMM::alloc()
+        with VMM::map()
+    */
+    if(allocated(scratch))
+        VMM::dealloc(scratch);
+    else {
+        uint32_t scratch_pa;
+        assert(VMM::get_physical(scratch, &scratch_pa));
+        VMM::unmap(scratch);
+        PMM::free(scratch_pa);
+    }
 
     /* Now walk user pages in current pagedir */
     for(unsigned t = 1; t < (unsigned)(USERSPACE_END+1)/(VMM::PAGE_SIZE*1024); t++) {
@@ -199,7 +219,7 @@ Pagedir* VMM::clone_pagedir() {
             assert(table);
 
             for(unsigned e = 0; e < 1024; e++) {
-                if((table->entries[e] & Pagedir::PTE_PRESENT) && (table->entries[e] & Pagedir::PTE_USER)) {
+                if(table->entries[e] & Pagedir::PTE_PRESENT) {
                     uint32_t* va = (uint32_t*) ((t*VMM::PAGE_SIZE*1024) + (e*VMM::PAGE_SIZE));
 
                     uint32_t flags = table->entries[e] & (~Pagedir::PTE_FRAME) & (~Pagedir::PTE_ALLOCATED);

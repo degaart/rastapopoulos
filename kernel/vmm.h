@@ -93,6 +93,9 @@ public:
 	*/
 	static bool get_physical(void* va, uint32_t* pa);
 
+	static uint32_t get_page_attr(uint32_t va, uint32_t* dir_attr);
+	static bool allocated(void* va);		/* Was page allocated with VMM::alloc()? (else was just mapped) */
+
 	/*
 		Check if given VA is mapped
 	*/

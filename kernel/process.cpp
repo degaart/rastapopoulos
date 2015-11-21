@@ -5,6 +5,7 @@
 #include "vmm.h"
 #include "pmm.h"
 #include "gdt.h"
+#include "idt.h"
 #include "timer.h"
 #include "initrd.h"
 #include "elf.h"
@@ -96,7 +97,7 @@ void Process::switch_process(Process* process) {
     assert(process->_pagedir);
     assert((process->_current_ring == RING0) || (process->_current_ring == RING3));
 
-    TRACE("Switching to process %s in ring %u", process->name(), process->_current_ring);
+    //TRACE("Switching to process %s (PID %u) in ring %u", process->name(), process->_pid, process->_current_ring);
     _current_process = process;
     GDT::set_kernel_stack((void*)process->_kernel_esp);
 
@@ -127,25 +128,6 @@ void Process::switch_process(Process* process) {
     ctx.regs.ebp = process->_regs.ebp;
     switch_context(&ctx);
     PANIC("Returned from switch_context()!!!");
-
-    // if(process->_current_ring == RING3) {
-    //     switch_to_usermode(
-    //         process->_regs.esp, process->_regs.eflags, process->_regs.eip,
-    //         process->_regs.edi, process->_regs.esi,
-    //         process->_regs.edx, process->_regs.ecx, process->_regs.ebx, process->_regs.eax,
-    //         process->_regs.ebp,
-    //         process->_pagedir->physical()
-    //     );
-    // } else {
-    //     // TRACE("ESP: 0x%X, EIP: 0x%X", process->esp, process->eip);
-    //     //VMM::switch_pagedir(process->_pagedir);
-    //     resume_from_interrupt(
-    //         process->_regs.esp, process->_regs.eflags, process->_regs.eip,
-    //         process->_regs.edi, process->_regs.esi,
-    //         process->_regs.edx, process->_regs.ecx, process->_regs.ebx, process->_regs.eax,
-    //         process->_regs.ebp
-    //     );
-    // }
 }
 
 void Process::resume_next_process(void* args, const isr_regs_t* regs) {
@@ -190,6 +172,8 @@ void Process::resume_next_process(void* args, const isr_regs_t* regs) {
 }
 
 void Process::init() {
+    IDT::install_handler(0x81, fork);
+
     // Create KERNEL_TASK
     Process* kernel_task = create();
     kernel_task->set_name("KERNEL_TASK");
@@ -204,7 +188,7 @@ void Process::init() {
     TRACE("_kernel_esp: 0x%X", kernel_task->_kernel_esp);
     kernel_task->_pagedir->alloc(KERNEL_STACK_START, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
 
-    //Timer::schedule(resume_next_process, nullptr, 250);
+    Timer::schedule(resume_next_process, nullptr, 250);
     switch_process(kernel_task);
 }
 
@@ -391,31 +375,36 @@ void Process::check_writable_block(const void* buffer, size_t size) {
     }
 }
 
-#if 0
-uint32_t Process::fork(Process* process) {
-    assert(process == _current_process);
+void Process::fork(isr_regs_t* regs) {
+    // this interrupt should only be called from kernel-mode
+    assert((regs->cs & 0x3) == 0);
 
-    /*
-        so, let's see
-        a fork is a copy of the address-space of the parent
-        any modifications of memory inside parent after fork is invisible to the child
-        any modifications of memory inside child after fork is invisible to parent
-    */
-    PANIC("Not implemented yet");
-    Process* proc = new Process(next_pid(), _current_process->_name, false);
-    VMM::free_pagedir(proc->_pagedir);
+    Process* proc = create();
+    proc->set_name(_current_process->name());
     proc->_pagedir = VMM::clone_pagedir();
+
+    assert(proc->_pagedir->is_mapped(KERNEL_STACK_START));
+
+
+    proc->_kernel_stack = _current_process->_kernel_stack;
     proc->_user_stack = _current_process->_user_stack;
-    //proc->_workingset_size = _current_process->_workingset_size;
-    proc->_current_ring = RING3;
-    proc->_kernel_esp = (uint32_t)(proc->_kernel_stack + sizeof(proc->_kernel_stack) - 1);
-    proc->_regs = _current_process->_regs;
-    
-    // Ports not copied. Fuck it
-    proc->_regs.eax = 0;   /* The child gets 0 */
-    return proc->_pid; /* And the parent receives child's PID */
+    proc->_current_ring = RING0;
+
+    proc->_kernel_esp = (uint32_t)GDT::get_kernel_stack();
+    proc->_regs.esp = regs->esp + 0x14;                 /* Just... dont ask, ok? */
+    proc->_regs.eflags = regs->eflags;
+    proc->_regs.eip = regs->eip;
+    proc->_regs.edi = regs->edi;
+    proc->_regs.esi = regs->esi;
+    proc->_regs.edx = regs->edx;
+    proc->_regs.ecx = regs->ecx;
+    proc->_regs.ebx = regs->ebx;
+    proc->_regs.eax = 0;                /* Child gets 0 in eax, mmmkay? */
+    proc->_regs.ebp = regs->ebp;
+
+    TRACE("proc->eip: 0x%X", proc->_regs.eip);
+    regs->eax = proc->_pid;             /* And the parent receives child's PID */
 }
-#endif
 
 uint8_t* Process::kernel_stack() {
     return (uint8_t*)_kernel_stack;
@@ -424,7 +413,7 @@ uint8_t* Process::kernel_stack() {
 uint32_t Process::next_pid() {
     pushf();
     cli();
-    uint32_t pid = _current_pid;
+    uint32_t pid = _current_pid++;
     popf();
     return pid;
 }

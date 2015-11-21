@@ -52,6 +52,7 @@ private:
     static Process* next_process();
     static void resume_next_process(void* args, const isr_regs_t* regs);
     static uint32_t ephemeral_port_number();
+    static void fork(isr_regs_t* regs);
 public:
     static void init();
     static Process* create();
@@ -59,11 +60,15 @@ public:
     static void exit_current_process();
     static Process* current_process();
     static Process* process_for_port(uint32_t port);
-    static uint32_t fork(Process* process);
 
     void load_elf(const char* filename);
+    
     const char* name();
     void set_name(const char* name);
+    uint32_t pid() {
+        return _pid;
+    }
+
 
     /*
         Open port for reading
