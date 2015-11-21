@@ -28,5 +28,10 @@ void set_kernel_stack(const void* stack);
 #define USER_DATA_SEG       0x20
 #define TSS_SEG             0x28
 
+#define RPL0                0x0
+#define RPL1                0x1
+#define RPL2                0x2
+#define RPL3                0x3
+
 #endif //_GDT_H_
 

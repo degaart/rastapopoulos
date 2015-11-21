@@ -33,7 +33,7 @@ void Syscall::syscall_handler(isr_regs_t* regs) {
         SYSCALL(SYSCALL_PORT_CLOSE, syscall_port_close);
         SYSCALL(SYSCALL_PORT_SEND, syscall_port_send);
         SYSCALL(SYSCALL_PORT_READ, syscall_port_read);
-        SYSCALL(SYSCALL_FORK, syscall_fork);
+        //SYSCALL(SYSCALL_FORK, syscall_fork);
         default:
             PANIC("Unhandled syscall 0x%X", func);
     }
@@ -184,11 +184,11 @@ uint32_t Syscall::syscall_port_close(uint32_t param0, uint32_t, uint32_t) {
     return proc->close_port(port_number);
 }
 
-uint32_t Syscall::syscall_fork(uint32_t, uint32_t, uint32_t) {
-    Process* proc = Process::current_process();
-    uint32_t ret = Process::fork(proc);
-    return ret;
-}
+// uint32_t Syscall::syscall_fork(uint32_t, uint32_t, uint32_t) {
+//     Process* proc = Process::current_process();
+//     uint32_t ret = Process::fork(proc);
+//     return ret;
+// }
 
 
 

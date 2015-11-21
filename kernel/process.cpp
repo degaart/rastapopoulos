@@ -8,10 +8,10 @@
 #include "timer.h"
 #include "initrd.h"
 #include "elf.h"
+#include "kernel_task.h"
+#include "context.h"
 
 #define EPHEMERAL_PORT_START 65536
-
-
 
 Process::ProcessList_t Process::_processes;
 Process* Process::_current_process = nullptr;
@@ -35,11 +35,17 @@ void resume_from_interrupt(
     uint32_t ebp
 );
 
-Process::Process(uint32_t pid, const char* name, bool alloc_stack)
+Process::Process(uint32_t pid)
 : _pid(pid) {
-    strlcpy(_name, name, sizeof(_name));
+    bzero(_name, sizeof(_name));
+    _pagedir        = nullptr;
+    _kernel_stack   = 0;
+    _user_stack     = 0;
+    _current_ring   = RING0;
+    _kernel_esp     = 0;
     bzero(&_regs, sizeof(_regs));
 
+#if 0
     assert((KERNEL_STACK_START % VMM::PAGE_SIZE) == 0);
     _current_ring       = RING3;
     _kernel_esp         = KERNEL_STACK_END;
@@ -60,6 +66,7 @@ Process::Process(uint32_t pid, const char* name, bool alloc_stack)
         _pagedir->alloc(KERNEL_STACK_START, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
         _pagedir->alloc(KERNEL_STACK_START + VMM::PAGE_SIZE, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
     }
+#endif
 }
 
 Process::~Process() {
@@ -72,43 +79,73 @@ Process::~Process() {
         - Switch to another known-good Pagedir before destroying this process's pagedir
         - Pagedir's destructor now frees any allocated frames, keeping mapped frames
     */
+    assert(VMM::current_pagedir() != _pagedir);
     VMM::free_pagedir(_pagedir);
 }
 
-Process* Process::create(const char* name) {
-    Process* proc = new Process(++_current_pid, name);
+Process* Process::create() {
+    Process* proc = new Process(next_pid());
     _processes.append(proc);
     return proc;
 }
 
 void Process::switch_process(Process* process) {
-    assert(process->_workingset_size >= VMM::PAGE_SIZE);
-    assert(process->_regs.eflags & EFLAGS_IF);
-
     assert(_processes.contains(process));
-    TRACE("Switching to process %s in ring %u", process->name(), process->_current_ring);
+    assert(process->_kernel_esp);
+    assert(process->_name);
+    assert(process->_pagedir);
+    assert((process->_current_ring == RING0) || (process->_current_ring == RING3));
 
+    TRACE("Switching to process %s in ring %u", process->name(), process->_current_ring);
     _current_process = process;
-    
     GDT::set_kernel_stack((void*)process->_kernel_esp);
+
+    context_t ctx;
+    bzero(&ctx, sizeof(ctx));
     if(process->_current_ring == RING3) {
-        switch_to_usermode(
-            process->_regs.esp, process->_regs.eflags, process->_regs.eip,
-            process->_regs.edi, process->_regs.esi,
-            process->_regs.edx, process->_regs.ecx, process->_regs.ebx, process->_regs.eax,
-            process->_regs.ebp,
-            process->_pagedir->physical()
-        );
+        ctx.cs = USER_CODE_SEG | RPL3;
+        ctx.ds = USER_DATA_SEG | RPL3;
+        ctx.ss = USER_DATA_SEG | RPL3;
+        assert(process->_regs.eflags & EFLAGS_IF);
     } else {
-        // TRACE("ESP: 0x%X, EIP: 0x%X", process->esp, process->eip);
-        //VMM::switch_pagedir(process->_pagedir);
-        resume_from_interrupt(
-            process->_regs.esp, process->_regs.eflags, process->_regs.eip,
-            process->_regs.edi, process->_regs.esi,
-            process->_regs.edx, process->_regs.ecx, process->_regs.ebx, process->_regs.eax,
-            process->_regs.ebp
-        );
+        ctx.cs = KERNEL_CODE_SEG;
+        ctx.ds = KERNEL_DATA_SEG;
+        ctx.ss = KERNEL_DATA_SEG;
     }
+    ctx.pagedir = process->_pagedir;
+
+    ctx.regs.esp = process->_regs.esp;
+    ctx.regs.eflags = process->_regs.eflags;
+    ctx.regs.eip = process->_regs.eip;
+    
+    ctx.regs.edi = process->_regs.edi;
+    ctx.regs.esi = process->_regs.esi;
+    ctx.regs.edx = process->_regs.edx;
+    ctx.regs.ecx = process->_regs.ecx;
+    ctx.regs.ebx = process->_regs.ebx;
+    ctx.regs.eax = process->_regs.eax;
+    ctx.regs.ebp = process->_regs.ebp;
+    switch_context(&ctx);
+    PANIC("Returned from switch_context()!!!");
+
+    // if(process->_current_ring == RING3) {
+    //     switch_to_usermode(
+    //         process->_regs.esp, process->_regs.eflags, process->_regs.eip,
+    //         process->_regs.edi, process->_regs.esi,
+    //         process->_regs.edx, process->_regs.ecx, process->_regs.ebx, process->_regs.eax,
+    //         process->_regs.ebp,
+    //         process->_pagedir->physical()
+    //     );
+    // } else {
+    //     // TRACE("ESP: 0x%X, EIP: 0x%X", process->esp, process->eip);
+    //     //VMM::switch_pagedir(process->_pagedir);
+    //     resume_from_interrupt(
+    //         process->_regs.esp, process->_regs.eflags, process->_regs.eip,
+    //         process->_regs.edi, process->_regs.esi,
+    //         process->_regs.edx, process->_regs.ecx, process->_regs.ebx, process->_regs.eax,
+    //         process->_regs.ebp
+    //     );
+    // }
 }
 
 void Process::resume_next_process(void* args, const isr_regs_t* regs) {
@@ -153,7 +190,22 @@ void Process::resume_next_process(void* args, const isr_regs_t* regs) {
 }
 
 void Process::init() {
+    // Create KERNEL_TASK
+    Process* kernel_task = create();
+    kernel_task->set_name("KERNEL_TASK");
+    kernel_task->_kernel_esp         = KERNEL_STACK_END;
+    kernel_task->_regs.esp           = KERNEL_STACK_END;
+    read_eflags(kernel_task->_regs.eflags);
+    kernel_task->_regs.eflags        |= EFLAGS_IF;
+    kernel_task->_regs.eip           = (uint32_t)KernelTask::entry;
+    kernel_task->_user_stack         = 0;
+    kernel_task->_pagedir            = VMM::create_pagedir();
+    TRACE("KERNEL_STACK_START: 0x%X", KERNEL_STACK_START);
+    TRACE("_kernel_esp: 0x%X", kernel_task->_kernel_esp);
+    kernel_task->_pagedir->alloc(KERNEL_STACK_START, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+
     //Timer::schedule(resume_next_process, nullptr, 250);
+    switch_process(kernel_task);
 }
 
 void Process::exit_current_process() {
@@ -192,9 +244,9 @@ Process* Process::next_process() {
 }
 
 void Process::load_elf(const char* filename) {
-    if(_workingset_size != 0) {
+    /*if(_workingset_size != 0) {
         PANIC("Process image already loaded");
-    }
+    }*/
 
     Initrd::File* file = Initrd::get().open(filename);
     if(!file) {
@@ -215,7 +267,7 @@ void Process::load_elf(const char* filename) {
             }
 
             VMM::alloc(phdr->p_vaddr, phdr->p_memsz, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
-            _workingset_size = align(phdr->p_memsz, VMM::PAGE_SIZE);
+            //_workingset_size = align(phdr->p_memsz, VMM::PAGE_SIZE);
 
             file->seek(phdr->p_offset);
             int read_bytes = file->read((uint8_t*)phdr->p_vaddr, phdr->p_filesz);
@@ -240,6 +292,10 @@ Process* Process::current_process() {
 
 const char* Process::name() {
     return _name;
+}
+
+void Process::set_name(const char* name) {
+    strlcpy(_name, name, sizeof(_name));
 }
 
 uint32_t Process::open_port(uint32_t port_number) {
@@ -335,6 +391,7 @@ void Process::check_writable_block(const void* buffer, size_t size) {
     }
 }
 
+#if 0
 uint32_t Process::fork(Process* process) {
     assert(process == _current_process);
 
@@ -345,11 +402,11 @@ uint32_t Process::fork(Process* process) {
         any modifications of memory inside child after fork is invisible to parent
     */
     PANIC("Not implemented yet");
-    Process* proc = new Process(++_current_pid, _current_process->_name, false);
+    Process* proc = new Process(next_pid(), _current_process->_name, false);
     VMM::free_pagedir(proc->_pagedir);
     proc->_pagedir = VMM::clone_pagedir();
     proc->_user_stack = _current_process->_user_stack;
-    proc->_workingset_size = _current_process->_workingset_size;
+    //proc->_workingset_size = _current_process->_workingset_size;
     proc->_current_ring = RING3;
     proc->_kernel_esp = (uint32_t)(proc->_kernel_stack + sizeof(proc->_kernel_stack) - 1);
     proc->_regs = _current_process->_regs;
@@ -358,8 +415,19 @@ uint32_t Process::fork(Process* process) {
     proc->_regs.eax = 0;   /* The child gets 0 */
     return proc->_pid; /* And the parent receives child's PID */
 }
+#endif
 
 uint8_t* Process::kernel_stack() {
     return (uint8_t*)_kernel_stack;
 }
+
+uint32_t Process::next_pid() {
+    pushf();
+    cli();
+    uint32_t pid = _current_pid;
+    popf();
+    return pid;
+}
+
+
 

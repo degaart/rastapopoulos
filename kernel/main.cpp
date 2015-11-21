@@ -22,11 +22,7 @@
 #include "backtrace.h"
 #include "test_vmm.h"
 
-static void test_usermode();
-static void test_vga();
-static void test_elf();
 void test_scheduler();
-void test_backtrace(struct multiboot_info* multiboot_info);
 
 typedef void (*ctor_t)(void);
 static void call_global_ctors() {
@@ -125,26 +121,11 @@ extern "C" void main(struct multiboot_info* multiboot_info) {
 
     TRACE("Initializing process manager");
     Process::init();
+    halt();     // shoult not get here (process manager starts KERNEL_TASK)
 
-    // test_elf();
-    // test_vmm();
     test_scheduler();
     TRACE("Tests done. Halting");
     halt();
-}
-
-static void test_elf() {
-    TRACE("Testing elf");
-    
-    Process* hello_proc = Process::create("HELLO.ELF");
-    hello_proc->load_elf("HELLO.ELF");
-
-    Process* proc = Process::create("VGADRV.ELF");
-    proc->load_elf("VGADRV.ELF");
-    Process::switch_process(proc);
-
-
-    TRACE("Tests done");
 }
 
 

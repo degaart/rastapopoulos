@@ -25,6 +25,7 @@ SRCS = \
     port.cpp \
     backtrace.cpp \
     context.cpp \
+    kernel_task.cpp \
     test_backtrace.cpp \
     test_vmm.cpp \
     test_scheduler.cpp
