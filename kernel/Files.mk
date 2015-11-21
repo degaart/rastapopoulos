@@ -24,8 +24,10 @@ SRCS = \
     initrd.cpp \
     port.cpp \
     backtrace.cpp \
+    context.cpp \
     test_backtrace.cpp \
-    test_vmm.cpp
+    test_vmm.cpp \
+    test_scheduler.cpp
 
 C_SRCS = \
     elf.c
@@ -38,5 +40,6 @@ ASM_SRCS = \
     switch_to_usermode.asm \
     usermode_program.asm \
     resume_from_interrupt.asm \
-    read_eip.asm
+    read_eip.asm \
+    perform_iret.asm
     

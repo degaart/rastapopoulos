@@ -60,15 +60,21 @@ LINKER_SYMBOL(_KERNEL_END_);
 
 #define EXPORT extern "C"
 
-template<typename T> T align(T value, unsigned alignment) {
+#include "vmm.h"
+
+template<typename T> T align(T value, unsigned alignment = VMM::PAGE_SIZE) {
     unsigned result = (unsigned)value;
     result += alignment - 1;
     result &= ~(alignment - 1);
     return (T)result;
 }
 
-template<typename T> T truncate(T value, unsigned alignment) {
+template<typename T> T truncate(T value, unsigned alignment = VMM::PAGE_SIZE) {
     return (value / alignment) * alignment;
+}
+
+template<typename T> bool is_aligned(T value, unsigned alignment = VMM::PAGE_SIZE) {
+    return (((unsigned)value) % alignment) == 0;
 }
 
 #define LOBYTE(i) ((i) & 0xFF)

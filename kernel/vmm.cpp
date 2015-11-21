@@ -10,7 +10,6 @@
 #include "backtrace.h"
 
 bool VMM::_paging_enabled = false;
-const uint8_t* VMM::INITIAL_KERNEL_STACK = reinterpret_cast<uint8_t*>(0x7BFF);
 Pagedir* VMM::_current_pagedir;
 
 void VMM::init() {
@@ -23,7 +22,7 @@ void VMM::init() {
         i.e.:   INITIAL_KERNEL_STACK-0x100  -   INITIAL_KERNEL_STACK
                 KERNEL_START                -   kheap_start  
     */
-    TRACE("Initial kernel stack: %p - %p", INITIAL_KERNEL_STACK - 0x100, INITIAL_KERNEL_STACK);
+    TRACE("Initial kernel stack: 0x%X - 0x%X", INITIAL_KERNEL_STACK - 0x100, INITIAL_KERNEL_STACK);
     for(uint32_t page = truncate((uint32_t)INITIAL_KERNEL_STACK - 0x100, PAGE_SIZE);
         page < align((uint32_t)INITIAL_KERNEL_STACK, PAGE_SIZE)+1;
         page += PAGE_SIZE
@@ -149,13 +148,9 @@ void VMM::free_pagedir(Pagedir* pagedir) {
     delete pagedir;
 }
 
-void VMM::switch_pagedir(Pagedir* pagedir) {
-    /* Copy current kernel mappings before switching */
+void VMM::set_pagedir(Pagedir* pagedir) {
     pagedir->copy_kernel_mappings(_current_pagedir);
-
-    /* Switch to new pagedir */
     _current_pagedir = pagedir;
-    write_cr3((uint32_t)_current_pagedir->physical());
 }
 
 bool VMM::alloc(uint32_t va, uint32_t size, uint32_t flags) {
@@ -198,7 +193,7 @@ Pagedir* VMM::clone_pagedir() {
     unmap(scratch);
 
     /* Now walk user pages in current pagedir */
-    for(unsigned t = 1; t < (USERSPACE_END+1)/(VMM::PAGE_SIZE*1024); t++) {
+    for(unsigned t = 1; t < (unsigned)(USERSPACE_END+1)/(VMM::PAGE_SIZE*1024); t++) {
         if(_current_pagedir->_entries[t] & Pagedir::PDE_PRESENT) {
             Pagedir::pagetable_t* table = _current_pagedir->_tables[t];
             assert(table);

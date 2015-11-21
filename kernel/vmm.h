@@ -20,9 +20,10 @@ private:
 	static Pagedir* _current_pagedir;
 public:
 	static const uint32_t PAGE_SIZE = 0x1000;
-	static const uint8_t* INITIAL_KERNEL_STACK;
+
+	static const uint32_t INITIAL_KERNEL_STACK = 0x7BFF;
 	static const uint32_t USERSPACE_START = 0x400000;
-	static const uint32_t USERSPACE_END = 	0xBFFFFFFF;
+	static const uint32_t USERSPACE_END = 0xBFFFFFFF;
 
 	static void init();
 
@@ -36,7 +37,7 @@ public:
 	static void free_pagedir(Pagedir* pagedir);
 
 	/* set current page directory */
-	static void switch_pagedir(Pagedir*);
+	static void set_pagedir(Pagedir*);
 
 	/* get current page directory */
 	static Pagedir* current_pagedir();

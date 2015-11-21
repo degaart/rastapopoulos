@@ -7,6 +7,7 @@
 #include "regs.h"
 #include "idt.h"
 #include "Port.h"
+#include "vmm.h"
 
 class Process {
 public:
@@ -15,8 +16,9 @@ public:
         RING3
     };
 
-    static const uint32_t   USER_STACK_END = 0xBFFFFFFF;    /* Last useable byte of user stack */
-    static const uint32_t   PROCESS_ENTRY = 0x400000;       /* 4mb mark */
+    static const uint32_t   KERNEL_STACK_START = VMM::USERSPACE_END + 1 - (VMM::PAGE_SIZE * 2);
+    static const uint32_t   KERNEL_STACK_END = VMM::USERSPACE_END;
+    static const uint32_t   USER_STACK_END = KERNEL_STACK_START - 1;
 
 private:
     typedef LinkedList<Process*> ProcessList_t;
@@ -25,7 +27,7 @@ private:
     char                    _name[32];
 
     Pagedir*                _pagedir;
-    uint8_t                 _kernel_stack[0x1000];      /* 4k kernel stack (in kernel-space) */
+    uint32_t                _kernel_stack;              /* 4k kernel stack (in this process's) address space */
     uint32_t                _user_stack;                /* start of user stack (in this process's address space). End of stack is always USER_STACK_END */
     uint32_t                _workingset_size;           /* Size of process's working-set */
     Ring                    _current_ring;
@@ -38,8 +40,8 @@ private:
     static uint32_t         _current_pid;
     static uint32_t         _current_ephemeral_port;
 
-    Process(uint32_t pid, const char* name);
-    Process(uint32_t pid, const Process& proc);
+    Process(uint32_t pid, const char* name, bool alloc_stack = true);
+    Process(uint32_t pid, const Process& proc) = delete; /* Dangerous, because of Pagedir ownership issues */
     ~Process();
     Process(const Process&) = delete;
     Process(const Process&&) = delete;
@@ -59,7 +61,6 @@ public:
     static Process* process_for_port(uint32_t port);
     static uint32_t fork(Process* process);
 
-    void load_image(const char* filename);          /* Load process image from Initrd */
     void load_elf(const char* filename);
     const char* name();
 

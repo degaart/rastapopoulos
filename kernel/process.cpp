@@ -9,8 +9,9 @@
 #include "initrd.h"
 #include "elf.h"
 
-#define EXE_MAGIC "Rasta Executable"
 #define EPHEMERAL_PORT_START 65536
+
+
 
 Process::ProcessList_t Process::_processes;
 Process* Process::_current_process = nullptr;
@@ -22,7 +23,8 @@ void switch_to_usermode(
     uint32_t esp, uint32_t eflags, uint32_t eip,
     uint32_t edi, uint32_t esi,
     uint32_t edx, uint32_t ecx, uint32_t ebx, uint32_t eax,
-    uint32_t ebp
+    uint32_t ebp,
+    uint32_t cr3
 );
 
 extern "C"
@@ -33,52 +35,31 @@ void resume_from_interrupt(
     uint32_t ebp
 );
 
-Process::Process(uint32_t pid, const char* name)
+Process::Process(uint32_t pid, const char* name, bool alloc_stack)
 : _pid(pid) {
     strlcpy(_name, name, sizeof(_name));
     bzero(&_regs, sizeof(_regs));
 
+    assert((KERNEL_STACK_START % VMM::PAGE_SIZE) == 0);
     _current_ring       = RING3;
-    _kernel_esp         = (uint32_t)(_kernel_stack + sizeof(_kernel_stack) - 1);
+    _kernel_esp         = KERNEL_STACK_END;
     _regs.esp           = USER_STACK_END;
     _regs.eax           = pid;
     
     read_eflags(_regs.eflags);
     _regs.eflags        |= EFLAGS_IF;
-    _regs.eip           = PROCESS_ENTRY;
+    _regs.eip           = 0;
 
     _user_stack         = USER_STACK_END - VMM::PAGE_SIZE + 1;  /* gives a nice page-aligned stack */
     assert((_user_stack % VMM::PAGE_SIZE) == 0);
     _workingset_size    = 0;
 
-    _pagedir = VMM::create_pagedir();
-    VMM::switch_pagedir(_pagedir);
-    VMM::alloc(_user_stack, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
-}
-
-Process::Process(uint32_t pid, const Process& proc)
-: _pid(pid) {
-    strlcpy(_name, proc._name, sizeof(_name));
-    _regs = proc._regs;
-
-    _current_ring       = RING3;
-    _kernel_esp         = (uint32_t)(_kernel_stack + sizeof(_kernel_stack) - 1);
-    _user_stack         = proc._user_stack;
-    _workingset_size    = proc._workingset_size;
-
-    /*
-        Things to take into account:
-            - program text should ideally be shared (TODO, because program text isn't write-protected yet)
-            - pages mapped with VMM::map (should point to same physical pageframe)
-            - pages mapped via VMM::alloc (should point to new pageframe, but with copied content)
-    */
-    _pagedir = VMM::create_pagedir();
-    PANIC("Not implemented yet");
-
-    /*
-        Port list is empty. Might be an incorret assumption.
-        Maybe we need to share ports between parent and child?
-    */
+    if(alloc_stack) {
+        _pagedir = VMM::create_pagedir();
+        _pagedir->alloc(_user_stack, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
+        _pagedir->alloc(KERNEL_STACK_START, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+        _pagedir->alloc(KERNEL_STACK_START + VMM::PAGE_SIZE, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    }
 }
 
 Process::~Process() {
@@ -105,20 +86,22 @@ void Process::switch_process(Process* process) {
     assert(process->_regs.eflags & EFLAGS_IF);
 
     assert(_processes.contains(process));
+    TRACE("Switching to process %s in ring %u", process->name(), process->_current_ring);
+
     _current_process = process;
     
     GDT::set_kernel_stack((void*)process->_kernel_esp);
-    VMM::switch_pagedir(process->_pagedir);
-
     if(process->_current_ring == RING3) {
         switch_to_usermode(
             process->_regs.esp, process->_regs.eflags, process->_regs.eip,
             process->_regs.edi, process->_regs.esi,
             process->_regs.edx, process->_regs.ecx, process->_regs.ebx, process->_regs.eax,
-            process->_regs.ebp
+            process->_regs.ebp,
+            process->_pagedir->physical()
         );
     } else {
         // TRACE("ESP: 0x%X, EIP: 0x%X", process->esp, process->eip);
+        //VMM::switch_pagedir(process->_pagedir);
         resume_from_interrupt(
             process->_regs.esp, process->_regs.eflags, process->_regs.eip,
             process->_regs.edi, process->_regs.esi,
@@ -170,7 +153,7 @@ void Process::resume_next_process(void* args, const isr_regs_t* regs) {
 }
 
 void Process::init() {
-    Timer::schedule(resume_next_process, nullptr, 250);
+    //Timer::schedule(resume_next_process, nullptr, 250);
 }
 
 void Process::exit_current_process() {
@@ -182,7 +165,7 @@ void Process::exit_current_process() {
 
     _processes.remove_val(proc);
 
-    VMM::switch_pagedir(_current_process->_pagedir);
+    //VMM::switch_pagedir(_current_process->_pagedir);
     delete(proc);
     proc = nullptr;
 
@@ -208,32 +191,6 @@ Process* Process::next_process() {
     return *_processes.iterator();
 }
 
-void Process::load_image(const char* filename) {
-    if(_workingset_size != 0) {
-        PANIC("Process image alread loaded");
-    }
-
-    Initrd::File* file = Initrd::get().open(filename);
-    if(!file) {
-        PANIC("File not found in initrd: %s", filename);
-    }
-    if(memcmp((uint8_t*)file->data() + 2, EXE_MAGIC, sizeof(EXE_MAGIC))) {
-        PANIC("Invalid executable (bad magic): %s", filename);
-    }
-
-    VMM::switch_pagedir(_pagedir);
-    for(uint32_t page = PROCESS_ENTRY; page < PROCESS_ENTRY + file->size(); page += VMM::PAGE_SIZE) {
-        VMM::alloc(page, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
-        _workingset_size += VMM::PAGE_SIZE;
-        
-        int read_bytes = file->read((uint8_t*)page, VMM::PAGE_SIZE);
-        if(read_bytes == 0 || read_bytes < VMM::PAGE_SIZE) {
-            break;
-        }
-    }
-    delete file;
-}
-
 void Process::load_elf(const char* filename) {
     if(_workingset_size != 0) {
         PANIC("Process image already loaded");
@@ -249,11 +206,11 @@ void Process::load_elf(const char* filename) {
         PANIC("Invalid ELF file: %s", filename);
     }
 
-    VMM::switch_pagedir(_pagedir);
+    //VMM::switch_pagedir(_pagedir);
     for(unsigned i = 0; i < hdr->e_phnum; i++) {
         const Elf32_Phdr* phdr = elf_segment_header(hdr, i);
         if(phdr && phdr->p_type == PT_LOAD) {
-            if(phdr->p_vaddr < VMM::USERSPACE_START || phdr->p_vaddr > VMM::USERSPACE_END) {
+            if(phdr->p_vaddr < (uint32_t)VMM::USERSPACE_START || phdr->p_vaddr > (uint32_t)VMM::USERSPACE_END) {
                 PANIC("Invalid start address: 0x%X", phdr->p_vaddr);
             }
 
@@ -388,10 +345,21 @@ uint32_t Process::fork(Process* process) {
         any modifications of memory inside child after fork is invisible to parent
     */
     PANIC("Not implemented yet");
-    return 0;
+    Process* proc = new Process(++_current_pid, _current_process->_name, false);
+    VMM::free_pagedir(proc->_pagedir);
+    proc->_pagedir = VMM::clone_pagedir();
+    proc->_user_stack = _current_process->_user_stack;
+    proc->_workingset_size = _current_process->_workingset_size;
+    proc->_current_ring = RING3;
+    proc->_kernel_esp = (uint32_t)(proc->_kernel_stack + sizeof(proc->_kernel_stack) - 1);
+    proc->_regs = _current_process->_regs;
+    
+    // Ports not copied. Fuck it
+    proc->_regs.eax = 0;   /* The child gets 0 */
+    return proc->_pid; /* And the parent receives child's PID */
 }
 
 uint8_t* Process::kernel_stack() {
-    return _kernel_stack;
+    return (uint8_t*)_kernel_stack;
 }
 

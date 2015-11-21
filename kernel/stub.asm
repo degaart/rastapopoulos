@@ -21,7 +21,7 @@ _kernel_entry:
     ; Setup kernel stack
     ; NOTE: The bootloader has already disabled interrupts
     ; Caveat: do not use the stack before BSS zeroed (as the stack is stored in the bss)
-    xchg bx, bx
+    ;xchg bx, bx
     mov esp, _initial_kernel_stack + 4096
 
     ; Check multiboot bootloader

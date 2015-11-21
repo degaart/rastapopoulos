@@ -73,7 +73,7 @@ void Heap::free(void* ptr) {
     Block* block = Block::at((uint8_t*)ptr - sizeof(Block));
     if(!block->used())
         PANIC("Double-free detected for %p", ptr);
-    
+
     block->set_used(false);
     for(Block* prev = _head; prev && prev < block; prev = prev->next()) {
         if(prev->next() == block) {

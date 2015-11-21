@@ -40,7 +40,7 @@ static void test_clone() {
     uint32_t* test_addr = (uint32_t*)TEST_ADDRESS;
 
     Pagedir* current_pagedir = VMM::create_pagedir();
-    VMM::switch_pagedir(current_pagedir);
+    //VMM::switch_pagedir(current_pagedir);
 
     assert(VMM::alloc(test_addr, VMM::PAGE_SIZE * 16, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER));
     for(unsigned dword = 0; dword < (VMM::PAGE_SIZE * 16) / sizeof(unsigned); dword++) {
@@ -59,7 +59,7 @@ static void test_clone() {
         assert(clone->is_mapped(page));
 
     // switch to cloned pagedir and check all values are correct
-    VMM::switch_pagedir(clone);
+    //VMM::switch_pagedir(clone);
     for(unsigned dword = 0; dword < (VMM::PAGE_SIZE * 16) / sizeof(unsigned); dword++) {
         assert(test_addr[dword] == (dword ^ 0x7));
     }
@@ -69,7 +69,7 @@ static void test_clone() {
         test_addr[dword] = dword;
 
     // switch back to initial pagedir
-    VMM::switch_pagedir(current_pagedir);
+    //VMM::switch_pagedir(current_pagedir);
 
     // Check values should not have changed at all
     for(unsigned dword = 0; dword < (VMM::PAGE_SIZE * 16) / sizeof(unsigned); dword++)
@@ -104,7 +104,7 @@ static void test_clone1() {
     VMM::unmap(scratch);
 
     Pagedir* pagedir0 = VMM::create_pagedir();
-    VMM::switch_pagedir(pagedir0);
+    // VMM::switch_pagedir(pagedir0);
     assert(VMM::alloc(test_addr, VMM::PAGE_SIZE * 2, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER));
     for(unsigned dword = 0; dword < (VMM::PAGE_SIZE*2) / sizeof(unsigned); dword++)
         test_addr[dword] = dword ^ 0x12345678;
@@ -112,7 +112,7 @@ static void test_clone1() {
     Pagedir* pagedir1 = VMM::create_pagedir();
     copy_frame(pagedir1, test_addr, scratch);
     copy_frame(pagedir1, ((uint8_t*)test_addr)+VMM::PAGE_SIZE, scratch);
-    VMM::switch_pagedir(pagedir1);
+    // VMM::switch_pagedir(pagedir1);
 
     for(unsigned dword = 0; dword < (VMM::PAGE_SIZE*2) / sizeof(unsigned); dword++) {
         if(test_addr[dword] != (dword ^ 0x12345678))
@@ -123,7 +123,7 @@ static void test_clone1() {
     for(unsigned dword = 0; dword < (VMM::PAGE_SIZE*2) / sizeof(unsigned); dword++)
         test_addr[dword] = dword ^ 0x87654321;
 
-    VMM::switch_pagedir(pagedir0);
+    // VMM::switch_pagedir(pagedir0);
     for(unsigned dword = 0; dword < (VMM::PAGE_SIZE*2) / sizeof(unsigned); dword++)
         assert(test_addr[dword] == (dword ^ 0x12345678));    
 
