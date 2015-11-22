@@ -17,7 +17,14 @@
 struct symbol_t {
     unsigned long addr;
     char* name;
+    unsigned size;
     struct symbol_t* next;
+};
+
+struct symtab_t {
+    uint32_t addr;
+    uint32_t size;
+    uint32_t name_offset;
 };
 
 struct pipe_t {
@@ -73,13 +80,6 @@ pid_t exec_process(const char* const args[], int fd_in, int fd_out) {
     }
 }
 
-static int compare_symbols(const void *p0, const void *p1) {
-    struct symbol_t* s0 = (struct symbol_t*)p0;
-    struct symbol_t* s1 = (struct symbol_t*)p1;
-
-    return s1->addr - s0->addr;
-}
-
 struct symbol_t* read_symbol(char* buf) {
     /* Remove newline from buf */
     while(strlen(buf) && buf[strlen(buf)-1] == '\n') {
@@ -89,14 +89,18 @@ struct symbol_t* read_symbol(char* buf) {
     /* Split into fields, if field 4 == 'FUNC', output to cxxfilt */
     char* fields[12];
     memset(fields, 0, sizeof(fields));
-    char* lasts;
+    char* lasts = NULL;
     int nfields = 0;
     
     for(int i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
         char* word;
         if(i == 0)
             word = strtok_r(buf, " ", &lasts);
-        else
+        else if(i == 7) {
+            fields[i] = lasts;
+            nfields++;
+            break;
+        } else
             word = strtok_r(NULL, " ", &lasts);
         if(!word)
             break;
@@ -107,11 +111,13 @@ struct symbol_t* read_symbol(char* buf) {
     if(nfields == 8 && !strcmp(fields[3], "FUNC")) {
         const char* addr = fields[1];
         const char* symbol = fields[7];
+        unsigned size = atoi(fields[2]);
         
         struct symbol_t* result = malloc(sizeof(struct symbol_t));
         bzero(result, sizeof(*result));
         result->addr = strtoul(addr, NULL, 16);
         result->name = strdup(symbol);
+        result->size = size;
         return result;
     } else {
         return NULL;
@@ -123,8 +129,8 @@ struct symbol_t* read_symbols(const char* infile) {
     struct pipe_t* cxxfilt_pipe = pipe_create();
     
     const char* readelf_args[] = { READELF, "-W", "-s", infile, NULL };
-    const char* cxxfilt_args[] = { CXXFILT, NULL };
-
+    const char* cxxfilt_args[] = { CXXFILT, "-p", NULL };
+    
     int infd = open(infile, O_RDONLY);
     if(infd == -1) {
         perror("open()");
@@ -158,6 +164,7 @@ struct symbol_t* read_symbols(const char* infile) {
     struct symbol_t* symbols = NULL;
     char buf[2048];
     while (1) {
+skip_symbol:
         if(!fgets(buf, sizeof(buf), inf)) {
             if(feof(inf))
                 break;
@@ -174,19 +181,8 @@ struct symbol_t* read_symbols(const char* infile) {
         } else {
             struct symbol_t* sym = read_symbol(buf);
             if(sym) {
-                if(symbols) {
-                    struct symbol_t* insert_at = NULL;
-                    for(insert_at = symbols; insert_at->next; insert_at = insert_at->next) {
-                        if(insert_at->next->addr >= sym->addr) {
-                            break;
-                        }
-                    }
-                    
-                    sym->next = insert_at->next;
-                    insert_at->next = sym;
-                } else {
-                    symbols = sym;
-                }
+                sym->next = symbols;
+                symbols = sym;
             }
         }
     }
@@ -197,11 +193,20 @@ struct symbol_t* read_symbols(const char* infile) {
     return symbols;
 }
 
+static void serialize(const void* buffer, size_t size, FILE* f) {
+    ssize_t ret = fwrite(buffer, size, 1, f);
+    if (ret != 1) {
+        perror("fwrite()");
+        exit(EXIT_FAILURE);
+    }
+}
+
 void serialize_symbols(struct symbol_t* symbols, const char* outfile) {
     /*
      Serialized format
-     uint32_t[]  addresses
-     char*[]     address relative to file where symbol name is
+        uint32_t        size
+        symtab_t[]      table
+        char[][]        name table
      */
     FILE* outf = fopen(outfile, "wb");
     
@@ -209,35 +214,24 @@ void serialize_symbols(struct symbol_t* symbols, const char* outfile) {
     for(struct symbol_t* sym = symbols; sym; sym = sym->next) {
         symbol_count++;
     }
-    uint32_t current_offset = (sizeof(uint32_t)*2*symbol_count)+8;
+    
+    struct symtab_t entry;
+    serialize(&symbol_count, sizeof(symbol_count), outf);
+    uint32_t name_offset = sizeof(uint32_t) + (sizeof(struct symtab_t)*symbol_count);
     for(struct symbol_t* sym = symbols; sym; sym = sym->next) {
-        if(fwrite(&sym->addr, 4, 1, outf) != 1) {
-            perror("fwrite()");
-            exit(EXIT_FAILURE);
-        }
-        if(fwrite(&current_offset, 4, 1, outf) != 1) {
-            perror("fwrite()");
-            exit(EXIT_FAILURE);
-        }
-        current_offset += strlen(sym->name) + 1;
+        entry.addr = sym->addr;
+        entry.size = sym->size;
+        entry.name_offset = name_offset;
+        
+        //printf("0x%08X\t%u\t%s\n", entry.addr, entry.size, sym->name);
+        
+        serialize(&entry, sizeof(entry), outf);
+        name_offset += strlen(sym->name) + 1;
     }
-    uint32_t zero = 0;
-    if(fwrite(&zero, 4, 1, outf) != 1) {
-        perror("fwrite()");
-        exit(EXIT_FAILURE);
-    }
-    if(fwrite(&zero, 4, 1, outf) != 1) {
-        perror("fwrite()");
-        exit(EXIT_FAILURE);
-    }
-
+    
     for(struct symbol_t* sym = symbols; sym; sym = sym->next) {
-        if(fwrite(sym->name, strlen(sym->name) + 1,  1, outf) != 1) {
-            perror("fwrite()");
-            exit(EXIT_FAILURE);
-        }
+        serialize(sym->name, strlen(sym->name)+1, outf);
     }
-
     fclose(outf);
 }
 
@@ -251,17 +245,15 @@ int main(int argc, const char * argv[]) {
     const char* outfilename = argv[2];
     signal(SIGCHLD, SIG_IGN);
     
-//    printf("Reading symbols\n");
     struct symbol_t* symbols = read_symbols(infilename);
     assert(symbols);
     for(struct symbol_t* sym = symbols; sym; sym = sym->next) {
         assert(sym->addr);
         assert(sym->name);
-//        printf("0x%04lX\t%s\n", sym->addr, sym->mangled);
     }
     
-//    printf("Serializing symbols\n");
     serialize_symbols(symbols, outfilename);
     return 0;
 }
+
 

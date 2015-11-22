@@ -10,44 +10,69 @@
 
 struct symbol_t {
     uint32_t addr;
+    uint32_t size;
     uint32_t name_offset;
 };
-static symbol_t* _symbols = nullptr;
+
+struct symtab_t {
+    char* data;
+    struct symbol_t* symtab;
+    unsigned count;
+};
+
+static symtab_t _symtab;
 extern uint8_t _initial_kernel_stack;
 
-static const char* lookup_symbol(uint32_t addr) {
-    if(!_symbols)
-        return nullptr;
+static const char* lookup_symbol(const struct symtab_t* symtab, uint32_t addr) {
+    if(!symtab)
+        return NULL;
     
-    for(int i = 0; _symbols[i].addr && _symbols[i].name_offset; i++) {
-        if(addr >= _symbols[i].addr && addr <= _symbols[i+1].addr) {
-            return ((const char*)_symbols) + _symbols[i].name_offset;
+    for(unsigned i = 0; i < symtab->count; i++) {
+        if(addr >= symtab->symtab[i].addr && addr < symtab->symtab[i].addr + symtab->symtab[i].size) {
+            return symtab->data + symtab->symtab[i].name_offset;
         }
     }
-    return nullptr;
+    return NULL;
 }
 
 void backtrace() {
     uint32_t* ebp;
     read_ebp(ebp);
 
-    //TRACE("Initial kernel stack: %p", &_initial_kernel_stack);
-    TRACE("Backtrace:");
+    if(!_symtab.data) {
+        TRACE("No backtrace available");
+        return;
+    }
+
+    uint32_t stack_start, stack_end;
+    Process* current_process = Process::current_process();
+    if(current_process) {
+        stack_start = (uint32_t)(current_process->kernel_stack());
+        stack_end = (uint32_t) (current_process->kernel_stack() + 4096);
+    } else {
+        stack_start = (uint32_t) (&_initial_kernel_stack);
+        stack_end = (uint32_t) (&_initial_kernel_stack + 4096);
+    }
+
+    uint32_t data[255];
+    unsigned index = 0;
     while(1) {
+        if((uint32_t)ebp <= stack_start || ((uint32_t)ebp+(sizeof(uint32_t)*2)) >= stack_end)
+            break;
+
         uint32_t* prev_ebp = (uint32_t*) *ebp;
+        if((uint32_t)prev_ebp <= stack_start || ((uint32_t)prev_ebp+(sizeof(uint32_t)*2)) >= stack_end)
+            break;
         uint32_t prev_eip = *(prev_ebp + 1);
 
-        const char* name = lookup_symbol(prev_eip);
-        TRACE("\t0x%X %s", prev_eip, name ? name : "??");
-
+        data[index++] = prev_eip;
         ebp = prev_ebp;
-        if((uint8_t*)ebp <= &_initial_kernel_stack || (uint8_t*)ebp >= &_initial_kernel_stack + 4096) {
-            Process* current_process = Process::current_process();
-            if(!current_process)
-                break;
-            if((uint8_t*)ebp <= current_process->kernel_stack() || (uint8_t*)ebp >= current_process->kernel_stack() + 4096)
-                break;
-        }
+    }
+    
+    TRACE("Backtrace:");
+    for(unsigned i = 0; i < index; i++) {
+        const char* name = lookup_symbol(&_symtab, data[i]);
+        TRACE("\t0x%X %s", data[i], name ? name : "??");
     }
 }
 
@@ -63,15 +88,14 @@ void load_symbols(multiboot_info_t* multiboot_info) {
         unsigned size = mods[i].mod_end - mods[i].mod_start;
 
         if(!strcmp(cmdline, "symbols")) {
-            syms = (void*)mods[i].mod_start;
-            syms_size = size;
+            _symtab.data = (char*)kmalloc(size);
+            memcpy(_symtab.data, start, size);
+            _symtab.count = *((uint32_t*)_symtab.data);
+            _symtab.symtab = (struct symbol_t*)(_symtab.data + sizeof(uint32_t));
             break;
         }
     }
-    assert(syms);
-
-    _symbols = (symbol_t*)kmalloc(syms_size);
-    memcpy(_symbols, syms, syms_size);
+    assert(_symtab.data);
 }
 
 
