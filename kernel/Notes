@@ -6,8 +6,8 @@
 
 * exec/fork implementation
     1. Implement perform_iret [OK]
-    2. Implement KERNEL_TASK
-    3. Implement fork (only for KERNEL_TASK for now)
+    2. Implement KERNEL_TASK [OK]
+    3. Implement fork (only for KERNEL_TASK for now) [OK]
     4. Implement process states: READY, MSG_WAIT, TERMINATED, TIMED_SLEEP
     5. Implement scheduler (taking process state into account)
     6. Implement exec

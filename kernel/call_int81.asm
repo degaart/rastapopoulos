@@ -6,7 +6,7 @@ call_int81:
     mov ebp, esp
 
     int 0x81
-    xchg bx, bx
+    ;xchg bx, bx
 
     pop ebp
     ret

@@ -4,12 +4,140 @@
 		"selected_items":
 		[
 			[
-				"uint",
-				"uint8_t"
+				"handle",
+				"handler_t"
+			],
+			[
+				"scra",
+				"scratch_pa"
+			],
+			[
+				"Page",
+				"Pagedir"
+			],
+			[
+				"NULL",
+				"nullptr"
+			],
+			[
+				"KER",
+				"KERNEL_TASK"
+			],
+			[
+				"_curre",
+				"_current_process"
+			],
+			[
+				"_kernel",
+				"_kernel_stack"
+			],
+			[
+				"KERNEL_STA",
+				"KERNEL_STACK_START"
+			],
+			[
+				"_curr",
+				"_current_ring"
+			],
+			[
+				"create",
+				"create_pagedir"
+			],
+			[
+				"_kerne",
+				"_kernel_esp"
+			],
+			[
+				"work",
+				"_workingset_size"
+			],
+			[
+				"contex",
+				"context_stack"
+			],
+			[
+				"contx",
+				"context_stack"
+			],
+			[
+				"context",
+				"context_t"
+			],
+			[
+				"_cu",
+				"_current_ring"
+			],
+			[
+				"KERNE",
+				"KERNEL_STACK_END"
 			],
 			[
 				"PAGE_",
-				"PAGE_WRITABLE"
+				"PAGE_SIZE"
+			],
+			[
+				"USERS_",
+				"USERSPACE_END"
+			],
+			[
+				"uint",
+				"uint32_t"
+			],
+			[
+				"KERNEL_S",
+				"KERNEL_STACK_START"
+			],
+			[
+				"USERSPACE_",
+				"USERSPACE_END"
+			],
+			[
+				"_ker",
+				"_kernel_stack"
+			],
+			[
+				"_cure",
+				"_current_process"
+			],
+			[
+				"_current",
+				"_current_ring"
+			],
+			[
+				"alloc",
+				"alloc_stack"
+			],
+			[
+				"0x",
+				"0x400000"
+			],
+			[
+				"_sca",
+				"_scratch_buffer"
+			],
+			[
+				"page",
+				"pagedir"
+			],
+			[
+				"scta",
+				"_scratch"
+			],
+			[
+				"un",
+				"uint32_t"
+			],
+			[
+				"test",
+				"test_addr"
+			],
+			[
+				"scr",
+				"scratch_frame"
+			],
+			[
+				"PAGE",
+				"PAGE_SIZE"
 			],
 			[
 				"uin",
@@ -66,18 +194,6 @@
 			[
 				"multib",
 				"multiboot_v2_end"
-			],
-			[
-				"_kernel",
-				"_kernel_stack"
-			],
-			[
-				"_curre",
-				"_current_ring"
-			],
-			[
-				"PAGE",
-				"PAGE_PRESENT"
 			],
 			[
 				"dir",
@@ -212,14 +328,6 @@
 				"program_name"
 			],
 			[
-				"_current",
-				"_current_timestamp"
-			],
-			[
-				"un",
-				"unscheduling"
-			],
-			[
 				"_call",
 				"_callback_data"
 			],
@@ -268,10 +376,6 @@
 				"0xFF00"
 			],
 			[
-				"0x",
-				"0xB8000"
-			],
-			[
 				"paging",
 				"paging_enabled"
 			],
@@ -290,10 +394,6 @@
 			[
 				"al",
 				"alloc"
-			],
-			[
-				"page",
-				"PAGE_SIZE"
 			],
 			[
 				"kml",
@@ -414,116 +514,16 @@
 			[
 				"_CTOR",
 				"_CTORS_END_"
-			],
-			[
-				"cot",
-				"ctor"
-			],
-			[
-				"ctor",
-				"ctor0"
-			],
-			[
-				"_C",
-				"_CTORS_START_"
-			],
-			[
-				"_CT",
-				"_CTORS_END_"
-			],
-			[
-				"cpp",
-				"cpp"
-			],
-			[
-				"inc",
-				"include"
-			],
-			[
-				"calla",
-				"callback"
-			],
-			[
-				"write",
-				"write_char"
-			],
-			[
-				"ASM_",
-				"ASM_OBJS"
-			],
-			[
-				"i58",
-				"i586-elf-cpp"
-			],
-			[
-				"AS",
-				"ASM_OBJS"
-			],
-			[
-				"boot",
-				"bootldr"
-			],
-			[
-				"boo",
-				"bootsect"
-			],
-			[
-				"fprint",
-				"fprintf	fprintf …"
-			],
-			[
-				"file",
-				"filesize"
-			],
-			[
-				"X",
-				"X"
-			],
-			[
-				"PRO",
-				"PROCESS_ENTRY"
-			],
-			[
-				"write_debu",
-				"write_debug_string"
-			],
-			[
-				"SERIAL_LINE",
-				"SERIAL_LINE_STATUS_PORT"
-			],
-			[
-				"en",
-				"enabled"
-			],
-			[
-				"gt",
-				"getCurrentLine"
-			],
-			[
-				"proto",
-				"prototype"
-			],
-			[
-				"download",
-				"download_file"
-			],
-			[
-				"cache",
-				"cache_filename"
-			],
-			[
-				"tmp",
-				"tmpdir"
 			]
 		]
 	},
 	"buffers":
 	[
 		{
-			"file": "main.cpp",
+			"file": "syscall_nums.h",
 			"settings":
 			{
-				"buffer_size": 5017,
+				"buffer_size": 264,
 				"line_ending": "Unix"
 			}
 		},
@@ -531,7 +531,7 @@
 			"file": "process.h",
 			"settings":
 			{
-				"buffer_size": 2985,
+				"buffer_size": 3762,
 				"line_ending": "Unix"
 			}
 		},
@@ -539,15 +539,15 @@
 			"file": "process.cpp",
 			"settings":
 			{
-				"buffer_size": 12590,
+				"buffer_size": 13464,
 				"line_ending": "Unix"
 			}
 		},
 		{
-			"file": "initrd.h",
+			"file": "syscall.h",
 			"settings":
 			{
-				"buffer_size": 775,
+				"buffer_size": 475,
 				"line_ending": "Unix"
 			}
 		}
@@ -642,71 +642,98 @@
 	],
 	"file_history":
 	[
-		"/Users/zorro/Applications/Wineskin/MDK.app/Wineskin.app/Contents/Resources/winetricks",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/makedepend.sh",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/Makefile.depends",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/elf.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/elf.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/main.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/dynamic_array.cxx",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/dynamic_array.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/message.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel_task.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/backtrace.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Notes",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/context.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test_backtrace.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/debug.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/backtrace.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/call_int81.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/perform_iret.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/resume_from_interrupt.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/switch_to_usermode.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/kernel.map",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt_stub.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/debug.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/regs.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Files.mk",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel_task.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test_scheduler.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/context.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test_vmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/switch_context.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Nnotes",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/stub.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.cpp",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/C++.sublime-settings",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/C.sublime-settings",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/Default/Preferences.sublime-settings",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/ClangAutoComplete/ClangAutoComplete.py",
+		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/ClangAutoComplete/ClangAutoComplete.sublime-settings",
+		"/private/tmp/ClangAutoComplete-master/README.md",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/flush_tlb.asm",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pagedir.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/elf.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test_vmm.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.h",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.cpp",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/elf.c",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Makefile",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.h",
+		"/Users/zorro/Applications/Wineskin/MDK.app/Wineskin.app/Contents/Resources/winetricks",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/makedepend.sh",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/Makefile.depends",
+		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/backtrace.h",
 		"/Users/zorro/Desktop/Build/wxformbuilder/src/wxformbuilder/output/wxFormBuilder.app/Contents/SharedSupport/plugins/forms/xml/forms.cppcode",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/stub.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel.ld",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/kernel.map",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/call_ctors.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test_backtrace.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/backtrace.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/process.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/multiboot.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kheap.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel.sublime-project",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/io.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/io.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt_stub.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pmm_memregion.cpp",
 		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/SublimeGDB.sublime-settings",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/vmm.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/regs.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/syscall_nums.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/inb.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/io.o.S",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/outb.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/usermode_program.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kmalloc.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/port.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/port.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/linked_list.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/message.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Message.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pic.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pic.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/heap_block.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cxxrt.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/initrd_header.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/util.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/bitset.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/build.sh",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/hello.h",
@@ -715,32 +742,23 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/hello.c",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/timer.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/pit.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/debug.cpp",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/debug.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/resume_from_interrupt.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/switch_to_usermode.asm",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/read_eip.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/Notes",
 		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/SublimeGDB/SublimeGDB.sublime-settings",
 		"/Volumes/Kratos/VM/apt-cacher-ng/apt-cacher-ng/mirror.malagasy.com/debian/dists/stable/Release.head",
 		"/Volumes/Kratos/Projects/ZBackup/src/scripts/backup-kratos.sh",
 		"/private/tmp/Mass Effect 1/GAME/Mass Effect 1/# Installation Guide.txt",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/flush_tlb.asm",
 		"/Volumes/Kratos/Games/Mass Effect 1/INSTALLATION.txt",
 		"/Users/zorro/Desktop/Games/RE5 EnglishISO Upload/do not READ ME.txt",
 		"/Volumes/Kratos/Software/zpkg/packages.json",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/obj/main.o.S",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cxxutil.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/idt_flush.asm",
-		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/memmap.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/memmap.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/kernel_params.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/gdt_flush.asm",
 		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/User/rasta-build.sublime-build",
 		"/Volumes/Kratos/Sybase/SYBASE.lic 15.0 solaris x64",
-		"/Users/zorro/Library/Application Support/Sublime Text 3/Packages/Default/Preferences.sublime-settings",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/stream.h",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/test.cpp",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/cpprt.h",
@@ -751,25 +769,7 @@
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/debug.c",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/string.c",
 		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/kernel/kernel_stub.asm",
-		"/opt/bochs/share/doc/bochs/bochsrc-sample.txt",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/debug.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/bootldr_stub.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/debug.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/bootldr_str.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/util.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/io.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/inb.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/outb.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/Makefile",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/bootldr_str.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/bootldr.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/obj/debug.o.S",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/obj/io.o.S",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/util.c",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/bootldr_stub.asm",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/0.11/bootldr/io.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/srclib/istdio.h",
-		"/Volumes/Kratos/Projects/RastapopoulOS/src/tools/smallerc/SmallerC-master/v0100/srclib/doprint.c"
+		"/opt/bochs/share/doc/bochs/bochsrc-sample.txt"
 	],
 	"find":
 	{
@@ -790,6 +790,14 @@
 		"case_sensitive": false,
 		"find_history":
 		[
+			"create(",
+			"_Workingset_size",
+			"_current_pid",
+			"resume_next_process",
+			"switch_pagedir",
+			"EXE_MAGIC",
+			"complete",
+			"PROCESS_ENTRY",
 			"call_ctors",
 			"D00",
 			"100D00",
@@ -909,37 +917,35 @@
 	"groups":
 	[
 		{
-			"selected": 0,
+			"selected": 2,
 			"sheets":
 			[
 				{
 					"buffer": 0,
-					"file": "main.cpp",
+					"file": "syscall_nums.h",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 5017,
+						"buffer_size": 264,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								4983,
-								4983
+								235,
+								235
 							]
 						],
 						"settings":
 						{
-							"syntax": "Packages/C++/C++.tmLanguage",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
+							"syntax": "Packages/C++/C++.tmLanguage"
 						},
 						"translation.x": 0.0,
-						"translation.y": 534.0,
+						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 0,
+					"stack_index": 1,
 					"type": "text"
 				},
 				{
@@ -948,15 +954,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 2985,
+						"buffer_size": 3762,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								2262,
-								2226
+								2665,
+								2305
 							]
 						],
 						"settings":
@@ -966,10 +972,10 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 607.0,
+						"translation.y": 564.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 3,
+					"stack_index": 2,
 					"type": "text"
 				},
 				{
@@ -978,15 +984,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 12590,
+						"buffer_size": 13464,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								8823,
-								8823
+								13122,
+								13122
 							]
 						],
 						"settings":
@@ -996,40 +1002,38 @@
 							"translate_tabs_to_spaces": true
 						},
 						"translation.x": 0.0,
-						"translation.y": 1223.0,
+						"translation.y": 1206.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 1,
+					"stack_index": 0,
 					"type": "text"
 				},
 				{
 					"buffer": 3,
-					"file": "initrd.h",
+					"file": "syscall.h",
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 775,
+						"buffer_size": 475,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								556,
-								556
+								451,
+								451
 							]
 						],
 						"settings":
 						{
-							"syntax": "Packages/C++/C++.tmLanguage",
-							"tab_size": 4,
-							"translate_tabs_to_spaces": true
+							"syntax": "Packages/C++/C++.tmLanguage"
 						},
 						"translation.x": 0.0,
 						"translation.y": 0.0,
 						"zoom_level": 1.0
 					},
-					"stack_index": 2,
+					"stack_index": 3,
 					"type": "text"
 				}
 			]
@@ -1068,7 +1072,7 @@
 	"menu_visible": true,
 	"output.exec":
 	{
-		"height": 183.0
+		"height": 234.0
 	},
 	"output.find_results":
 	{

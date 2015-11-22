@@ -4,6 +4,9 @@
 #include <stdint.h>
 
 class KernelTask {
+private:
+    static void child1();
+    static void child2();
 public:
     static void entry();
 };

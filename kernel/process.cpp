@@ -11,6 +11,7 @@
 #include "elf.h"
 #include "kernel_task.h"
 #include "context.h"
+#include "syscall.h"
 
 #define EPHEMERAL_PORT_START 65536
 
@@ -44,30 +45,8 @@ Process::Process(uint32_t pid)
     _user_stack     = 0;
     _current_ring   = RING0;
     _kernel_esp     = 0;
+    _state          = NEW;
     bzero(&_regs, sizeof(_regs));
-
-#if 0
-    assert((KERNEL_STACK_START % VMM::PAGE_SIZE) == 0);
-    _current_ring       = RING3;
-    _kernel_esp         = KERNEL_STACK_END;
-    _regs.esp           = USER_STACK_END;
-    _regs.eax           = pid;
-    
-    read_eflags(_regs.eflags);
-    _regs.eflags        |= EFLAGS_IF;
-    _regs.eip           = 0;
-
-    _user_stack         = USER_STACK_END - VMM::PAGE_SIZE + 1;  /* gives a nice page-aligned stack */
-    assert((_user_stack % VMM::PAGE_SIZE) == 0);
-    _workingset_size    = 0;
-
-    if(alloc_stack) {
-        _pagedir = VMM::create_pagedir();
-        _pagedir->alloc(_user_stack, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE|VMM::PAGE_USER);
-        _pagedir->alloc(KERNEL_STACK_START, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-        _pagedir->alloc(KERNEL_STACK_START + VMM::PAGE_SIZE, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
-    }
-#endif
 }
 
 Process::~Process() {
@@ -172,21 +151,29 @@ void Process::resume_next_process(void* args, const isr_regs_t* regs) {
 }
 
 void Process::init() {
-    IDT::install_handler(0x81, fork);
+    IDT::install_handler(0x81, int_fork);
+    Syscall::install_handler(SYSCALL_PORT_OPEN, syscall_port_open);
+    Syscall::install_handler(SYSCALL_PORT_CLOSE, syscall_port_close);
+    Syscall::install_handler(SYSCALL_PORT_SEND, syscall_port_send);
+    Syscall::install_handler(SYSCALL_PORT_READ, syscall_port_read);
 
     // Create KERNEL_TASK
-    Process* kernel_task = create();
+    Process* kernel_task            = create();
     kernel_task->set_name("KERNEL_TASK");
-    kernel_task->_kernel_esp         = KERNEL_STACK_END;
-    kernel_task->_regs.esp           = KERNEL_STACK_END;
+    kernel_task->_kernel_esp        = KERNEL_STACK_END;
+    kernel_task->_regs.esp          = KERNEL_STACK_END;
     read_eflags(kernel_task->_regs.eflags);
-    kernel_task->_regs.eflags        |= EFLAGS_IF;
-    kernel_task->_regs.eip           = (uint32_t)KernelTask::entry;
-    kernel_task->_user_stack         = 0;
-    kernel_task->_pagedir            = VMM::create_pagedir();
-    TRACE("KERNEL_STACK_START: 0x%X", KERNEL_STACK_START);
-    TRACE("_kernel_esp: 0x%X", kernel_task->_kernel_esp);
+    kernel_task->_regs.eflags       |= EFLAGS_IF;
+    kernel_task->_regs.eip          = (uint32_t)KernelTask::entry;
+    kernel_task->_user_stack        = 0;
+    kernel_task->_pagedir           = VMM::create_pagedir();
     kernel_task->_pagedir->alloc(KERNEL_STACK_START, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
+    kernel_task->_kernel_stack      = KERNEL_STACK_START;
+    kernel_task->_state             = READY;
+
+    uint32_t eflags;
+    read_eflags(eflags);
+    assert(!(eflags & EFLAGS_IF));
 
     Timer::schedule(resume_next_process, nullptr, 250);
     switch_process(kernel_task);
@@ -375,35 +362,33 @@ void Process::check_writable_block(const void* buffer, size_t size) {
     }
 }
 
-void Process::fork(isr_regs_t* regs) {
+void Process::int_fork(isr_regs_t* regs) {
     // this interrupt should only be called from kernel-mode
     assert((regs->cs & 0x3) == 0);
 
-    Process* proc = create();
+    Process* proc           = create();
     proc->set_name(_current_process->name());
-    proc->_pagedir = VMM::clone_pagedir();
-
+    proc->_pagedir          = VMM::clone_pagedir();
+    proc->_state            = READY;
     assert(proc->_pagedir->is_mapped(KERNEL_STACK_START));
 
+    proc->_kernel_stack     = _current_process->_kernel_stack;
+    proc->_user_stack       = _current_process->_user_stack;
+    proc->_current_ring     = RING0;
 
-    proc->_kernel_stack = _current_process->_kernel_stack;
-    proc->_user_stack = _current_process->_user_stack;
-    proc->_current_ring = RING0;
+    proc->_kernel_esp       = (uint32_t)GDT::get_kernel_stack();
+    proc->_regs.esp         = regs->esp + 0x14;                 /* Just... dont ask, ok? */
+    proc->_regs.eflags      = regs->eflags;
+    proc->_regs.eip         = regs->eip;
+    proc->_regs.edi         = regs->edi;
+    proc->_regs.esi         = regs->esi;
+    proc->_regs.edx         = regs->edx;
+    proc->_regs.ecx         = regs->ecx;
+    proc->_regs.ebx         = regs->ebx;
+    proc->_regs.eax         = 0;                                /* Child gets 0 in eax, mmmkay? */
+    proc->_regs.ebp         = regs->ebp;
 
-    proc->_kernel_esp = (uint32_t)GDT::get_kernel_stack();
-    proc->_regs.esp = regs->esp + 0x14;                 /* Just... dont ask, ok? */
-    proc->_regs.eflags = regs->eflags;
-    proc->_regs.eip = regs->eip;
-    proc->_regs.edi = regs->edi;
-    proc->_regs.esi = regs->esi;
-    proc->_regs.edx = regs->edx;
-    proc->_regs.ecx = regs->ecx;
-    proc->_regs.ebx = regs->ebx;
-    proc->_regs.eax = 0;                /* Child gets 0 in eax, mmmkay? */
-    proc->_regs.ebp = regs->ebp;
-
-    TRACE("proc->eip: 0x%X", proc->_regs.eip);
-    regs->eax = proc->_pid;             /* And the parent receives child's PID */
+    regs->eax               = proc->_pid;                       /* And the parent receives child's PID */
 }
 
 uint8_t* Process::kernel_stack() {
@@ -411,11 +396,70 @@ uint8_t* Process::kernel_stack() {
 }
 
 uint32_t Process::next_pid() {
-    pushf();
-    cli();
+    uint32_t lock;
+    EnterCriticalSection(lock);
     uint32_t pid = _current_pid++;
-    popf();
+    LeaveCriticalSection(lock);
     return pid;
+}
+
+uint32_t Process::syscall_port_open(uint32_t port_number, uint32_t param1, uint32_t param2) {
+    return _current_process->open_port(port_number);
+}
+
+uint32_t Process::syscall_port_close(uint32_t port_number, uint32_t param1, uint32_t param2) {
+    return _current_process->close_port(port_number);
+}
+
+uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t param1, uint32_t param2) {
+    const Message_t* msg = (const Message_t*)param1;
+
+    /* Check message validity */
+    if(!msg) {
+        TRACE("Process %s: Invalid message at %p. Terminated", _current_process->name(), msg);
+        exit_current_process();
+        PANIC("Should not get here!");
+    }
+    // _current_process->check_readable_block(msg, sizeof(Message_t));
+    // _current_process->check_readable_block(msg->payload, msg->payload_size);
+    
+    Process* proc = Process::process_for_port(port_number);
+    if(proc == nullptr)
+        return false;
+
+    Port* port = proc->get_port(port_number);
+    if(port == nullptr)
+        return false;
+
+    port->send(*msg);
+    return true;
+}
+
+uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint32_t param2) {
+    Message_t* buffer = (Message_t*)param1;
+
+    if(!buffer) {
+        TRACE("Process %s: Invalid message at %p", _current_process->name(), buffer);
+        exit_current_process();
+        PANIC("Should not get here");
+    }
+    // proc->check_writable_block(buffer, sizeof(Message_t));
+    // proc->check_writable_block(buffer->payload, buffer->payload_size);
+
+    Port* port = _current_process->get_port(port_number);
+    if(!port) {
+        return false;
+    }
+
+    while(port->empty()) {
+        sti();
+        yield();
+        cli();
+    }
+
+    int32_t ret = port->read(buffer);
+    assert(ret >= 0);
+    return ret;
 }
 
 

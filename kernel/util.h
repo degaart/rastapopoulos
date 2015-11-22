@@ -7,6 +7,7 @@
     asm volatile(   \
         ".intel_syntax noprefix\n"      \
         "hlt\n"                         \
+        ::: "memory" \
     )
 
 #define halt()      \
@@ -19,26 +20,42 @@
     asm volatile( \
         ".intel_syntax noprefix\n" \
         "pushf\n" \
+        ::: "memory" \
     )
 
 #define popf() \
     asm volatile( \
         ".intel_syntax noprefix\n" \
         "popf\n" \
+        ::: "memory" \
     )
 
 #define sti() \
     asm volatile( \
         ".intel_syntax noprefix\n" \
         "sti\n" \
+        ::: "memory" \
     )
 
 #define cli() \
     asm volatile( \
         ".intel_syntax noprefix\n" \
         "cli\n" \
+        ::: "memory" \
     )
 
+#define EnterCriticalSection(handle) \
+    read_eflags(handle); \
+    handle &= EFLAGS_IF; \
+    cli()
+
+#define LeaveCriticalSection(handle) \
+    if(handle & EFLAGS_IF) \
+        sti(); \
+    else \
+        cli() 
+
+    
 
 #include "regs.h"
 
@@ -47,7 +64,7 @@
 #define LINKER_SYMBOL(sym) extern unsigned char sym[]
 
 LINKER_SYMBOL(_TEXT_START_);
-LINKER_SYMBOL(_TEXT_START_);
+LINKER_SYMBOL(_TEXT_END_);
 LINKER_SYMBOL(_RODATA_START_);
 LINKER_SYMBOL(_RODATA_END_);
 LINKER_SYMBOL(_DATA_START_);

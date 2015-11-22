@@ -83,12 +83,14 @@ extern "C" void isr_handler(isr_regs_t regs) {
 }
 
 void IDT::install_handler(int num, isr_handler_t handler, bool usermode) {
-    pushf();
-    cli();
+    uint32_t lock;
+    EnterCriticalSection(lock);
+
     isr_handlers[num] = handler;
     if(usermode)
         idt_entries[num].flags |= IDT_DPL3;
     else
         idt_entries[num].flags &= ~IDT_DPL3;
-    popf();
+    
+    LeaveCriticalSection(lock);
 }

@@ -9,7 +9,10 @@
 #include "Port.h"
 #include "vmm.h"
 
+class KernelTask;
+
 class Process {
+    friend class KernelTask;
 public:
     enum Ring {
         RING0,
@@ -20,6 +23,13 @@ public:
     static const uint32_t   KERNEL_STACK_END = VMM::USERSPACE_END;
     static const uint32_t   USER_STACK_END = KERNEL_STACK_START - 1;
 
+    enum State {
+        NEW,            /* Newly constructed, has no pagedir, stack, etc... */
+        READY,          /* Ready to run */
+        MSG_WAIT,       /* Waiting for a message */
+        SLEEP,          /* Sleeping until a deadline */
+        EXITED          /* Already exited, waiting for parent to reap */
+    };
 private:
     typedef LinkedList<Process*> ProcessList_t;
 
@@ -33,6 +43,7 @@ private:
     uint32_t                _kernel_esp;
     regs_t                  _regs;
     LinkedList<Port*>       _ports;                     /* Ports this process can read from */
+    State                   _state;
 
     static ProcessList_t    _processes;
     static Process*         _current_process;
@@ -52,7 +63,12 @@ private:
     static Process* next_process();
     static void resume_next_process(void* args, const isr_regs_t* regs);
     static uint32_t ephemeral_port_number();
-    static void fork(isr_regs_t* regs);
+    static void int_fork(isr_regs_t* regs);
+
+    static uint32_t syscall_port_open(uint32_t param0, uint32_t param1, uint32_t param2);
+    static uint32_t syscall_port_close(uint32_t param0, uint32_t param1, uint32_t param2);
+    static uint32_t syscall_port_send(uint32_t param0, uint32_t param1, uint32_t param2);
+    static uint32_t syscall_port_read(uint32_t param0, uint32_t param1, uint32_t param2);
 public:
     static void init();
     static Process* create();

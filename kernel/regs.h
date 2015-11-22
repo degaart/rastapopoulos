@@ -87,6 +87,11 @@
 #define EFLAGS_ID       (1 << 21)
 
     extern "C" uint32_t read_eip(void);
+    static bool interrupts_enabled() {
+        uint32_t eflags;
+        read_eflags(eflags);
+        return eflags & EFLAGS_IF;
+    }
 
     struct regs_t {
         uint32_t esp;

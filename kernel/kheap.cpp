@@ -8,10 +8,6 @@
 Heap* KHeap::_kheap;
 static const int INITIAL_HEAP_SIZE = VMM::PAGE_SIZE;
 
-#ifdef __APPLE__
-unsigned char _KERNEL_END_[INITIAL_HEAP_SIZE * 128];
-#endif
-
 void KHeap::init() {
     if(VMM::paging_enabled())
         PANIC("KHeap must be initialized prior to enabling paging");
@@ -29,9 +25,8 @@ void KHeap::dump() {
 }
 
 void* KHeap::alloc_impl(unsigned size, unsigned alignment) {
-    check();
-
     if(!VMM::paging_enabled()) {
+        check();
         void* ptr = _kheap->alloc<void>(size, alignment);
         while(!ptr) {
             /* Not enough space, must grow heap */
@@ -39,17 +34,16 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment) {
             TRACE("Growing kernel heap size by %d bytes", grow_size);
             _kheap->grow(grow_size);
             
-#ifdef __APPLE__
-            assert(end() < _KERNEL_END_ + (INITIAL_HEAP_SIZE * 128));
-#endif
-            
-            
             ptr = _kheap->alloc<void>(size, alignment);
         }
 
         check();
         return ptr;
     } else {
+        uint32_t lock;
+        EnterCriticalSection(lock);
+        check();
+
         void* ptr = _kheap->alloc<void>(size, alignment);
         while(!ptr) {
             unsigned grow_size = align(size, VMM::PAGE_SIZE);
@@ -61,6 +55,7 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment) {
             assert( reinterpret_cast<uint32_t>(_kheap->limit()) % VMM::PAGE_SIZE == 0 );
             for(unsigned i = 0; i<grow_pages; i++) {
                 if(end() + grow_size >= (uint8_t*)VMM::USERSPACE_START) {
+                    LeaveCriticalSection(lock);
                     return nullptr;
                 }
                 uint32_t page = PMM::alloc();
@@ -70,18 +65,23 @@ void* KHeap::alloc_impl(unsigned size, unsigned alignment) {
             _kheap->grow(grow_size);
             ptr = _kheap->alloc<void>(size, alignment);
         }
-
+        LeaveCriticalSection(lock);
         return ptr;
     }
 }
 
 void KHeap::free(void* ptr) {
+    uint32_t lock;
+    EnterCriticalSection(lock);
+
     check();
     
     if(ptr)
         _kheap->free(ptr);
 
     check();
+
+    LeaveCriticalSection(lock);
 }
 
 uint8_t* KHeap::start() {

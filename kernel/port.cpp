@@ -1,11 +1,14 @@
 #include "port.h"
 #include "string.h"
 #include "kmalloc.h"
+#include "util.h"
+#include "regs.h"
 
 void Port::send(const Message_t& message) {
     Message_t copy = message;
     copy.payload = kmalloc(message.payload_size);
     memcpy(copy.payload, message.payload, message.payload_size);
+
     messages.append(copy);
 }
 
@@ -31,4 +34,7 @@ int32_t Port::read(Message_t* buffer) {
 bool Port::empty() {
     return messages.size() == 0;
 }
+
+
+
 
