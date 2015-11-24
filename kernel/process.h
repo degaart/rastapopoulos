@@ -24,6 +24,7 @@ public:
     static const uint32_t   USER_STACK_END      = KERNEL_STACK_START - 1;
 
     static const uint32_t   YIELD_MSGWAIT       = 0x1;
+    static const uint32_t   YIELD_SLEEP         = 0x2;
 private:
     typedef LinkedList<Process*> ProcessList_t;
 
@@ -37,6 +38,7 @@ private:
     uint32_t                _kernel_esp;
     regs_t                  _regs;
     LinkedList<Port*>       _ports;                     /* Ports this process can read from */
+    uint64_t                _sleep_deadline;            /* ticks at which to wake process */
 
     static ProcessList_t    _processes;
     static Process*         _current_process;
@@ -71,13 +73,14 @@ private:
     static uint32_t syscall_port_send(uint32_t port_number, uint32_t msg, uint32_t unused1, isr_regs_t* regs);
     static uint32_t syscall_port_read(uint32_t port_number, uint32_t msg, uint32_t unused1, isr_regs_t* regs);
     static uint32_t syscall_fork(uint32_t unused0, uint32_t unused1, uint32_t unused2, isr_regs_t* regs);
-    static uint32_t syscall_yield(uint32_t flags, uint32_t unused1, uint32_t unused2, isr_regs_t* regs);
+    static uint32_t syscall_yield(uint32_t flags, uint32_t duration, uint32_t unused2, isr_regs_t* regs);
 public:
     static void init();
     static Process* create();
     static void switch_process();
     static Process* current_process();
     static Process* process_for_port(uint32_t port);
+    static void dump_queues();
 
     void load_elf(const char* filename);
     

@@ -6,6 +6,7 @@
 #include "process.h"
 #include "vmm.h"
 #include "process.h"
+#include "regs.h"
 
 bool Syscall::_initialized = false;
 DynamicArray<Syscall::handler_t> Syscall::_handlers;
@@ -45,5 +46,6 @@ uint32_t Syscall::syscall(uint32_t func, uint32_t param0, uint32_t param1, uint3
         : "=r"(ret)
         : "a"(func), "b"(param0), "c"(param1), "d"(param2)
     );
+
     return ret;
 }

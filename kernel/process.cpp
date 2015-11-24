@@ -114,6 +114,20 @@ void Process::switch_process() {
 
 void Process::timer_schedule(void* args, const isr_regs_t* regs) {
     save_context(regs);
+
+    /* Process sleep queue (they should be woken up as soon as possible) */
+    uint64_t now = Timer::current_timestamp();
+    ProcessList_t woken;
+    for(auto process = _sleep_queue.iterator(); process.valid(); process.next()) {
+        if(now >= (*process)->_sleep_deadline) {
+            woken.append(*process);
+        }
+    }
+    for(auto process = woken.iterator(); process.valid(); process.next()) {
+        _sleep_queue.remove_val(*process);
+        _ready_queue.push(*process);            /* Put at top of ready queue */
+    }
+
     _ready_queue.append(_current_process);
     switch_process();
     PANIC("Should not happen");
@@ -365,7 +379,7 @@ uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t msg_addr, uin
     if(port == nullptr)
         return false;
 
-    port->send(*msg);
+    port->send(*msg, _current_process);
 
     /* Update process state */
     if(_msgwait_queue.contains(dst_proc)) {
@@ -424,13 +438,22 @@ uint32_t Process::syscall_fork(uint32_t unused0, uint32_t unused1, uint32_t unus
     return proc->_pid;                                          /* And the parent receives child's PID */
 }
 
-uint32_t Process::syscall_yield(uint32_t flags, uint32_t unused0, uint32_t unused1, isr_regs_t* regs) {
-    if(flags & YIELD_MSGWAIT) {
-        if(_ready_queue.size() == 1) {
+uint32_t Process::syscall_yield(uint32_t flags, uint32_t duration, uint32_t unused1, isr_regs_t* regs) {
+    if(flags == YIELD_MSGWAIT) {
+        if(_processes.size() == 1) {
             PANIC("Deadlock: there is no other process to give you messages, dumbass!");
         } else {
             _msgwait_queue.push(_current_process);    
         }
+    } else if(flags == YIELD_SLEEP) {
+        assert(_processes.contains(_current_process));
+        assert(!_sleep_queue.contains(_current_process));
+        //Process not in _ready_queue because it was removed by switch_process()
+
+        _ready_queue.remove_val(_current_process);
+
+        _current_process->_sleep_deadline = Timer::current_timestamp() + duration;
+        _sleep_queue.push(_current_process);
     } else {
         if(_ready_queue.size() == 1) {
             sti();
@@ -446,4 +469,32 @@ uint32_t Process::syscall_yield(uint32_t flags, uint32_t unused0, uint32_t unuse
     return 0;
 }
 
+void Process::dump_queues() {
+    TRACE("Ready queue:");
+    for(auto i = _ready_queue.iterator(); i.valid(); i.next()) {
+        TRACE("\t%d\t%s", (*i)->_pid, (*i)->_name);
+    }
+
+    TRACE("MsgWait queue:");
+    for(auto i = _msgwait_queue.iterator(); i.valid(); i.next()) {
+        TRACE("\t%d\t%s", (*i)->_pid, (*i)->_name);
+    }
+
+    TRACE("Sleep queue:");
+    for(auto i = _sleep_queue.iterator(); i.valid(); i.next()) {
+        TRACE("\t%d\t%s", (*i)->_pid, (*i)->_name);
+    }
+
+    TRACE("Exited queue:");
+    for(auto i = _exited_queue.iterator(); i.valid(); i.next()) {
+        TRACE("\t%d\t%s", (*i)->_pid, (*i)->_name);
+    }
+
+    TRACE("All processes:");
+    for(auto i = _processes.iterator(); i.valid(); i.next()) {
+        TRACE("\t%d\t%s", (*i)->_pid, (*i)->_name);
+    }
+
+
+}
 

@@ -33,19 +33,6 @@ void String::itoa(char* str, unsigned n) {
 }
 
 void String::itox(char* str, unsigned n) {
-	/*if(!n) {
-		str[0] = '0';
-		str[1] = '\0';
-		return;
-	} else if(n < 10) {
-		str[0] = '0' + n;
-		str[1] = '\0';
-		return;
-	} else if(n < 16) {
-		str[0] = 'A' + (n - 10);
-		str[1] = '\0';
-		return;
-	} else {*/
 		char* out = str;
 		unsigned nibble = 8;
         
@@ -60,7 +47,6 @@ void String::itox(char* str, unsigned n) {
             nibble--;
     	}
         *out = '\0';
-	/*}*/
 }
 
 uint32_t String::xtoa(const char* str) {
