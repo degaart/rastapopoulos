@@ -50,6 +50,13 @@ private:
     static uint32_t         _current_pid;
     static uint32_t         _current_ephemeral_port;
 
+    /* Process queues */
+    static ProcessList_t    _ready_queue;           /* Processes ready to run */
+    static ProcessList_t    _msgwait_queue;         /* Processes waiting for a message */
+    static ProcessList_t    _sleep_queue;           /* Processes sleeping */
+    static ProcessList_t    _exited_queue;          /* Exited processes */
+
+
     Process(uint32_t pid);
     Process(uint32_t pid, const Process& proc) = delete; /* Dangerous, because of Pagedir ownership issues */
     ~Process();
@@ -61,14 +68,17 @@ private:
 
     static uint32_t next_pid();
     static Process* next_process();
-    static void resume_next_process(void* args, const isr_regs_t* regs);
+    static void timer_schedule(void* args, const isr_regs_t* regs);
+    static void timer_print_current_process(void* args, const isr_regs_t* regs);
     static uint32_t ephemeral_port_number();
-    static void int_fork(isr_regs_t* regs);
 
-    static uint32_t syscall_port_open(uint32_t param0, uint32_t param1, uint32_t param2);
-    static uint32_t syscall_port_close(uint32_t param0, uint32_t param1, uint32_t param2);
-    static uint32_t syscall_port_send(uint32_t param0, uint32_t param1, uint32_t param2);
-    static uint32_t syscall_port_read(uint32_t param0, uint32_t param1, uint32_t param2);
+    static void save_context(const isr_regs_t* regs);
+    static uint32_t syscall_port_open(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
+    static uint32_t syscall_port_close(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
+    static uint32_t syscall_port_send(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
+    static uint32_t syscall_port_read(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
+    static uint32_t syscall_fork(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
+    static uint32_t syscall_yield(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
 public:
     static void init();
     static Process* create();

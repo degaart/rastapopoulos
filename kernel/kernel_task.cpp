@@ -2,8 +2,31 @@
 #include "process.h"
 #include "io.h"
 #include "util.h"
+#include "syscall.h"
 
-extern "C" uint32_t call_int81(void);
+static uint32_t port_open(uint32_t port) {
+    return Syscall::syscall(SYSCALL_PORT_OPEN, port);
+}
+
+static uint32_t port_close(uint32_t port) {
+    return Syscall::syscall(SYSCALL_PORT_CLOSE, port);
+}
+
+static uint32_t port_send(uint32_t port, const Message_t* msg) {
+    return Syscall::syscall(SYSCALL_PORT_SEND, port, (uint32_t)msg);
+}
+
+static uint32_t port_read(uint32_t port, const Message_t* msg) {
+    return Syscall::syscall(SYSCALL_PORT_READ, port, (uint32_t)msg);
+}
+
+static uint32_t fork() {
+    return Syscall::syscall(SYSCALL_FORK);
+}
+
+static uint32_t _yield() {
+    return Syscall::syscall(SYSCALL_YIELD);
+}
 
 /*
     Child1 generates prime numbers
@@ -11,27 +34,23 @@ extern "C" uint32_t call_int81(void);
     Child2 is dumb and only prints stars
 */
 void KernelTask::entry() {
-    uint32_t pid = call_int81();
+    uint32_t pid = fork();
     if(!pid) {
         child1();
         halt();
     }
 
-    pid = call_int81();
+    pid = fork();
     if(!pid) {
         child2();
         halt();
     }
 
     /*
-        We must disable interrupts each time we call a kernel function,
-        as the kernel is not yet interrupt-safe
+        We can't directly call syscall handlers, as the kernel is not
+        yet interrupt-safe
     */
-    uint32_t lock;
-    EnterCriticalSection(lock);
-    uint32_t port = Process::syscall_port_open(1000, 0, 0);
-    LeaveCriticalSection(lock);
-
+    uint32_t port = port_open(1000);
     if(port == Process::INVALID_PORT) {
         TRACE("Failed to open port");
         halt();
@@ -41,25 +60,18 @@ void KernelTask::entry() {
     Message_t msg;
     bzero(&msg, sizeof(msg));
 
-    BREAKPOINT();
     do {
         msg.payload_size = sizeof(unsigned);
         msg.payload = &prime;
-
-        EnterCriticalSection(lock);
-        uint32_t ret = Process::syscall_port_read(port, (uint32_t)&msg, 0);
-        LeaveCriticalSection(lock);
-        if(ret)
+        if(port_read(port, &msg)) {
             PANIC("Failed to read from port %d", port);
+        }
 
         assert(msg.payload_size == sizeof(unsigned));
-        TRACE("%u", prime);
+        //outb(0xE9, '*');
     } while(true);
 
-    EnterCriticalSection(lock);
-    Process::syscall_port_close(port, 0, 0);
-    LeaveCriticalSection(lock);
-
+    port_close(port);
     halt();
 }
 
@@ -78,17 +90,17 @@ void KernelTask::child1() {
             msg.payload_size = sizeof(unsigned);
             msg.payload = &i;
 
-            EnterCriticalSection(lock);
-            Process::syscall_port_send(1000, (uint32_t)&msg, 0);
-            LeaveCriticalSection(lock);
+            port_send(1000, &msg);
         }
     }    
 }
 
 void KernelTask::child2() {
     while(true) {
-        yield();
-        outb(0xE9, '.');
+        for(unsigned i=0; i < 0x1000000; i++)
+            ;
+        //outb(0xE9, '.');
+        // _yield();
     }
 }
 

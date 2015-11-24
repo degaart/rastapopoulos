@@ -32,11 +32,7 @@ void Debug::panic(const char* file, unsigned line, const char* function, const c
     va_end(args);
     trace_write('\n', 0);
     backtrace();
-
-    while(1) {
-        cli();
-        halt();
-    }
+    halt();
 }
 
 void Debug::write_string(const char* str) {

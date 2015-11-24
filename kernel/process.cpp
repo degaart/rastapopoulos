@@ -12,6 +12,7 @@
 #include "kernel_task.h"
 #include "context.h"
 #include "syscall.h"
+#include "io.h"
 
 #define EPHEMERAL_PORT_START 65536
 
@@ -19,23 +20,6 @@ Process::ProcessList_t Process::_processes;
 Process* Process::_current_process = nullptr;
 uint32_t Process::_current_pid = 0;
 uint32_t Process::_current_ephemeral_port = EPHEMERAL_PORT_START;
-
-extern "C"
-void switch_to_usermode(
-    uint32_t esp, uint32_t eflags, uint32_t eip,
-    uint32_t edi, uint32_t esi,
-    uint32_t edx, uint32_t ecx, uint32_t ebx, uint32_t eax,
-    uint32_t ebp,
-    uint32_t cr3
-);
-
-extern "C"
-void resume_from_interrupt(
-    uint32_t esp, uint32_t eflags, uint32_t eip,
-    uint32_t edi, uint32_t esi,
-    uint32_t edx, uint32_t ecx, uint32_t ebx, uint32_t eax,
-    uint32_t ebp
-);
 
 Process::Process(uint32_t pid)
 : _pid(pid) {
@@ -50,6 +34,19 @@ Process::Process(uint32_t pid)
 }
 
 Process::~Process() {
+    /* Walk each queue, the current process shouldn't be in any of them */
+    // assert(this != _current_process);
+    // for(ProcessList_t::iterator i = _ready_queue; i.valid(); i.next())
+    //     assert(this != *i);
+    // for(ProcessList_t::iterator i = _msgwait_queue; i.valid(); i.next())
+    //     assert(this != *i);
+    // for(ProcessList_t::iterator i = _sleep_queue; i.valid(); i.next())
+    //     assert(this != *i);
+    // for(ProcessList_t::iterator i = _exited_queue; i.valid(); i.next())
+    //     assert(this != *i);
+    // for(ProcessList_t::iterator i = _processes; i.valid(); i.next())
+    //     assert(this != *i);
+
     TRACE("Destroying %s (pid %u)", _name, _pid);
     for(auto i = _ports.iterator(); i.valid(); i.next()) {
         delete *i;
@@ -75,6 +72,8 @@ void Process::switch_process(Process* process) {
     assert(process->_name);
     assert(process->_pagedir);
     assert((process->_current_ring == RING0) || (process->_current_ring == RING3));
+    // assert(process != _current_process);
+    // assert(_ready_queue.contains(process));
 
     //TRACE("Switching to process %s (PID %u) in ring %u", process->name(), process->_pid, process->_current_ring);
     _current_process = process;
@@ -105,57 +104,32 @@ void Process::switch_process(Process* process) {
     ctx.regs.ebx = process->_regs.ebx;
     ctx.regs.eax = process->_regs.eax;
     ctx.regs.ebp = process->_regs.ebp;
+
     switch_context(&ctx);
     PANIC("Returned from switch_context()!!!");
 }
 
-void Process::resume_next_process(void* args, const isr_regs_t* regs) {
-    assert(_current_process != nullptr);
-
-    Ring current_ring = (regs->cs & 0x3) ? RING3 : RING0;
-    // TRACE("%s preempted in ring %u", _current_process->name, (unsigned)current_ring);
-
-    if(current_ring == RING3) {
-        /* Interrupt originated from ring3 */
-        _current_process->_current_ring = current_ring;
-        _current_process->_kernel_esp = (uint32_t)GDT::get_kernel_stack();
-        _current_process->_regs.esp = regs->useresp;
-        _current_process->_regs.eflags = regs->eflags;
-        _current_process->_regs.eip = regs->eip;
-        _current_process->_regs.edi = regs->edi;
-        _current_process->_regs.esi = regs->esi;
-        _current_process->_regs.edx = regs->edx;
-        _current_process->_regs.ecx = regs->ecx;
-        _current_process->_regs.ebx = regs->ebx;
-        _current_process->_regs.eax = regs->eax;
-        _current_process->_regs.ebp = regs->ebp;
-    } else {
-        /* Interrupt originated from ring0 */
-        _current_process->_current_ring = current_ring;
-        _current_process->_kernel_esp = (uint32_t)GDT::get_kernel_stack();        /* Restored on kernel process switch in switch_process() */
-        _current_process->_regs.esp = regs->esp + 0x14;       /* State of ESP before the pusha in isr_stub */
-        _current_process->_regs.eflags = regs->eflags;
-        _current_process->_regs.eip = regs->eip;
-        _current_process->_regs.edi = regs->edi;
-        _current_process->_regs.esi = regs->esi;
-        _current_process->_regs.edx = regs->edx;
-        _current_process->_regs.ecx = regs->ecx;
-        _current_process->_regs.ebx = regs->ebx;
-        _current_process->_regs.eax = regs->eax;
-        _current_process->_regs.ebp = regs->ebp;
-    }
-
-    /* Switch to next process */
+void Process::timer_schedule(void* args, const isr_regs_t* regs) {
+    save_context(regs);
     switch_process(next_process());
     PANIC("Should not happen");
 }
 
+void Process::timer_print_current_process(void* args, const isr_regs_t* regs) {
+    if(_current_process) {
+        char buffer[10];
+        String::itoa(buffer, _current_process->pid());
+        Debug::write_string(buffer);
+    }
+}
+
 void Process::init() {
-    IDT::install_handler(0x81, int_fork);
     Syscall::install_handler(SYSCALL_PORT_OPEN, syscall_port_open);
     Syscall::install_handler(SYSCALL_PORT_CLOSE, syscall_port_close);
     Syscall::install_handler(SYSCALL_PORT_SEND, syscall_port_send);
     Syscall::install_handler(SYSCALL_PORT_READ, syscall_port_read);
+    Syscall::install_handler(SYSCALL_FORK, syscall_fork);
+    Syscall::install_handler(SYSCALL_YIELD, syscall_yield);
 
     // Create KERNEL_TASK
     Process* kernel_task            = create();
@@ -175,7 +149,8 @@ void Process::init() {
     read_eflags(eflags);
     assert(!(eflags & EFLAGS_IF));
 
-    Timer::schedule(resume_next_process, nullptr, 250);
+    Timer::schedule(timer_schedule, nullptr, 250);
+    Timer::schedule(timer_print_current_process, nullptr, 40);
     switch_process(kernel_task);
 }
 
@@ -199,19 +174,33 @@ void Process::exit_current_process() {
 Process* Process::next_process() {
     assert(_processes.size() != 0);
 
+    /* This doesn't work: the third process gets no cpu time */
+
     /* If no current process, return first process */
     if(_current_process == nullptr)
         return *_processes.iterator();
     
     /* Else return process immediately following current process */
     ProcessList_t::Iterator it = _processes.find(_current_process);
-    assert(it.valid());
-    it.next();
-    if(it.valid())
-        return *it;
-    
-    /* Else return first process */
-    return *_processes.iterator();
+    while(it.valid()) {
+        if((*it)->_state == READY)
+            return *it;
+        it.next();
+    }
+
+    /* Else, start again */
+    it = _processes.iterator();
+    while(it.valid()) {
+        if((*it)->_state == READY)
+            return *it;
+        it.next();
+    }
+
+    /* Else this is an error. There should at least be a runnable process */
+    PANIC("No runnable processes found");
+
+    /* Just to make the compiler happy */
+    return nullptr;
 }
 
 void Process::load_elf(const char* filename) {
@@ -362,35 +351,6 @@ void Process::check_writable_block(const void* buffer, size_t size) {
     }
 }
 
-void Process::int_fork(isr_regs_t* regs) {
-    // this interrupt should only be called from kernel-mode
-    assert((regs->cs & 0x3) == 0);
-
-    Process* proc           = create();
-    proc->set_name(_current_process->name());
-    proc->_pagedir          = VMM::clone_pagedir();
-    proc->_state            = READY;
-    assert(proc->_pagedir->is_mapped(KERNEL_STACK_START));
-
-    proc->_kernel_stack     = _current_process->_kernel_stack;
-    proc->_user_stack       = _current_process->_user_stack;
-    proc->_current_ring     = RING0;
-
-    proc->_kernel_esp       = (uint32_t)GDT::get_kernel_stack();
-    proc->_regs.esp         = regs->esp + 0x14;                 /* Just... dont ask, ok? */
-    proc->_regs.eflags      = regs->eflags;
-    proc->_regs.eip         = regs->eip;
-    proc->_regs.edi         = regs->edi;
-    proc->_regs.esi         = regs->esi;
-    proc->_regs.edx         = regs->edx;
-    proc->_regs.ecx         = regs->ecx;
-    proc->_regs.ebx         = regs->ebx;
-    proc->_regs.eax         = 0;                                /* Child gets 0 in eax, mmmkay? */
-    proc->_regs.ebp         = regs->ebp;
-
-    regs->eax               = proc->_pid;                       /* And the parent receives child's PID */
-}
-
 uint8_t* Process::kernel_stack() {
     return (uint8_t*)_kernel_stack;
 }
@@ -403,15 +363,37 @@ uint32_t Process::next_pid() {
     return pid;
 }
 
-uint32_t Process::syscall_port_open(uint32_t port_number, uint32_t param1, uint32_t param2) {
+void Process::save_context(const isr_regs_t* regs) {
+    assert(_current_process != nullptr);
+
+    _current_process->_current_ring = regs->cs & 0x3 ? RING3 : RING0;
+
+    if(_current_process->_current_ring == RING3)
+        _current_process->_regs.esp     = regs->useresp;
+    else
+        _current_process->_regs.esp     = regs->esp + 0x14;
+
+    _current_process->_kernel_esp       = (uint32_t)GDT::get_kernel_stack();
+    _current_process->_regs.eflags      = regs->eflags;
+    _current_process->_regs.eip         = regs->eip;
+    _current_process->_regs.edi         = regs->edi;
+    _current_process->_regs.esi         = regs->esi;
+    _current_process->_regs.edx         = regs->edx;
+    _current_process->_regs.ecx         = regs->ecx;
+    _current_process->_regs.ebx         = regs->ebx;
+    _current_process->_regs.eax         = regs->eax;
+    _current_process->_regs.ebp         = regs->ebp;
+}
+
+uint32_t Process::syscall_port_open(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
     return _current_process->open_port(port_number);
 }
 
-uint32_t Process::syscall_port_close(uint32_t port_number, uint32_t param1, uint32_t param2) {
+uint32_t Process::syscall_port_close(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
     return _current_process->close_port(port_number);
 }
 
-uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t param1, uint32_t param2) {
+uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
     const Message_t* msg = (const Message_t*)param1;
 
     /* Check message validity */
@@ -432,10 +414,15 @@ uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t param1, uint3
         return false;
 
     port->send(*msg);
+
+    /* Update process state */
+    if(proc->_state == MSG_WAIT)
+        proc->_state = READY;
+
     return true;
 }
 
-uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint32_t param2) {
+uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
     Message_t* buffer = (Message_t*)param1;
 
     if(!buffer) {
@@ -452,9 +439,8 @@ uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint3
     }
 
     while(port->empty()) {
-        sti();
-        yield();
-        cli();
+        _current_process->_state = MSG_WAIT;
+        Syscall::syscall(SYSCALL_YIELD);
     }
 
     int32_t ret = port->read(buffer);
@@ -462,5 +448,44 @@ uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint3
     return ret;
 }
 
+uint32_t Process::syscall_fork(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
+    Process* proc           = create();
+    proc->set_name(_current_process->name());
+    proc->_pagedir          = VMM::clone_pagedir();
+    proc->_state            = READY;
+    assert(proc->_pagedir->is_mapped(KERNEL_STACK_START));
+
+    proc->_kernel_stack     = _current_process->_kernel_stack;
+    proc->_user_stack       = _current_process->_user_stack;
+    proc->_current_ring     = _current_process->_current_ring;
+
+    proc->_kernel_esp       = (uint32_t)GDT::get_kernel_stack();
+    proc->_regs.esp         = regs->esp + 0x14;                 /* Just... dont ask, ok? */
+    proc->_regs.eflags      = regs->eflags;
+    proc->_regs.eip         = regs->eip;
+    proc->_regs.edi         = regs->edi;
+    proc->_regs.esi         = regs->esi;
+    proc->_regs.edx         = regs->edx;
+    proc->_regs.ecx         = regs->ecx;
+    proc->_regs.ebx         = regs->ebx;
+    proc->_regs.eax         = 0;                                /* Child gets 0 in eax, mmmkay? */
+    proc->_regs.ebp         = regs->ebp;
+
+    return proc->_pid;                                          /* And the parent receives child's PID */
+}
+
+uint32_t Process::syscall_yield(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
+    Process* next_process = Process::next_process();
+    assert(next_process);
+
+    if(next_process == _current_process) {
+        sti();
+        yield();
+    } else {
+        save_context(regs);
+        switch_process(next_process);
+    }
+    return 0;
+}
 
 

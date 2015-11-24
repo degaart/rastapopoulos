@@ -6,10 +6,10 @@
 #define SYSCALL_PORT_SEND       0x03
 #define SYSCALL_PORT_READ       0x04
 #define SYSCALL_FORK            0x05
+#define SYSCALL_YIELD           0x06
 
 #define SYSCALL_HALT            0xFFF0
 #define SYSCALL_TRACE           0xFFF1
-#define SYSCALL_YIELD           0xFFF2
 #define SYSCALL_EXIT            0xFFF3
 #define SYSCALL_MMAP            0xFFF4
 #define SYSCALL_OUTB            0xFFF5
