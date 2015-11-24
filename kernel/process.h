@@ -19,17 +19,11 @@ public:
         RING3
     };
 
-    static const uint32_t   KERNEL_STACK_START = VMM::USERSPACE_END + 1 - VMM::PAGE_SIZE;
-    static const uint32_t   KERNEL_STACK_END = VMM::USERSPACE_END;
-    static const uint32_t   USER_STACK_END = KERNEL_STACK_START - 1;
+    static const uint32_t   KERNEL_STACK_START  = VMM::USERSPACE_END + 1 - VMM::PAGE_SIZE;
+    static const uint32_t   KERNEL_STACK_END    = VMM::USERSPACE_END;
+    static const uint32_t   USER_STACK_END      = KERNEL_STACK_START - 1;
 
-    enum State {
-        NEW,            /* Newly constructed, has no pagedir, stack, etc... */
-        READY,          /* Ready to run */
-        MSG_WAIT,       /* Waiting for a message */
-        SLEEP,          /* Sleeping until a deadline */
-        EXITED          /* Already exited, waiting for parent to reap */
-    };
+    static const uint32_t   YIELD_MSGWAIT       = 0x1;
 private:
     typedef LinkedList<Process*> ProcessList_t;
 
@@ -43,7 +37,6 @@ private:
     uint32_t                _kernel_esp;
     regs_t                  _regs;
     LinkedList<Port*>       _ports;                     /* Ports this process can read from */
-    State                   _state;
 
     static ProcessList_t    _processes;
     static Process*         _current_process;
@@ -73,17 +66,16 @@ private:
     static uint32_t ephemeral_port_number();
 
     static void save_context(const isr_regs_t* regs);
-    static uint32_t syscall_port_open(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
-    static uint32_t syscall_port_close(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
-    static uint32_t syscall_port_send(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
-    static uint32_t syscall_port_read(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
-    static uint32_t syscall_fork(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
-    static uint32_t syscall_yield(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs);
+    static uint32_t syscall_port_open(uint32_t port_number, uint32_t unused0, uint32_t unused1, isr_regs_t* regs);
+    static uint32_t syscall_port_close(uint32_t port_number, uint32_t unused0, uint32_t unused1, isr_regs_t* regs);
+    static uint32_t syscall_port_send(uint32_t port_number, uint32_t msg, uint32_t unused1, isr_regs_t* regs);
+    static uint32_t syscall_port_read(uint32_t port_number, uint32_t msg, uint32_t unused1, isr_regs_t* regs);
+    static uint32_t syscall_fork(uint32_t unused0, uint32_t unused1, uint32_t unused2, isr_regs_t* regs);
+    static uint32_t syscall_yield(uint32_t flags, uint32_t unused1, uint32_t unused2, isr_regs_t* regs);
 public:
     static void init();
     static Process* create();
-    static void switch_process(Process* proc);
-    static void exit_current_process();
+    static void switch_process();
     static Process* current_process();
     static Process* process_for_port(uint32_t port);
 

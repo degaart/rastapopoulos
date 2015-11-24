@@ -20,6 +20,10 @@ Process::ProcessList_t Process::_processes;
 Process* Process::_current_process = nullptr;
 uint32_t Process::_current_pid = 0;
 uint32_t Process::_current_ephemeral_port = EPHEMERAL_PORT_START;
+Process::ProcessList_t Process::_ready_queue;
+Process::ProcessList_t Process::_msgwait_queue;
+Process::ProcessList_t Process::_sleep_queue;
+Process::ProcessList_t Process::_exited_queue;
 
 Process::Process(uint32_t pid)
 : _pid(pid) {
@@ -29,23 +33,22 @@ Process::Process(uint32_t pid)
     _user_stack     = 0;
     _current_ring   = RING0;
     _kernel_esp     = 0;
-    _state          = NEW;
     bzero(&_regs, sizeof(_regs));
 }
 
 Process::~Process() {
     /* Walk each queue, the current process shouldn't be in any of them */
-    // assert(this != _current_process);
-    // for(ProcessList_t::iterator i = _ready_queue; i.valid(); i.next())
-    //     assert(this != *i);
-    // for(ProcessList_t::iterator i = _msgwait_queue; i.valid(); i.next())
-    //     assert(this != *i);
-    // for(ProcessList_t::iterator i = _sleep_queue; i.valid(); i.next())
-    //     assert(this != *i);
-    // for(ProcessList_t::iterator i = _exited_queue; i.valid(); i.next())
-    //     assert(this != *i);
-    // for(ProcessList_t::iterator i = _processes; i.valid(); i.next())
-    //     assert(this != *i);
+    assert(this != _current_process);
+    for(auto i = _ready_queue.iterator(); i.valid(); i.next())
+        assert(this != *i);
+    for(auto i = _msgwait_queue.iterator(); i.valid(); i.next())
+        assert(this != *i);
+    for(auto i = _sleep_queue.iterator(); i.valid(); i.next())
+        assert(this != *i);
+    for(auto i = _exited_queue.iterator(); i.valid(); i.next())
+        assert(this != *i);
+    for(auto i = _processes.iterator(); i.valid(); i.next())
+        assert(this != *i);
 
     TRACE("Destroying %s (pid %u)", _name, _pid);
     for(auto i = _ports.iterator(); i.valid(); i.next()) {
@@ -66,14 +69,14 @@ Process* Process::create() {
     return proc;
 }
 
-void Process::switch_process(Process* process) {
+void Process::switch_process() {
+    Process* process = _ready_queue.pop();
+
     assert(_processes.contains(process));
     assert(process->_kernel_esp);
     assert(process->_name);
     assert(process->_pagedir);
     assert((process->_current_ring == RING0) || (process->_current_ring == RING3));
-    // assert(process != _current_process);
-    // assert(_ready_queue.contains(process));
 
     //TRACE("Switching to process %s (PID %u) in ring %u", process->name(), process->_pid, process->_current_ring);
     _current_process = process;
@@ -111,7 +114,8 @@ void Process::switch_process(Process* process) {
 
 void Process::timer_schedule(void* args, const isr_regs_t* regs) {
     save_context(regs);
-    switch_process(next_process());
+    _ready_queue.append(_current_process);
+    switch_process();
     PANIC("Should not happen");
 }
 
@@ -124,6 +128,8 @@ void Process::timer_print_current_process(void* args, const isr_regs_t* regs) {
 }
 
 void Process::init() {
+    assert(!interrupts_enabled());
+
     Syscall::install_handler(SYSCALL_PORT_OPEN, syscall_port_open);
     Syscall::install_handler(SYSCALL_PORT_CLOSE, syscall_port_close);
     Syscall::install_handler(SYSCALL_PORT_SEND, syscall_port_send);
@@ -143,71 +149,20 @@ void Process::init() {
     kernel_task->_pagedir           = VMM::create_pagedir();
     kernel_task->_pagedir->alloc(KERNEL_STACK_START, VMM::PAGE_PRESENT|VMM::PAGE_WRITABLE);
     kernel_task->_kernel_stack      = KERNEL_STACK_START;
-    kernel_task->_state             = READY;
-
-    uint32_t eflags;
-    read_eflags(eflags);
-    assert(!(eflags & EFLAGS_IF));
+    _ready_queue.append(kernel_task);
 
     Timer::schedule(timer_schedule, nullptr, 250);
     Timer::schedule(timer_print_current_process, nullptr, 40);
-    switch_process(kernel_task);
-}
-
-void Process::exit_current_process() {
-    Process* proc = _current_process;
-    _current_process = next_process();
-    if(_current_process == proc) {
-        PANIC("No more processes to run!");
-    }
-
-    _processes.remove_val(proc);
-
-    //VMM::switch_pagedir(_current_process->_pagedir);
-    delete(proc);
-    proc = nullptr;
-
-    switch_process(_current_process);
-    PANIC("Should not happen");
+    switch_process();
 }
 
 Process* Process::next_process() {
     assert(_processes.size() != 0);
-
-    /* This doesn't work: the third process gets no cpu time */
-
-    /* If no current process, return first process */
-    if(_current_process == nullptr)
-        return *_processes.iterator();
-    
-    /* Else return process immediately following current process */
-    ProcessList_t::Iterator it = _processes.find(_current_process);
-    while(it.valid()) {
-        if((*it)->_state == READY)
-            return *it;
-        it.next();
-    }
-
-    /* Else, start again */
-    it = _processes.iterator();
-    while(it.valid()) {
-        if((*it)->_state == READY)
-            return *it;
-        it.next();
-    }
-
-    /* Else this is an error. There should at least be a runnable process */
-    PANIC("No runnable processes found");
-
-    /* Just to make the compiler happy */
-    return nullptr;
+    return _ready_queue.head();
 }
 
 void Process::load_elf(const char* filename) {
-    /*if(_workingset_size != 0) {
-        PANIC("Process image already loaded");
-    }*/
-
+    /* TODO: handle the case when already loaded */
     Initrd::File* file = Initrd::get().open(filename);
     if(!file) {
         PANIC("File not found: %s", filename);
@@ -261,10 +216,13 @@ void Process::set_name(const char* name) {
 uint32_t Process::open_port(uint32_t port_number) {
     if(port_number != INVALID_PORT) {
         /* Check if another process hasn't opened that port */
-        if(process_for_port(port_number) != nullptr) {
+        Process* p = process_for_port(port_number);
+        if(p != nullptr) {
+            TRACE("Process %u has already opened port %d", p->_pid, port_number);
             return INVALID_PORT;
         }
     } else if(port_number >= EPHEMERAL_PORT_START) {
+        TRACE("Invalid port number: %d", port_number);
         return INVALID_PORT;
     } else {
         port_number = ephemeral_port_number();
@@ -327,11 +285,9 @@ void Process::check_readable_block(const void* buffer, size_t size) {
     uint32_t first_unreadable, first_invalid;
     if(!_pagedir->check_readable_block(buffer, size, &first_unreadable, &first_invalid)) {
         if(first_unreadable) {
-            TRACE("Process %s: Access violation (unreadable page) at page 0x%X. Terminated", _name, first_unreadable);
-            exit_current_process();
+            PANIC("Process %s: Access violation (unreadable page) at page 0x%X. Terminated", _name, first_unreadable);
         } else {
-            TRACE("Process %s: Unmapped page at 0x%X. Terminated", _name, first_invalid);
-            exit_current_process();
+            PANIC("Process %s: Unmapped page at 0x%X. Terminated", _name, first_invalid);
         }
     }
 }
@@ -342,11 +298,9 @@ void Process::check_writable_block(const void* buffer, size_t size) {
     uint32_t first_readonly, first_invalid;
     if(!_pagedir->check_writable_block(buffer, size, &first_readonly, &first_invalid)) {
         if(first_readonly) {
-            TRACE("Process %s: Access violation (read-only) at page at 0x%X. Terminated", _name, first_readonly);
-            exit_current_process();
+            PANIC("Process %s: Access violation (read-only) at page at 0x%X. Terminated", _name, first_readonly);
         } else {
-            TRACE("Process %s: Unmapped page at 0x%X. Terminated", _name, first_invalid);
-            exit_current_process();
+            PANIC("Process %s: Unmapped page at 0x%X. Terminated", _name, first_invalid);
         }
     }
 }
@@ -385,50 +339,47 @@ void Process::save_context(const isr_regs_t* regs) {
     _current_process->_regs.ebp         = regs->ebp;
 }
 
-uint32_t Process::syscall_port_open(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
+uint32_t Process::syscall_port_open(uint32_t port_number, uint32_t unused0, uint32_t unused1, isr_regs_t* regs) {
     return _current_process->open_port(port_number);
 }
 
-uint32_t Process::syscall_port_close(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
+uint32_t Process::syscall_port_close(uint32_t port_number, uint32_t unused0, uint32_t unused1, isr_regs_t* regs) {
     return _current_process->close_port(port_number);
 }
 
-uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
-    const Message_t* msg = (const Message_t*)param1;
+uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t msg_addr, uint32_t unused1, isr_regs_t* regs) {
+    const Message_t* msg = (const Message_t*)msg_addr;
 
     /* Check message validity */
     if(!msg) {
-        TRACE("Process %s: Invalid message at %p. Terminated", _current_process->name(), msg);
-        exit_current_process();
-        PANIC("Should not get here!");
+        PANIC("Process %s: Invalid message at %p", _current_process->name(), msg);
     }
     // _current_process->check_readable_block(msg, sizeof(Message_t));
     // _current_process->check_readable_block(msg->payload, msg->payload_size);
     
-    Process* proc = Process::process_for_port(port_number);
-    if(proc == nullptr)
+    Process* dst_proc = Process::process_for_port(port_number);
+    if(dst_proc == nullptr)
         return false;
 
-    Port* port = proc->get_port(port_number);
+    Port* port = dst_proc->get_port(port_number);
     if(port == nullptr)
         return false;
 
     port->send(*msg);
 
     /* Update process state */
-    if(proc->_state == MSG_WAIT)
-        proc->_state = READY;
-
+    if(_msgwait_queue.contains(dst_proc)) {
+        _msgwait_queue.remove_val(dst_proc);
+        _ready_queue.append(dst_proc);
+    }
     return true;
 }
 
-uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
-    Message_t* buffer = (Message_t*)param1;
+uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t msg_addr, uint32_t unused1, isr_regs_t* regs) {
+    Message_t* buffer = (Message_t*)msg_addr;
 
     if(!buffer) {
-        TRACE("Process %s: Invalid message at %p", _current_process->name(), buffer);
-        exit_current_process();
-        PANIC("Should not get here");
+        PANIC("Process %s: Invalid message at %p", _current_process->name(), buffer);
     }
     // proc->check_writable_block(buffer, sizeof(Message_t));
     // proc->check_writable_block(buffer->payload, buffer->payload_size);
@@ -439,8 +390,7 @@ uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint3
     }
 
     while(port->empty()) {
-        _current_process->_state = MSG_WAIT;
-        Syscall::syscall(SYSCALL_YIELD);
+        Syscall::syscall(SYSCALL_YIELD, YIELD_MSGWAIT);
     }
 
     int32_t ret = port->read(buffer);
@@ -448,11 +398,10 @@ uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t param1, uint3
     return ret;
 }
 
-uint32_t Process::syscall_fork(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
+uint32_t Process::syscall_fork(uint32_t unused0, uint32_t unused1, uint32_t unused2, isr_regs_t* regs) {
     Process* proc           = create();
     proc->set_name(_current_process->name());
     proc->_pagedir          = VMM::clone_pagedir();
-    proc->_state            = READY;
     assert(proc->_pagedir->is_mapped(KERNEL_STACK_START));
 
     proc->_kernel_stack     = _current_process->_kernel_stack;
@@ -470,21 +419,30 @@ uint32_t Process::syscall_fork(uint32_t param0, uint32_t param1, uint32_t param2
     proc->_regs.ebx         = regs->ebx;
     proc->_regs.eax         = 0;                                /* Child gets 0 in eax, mmmkay? */
     proc->_regs.ebp         = regs->ebp;
+    _ready_queue.append(proc);
 
     return proc->_pid;                                          /* And the parent receives child's PID */
 }
 
-uint32_t Process::syscall_yield(uint32_t param0, uint32_t param1, uint32_t param2, isr_regs_t* regs) {
-    Process* next_process = Process::next_process();
-    assert(next_process);
-
-    if(next_process == _current_process) {
-        sti();
-        yield();
+uint32_t Process::syscall_yield(uint32_t flags, uint32_t unused0, uint32_t unused1, isr_regs_t* regs) {
+    if(flags & YIELD_MSGWAIT) {
+        if(_ready_queue.size() == 1) {
+            PANIC("Deadlock: there is no other process to give you messages, dumbass!");
+        } else {
+            _msgwait_queue.push(_current_process);    
+        }
     } else {
-        save_context(regs);
-        switch_process(next_process);
+        if(_ready_queue.size() == 1) {
+            sti();
+            yield();
+            cli();
+            return 0;
+        }
+        _ready_queue.append(_current_process);
     }
+
+    save_context(regs);
+    switch_process();
     return 0;
 }
 
