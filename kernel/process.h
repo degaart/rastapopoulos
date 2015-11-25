@@ -81,6 +81,7 @@ public:
     static Process* current_process();
     static Process* process_for_port(uint32_t port);
     static void dump_queues();
+    static void dump_queues_compact();
 
     void load_elf(const char* filename);
     

@@ -4,7 +4,7 @@
 #include "util.h"
 #include "regs.h"
 
-void Port::send(const Message_t& message, Process* sender) {
+uint32_t Port::send(const Message_t& message, Process* sender) {
     assert(sender);
 
     Message_t copy = message;
@@ -13,15 +13,17 @@ void Port::send(const Message_t& message, Process* sender) {
     copy.sender = sender;
 
     messages.append(copy);
+    return SUCCESS;
 }
 
-int32_t Port::read(Message_t* buffer) {
+uint32_t Port::read(Message_t* buffer) {
     if(empty())
-        return -1;
+        return EMPTY_PORT;
 
     Message_t msg = messages.head();
     if(msg.payload_size > buffer->payload_size) {
-        return msg.payload_size;
+        buffer->payload_size = msg.payload_size;
+        return BUFFER_TOO_SMALL;
     }
     messages.pop();
     assert(msg.sender);         /* Hell, what happens if sender exits before we process this message? */
@@ -33,7 +35,7 @@ int32_t Port::read(Message_t* buffer) {
     buffer->payload_size = msg.payload_size;
 
     kfree(msg.payload);
-    return 0;
+    return SUCCESS;
 }
 
 bool Port::empty() {

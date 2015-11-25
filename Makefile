@@ -17,7 +17,7 @@ gdb: usb.img
 run_graphic: usb.img
 	@qemu-system-i386 -drive file=usb.img,format=raw -boot c -m 128 -debugcon file:/tmp/rastapopoulos.log -no-reboot -vga std
 
-usb.img: kernel initrd
+usb.img: kernel 
 	@if ! [ -f usb.img ]; then echo "[INIT] $@"; ./mkimage.sh usb.img Rasta 64M; fi
 	
 	@echo "[COPY] kernel.elf"
@@ -25,9 +25,6 @@ usb.img: kernel initrd
 
 	@echo "[COPY] kernel.sym"
 	@./copyfile.sh usb.img kernel/obj/kernel.sym L:/	
-
-	@echo "[COPY] initrd.img"
-	@./copyfile.sh usb.img initrd.img L:/
 
 	@echo "[COPY] grub.cfg"
 	@./copyfile.sh usb.img grub.cfg L:/boot/grub

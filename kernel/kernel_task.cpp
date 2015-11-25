@@ -5,25 +5,56 @@
 #include "syscall.h"
 #include "kernel_msg.h"
 #include "timer.h"
+#include "kmalloc.h"
 
 #define KERNEL_TASK_PORT        1
 #define CHILD1_PORT             2
 #define CHILD2_PORT             3
+#define INVALID_PORT            0
+
+static const char* errmsg(uint32_t code) {
+    switch(code) {
+        case Port::SUCCESS:
+            return "SUCCESS";
+        case Port::INVALID_MESSAGE:
+            return "INVALID_MESSAGE";
+        case Port::BUFFER_TOO_SMALL:
+            return "BUFFER_TOO_SMALL";
+        case Port::EMPTY_PORT:
+            return "EMPTY_PORT";
+        default:
+            return "UNKNOWN_ERROR";
+    }
+}
 
 static uint32_t port_open(uint32_t port) {
-    return Syscall::syscall(SYSCALL_PORT_OPEN, port);
+    uint32_t ret = Syscall::syscall(SYSCALL_PORT_OPEN, port);
+    if(ret == INVALID_PORT)
+        PANIC("Failed to open port %u: %s", port, errmsg(ret));
+    return ret;
 }
 
-static uint32_t port_close(uint32_t port) {
-    return Syscall::syscall(SYSCALL_PORT_CLOSE, port);
+static void port_close(uint32_t port) {
+    int ret = Syscall::syscall(SYSCALL_PORT_CLOSE, port);
+    if(ret)
+        PANIC("Failed to close port %u: %s", port, errmsg(ret));
 }
 
-static uint32_t port_send(uint32_t port, const Message_t* msg) {
-    return Syscall::syscall(SYSCALL_PORT_SEND, port, (uint32_t)msg);
+static void port_send(uint32_t port, const Message_t* msg) {
+    int ret = Syscall::syscall(SYSCALL_PORT_SEND, port, (uint32_t)msg);
+    if(ret)
+        PANIC("Failed to send message to port %u: %s", port, errmsg(ret));
 }
 
-static uint32_t port_read(uint32_t port, const Message_t* msg) {
-    return Syscall::syscall(SYSCALL_PORT_READ, port, (uint32_t)msg);
+static void port_read(uint32_t port, const Message_t* msg) {
+    uint32_t bufsize = msg->payload_size;
+    int ret = Syscall::syscall(SYSCALL_PORT_READ, port, (uint32_t)msg);
+    if(ret) {
+        if(ret == Port::BUFFER_TOO_SMALL)
+            PANIC("Failed to read message from port %u: %s. Need %u bytes, has %u bytes", port, errmsg(ret), msg->payload_size, bufsize);
+
+        PANIC("Failed to read message from port %u: %s", port, errmsg(ret));
+    }
 }
 
 static uint32_t fork() {
@@ -39,7 +70,7 @@ static void sleep(unsigned duration) {
 }
 
 static void msg_trace(Process* sender, const char* msg, size_t size) {
-    TRACE("%d %s %s", sender->pid(), sender->name(), msg);
+    //TRACE("%d %s %s", sender->pid(), sender->name(), msg);
 }
 
 static void msg_get_ticks(uint32_t result_port) {
@@ -84,22 +115,16 @@ void KernelTask::entry() {
     /*
         We can't directly call syscall handlers, as some syscalls need to save process context
     */
-    uint32_t port = port_open(1000);
-    if(port == Process::INVALID_PORT) {
-        TRACE("Failed to open port");
-        halt();
-    }
+    uint32_t port = port_open(KERNEL_TASK_PORT);
 
-    uint32_t prime;
     Message_t msg;
     bzero(&msg, sizeof(msg));
+    msg.payload = kmalloc(4096);
+    msg.payload_size = 4096;
 
     do {
-        msg.payload_size = sizeof(unsigned);
-        msg.payload = &prime;
-        if(port_read(port, &msg)) {
-            PANIC("Failed to read from port %d", port);
-        }
+        msg.payload_size = 4096;
+        port_read(port, &msg);
 
         switch(msg.id) {
             case MSG_TRACE:
@@ -172,7 +197,7 @@ void KernelTask::child1() {
             msg.payload_size = strlen(buffer);
             msg.payload = buffer;
 
-            port_send(1000, &msg);
+            port_send(KERNEL_TASK_PORT, &msg);
         }
     }    
 }
@@ -187,29 +212,23 @@ static uint64_t get_ticks(uint32_t result_port) {
     uint64_t result;
     msg.payload = &result;
     msg.payload_size = sizeof(result);
-    if(port_read(result_port, &msg)) {
-        PANIC("Failed to read from port");
-    }
+    port_read(result_port, &msg);
 
     return result;
 }
 
 void KernelTask::child2() {
     uint32_t port = port_open(CHILD2_PORT);
-    if(port == Process::INVALID_PORT) {
-        PANIC("Failed to open port %d", CHILD2_PORT);
-    }
-
 
     while(true) {
         for(unsigned i=0; i < 0x1000000; i++)
             ;
         
-        // uint64_t ticks_start = get_ticks(port);
-        sleep(500);
-        // uint64_t ticks_end = get_ticks(port);
+        uint64_t ticks_start = get_ticks(port);
+        sleep(1000);
+        uint64_t ticks_end = get_ticks(port);
 
-        // TRACE("Sleep duration: %u", (uint32_t)(ticks_end - ticks_start));
+        TRACE("\nSleep duration: %u", (uint32_t)(ticks_end - ticks_start));
     }
 
     port_close(CHILD2_PORT);

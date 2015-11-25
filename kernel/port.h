@@ -9,11 +9,18 @@ class Process;
 
 class Port {
 public:
+    static const uint32_t SUCCESS               = 0;
+    static const uint32_t INVALID_PORT_NUMBER   = 1;
+    static const uint32_t INVALID_MESSAGE       = 2;
+    static const uint32_t BUFFER_TOO_SMALL      = 3;
+    static const uint32_t EMPTY_PORT            = 4;
+
+
     uint32_t                number;
     LinkedList<Message_t>   messages;
 
-    void send(const Message_t& message, Process* sender);
-    int32_t read(Message_t* message);
+    uint32_t send(const Message_t& message, Process* sender);
+    uint32_t read(Message_t* message);
     bool empty();
 };
 

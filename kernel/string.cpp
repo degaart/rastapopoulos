@@ -68,25 +68,27 @@ uint32_t String::xtoa(const char* str) {
     return res;
 }
 
-void String::format(
+int String::format(
     String::format_callback callback, 
     void* callback_params,
     const char* fmt,
-    ...
-) {
+    ...) 
+{
     va_list args;
 
     va_start(args, fmt);
-    formatv(callback, callback_params, fmt, args);
+    int ret = formatv(callback, callback_params, fmt, args);
     va_end(args);
+    return ret;
 }
 
-void String::formatv(
+int String::formatv(
     String::format_callback callback, 
     void* callback_params,
     const char* fmt,
-    va_list args
-) {
+    va_list args) 
+{
+    int ret = 0;
     while(*fmt) {
         char num_buffer[16];
         unsigned val;
@@ -101,16 +103,20 @@ void String::formatv(
 
                 itoa(num_buffer, val);
                 p = num_buffer;
-                while(*p)
+                while(*p) {
                     callback(*(p++), callback_params);
+                    ret++;
+                }
 
                 fmt++;
                 break;
             case 's':
                 p = va_arg(args, char*);
 
-                while(*p)
+                while(*p) {
                     callback(*(p++), callback_params);
+                    ret++;
+                }
 
                 fmt++;
                 break;
@@ -120,8 +126,10 @@ void String::formatv(
 
                 itox(num_buffer, val);
                 p = num_buffer;
-                while(*p)
+                while(*p) {
                     callback(*(p++), callback_params);
+                    ret++;
+                }
 
                 fmt++;
                 break;
@@ -133,8 +141,10 @@ void String::formatv(
                 num_buffer[1] = 'x';
                 itox(num_buffer + 2, val);
                 p = num_buffer;
-                while(*p)
+                while(*p) {
                     callback(*(p++), callback_params);
+                    ret++;
+                }
 
                 fmt++;
                 break;
@@ -142,15 +152,18 @@ void String::formatv(
                 if(*(fmt+1)) {
                     callback(*(fmt+1), callback_params);
                     fmt++;
+                    ret++;
                 }
             } //switch(*(fmt+1))
             break;
         default:
             callback(*fmt, callback_params);
+            ret++;
             break;
         } //switch(*fmt)
         fmt++;
     } // while(fmt)
+    return ret;
 }
 
 void memset(void* buffer, int ch, uint32_t size) {
@@ -248,7 +261,7 @@ char* strdup(const char* str) {
 
 size_t strlen(const char* str) {
     size_t len = 0;
-    while(*str)
+    while(*(str++))
         len++;
     return len;
 }
@@ -265,4 +278,47 @@ int strcmp(const char* s0, const char* s1) {
     return 0;
 }
 
+struct snprintf_t {
+    char* buf;
+    int siz;
+};
 
+static void snprintf_callback(int ch, void* param) {
+    snprintf_t* buf = (snprintf_t*)param;
+    if(buf->siz) {
+        *(buf->buf) = ch;
+        buf->buf++;
+        buf->siz++;
+    }
+}
+
+int vsnprintf(char* buffer, size_t size, const char* fmt, va_list args) {
+    snprintf_t buf;
+    buf.buf = buffer;
+    buf.siz = size - 1;
+    int ret = String::formatv(snprintf_callback, &buf, fmt, args);
+    buffer[ret] = '\0';
+    return ret + 1;
+}
+
+int snprintf(char* buffer, size_t size, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int ret = vsnprintf(buffer, size, fmt, args);
+    va_end(args);
+    return ret;
+}
+
+int vsncatf(char* buffer, size_t size, const char* fmt, va_list args) {
+    int len = strlen(buffer);
+    if(len < 0 || (len+1) >= size)
+        return 0;
+    int ret = vsnprintf(buffer + len, size - len, fmt, args);
+    return ret;
+}
+
+int sncatf(char* buffer, size_t size, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    return vsncatf(buffer, size, fmt, args);
+}

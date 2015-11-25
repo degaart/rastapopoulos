@@ -14,13 +14,14 @@ public:
 	static uint32_t xtoa(const char* str);
 	
 	typedef void (*format_callback)(int, void*);
-	static void format(
+	static int format(
 	    format_callback callback, 
 	    void* callback_params,
 	    const char* fmt,
 	    ...
-	);
-	static void formatv(
+	) __attribute__ ((format (printf, 3, 4)));
+
+	static int formatv(
 	    format_callback callback, 
 	    void* callback_params,
 	    const char* fmt,
@@ -39,6 +40,10 @@ extern "C" {
 	char* strdup(const char* str);
 	size_t strlen(const char* str);
 	int strcmp(const char* s0, const char* s1);
+	int vsnprintf(char* buffer, size_t size, const char* fmt, va_list args);
+	int snprintf(char* buffer, size_t size, const char* fmt, ...) __attribute__ ((format (printf, 3, 4)));;
+	int vsncatf(char* buffer, size_t size, const char* fmt, va_list args);
+	int sncatf(char* buffer, size_t size, const char* fmt, ...) __attribute__ ((format (printf, 3, 4)));;
 }
 
 #endif // _STRING_H_

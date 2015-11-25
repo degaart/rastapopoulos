@@ -13,6 +13,7 @@
 #include "context.h"
 #include "syscall.h"
 #include "io.h"
+#include "kmalloc.h"
 
 #define EPHEMERAL_PORT_START 65536
 
@@ -70,6 +71,9 @@ Process* Process::create() {
 }
 
 void Process::switch_process() {
+    /* dump some infos for debugging */
+    // dump_queues_compact();
+
     Process* process = _ready_queue.pop();
 
     assert(_processes.contains(process));
@@ -227,41 +231,6 @@ void Process::set_name(const char* name) {
     strlcpy(_name, name, sizeof(_name));
 }
 
-uint32_t Process::open_port(uint32_t port_number) {
-    if(port_number != INVALID_PORT) {
-        /* Check if another process hasn't opened that port */
-        Process* p = process_for_port(port_number);
-        if(p != nullptr) {
-            TRACE("Process %u has already opened port %d", p->_pid, port_number);
-            return INVALID_PORT;
-        }
-    } else if(port_number >= EPHEMERAL_PORT_START) {
-        TRACE("Invalid port number: %d", port_number);
-        return INVALID_PORT;
-    } else {
-        port_number = ephemeral_port_number();
-    }
-
-    Port* port = new Port();
-    port->number = port_number;
-    _ports.append(port);
-    return port_number;
-}
-
-bool Process::close_port(uint32_t port_number) {
-    assert(port_number != INVALID_PORT);
-
-    /* Check if port is really opened by current process */
-    auto port = port_iterator(port_number);
-    if(!port.valid())
-        PANIC("Process %s (PID %d) tried to close invalid port %u", _name, _pid, port_number);
-
-    Port* p = *port;
-    _ports.remove(port);
-    delete p;
-    return true;
-}
-
 uint32_t Process::ephemeral_port_number() {
     if(_current_ephemeral_port == UINT32_MAX)
         PANIC("Ephemeral ports number exhaustion");
@@ -353,6 +322,39 @@ void Process::save_context(const isr_regs_t* regs) {
     _current_process->_regs.ebp         = regs->ebp;
 }
 
+uint32_t Process::open_port(uint32_t port_number) {
+    if(port_number == INVALID_PORT)
+        port_number = _current_ephemeral_port++;
+    else if(port_number >= EPHEMERAL_PORT_START)
+        return INVALID_PORT;
+
+    /* Check if another process hasn't opened that port */
+    Process* p = process_for_port(port_number);
+    if(p != nullptr) {
+        TRACE("Process %u has already opened port %d", p->_pid, port_number);
+        return INVALID_PORT;
+    }
+
+    Port* port = new Port();
+    port->number = port_number;
+    _ports.append(port);
+    return port_number;
+}
+
+bool Process::close_port(uint32_t port_number) {
+    assert(port_number != INVALID_PORT);
+
+    /* Check if port is really opened by current process */
+    auto port = port_iterator(port_number);
+    if(!port.valid())
+        PANIC("Process %s (PID %d) tried to close invalid port %u", _name, _pid, port_number);
+
+    Port* p = *port;
+    _ports.remove(port);
+    delete p;
+    return true;
+}
+
 uint32_t Process::syscall_port_open(uint32_t port_number, uint32_t unused0, uint32_t unused1, isr_regs_t* regs) {
     return _current_process->open_port(port_number);
 }
@@ -365,50 +367,47 @@ uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t msg_addr, uin
     const Message_t* msg = (const Message_t*)msg_addr;
 
     /* Check message validity */
-    if(!msg) {
-        PANIC("Process %s: Invalid message at %p", _current_process->name(), msg);
-    }
+    if(!msg)
+        return Port::INVALID_MESSAGE;
     // _current_process->check_readable_block(msg, sizeof(Message_t));
     // _current_process->check_readable_block(msg->payload, msg->payload_size);
     
     Process* dst_proc = Process::process_for_port(port_number);
     if(dst_proc == nullptr)
-        return false;
+        return Port::INVALID_PORT_NUMBER;
 
     Port* port = dst_proc->get_port(port_number);
     if(port == nullptr)
-        return false;
+        return Port::INVALID_PORT_NUMBER;
 
-    port->send(*msg, _current_process);
+    uint32_t ret = port->send(*msg, _current_process);
+    if(ret != 0)
+        return ret;
 
     /* Update process state */
     if(_msgwait_queue.contains(dst_proc)) {
         _msgwait_queue.remove_val(dst_proc);
         _ready_queue.append(dst_proc);
     }
-    return true;
+    return Port::SUCCESS;
 }
 
 uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t msg_addr, uint32_t unused1, isr_regs_t* regs) {
     Message_t* buffer = (Message_t*)msg_addr;
-
-    if(!buffer) {
-        PANIC("Process %s: Invalid message at %p", _current_process->name(), buffer);
-    }
+    if(!buffer)
+        return Port::INVALID_MESSAGE;
     // proc->check_writable_block(buffer, sizeof(Message_t));
     // proc->check_writable_block(buffer->payload, buffer->payload_size);
 
     Port* port = _current_process->get_port(port_number);
-    if(!port) {
-        return false;
-    }
-
+    if(!port)
+        return Port::INVALID_PORT_NUMBER;
+    
     while(port->empty()) {
         Syscall::syscall(SYSCALL_YIELD, YIELD_MSGWAIT);
     }
 
     int32_t ret = port->read(buffer);
-    assert(ret >= 0);
     return ret;
 }
 
@@ -494,7 +493,45 @@ void Process::dump_queues() {
     for(auto i = _processes.iterator(); i.valid(); i.next()) {
         TRACE("\t%d\t%s", (*i)->_pid, (*i)->_name);
     }
+}
 
+void Process::dump_queues_compact() {
+    char* str = (char*)kmalloc(4096);
+    *str = '\0';
+    strlcat(str, "\n", 4096);
+    
+    if(_ready_queue.size()) {
+        sncatf(str, 4096, "Ready queue:");
+        for(auto i = _ready_queue.iterator(); i.valid(); i.next()) {
+            sncatf(str, 4096, " %d", (*i)->_pid);
+        }
+        strlcat(str, "\n", 4096);
+    }
+    if(_msgwait_queue.size()) {
+        sncatf(str, 4096, "Msgwait queue:");
+        for(auto i = _msgwait_queue.iterator(); i.valid(); i.next()) {
+            sncatf(str, 4096, " %d", (*i)->_pid);
+        }
+         strlcat(str, "\n", 4096);
+    }
+    if(_sleep_queue.size()) {
+        sncatf(str, 4096, "Sleep queue:");
+        for(auto i = _sleep_queue.iterator(); i.valid(); i.next()) {
+            sncatf(str, 4096, " %d", (*i)->_pid);
+        }
+         strlcat(str, "\n", 4096);
+    }
+    if(_exited_queue.size()) {
+        sncatf(str, 4096, "Exited queue:");
+        for(auto i = _exited_queue.iterator(); i.valid(); i.next()) {
+            sncatf(str, 4096, " %d", (*i)->_pid);
+        }
+         strlcat(str, "\n", 4096);
+    }
+    if(strlen(str) && str[strlen(str)-1] == '\n')
+        str[strlen(str)-1] = '\0';
 
+    TRACE("%s", str);
+    kfree(str);
 }
 
