@@ -70,7 +70,7 @@ static void sleep(unsigned duration) {
 }
 
 static void msg_trace(Process* sender, const char* msg, size_t size) {
-    //TRACE("%d %s %s", sender->pid(), sender->name(), msg);
+    TRACE("%d %s %s", sender->pid(), sender->name(), msg);
 }
 
 static void msg_get_ticks(uint32_t result_port) {

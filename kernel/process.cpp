@@ -170,7 +170,7 @@ void Process::init() {
     _ready_queue.append(kernel_task);
 
     Timer::schedule(timer_schedule, nullptr, 250);
-    Timer::schedule(timer_print_current_process, nullptr, 40);
+    //Timer::schedule(timer_print_current_process, nullptr, 40);
     switch_process();
 }
 
