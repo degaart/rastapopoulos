@@ -75,6 +75,7 @@ void Heap::free(void* ptr) {
         PANIC("Double-free detected for %p", ptr);
 
     block->set_used(false);
+    
     for(Block* prev = _head; prev && prev < block; prev = prev->next()) {
         if(prev->next() == block) {
             if(!prev->used()) {

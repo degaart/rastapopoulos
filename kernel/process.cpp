@@ -369,8 +369,6 @@ uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t msg_addr, uin
     /* Check message validity */
     if(!msg)
         return Port::INVALID_MESSAGE;
-    // _current_process->check_readable_block(msg, sizeof(Message_t));
-    // _current_process->check_readable_block(msg->payload, msg->payload_size);
     
     Process* dst_proc = Process::process_for_port(port_number);
     if(dst_proc == nullptr)
@@ -380,7 +378,7 @@ uint32_t Process::syscall_port_send(uint32_t port_number, uint32_t msg_addr, uin
     if(port == nullptr)
         return Port::INVALID_PORT_NUMBER;
 
-    uint32_t ret = port->send(*msg, _current_process);
+    uint32_t ret = port->send(msg, _current_process);
     if(ret != 0)
         return ret;
 
@@ -406,8 +404,10 @@ uint32_t Process::syscall_port_read(uint32_t port_number, uint32_t msg_addr, uin
     while(port->empty()) {
         Syscall::syscall(SYSCALL_YIELD, YIELD_MSGWAIT);
     }
-
+    assert(!interrupts_enabled());
+    
     int32_t ret = port->read(buffer);
+    msg_check_checksum(buffer);
     return ret;
 }
 

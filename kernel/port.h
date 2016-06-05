@@ -17,11 +17,13 @@ public:
 
 
     uint32_t                number;
-    LinkedList<Message_t>   messages;
+    LinkedList<Message_t*>  messages;
 
-    uint32_t send(const Message_t& message, Process* sender);
+    uint32_t send(const Message_t* message, Process* sender);
     uint32_t read(Message_t* message);
     bool empty();
+
+    static uint32_t checksum(const void* buffer, uint32_t size);
 };
 
 #endif //_PORT_H_

@@ -6,6 +6,7 @@
 #include "kernel_msg.h"
 #include "timer.h"
 #include "kmalloc.h"
+#include "crc32.h"
 
 #define KERNEL_TASK_PORT        1
 #define CHILD1_PORT             2
@@ -40,7 +41,9 @@ static void port_close(uint32_t port) {
         PANIC("Failed to close port %u: %s", port, errmsg(ret));
 }
 
-static void port_send(uint32_t port, const Message_t* msg) {
+static void port_send(uint32_t port, Message_t* msg) {
+    msg_update_checksum(msg);    
+
     int ret = Syscall::syscall(SYSCALL_PORT_SEND, port, (uint32_t)msg);
     if(ret)
         PANIC("Failed to send message to port %u: %s", port, errmsg(ret));
@@ -54,6 +57,8 @@ static void port_read(uint32_t port, const Message_t* msg) {
             PANIC("Failed to read message from port %u: %s. Need %u bytes, has %u bytes", port, errmsg(ret), msg->payload_size, bufsize);
 
         PANIC("Failed to read message from port %u: %s", port, errmsg(ret));
+    } else {
+        msg_check_checksum(msg);
     }
 }
 
@@ -70,7 +75,7 @@ static void sleep(unsigned duration) {
 }
 
 static void msg_trace(Process* sender, const char* msg, size_t size) {
-    TRACE("%d %s %s", sender->pid(), sender->name(), msg);
+    TRACE("%d: %s", sender->pid(), msg);
 }
 
 static void msg_get_ticks(uint32_t result_port) {
@@ -96,6 +101,7 @@ static void msg_get_ticks(uint32_t result_port) {
         Here are some functions that are interrupt-safe:
             - All functions in debug.cpp (TRACE, etc)
             - All functions in string.cpp except strdup
+        Edit: I've made kmalloc interrupt-safe, so not everything in this comment is right anymore
 */
 void KernelTask::entry() {
     uint32_t bkl;
@@ -174,32 +180,26 @@ void KernelTask::entry() {
     halt();
 }
 
+static unsigned calculate(unsigned starting) {
+    return (~((((starting * 7) ^ 0x77777777) / 3) + 1));
+}
+
 void KernelTask::child1() {
-    uint32_t bkl;
+    while(true) {
+        for(unsigned i = 0; i < 10000; i++) {
+            unsigned n = calculate(i);
 
-    unsigned i = 3, count, c;
-    for (i = 3 ; ;  i++) {
-        for ( c = 2 ; c <= i - 1 ; c++ ) {
-            if ( (i%c) == 0 )
-                break;
-        }
-
-        if ( c == i ) {
-            char buffer[11];
-
-            EnterCriticalSection(bkl);
-            String::itoa(buffer, c);
-            LeaveCriticalSection(bkl);
+            char buffer[64];
+            snprintf(buffer, sizeof(buffer), "%u 0x%X", i, n);
 
             Message_t msg;
             bzero(&msg, sizeof(msg));
             msg.id = MSG_TRACE;
-            msg.payload_size = strlen(buffer);
+            msg.payload_size = strlen(buffer) + 1;
             msg.payload = buffer;
-
             port_send(KERNEL_TASK_PORT, &msg);
         }
-    }    
+    }
 }
 
 static uint64_t get_ticks(uint32_t result_port) {
@@ -218,19 +218,20 @@ static uint64_t get_ticks(uint32_t result_port) {
 }
 
 void KernelTask::child2() {
-    uint32_t port = port_open(CHILD2_PORT);
-
     while(true) {
-        for(unsigned i=0; i < 0x1000000; i++)
-            ;
-        
-        uint64_t ticks_start = get_ticks(port);
-        sleep(1000);
-        uint64_t ticks_end = get_ticks(port);
+        for(unsigned i = 0; i < 20000; i++) {
+            unsigned n = calculate(i);
 
-        TRACE("\nSleep duration: %u", (uint32_t)(ticks_end - ticks_start));
+            char buffer[64];
+            snprintf(buffer, sizeof(buffer), "%u 0x%X", i, n);
+
+            Message_t msg;
+            bzero(&msg, sizeof(msg));
+            msg.id = MSG_TRACE;
+            msg.payload_size = strlen(buffer) + 1;
+            msg.payload = buffer;
+            port_send(KERNEL_TASK_PORT, &msg);
+        }
     }
-
-    port_close(CHILD2_PORT);
 }
 

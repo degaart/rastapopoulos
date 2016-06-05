@@ -28,7 +28,9 @@ SRCS = \
     kernel_task.cpp \
     test_backtrace.cpp \
     test_vmm.cpp \
-    test_scheduler.cpp
+    test_scheduler.cpp \
+    crc32.cpp \
+    message.cpp
 
 C_SRCS = \
     elf.c
