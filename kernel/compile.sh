@@ -6,7 +6,7 @@ clang \
     -O0 \
     -masm=intel \
     -march=i386 -target i686-pc-elf -ffreestanding -fno-builtin -nostdlib \
-    -Werror -Wfatal-errors \
+    -Werror \
     -g \
     -std=gnu99 \
     "$1"

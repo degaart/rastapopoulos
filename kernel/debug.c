@@ -6,10 +6,18 @@
 #include "multiboot.h"
 #include "registers.h"
 
+struct debug_sym {
+    const char* name;
+    uint32_t start;
+    uint32_t end;
+};
+
+// TODO: Find a way to use dynamic memory here
+// For now, just use a static table until we implement kmalloc
 extern uint8_t _initial_kernel_stack;
-static unsigned _debug_sym_count = 0;
-static elf32_sym_t* _debug_syms = NULL;
-static const char* _debug_strtab = NULL;
+static unsigned _debug_syms_count = 0;
+static struct debug_sym _debug_syms[512] = {};
+static char _debug_strings[4096];
 
 static void __log_callback(int ch, void* unused)
 {
@@ -28,7 +36,8 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     __log_callback('\n', NULL);
 }
 
-void backtrace() {
+void backtrace()
+{
     uint32_t* ebp;
     read_ebp(ebp);
 
@@ -52,26 +61,19 @@ void backtrace() {
     
     trace("Backtrace:");
     for(unsigned i = 0; i < index; i++) {
-        elf32_sym_t* sym = _debug_syms;
         const char* name = NULL;
-        for(unsigned sym_index = 0; sym_index < _debug_sym_count; sym_index++) {
-            if(ELF32_ST_TYPE(sym->st_info) == STT_FUNC || 
-               ELF32_ST_TYPE(sym->st_info) == STT_OBJECT) {
-                
-                if(data[i] >= sym->st_value && data[i] < sym->st_value + sym->st_size) {
-                    name = _debug_strtab + sym->st_name;
-                }
+        for(unsigned sym_index = 0; sym_index < _debug_syms_count; sym_index++) {
+            if(data[i] >= _debug_syms[sym_index].start && data[i] < _debug_syms[sym_index].end) {
+                name = _debug_syms[sym_index].name;
+                break;
             }
-            sym++;
         }
         trace("\t0x%X %s", data[i], name ? name : "??");
     }
 }
 
-void load_symbols(const void* multiboot_info_ptr)
+void load_symbols(const struct multiboot_info* multiboot_info)
 {
-    const multiboot_info_t* multiboot_info = multiboot_info_ptr;
-
     // All headers
     elf32_shdr_t* hdrs = (elf32_shdr_t*)multiboot_info->sym2.addr;
    
@@ -99,9 +101,23 @@ void load_symbols(const void* multiboot_info_ptr)
 
     // Dump all this
     if(sym_hdr && strtab_hdr) {
-        _debug_strtab = (const char*)strtab_hdr->sh_addr;
-        _debug_sym_count = sym_hdr->sh_size / sizeof(elf32_sym_t);
-        _debug_syms = (elf32_sym_t*)sym_hdr->sh_addr;
+        if(strtab_hdr->sh_size > sizeof(_debug_strings)) {
+            trace("PANIC: Too many symbols");
+            while(1);
+        }
+        memcpy(_debug_strings, (void*)strtab_hdr->sh_addr, strtab_hdr->sh_size);
+
+        unsigned sym_count = sym_hdr->sh_size / sizeof(elf32_sym_t);
+        elf32_sym_t* syms = (elf32_sym_t*)sym_hdr->sh_addr;
+        for(unsigned i = 0; i < sym_count; i++) {
+            if(ELF32_ST_TYPE(syms[i].st_info) == STT_FUNC || 
+               ELF32_ST_TYPE(syms[i].st_info) == STT_OBJECT) {
+                _debug_syms[_debug_syms_count].name = _debug_strings + syms[i].st_name;
+                _debug_syms[_debug_syms_count].start = syms[i].st_value;
+                _debug_syms[_debug_syms_count].end = syms[i].st_value + syms[i].st_size;
+                _debug_syms_count++;
+            }
+        }
     }
 }
 

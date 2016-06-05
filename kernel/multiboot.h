@@ -1,6 +1,6 @@
 #pragma once
 
-typedef struct {
+typedef struct multiboot_info {
     uint32_t flags;
     uint32_t mem_lower;
     uint32_t mem_upper;
