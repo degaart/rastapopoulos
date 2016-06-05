@@ -4,12 +4,12 @@ set -eou pipefail
 
 [ -d "obj" ] || mkdir -v obj
 
-find . -name *.asm|while read filename
+for filename in *.asm
 do
     ./compile-asm.sh "$filename"
 done
 
-find . -name *.c|while read filename
+for filename in *.c
 do
     ./compile.sh "$filename"
 done

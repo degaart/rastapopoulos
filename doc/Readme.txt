@@ -17,7 +17,7 @@ Constraints:
     * Gfx: vesa (but can be limited to text-mode in the beginning)
 
 Things to implement:
-    * Kernel boots in qemu and writes message to serial port
+    * Kernel boots in qemu and writes message to serial port [OK]
     * Load multiboot module
     * Parse multiboot memory layout
     * Kernel heap
