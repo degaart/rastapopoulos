@@ -16,7 +16,7 @@ struct debug_sym {
 // For now, just use a static table until we implement kmalloc
 extern uint8_t _initial_kernel_stack;
 static unsigned _debug_syms_count = 0;
-static struct debug_sym _debug_syms[512] = {};
+static struct debug_sym _debug_syms[12] = {};
 static char _debug_strings[4096];
 
 static void __log_callback(int ch, void* unused)
@@ -101,13 +101,11 @@ void load_symbols(const struct multiboot_info* multiboot_info)
 
     // Dump all this
     if(sym_hdr && strtab_hdr) {
-        if(strtab_hdr->sh_size > sizeof(_debug_strings)) {
-            trace("PANIC: Too many symbols");
-            while(1);
-        }
+        assert(strtab_hdr->sh_size <= sizeof(_debug_strings));
         memcpy(_debug_strings, (void*)strtab_hdr->sh_addr, strtab_hdr->sh_size);
 
         unsigned sym_count = sym_hdr->sh_size / sizeof(elf32_sym_t);
+        assert(sym_count <= countof(_debug_syms));
         elf32_sym_t* syms = (elf32_sym_t*)sym_hdr->sh_addr;
         for(unsigned i = 0; i < sym_count; i++) {
             if(ELF32_ST_TYPE(syms[i].st_info) == STT_FUNC || 
@@ -121,4 +119,9 @@ void load_symbols(const struct multiboot_info* multiboot_info)
     }
 }
 
+void __assertion_failed(const char* function, const char* file, int line, const char* expression)
+{
+    __log(function, file, line, "Assertion failed: %s", expression);
+    reboot();
+}
 

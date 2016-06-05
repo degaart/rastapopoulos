@@ -5,14 +5,19 @@
 #include "registers.h"
 #include "multiboot.h"
 
-static void reboot()
+void reboot()
 {
-    asm volatile(
-        ".intel_syntax noprefix\n"
-        "int 0x13\n"
-    );
+    uint8_t good = 0x02;
+    while (good & 0x02)
+        good = inb(0x64);
+    outb(0x64, 0xFE);
+    halt();
 }
 
+void halt()
+{
+    asm volatile("cli\nhlt\n");
+}
 
 void fn3()
 {
