@@ -2,6 +2,7 @@
 #include "io.h"
 #include "string.h"
 #include "debug.h"
+#include "registers.h"
 
 static void reboot()
 {
@@ -94,6 +95,76 @@ typedef struct {
 #define ELF32_ST_TYPE(i)        ((i) & 0xF)
 #define ELF32_ST_INFO(b, t)     (((b) << 4) | ((t) & 0xF))
 
+extern uint8_t _initial_kernel_stack;
+static unsigned _debug_sym_count = 0;
+static elf32_sym_t* _debug_syms = NULL;
+static const char* _debug_strtab = NULL;
+
+void backtrace() {
+    uint32_t* ebp;
+    read_ebp(ebp);
+
+    uint32_t stack_start = (uint32_t) (&_initial_kernel_stack);
+    uint32_t stack_end = (uint32_t) (&_initial_kernel_stack + 4096);
+
+    uint32_t data[255];
+    unsigned index = 0;
+    while(1) {
+        if((uint32_t)ebp <= stack_start || ((uint32_t)ebp+(sizeof(uint32_t)*2)) >= stack_end)
+            break;
+
+        uint32_t* prev_ebp = (uint32_t*) *ebp;
+        if((uint32_t)prev_ebp <= stack_start || ((uint32_t)prev_ebp+(sizeof(uint32_t)*2)) >= stack_end)
+            break;
+        uint32_t prev_eip = *(prev_ebp + 1);
+
+        data[index++] = prev_eip;
+        ebp = prev_ebp;
+    }
+    
+    trace("Backtrace:");
+    for(unsigned i = 0; i < index; i++) {
+        elf32_sym_t* sym = _debug_syms;
+        const char* name = NULL;
+        for(unsigned sym_index = 0; sym_index < _debug_sym_count; sym_index++) {
+            if(ELF32_ST_TYPE(sym->st_info) == STT_FUNC || 
+               ELF32_ST_TYPE(sym->st_info) == STT_OBJECT) {
+                
+                if(data[i] >= sym->st_value && data[i] < sym->st_value + sym->st_size) {
+                    name = _debug_strtab + sym->st_name;
+                }
+            }
+            sym++;
+        }
+        trace("\t0x%X %s", data[i], name ? name : "??");
+    }
+}
+
+void fn3()
+{
+    backtrace();
+}
+
+void fn2()
+{
+    fn3();
+}
+
+void fn1()
+{
+    fn2();
+}
+
+void fn0()
+{
+    fn1();
+}
+
+void test_backtrace()
+{
+    fn0();
+}
+
 void kmain(const multiboot_info_t* multiboot_info)
 {
     trace("Multiboot info: %p", multiboot_info);
@@ -146,17 +217,23 @@ void kmain(const multiboot_info_t* multiboot_info)
 
         // Dump all this
         if(sym_hdr && strtab_hdr) {
+            _debug_strtab = (const char*)strtab_hdr->sh_addr;
+            _debug_sym_count = sym_hdr->sh_size / sizeof(elf32_sym_t);
+            _debug_syms = (elf32_sym_t*)sym_hdr->sh_addr;
+#if 0
             const char* strtab = (const char*)strtab_hdr->sh_addr;
 
             unsigned sym_count = sym_hdr->sh_size / sizeof(elf32_sym_t);
             elf32_sym_t* sym = (elf32_sym_t*)sym_hdr->sh_addr;
             for(unsigned i = 0; i < sym_count; i++) {
                 if(ELF32_ST_TYPE(sym->st_info) == STT_FUNC || ELF32_ST_TYPE(sym->st_info) == STT_OBJECT) {
+                    
                     trace("sym[%d]: %p %p %s", i, sym->st_value, sym->st_size, strtab + sym->st_name);
                 }
                 sym++;
             }
             trace("Sym count: %d", sym_count);
+#endif
         }
     }
     if(multiboot_info->flags & MULTIBOOT_FLAG_MMAP) {
@@ -166,6 +243,9 @@ void kmain(const multiboot_info_t* multiboot_info)
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
+
+
+    test_backtrace();
     reboot();
 
 }
