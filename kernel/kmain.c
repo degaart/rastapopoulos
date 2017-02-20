@@ -19,31 +19,6 @@ void halt()
     asm volatile("cli\nhlt\n");
 }
 
-void fn3()
-{
-    backtrace();
-}
-
-void fn2()
-{
-    fn3();
-}
-
-void fn1()
-{
-    fn2();
-}
-
-void fn0()
-{
-    fn1();
-}
-
-void test_backtrace()
-{
-    fn0();
-}
-
 void kmain(const multiboot_info_t* multiboot_info)
 {
     trace("Multiboot info: %p", multiboot_info);
@@ -74,9 +49,6 @@ void kmain(const multiboot_info_t* multiboot_info)
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
-
-    test_backtrace();
     reboot();
-
 }
 
