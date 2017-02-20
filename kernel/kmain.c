@@ -17,10 +17,6 @@ void reboot()
 void kmain(const multiboot_info_t* multiboot_info)
 {
     trace("*** Rastapopoulos booted ***");
-
-    uint32_t esp;
-    read_esp(esp);
-    trace("ESP: %p", esp);
     trace("Multiboot info: %p", multiboot_info);
 
     char multiboot_flags[32] = {};
@@ -49,6 +45,8 @@ void kmain(const multiboot_info_t* multiboot_info)
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
+
+    // Check backtrace works
     reboot();
 }
 

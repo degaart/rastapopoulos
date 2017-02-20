@@ -1,34 +1,17 @@
 #pragma once
 
-#define __READ_REG__(reg, val) asm volatile("mov %%" #reg ", %0" : "=r"(val))
-#define __WRITE_REG__(reg, val) asm volatile("mov %0, %%" #reg :: "r"(val))
+extern uint32_t read_cr3();
+extern uint32_t read_cr2();
+extern uint32_t read_cr1();
+extern uint32_t read_cr0();
+extern uint32_t read_eflags();
+extern uint32_t read_ebp();
 
-#define read_cr3(x) __READ_REG__(cr3, x)
-#define read_cr2(x) __READ_REG__(cr2, x)
-#define read_cr1(x) __READ_REG__(cr1, x)
-#define read_cr0(x) __READ_REG__(cr0, x)
-#define read_esp(x) __READ_REG__(esp, x)
-#define read_ebp(x) __READ_REG__(ebp, x)
-
-#define write_cr3(x) __WRITE_REG__(cr3, x)
-#define write_cr2(x) __WRITE_REG__(cr2, x)
-#define write_cr1(x) __WRITE_REG__(cr1, x)
-#define write_cr0(x) __WRITE_REG__(cr0, x)
-#define write_esp(x) __WRITE_REG__(esp, x)
-
-#define read_eflags(x)      \
-    asm volatile(           \
-        "pushf\n"           \
-        "popl %0\n"         \
-        : "=r" (x)          \
-    )
-#define write_eflags(x)     \
-    asm volatile(           \
-        "pushl %0\n"        \
-        "popf\n"            \
-        :: "r"(x)           \
-    )
-
+extern void write_cr3(uint32_t val);
+extern void write_cr2(uint32_t val);
+extern void write_cr1(uint32_t val);
+extern void write_cr0(uint32_t val);
+extern void write_eflags(uint32_t val);
 
 #define CR0_PG  (1 << 31)
 #define CR0_CD  (1 << 30)
@@ -81,8 +64,7 @@
 #define EFLAGS_ID       (1 << 21)
 
 static bool interrupts_enabled() {
-    uint32_t eflags;
-    read_eflags(eflags);
+    uint32_t eflags = read_eflags();
     return eflags & EFLAGS_IF;
 }
 

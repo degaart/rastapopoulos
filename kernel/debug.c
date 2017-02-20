@@ -38,8 +38,7 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
 
 void backtrace()
 {
-    uint32_t* ebp;
-    read_ebp(ebp);
+    uint32_t* ebp = (uint32_t*)read_ebp();
 
     uint32_t stack_start = (uint32_t) (&_initial_kernel_stack);
     uint32_t stack_end = (uint32_t) (&_initial_kernel_stack + 4096);

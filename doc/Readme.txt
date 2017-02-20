@@ -6,6 +6,7 @@ Goals
 Methodology
     * Only state goals, do not make assumptions on what the architecture will look like
     * Do not refactor code too early. Only pull out functions when it is needed
+    * Avoid inline assembly as much as possible: clang's intel syntax support is wonky
 
 Toolset:
     * clang 3.8
