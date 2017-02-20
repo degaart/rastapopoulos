@@ -1,5 +1,9 @@
 #pragma once
 
+#include <stdint.h>
+#include <stdarg.h>
+#include <stddef.h>
+
 typedef void (*format_callback_t)(int, void*);
 
 void itoa(char* str, unsigned n);

@@ -8,7 +8,7 @@
         if(!(c)) {                                                      \
             __assertion_failed(__FUNCTION__, __FILE__, __LINE__, #c);   \
         }                                                               \
-    } while(false)
+    } while(0)
 
 struct multiboot_info;
 

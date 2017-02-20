@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "registers.h"
 #include "multiboot.h"
+#include "gdt.h"
 
 void reboot()
 {
@@ -14,9 +15,8 @@ void reboot()
     halt();
 }
 
-void kmain(const multiboot_info_t* multiboot_info)
+static void dump_multiboot_info(const multiboot_info_t* multiboot_info)
 {
-    trace("*** Rastapopoulos booted ***");
     trace("Multiboot info: %p", multiboot_info);
 
     char multiboot_flags[32] = {};
@@ -45,8 +45,19 @@ void kmain(const multiboot_info_t* multiboot_info)
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
+}
 
-    // Check backtrace works
+void kmain(const multiboot_info_t* multiboot_info)
+{
+    trace("*** Rastapopoulos booted ***");
+    
+    // GDT
+    gdt_init();
+
+    // Dump multiboot info
+    dump_multiboot_info(multiboot_info);
+
+    // Reboot
     reboot();
 }
 

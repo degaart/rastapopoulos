@@ -1,5 +1,8 @@
 #pragma once
 
+#include <stdint.h>
+#include <stdbool.h>
+
 extern uint32_t read_cr3();
 extern uint32_t read_cr2();
 extern uint32_t read_cr1();
