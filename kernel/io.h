@@ -1,7 +1,7 @@
 #pragma once
 
-void outb(uint16_t port, uint8_t val);
-uint8_t inb(uint16_t port);
-void outw(uint16_t port, uint16_t val);
-uint16_t inw(uint16_t port);
+extern void outb(uint32_t port, uint32_t val);
+extern uint32_t inb(uint32_t port);
+extern void outw(uint32_t port, uint32_t val);
+extern uint32_t inw(uint32_t port);
 

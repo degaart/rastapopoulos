@@ -14,13 +14,13 @@ void reboot()
     halt();
 }
 
-void halt()
-{
-    asm volatile("cli\nhlt\n");
-}
-
 void kmain(const multiboot_info_t* multiboot_info)
 {
+    trace("*** Rastapopoulos booted ***");
+
+    uint32_t esp;
+    read_esp(esp);
+    trace("ESP: %p", esp);
     trace("Multiboot info: %p", multiboot_info);
 
     char multiboot_flags[32] = {};
