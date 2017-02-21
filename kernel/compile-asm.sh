@@ -1,5 +1,7 @@
 #!/bin/bash
 set -eou pipefail
 
-nasm -f elf32 -o "obj/$1.o" "$1"
+echo "[AS] $1"
+
+nasm -f elf32 -o "obj/$(basename "$1").o" "$1"
 
