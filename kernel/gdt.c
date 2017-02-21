@@ -152,7 +152,8 @@ void gdt_init()
     write_eflags(eflags);
 }
 
-static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran) {
+static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran)
+{
     gdt_entries[num].base_low    = (base & 0xFFFF);
     gdt_entries[num].base_middle = (base >> 16) & 0xFF;
     gdt_entries[num].base_high   = (base >> 24) & 0xFF;

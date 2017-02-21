@@ -30,10 +30,3 @@ fi
     exit 1
 }
 
-# Execute qemu
-qemu-system-i386 \
-    -drive file=disk.img,format=raw \
-    -boot c \
-    -m 128 \
-    -debugcon file:/tmp/rastapopoulos.log \
-    -nographic -no-reboot

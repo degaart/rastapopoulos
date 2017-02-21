@@ -10,5 +10,9 @@
 #define countof(a) sizeof(a) / sizeof(a[0])
     
 void reboot();
-extern void halt();
+void halt();
+extern void hlt();
+extern void cli();
+extern void sti();
+
 

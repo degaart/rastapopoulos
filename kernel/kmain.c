@@ -5,6 +5,9 @@
 #include "registers.h"
 #include "multiboot.h"
 #include "gdt.h"
+#include "idt.h"
+#include "pic.h"
+#include "timer.h"
 
 void reboot()
 {
@@ -13,6 +16,12 @@ void reboot()
         good = inb(0x64);
     outb(0x64, 0xFE);
     halt();
+}
+
+void halt()
+{
+    cli();
+    hlt();
 }
 
 static void dump_multiboot_info(const multiboot_info_t* multiboot_info)
@@ -54,10 +63,24 @@ void kmain(const multiboot_info_t* multiboot_info)
     // GDT
     gdt_init();
 
+    // IDT
+    idt_init();
+    idt_flush();
+
+    // PIC
+    pic_init();
+
+    // System timer
+    timer_init();
+
     // Dump multiboot info
     dump_multiboot_info(multiboot_info);
 
     // Reboot
-    reboot();
+    // reboot();
+   
+    sti();
+    while(1)
+        hlt();
 }
 

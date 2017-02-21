@@ -16,8 +16,8 @@ struct debug_sym {
 // For now, just use a static table until we implement kmalloc
 extern uint8_t _initial_kernel_stack;
 static unsigned _debug_syms_count = 0;
-static struct debug_sym _debug_syms[512] = {};
-static char _debug_strings[4096];
+static struct debug_sym _debug_syms[8192 * 4] = {};
+static char _debug_strings[8192 * 4];
 
 static void __log_callback(int ch, void* unused)
 {

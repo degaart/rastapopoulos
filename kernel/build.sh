@@ -20,7 +20,7 @@ i686-pc-elf-ld \
     -Map obj/kernel.map \
     -nostdlib \
     -static \
-    -g obj/*.o
+    -g $(find obj -name '*.o' -and -not -name 'kstub.asm.o')
 
 
 

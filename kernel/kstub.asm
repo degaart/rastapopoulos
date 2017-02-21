@@ -6,6 +6,8 @@
 section .text
 
 extern kmain
+; void __log(const char* func, const char* file, int line, const char* fmt, ...);
+extern __log
 
 global _kernel_entry
 _kernel_entry:
@@ -93,6 +95,24 @@ multiboot_header:
     dd MB_MAGIC
     dd FLAGS
     dd -(MB_MAGIC + FLAGS)
+
+; void hlt()
+global hlt
+hlt:
+    hlt
+    ret
+
+; void cli()
+global cli
+cli:
+    cli
+    ret
+
+; void sti()
+global sti
+sti:
+    sti
+    ret
 
 section .bss
 global _initial_kernel_stack

@@ -1,4 +1,4 @@
-/*STARTUP(obj/kernel_stub.ao)*/
+STARTUP(obj/kstub.asm.o)
 /*OUTPUT_FORMAT("binary")*/
 ENTRY(_kernel_entry);
 OUTPUT_FORMAT("elf32-i386");
