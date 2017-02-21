@@ -8,9 +8,14 @@
 #include "idt.h"
 #include "pic.h"
 #include "timer.h"
+#include "pmm.h"
+
+extern unsigned char _KERNEL_END_;   /* Set by linker */
 
 void reboot()
 {
+    trace("*** Rastapopoulos rebooted ***\n\n\n");
+
     uint8_t good = 0x02;
     while (good & 0x02)
         good = inb(0x64);
@@ -30,7 +35,7 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
     reboot();
 }
 
-static void dump_multiboot_info(const multiboot_info_t* multiboot_info)
+static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
 {
     trace("Multiboot info: %p", multiboot_info);
 
@@ -60,9 +65,17 @@ static void dump_multiboot_info(const multiboot_info_t* multiboot_info)
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
+    trace("_KERNEL_END_: %p", &_KERNEL_END_);
 }
 
-void kmain(const multiboot_info_t* multiboot_info)
+void test_bitset();
+
+static void run_tests()
+{
+    test_bitset();
+}
+
+void kmain(const struct multiboot_info* multiboot_info)
 {
     trace("*** Rastapopoulos booted ***");
     
@@ -73,6 +86,9 @@ void kmain(const multiboot_info_t* multiboot_info)
     idt_init();
     idt_flush();
 
+    // Physical memory manager
+    pmm_init(multiboot_info);
+
     // PIC
     pic_init();
 
@@ -80,14 +96,8 @@ void kmain(const multiboot_info_t* multiboot_info)
     timer_init();
     timer_schedule(reboot_timer, NULL, 3000, false);
 
-    // Dump multiboot info
-    dump_multiboot_info(multiboot_info);
-
-    // Reboot
-    // reboot();
-   
-    sti();
-    while(1)
-        hlt();
+    // Run tests
+    run_tests();
+    reboot();
 }
 

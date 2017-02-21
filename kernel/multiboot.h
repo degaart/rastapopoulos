@@ -1,6 +1,8 @@
 #pragma once
 
-typedef struct multiboot_info {
+#include <stdint.h>
+
+struct multiboot_info {
     uint32_t flags;
     uint32_t mem_lower;
     uint32_t mem_upper;
@@ -35,11 +37,24 @@ typedef struct multiboot_info {
     uint32_t vbe_interface_seg;
     uint32_t vbe_interface_off;
     uint32_t vbe_interface_len;
-} multiboot_info_t;
+};
 
 #define MULTIBOOT_FLAG_MEMINFO  (1 << 0)
 #define MULTIBOOT_FLAG_MODINFO  (1 << 3)
 #define MULTIBOOT_FLAG_SYMBOLS1 (1 << 4)
 #define MULTIBOOT_FLAG_SYMBOLS2 (1 << 5)
 #define MULTIBOOT_FLAG_MMAP     (1 << 6)
+
+struct multiboot_mmap_entry {
+    uint32_t size;
+    uint64_t addr;
+    uint64_t len;
+    uint32_t type;
+} __attribute((packed));
+
+#define MULTIBOOT_MEMORY_AVAILABLE		        1
+#define MULTIBOOT_MEMORY_RESERVED		        2
+#define MULTIBOOT_MEMORY_ACPI_RECLAIMABLE       3
+#define MULTIBOOT_MEMORY_NVS                    4
+#define MULTIBOOT_MEMORY_BADRAM                 5
 

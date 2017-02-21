@@ -4,15 +4,8 @@ set -eou pipefail
 
 [ -d "obj" ] || mkdir -v obj
 
-for filename in *.asm
-do
-    ./compile-asm.sh "$filename"
-done
-
-for filename in *.c
-do
-    ./compile.sh "$filename"
-done
+find . -name '*.asm' -exec ./compile-asm.sh '{}' ';'
+find . -name '*.c' -exec ./compile.sh '{}' ';'
 
 i686-pc-elf-ld \
     -T kernel.ld \
