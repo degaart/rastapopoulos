@@ -34,5 +34,7 @@
 
 # Misc crap
 *.DS_Store
-*.swap
+*.swp
+*.img
+kernel/obj
 

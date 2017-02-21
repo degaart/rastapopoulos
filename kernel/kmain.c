@@ -24,6 +24,15 @@ void halt()
     hlt();
 }
 
+static void test_timer(void* data, const struct isr_regs* regs)
+{
+    static int counter = 0;
+    trace("[%d] test_timer triggered", (uint32_t)timer_timestamp());
+    if(counter >= 30)
+        reboot();
+    counter++;
+}
+
 static void dump_multiboot_info(const multiboot_info_t* multiboot_info)
 {
     trace("Multiboot info: %p", multiboot_info);
@@ -72,6 +81,7 @@ void kmain(const multiboot_info_t* multiboot_info)
 
     // System timer
     timer_init();
+    timer_schedule(test_timer, NULL, 30, true);
 
     // Dump multiboot info
     dump_multiboot_info(multiboot_info);
