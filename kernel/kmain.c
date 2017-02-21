@@ -24,13 +24,10 @@ void halt()
     hlt();
 }
 
-static void test_timer(void* data, const struct isr_regs* regs)
+static void reboot_timer(void* data, const struct isr_regs* regs)
 {
-    static int counter = 0;
-    trace("[%d] test_timer triggered", (uint32_t)timer_timestamp());
-    if(counter >= 30)
-        reboot();
-    counter++;
+    trace("*** Rebooting Rastapopoulos ***\n\n\n");
+    reboot();
 }
 
 static void dump_multiboot_info(const multiboot_info_t* multiboot_info)
@@ -81,7 +78,7 @@ void kmain(const multiboot_info_t* multiboot_info)
 
     // System timer
     timer_init();
-    timer_schedule(test_timer, NULL, 30, true);
+    timer_schedule(reboot_timer, NULL, 3000, false);
 
     // Dump multiboot info
     dump_multiboot_info(multiboot_info);
