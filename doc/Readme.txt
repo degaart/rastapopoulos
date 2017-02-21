@@ -22,11 +22,11 @@ Things to implement:
     * Load multiboot module
     * Parse multiboot memory layout
     * Kernel heap
-    * Symbol loading and backtrace support
+    * Symbol loading and backtrace support [OK]
     * Load files from an initrd
-    * Initialize protected-mode (gdt & idt)
-    * PIC
-    * System timer (PIT)
+    * Initialize protected-mode (gdt & idt) [OK]
+    * PIC [OK]
+    * System timer (PIT) [OK]
     * Physical memory manager (page frame allocator)
     * Virtual memory manager (page allocator)
     * Syscall handler

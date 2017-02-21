@@ -13,3 +13,5 @@
 
 #define MAKE_UINT64(lo, hi)  ( ((uint64_t)(lo)) | ((uint64_t)(hi) << 32) )
 
+#define countof(a) sizeof(a) / sizeof(a[0])
+    

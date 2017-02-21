@@ -1,5 +1,6 @@
 #include "kernel.h"
 #include "string.h"
+#include "debug.h"
 
 void itoa(char* str, unsigned n)
 {
@@ -205,32 +206,6 @@ int memcmp(const void* p0, const void* p1, size_t size)
     return 0;
 }
 
-/* Stolen from FreeBSD 10 */
-unsigned strlcpy(char* dst, const char* src, unsigned siz)
-{
-    char *d = dst;
-    const char *s = src;
-    unsigned n = siz;
-
-    /* Copy as many bytes as will fit */
-    if (n != 0) {
-        while (--n != 0) {
-            if ((*d++ = *s++) == '\0')
-                break;
-        }
-    }
-
-    /* Not enough room in dst, add NUL and traverse rest of src */
-    if (n == 0) {
-        if (siz != 0)
-            *d = '\0';      /* NUL-terminate dst */
-        while (*s++)
-            ;
-    }
-
-    return(s - src - 1);    /* count does not include NUL */
-}
-
 size_t strlen(const char* str)
 {
     size_t len = 0;
@@ -239,32 +214,31 @@ size_t strlen(const char* str)
     return len;
 }
 
-/* Stolen from FreeBSD 10 */
-unsigned strlcat(char* dst, const char* src, unsigned siz)
+void strlcpy(char* dst, const char* src, unsigned siz)
 {
-    char *d = dst;
-    const char *s = src;
-    unsigned n = siz;
-    unsigned dlen;
-
-    /* Find the end of dst and adjust bytes left but don't go past end */
-    while (n-- != 0 && *d != '\0')
-        d++;
-    dlen = d - dst;
-    n = siz - dlen;
-
-    if (n == 0)
-        return(dlen + strlen(s));
-    while (*s != '\0') {
-        if (n != 1) {
-            *d++ = *s;
-            n--;
-        }
-        s++;
+    while(siz > 1 && *src) {
+        *dst = *src;
+        dst++;
+        src++;
+        siz--;
     }
-    *d = '\0';
+    assert(!(*src));
+    *dst = '\0';
+}
 
-    return(dlen + (s - src));   /* count does not include NUL */
+void strlcat(char* dst, const char* src, unsigned siz)
+{
+    while(*dst && siz) {
+        dst++;
+        siz--;
+    }
+
+    while(*src && siz > 1) {
+        *(dst++) = *(src++);
+        siz--;
+    }
+    assert(!(*src));
+    *dst = '\0';
 }
 
 int strcmp(const char* s0, const char* s1)

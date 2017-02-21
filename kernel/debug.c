@@ -5,6 +5,7 @@
 #include "elf.h"
 #include "multiboot.h"
 #include "registers.h"
+#include "util.h"
 
 struct debug_sym {
     const char* name;

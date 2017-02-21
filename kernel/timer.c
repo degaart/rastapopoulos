@@ -3,6 +3,7 @@
 #include "io.h"
 #include "util.h"
 #include "debug.h"
+#include "kernel.h"
 
 #define PORT_COMMAND    0x43
 #define PORT_DATA       0x40
@@ -21,6 +22,10 @@ static void irq_handler(int irq, const struct isr_regs* regs)
 
     /* TODO: Handle scheduled timers */
     trace("Ticks: %d, Timestamp: %d", (uint32_t)ticks, (uint32_t)current_timestamp);
+
+    if(ticks >= 10) {
+        reboot();
+    }
 }
 
 void timer_init()
