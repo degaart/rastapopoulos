@@ -46,6 +46,8 @@ void backtrace()
 
     uint32_t data[255];
     unsigned index = 0;
+    data[index++] = *(ebp + 1);
+
     while(1) {
         if((uint32_t)ebp <= stack_start || ((uint32_t)ebp+(sizeof(uint32_t)*2)) >= stack_end)
             break;
@@ -122,6 +124,7 @@ void load_symbols(const struct multiboot_info* multiboot_info)
 void __assertion_failed(const char* function, const char* file, int line, const char* expression)
 {
     __log(function, file, line, "Assertion failed: %s", expression);
+    backtrace();
     reboot();
 }
 

@@ -10,6 +10,8 @@ SECTIONS
 	*/
 	.text 0x00100000 :
 	{
+        _KERNEL_START_ = .;
+
 		_TEXT_START_ = .;
 		*(.text)
 		_TEXT_END_ = .;
