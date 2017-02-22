@@ -9,8 +9,11 @@
 #include "pic.h"
 #include "timer.h"
 #include "pmm.h"
+#include "util.h"
+#include "kmalloc.h"
 
-extern unsigned char _KERNEL_END_;   /* Set by linker */
+uint32_t KERNEL_START = (uint32_t) &_KERNEL_START_;
+uint32_t KERNEL_END = (uint32_t) &_KERNEL_END_;
 
 void reboot()
 {
@@ -78,6 +81,8 @@ static void run_tests()
 void kmain(const struct multiboot_info* multiboot_info)
 {
     trace("*** Rastapopoulos booted ***");
+
+    load_symbols(multiboot_info);
     
     // GDT
     gdt_init();
@@ -88,6 +93,43 @@ void kmain(const struct multiboot_info* multiboot_info)
 
     // Physical memory manager
     pmm_init(multiboot_info);
+
+    /*
+     * Reserve specific areas of unpaged memory
+     * BDA:     0x00000400 - 0x000004FF
+     * EDBA:    0x0009FC00 - 0x0009FFFF
+     * VGA:     0x000A0000 - 0x000FFFFF
+     * multiboot_info
+     * kernel code and data section
+     * initial kernel heap
+     */
+    pmm_reserve(0x0);
+    for(uint32_t page = TRUNCATE(0x9FC00, PAGE_SIZE); page < 0x9FFFF; page += PAGE_SIZE)
+        pmm_reserve(page);
+
+    for(uint32_t page = TRUNCATE(0xA0000, PAGE_SIZE); page < 0xFFFFF; page += PAGE_SIZE)
+        pmm_reserve(page);
+
+    for(uint32_t page = TRUNCATE((uint32_t)multiboot_info, PAGE_SIZE); 
+        page < (uint32_t)multiboot_info + sizeof(struct multiboot_info); 
+        page += PAGE_SIZE) {
+        pmm_reserve(page);
+    }
+
+    for(uint32_t page = TRUNCATE(KERNEL_START, PAGE_SIZE); 
+        page < KERNEL_END; 
+        page += PAGE_SIZE) {
+        pmm_reserve(page);
+    }
+
+    struct kernel_heap_info heap_info;
+    kernel_heap_info(&heap_info);
+    for(uint32_t page = TRUNCATE(heap_info.heap_start, PAGE_SIZE); 
+        page < heap_info.heap_start + heap_info.heap_size; 
+        page += PAGE_SIZE) {
+        if(!pmm_reserved(page))
+            pmm_reserve(page);
+    }
 
     // PIC
     pic_init();

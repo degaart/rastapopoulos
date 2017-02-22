@@ -4,6 +4,8 @@
 #include "debug.h"
 #include "string.h"
 #include "util.h"
+#include "bitset.h"
+#include "kernel.h"
 
 struct memregion {
     uint32_t addr;
@@ -12,14 +14,24 @@ struct memregion {
     struct memregion* next;
 };
 
+static bool initialized = false;
 struct memregion* memregions = NULL;
 
 static void add_region(uint32_t addr, uint32_t len)
 {
+    uint32_t aligned_start = ALIGN(addr, PAGE_SIZE);
+    len -= aligned_start - addr;
+
+    uint32_t aligned_len = TRUNCATE(len, PAGE_SIZE);
+
+    assert(!(aligned_start % PAGE_SIZE));
+    assert(!(aligned_len % PAGE_SIZE));
+
     struct memregion* region = kmalloc(sizeof(struct memregion));
-    region->addr = addr;
-    region->len = len;
+    region->addr = aligned_start;
+    region->len = aligned_len;
     region->next = memregions;
+    region->bitmap = bitset_new(aligned_len / PAGE_SIZE);
 
     memregions = region;
 }
@@ -34,11 +46,50 @@ void pmm_init(const struct multiboot_info* multiboot_info)
             add_region(LODWORD(entry->addr), LODWORD(entry->len));
         }
     }
+    initialized = true;
 }
 
+bool pmm_initialized()
+{
+    return initialized;
+}
 
+void pmm_reserve(uint32_t page)
+{
+    assert(!(page % PAGE_SIZE));
 
+    for(struct memregion* region = memregions; region; region = region->next) {
+        if(page >= region->addr && page < region->addr + region->len) {
+            uint32_t offset = page - region->addr;
+            uint32_t index = offset / PAGE_SIZE;
 
+            if(bitset_test(region->bitmap, index)) {
+                trace("Error: page %p already reserved!", page);
+                backtrace();
+                reboot();
+            }
+            bitset_set(region->bitmap, index);
+        }
+    }
+}
+
+bool pmm_reserved(uint32_t page)
+{
+    assert(!(page % PAGE_SIZE));
+
+    bool result = true;
+    for(struct memregion* region = memregions; region; region = region->next) {
+        if(page >= region->addr && page < region->addr + region->len) {
+            uint32_t offset = page - region->addr;
+            uint32_t index = offset / PAGE_SIZE;
+
+            result = bitset_test(region->bitmap, index);
+            break;
+        }
+    }
+
+    return result;
+}
 
 
 

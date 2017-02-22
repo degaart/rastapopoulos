@@ -15,4 +15,6 @@ void bitset_set(struct bitset* bitset, uint32_t offset);
 void bitset_set_all(struct bitset* bitset);
 void bitset_clear(struct bitset* bitset, uint32_t offset);
 void bitset_clear_all(struct bitset* bitset);
+void bitset_set_range(struct bitset* bitset, uint32_t offset, uint32_t len);
+
 
