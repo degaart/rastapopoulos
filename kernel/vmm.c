@@ -52,18 +52,27 @@ static struct pagedir* current_pagedir = NULL;
 extern unsigned char initial_kernel_stack[];
 static bool paging_enabled = false;
 
+static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, uint32_t flags);
+
 void vmm_init()
 {
     assert(pmm_initialized());
 
     /* Create initial kernel pagedir */
-    current_pagedir = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
-    bzero(current_pagedir, sizeof(struct pagedir));
+    struct pagedir* pagedir = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
+    bzero(pagedir, sizeof(struct pagedir));
 
     /* Identity-map first 16Mb */
     for(uint32_t page = 0; page < 16 * 1024 * 1024; page += PAGE_SIZE) {
-        vmm_map(page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
+
+    /* 
+     * Last entry in pagedir should point to itself so we can modify it when paging is enabled
+     * (see recursive mapping)
+     */
+    assert((uint32_t)pagedir == (((uint32_t)pagedir) & PDE_FRAME));
+    pagedir->entries[1023] = ((uint32_t)pagedir) | PDE_PRESENT | PDE_WRITABLE;
 
 #if 0
     /* Map initial kernel stack */
@@ -99,24 +108,12 @@ void vmm_init()
     }
 #endif
 
-    /* A little bit of test */
-    uint32_t address = 0x00173000;
-    uint32_t pde_index = PAGE_DIRECTORY_INDEX(address);
-    uint32_t pte_index = PAGE_TABLE_INDEX(address);
-
-    assert(current_pagedir->entries[pde_index] & PDE_PRESENT);
-    uint32_t* table = (uint32_t*) (current_pagedir->entries[pde_index] & PDE_FRAME);
-
-    assert(table[pte_index] & PTE_PRESENT);
-    uint32_t va = table[pte_index] & PTE_FRAME;
-    assert(va == address);
-
     /* Enable paging */
-    write_cr3((uint32_t)current_pagedir);
+    write_cr3((uint32_t)pagedir);
     uint32_t cr3 = read_cr3();
     trace("cr3 = 0x%X", cr3);
 
-    assert(cr3 == (uint32_t)current_pagedir);
+    assert(cr3 == (uint32_t)pagedir);
 
     uint32_t cr0 = read_cr0();
     cr0 |= CR0_PG | CR0_WP; /* CR0_WP: ring0 cannot write to write-protected pages */
@@ -131,8 +128,13 @@ void vmm_init()
     paging_enabled = true;
 }
 
-void vmm_map(uint32_t va, uint32_t pa, uint32_t flags)
+/*
+ * Map pages while paging is still disabled
+ */
+static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, uint32_t flags)
 {
+    assert(!paging_enabled);
+
     assert(IS_ALIGNED(va, PAGE_SIZE));
     assert(IS_ALIGNED(pa, PAGE_SIZE));
 
@@ -140,26 +142,77 @@ void vmm_map(uint32_t va, uint32_t pa, uint32_t flags)
     uint32_t table_index = PAGE_TABLE_INDEX(va);
 
     /* Check if present in page directory */
-    if(!(current_pagedir->entries[dir_index] & PDE_PRESENT)) {
+    if(!(pagedir->entries[dir_index] & PDE_PRESENT)) {
         struct pagetable* table = kmalloc_a(sizeof(struct pagetable), PAGE_SIZE);
         assert(IS_ALIGNED((uint32_t)table, PAGE_SIZE));
         bzero(table, sizeof(struct pagetable));
 
-        current_pagedir->entries[dir_index] = ((uint32_t)table) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
+        pagedir->entries[dir_index] = ((uint32_t)table) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
     }
 
     /* Now check if present in pagetable */
-    struct pagetable* table = (struct pagetable*)(current_pagedir->entries[dir_index] & PDE_FRAME);
+    struct pagetable* table = (struct pagetable*)(pagedir->entries[dir_index] & PDE_FRAME);
     if(table->entries[table_index] & PTE_PRESENT) {
         trace("VA %p already mapped", va);
         abort();
     }
 
     table->entries[table_index] = (va & PTE_FRAME) | flags;
-
-    if(paging_enabled)
-        vmm_flush_tlb(va);
 }
+
+/*
+ * Map pages while paging is enabled
+ */
+void vmm_map(uint32_t va, uint32_t pa, uint32_t flags)
+{
+    assert(paging_enabled);
+
+    assert(IS_ALIGNED(va, PAGE_SIZE));
+    assert(IS_ALIGNED(pa, PAGE_SIZE));
+
+    trace("MAP: %p -> %p (0x%X)", va, pa, flags);
+
+    uint32_t dir_index = PAGE_DIRECTORY_INDEX(va);
+    uint32_t table_index = PAGE_TABLE_INDEX(va);
+
+    /* Current pagedir available at 0xFFFFF000 because of recursive mapping */
+    struct pagedir* current_pagedir = (struct pagedir*)0xFFFFF000;
+
+    /* Check if present in page directory */
+    bool pde_present = current_pagedir->entries[dir_index] & PDE_PRESENT;
+    if(!pde_present) {
+        /* Alloc 4k frame for page table */
+        uint32_t table_pa = pmm_alloc();
+
+        /* And stash into pagedir */
+        current_pagedir->entries[dir_index] = ((uint32_t)table_pa) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
+
+        /*
+         * Reload cr3
+         * TODO: Replace with flush_tlb()
+         */
+        write_cr3(read_cr3());
+
+        struct pagetable* table = (struct pagetable*)(0xFFC00000 + (dir_index * PAGE_SIZE));
+        bzero(table, sizeof(struct pagetable));
+        table->entries[table_index] = (pa & PTE_FRAME) | flags;
+    } else {
+        /* Pagetables available at (0xFFC00000 + (pte * PAGE_SIZE)) */
+        struct pagetable* table = (struct pagetable*)(0xFFC00000 + (dir_index * PAGE_SIZE));
+
+        if(table->entries[table_index] & PTE_PRESENT) {
+            trace("VA %p already mapped", va);
+            abort();
+        }
+
+        table->entries[table_index] = (pa & PTE_FRAME) | flags;
+    }
+
+    /* TODO: Replace with flush_tlb */
+    write_cr3(read_cr3());
+    //vmm_flush_tlb(va);
+}
+
 
 void vmm_flush_tlb(uint32_t va)
 {

@@ -90,5 +90,18 @@ bool pmm_reserved(uint32_t page)
     return result;
 }
 
+uint32_t pmm_alloc()
+{
+    for(struct memregion* region = memregions; region; region = region->next) {
+        uint32_t index = bitset_find(region->bitmap, 0);
+        if(index != BITSET_INVALID_INDEX) {
+            bitset_set(region->bitmap, index);
+            uint32_t page = region->addr + (index * PAGE_SIZE);
+            return page;
+        }
+    }
+    return PMM_INVALID_PAGE;
+}
+
 
 
