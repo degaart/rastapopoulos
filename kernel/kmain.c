@@ -11,6 +11,7 @@
 #include "pmm.h"
 #include "util.h"
 #include "kmalloc.h"
+#include "vmm.h"
 
 uint32_t KERNEL_START = (uint32_t) &_KERNEL_START_;
 uint32_t KERNEL_END = (uint32_t) &_KERNEL_END_;
@@ -24,6 +25,12 @@ void reboot()
         good = inb(0x64);
     outb(0x64, 0xFE);
     halt();
+}
+
+void abort()
+{
+    backtrace();
+    reboot();
 }
 
 void halt()
@@ -72,10 +79,12 @@ static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
 }
 
 void test_bitset();
+void test_vmm();
 
 static void run_tests()
 {
     test_bitset();
+    test_vmm();
 }
 
 void kmain(const struct multiboot_info* multiboot_info)
@@ -130,6 +139,9 @@ void kmain(const struct multiboot_info* multiboot_info)
         if(!pmm_reserved(page))
             pmm_reserve(page);
     }
+
+    // Virtual memory manager
+    vmm_init();
 
     // PIC
     pic_init();

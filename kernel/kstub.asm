@@ -115,6 +115,7 @@ sti:
     ret
 
 section .bss
+align 4096
 global _initial_kernel_stack
 _initial_kernel_stack:
     resb 4096

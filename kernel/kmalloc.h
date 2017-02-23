@@ -8,6 +8,7 @@ struct kernel_heap_info {
 };
 
 void* kmalloc(unsigned size);
+void* kmalloc_a(unsigned size, unsigned alignment);
 void kernel_heap_info(struct kernel_heap_info* heap_info);
 
 

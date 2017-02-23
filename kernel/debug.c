@@ -7,6 +7,8 @@
 #include "registers.h"
 #include "util.h"
 
+#define DEBUG_PORT 0xE9
+
 struct debug_sym {
     const char* name;
     uint32_t start;
@@ -22,7 +24,7 @@ static char _debug_strings[8192 * 4];
 
 static void __log_callback(int ch, void* unused)
 {
-    outb(0xE9, ch);
+    outb(DEBUG_PORT, ch);
 }
 
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
@@ -124,7 +126,6 @@ void load_symbols(const struct multiboot_info* multiboot_info)
 void __assertion_failed(const char* function, const char* file, int line, const char* expression)
 {
     __log(function, file, line, "Assertion failed: %s", expression);
-    backtrace();
-    reboot();
+    abort();
 }
 
