@@ -65,8 +65,7 @@ void pmm_reserve(uint32_t page)
 
             if(bitset_test(region->bitmap, index)) {
                 trace("Error: page %p already reserved!", page);
-                backtrace();
-                reboot();
+                abort();
             }
             bitset_set(region->bitmap, index);
         }
