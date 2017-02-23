@@ -111,8 +111,6 @@ void vmm_init()
     /* Enable paging */
     write_cr3((uint32_t)pagedir);
     uint32_t cr3 = read_cr3();
-    trace("cr3 = 0x%X", cr3);
-
     assert(cr3 == (uint32_t)pagedir);
 
     uint32_t cr0 = read_cr0();
@@ -120,7 +118,6 @@ void vmm_init()
     write_cr0(cr0);
 
     cr0 = read_cr0();
-    trace("cr0 = 0x%X", cr0);
 
     assert(cr0 & CR0_PG);
     assert(cr0 & CR0_WP);
@@ -170,8 +167,6 @@ void vmm_map(uint32_t va, uint32_t pa, uint32_t flags)
     assert(IS_ALIGNED(va, PAGE_SIZE));
     assert(IS_ALIGNED(pa, PAGE_SIZE));
 
-    trace("MAP: %p -> %p (0x%X)", va, pa, flags);
-
     uint32_t dir_index = PAGE_DIRECTORY_INDEX(va);
     uint32_t table_index = PAGE_TABLE_INDEX(va);
 
@@ -218,6 +213,28 @@ void vmm_flush_tlb(uint32_t va)
 {
     invlpg(va);
 }
+
+void vmm_unmap(uint32_t va)
+{
+    assert(paging_enabled);
+    assert(IS_ALIGNED(va, PAGE_SIZE));
+
+    uint32_t dir_index = PAGE_DIRECTORY_INDEX(va);
+    uint32_t table_index = PAGE_TABLE_INDEX(va);
+
+    struct pagedir* current_pagedir = (struct pagedir*)0xFFFFF000;
+    bool pde_present = current_pagedir->entries[dir_index] & PDE_PRESENT;
+    assert(pde_present);
+
+    struct pagetable* table = (struct pagetable*)(0xFFC00000 + (dir_index * PAGE_SIZE));
+    assert(table->entries[table_index] & PTE_PRESENT);
+
+    table->entries[table_index] &= ~PTE_PRESENT;
+
+    write_cr3(read_cr3());
+}
+
+
 
 
 

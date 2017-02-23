@@ -13,6 +13,7 @@
 
 void vmm_init();
 void vmm_map(uint32_t va, uint32_t pa, uint32_t flags);
+void vmm_unmap(uint32_t va);
 void vmm_flush_tlb(uint32_t va);
 void invlpg(uint32_t va);
 
