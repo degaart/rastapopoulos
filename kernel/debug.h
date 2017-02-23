@@ -10,6 +10,8 @@
         }                                                               \
     } while(0)
 
+#define breakpoint() __asm__ volatile("xchgw %bx, %bx")
+
 struct multiboot_info;
 
 void backtrace();

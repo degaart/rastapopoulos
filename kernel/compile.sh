@@ -4,7 +4,7 @@ set -eou pipefail
 echo "[CC] $1"
 
 # -fno-asynchronous-unwind-tables
-CFLAGS="-O2 -masm=intel \
+CFLAGS="-masm=intel \
     -march=i386 -target i686-pc-elf -ffreestanding -fno-builtin -nostdlib \
     -Werror \
     -g \

@@ -88,7 +88,7 @@ void isr_handler(struct isr_regs regs)
             regs.cs, regs.eip, regs.eflags, 
             regs.ss, regs.esp
         );
-        halt();
+        abort();
     }
 }
 
