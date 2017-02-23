@@ -4,6 +4,7 @@
 #include "../registers.h"
 #include "../kernel.h"
 #include "../util.h"
+#include "../idt.h"
 
 #define PTE_PRESENT             (1)
 #define PTE_WRITABLE            (1 << 1)
@@ -37,7 +38,7 @@
 #define PAGE_DIRECTORY_INDEX(x) (((x) >> 22) & 0x3ff)
 #define PAGE_TABLE_INDEX(x) (((x) >> 12) & 0x3ff)
 
-static bool is_identity_paged(uint32_t address)
+static bool is_identity_mapped(uint32_t address)
 {
     uint32_t* current_pagedir = (uint32_t*)read_cr3();
 
@@ -54,16 +55,20 @@ static bool is_identity_paged(uint32_t address)
     return result;
 }
 
-static void test_identity_paged()
+static void test_identity_mapped()
 {
+    trace("Testing kernel is properly identity-mapped");
+
     /* Test kernel is properly identity-paged */
     for(uint32_t page = KERNEL_START; page < KERNEL_END; page += PAGE_SIZE) {
-        assert(is_identity_paged(page));
+        assert(is_identity_mapped(page));
     }
 }
 
 static void test_recursive_mapping()
 {
+    trace("Testing recursive mapping");
+
     /* Last PDE should point to cr3 */
     uint32_t* cr3 = (uint32_t*)read_cr3();
     uint32_t* last_pde = (uint32_t*)(cr3[1023] & PDE_FRAME);
@@ -80,7 +85,6 @@ static void test_recursive_mapping()
 
     uint32_t* phys_pagetable = (uint32_t*)(cr3[pde_index] & PDE_FRAME);
     uint32_t* va_pagetable = (uint32_t*)(0xFFC00000 + (pde_index * PAGE_SIZE));
-    trace("phys_pagetable: %p, va_pagetable: %p", phys_pagetable, va_pagetable);
 
     for(int i = 0; i < 1024; i++) {
         assert(phys_pagetable[i] == va_pagetable[i]);
@@ -89,6 +93,8 @@ static void test_recursive_mapping()
 
 static void test_map()
 {
+    trace("Testing vmm_map");
+
     /* Try mapping a new page at 32Mb */
     uint32_t* my_page = (uint32_t*)(32 * 1024 * 1024);
     uint32_t page_frame = pmm_alloc();
@@ -119,34 +125,59 @@ static void test_map()
     }
 }
 
+static void* unmap_env[20];
+static void unmap_pf_handler(struct isr_regs* regs)
+{
+    __builtin_longjmp(unmap_env, 1);
+    assert(!"longjmp failed");
+}
+
+static void test_unmap()
+{
+    trace("Testing vmm_unmap");
+
+    /* Map a new page at 33Mb */
+    volatile uint32_t* test_page = (uint32_t*)(33 * 1024 * 1024);
+    uint32_t page_frame = pmm_alloc();
+    vmm_map((uint32_t)test_page, page_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+
+    /* Test we can read and write from that page */
+    uint32_t val = *test_page;
+    val ^= 7;
+    *test_page = val;
+
+    /* Unmap that page */
+    vmm_unmap((uint32_t)test_page);
+
+    /* Install page fault handler so we can longjmp back */
+    idt_install(14, unmap_pf_handler, false);
+    int status = __builtin_setjmp(unmap_env);
+    if(status)
+        return;
+
+    val = *test_page;
+    val ^= 0xB00B5;
+    *test_page = val;
+
+    assert(!"No page fault!");
+}
+
 void test_vmm()
 {
     trace("Testing vmm");
 
-    /* Test kernel properly identity-paged */
-    test_identity_paged();
-
-    /* First 16Mb should be mapped and readable */
-    for(uint32_t page = 0; page < 16 * 1024 * 1024; page += PAGE_SIZE) {
-        volatile unsigned* p = (unsigned*)page;
-        volatile unsigned val = *p;
-    }
+    /* Test kernel properly identity-mapped */
+    test_identity_mapped();
 
     /* Test last pagedir entry is recursively mapped to itself */
     test_recursive_mapping();
 
-#if 0
-    /* After that, reading should yield a page fault */
-    volatile unsigned* p = (unsigned*)(16 * 1024 * 1024);
-    while(true) {
-        p++;
-
-        trace("Reading from %p", p);
-        volatile unsigned val = *p;
-    }
-#endif
-
+    /* Test vmm_map */
     test_map();
+
+    /* Test vmm_unmap */
+    test_unmap();
 }
+
 
 
