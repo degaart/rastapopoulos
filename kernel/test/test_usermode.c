@@ -3,6 +3,17 @@
 #include "../vmm.h"
 #include "../pmm.h"
 #include "../registers.h"
+#include "../idt.h"
+#include "../gdt.h"
+#include "../kernel.h"
+
+#define TEST_EDI        0xABCD0001
+#define TEST_ESI        0xABCD0002
+#define TEST_EDX        0xABCD0003
+#define TEST_ECX        0xABCD0004
+#define TEST_EBX        0xABCD0005
+#define TEST_EAX        0xABCD0006
+#define TEST_EBP        0xABCD0007
 
 void usermode_program();
 void ring3jmp(uint32_t esp,
@@ -15,6 +26,22 @@ void ring3jmp(uint32_t esp,
               uint32_t ebx,
               uint32_t eax,
               uint32_t ebp);
+
+static void int80_handler(struct isr_regs* regs)
+{
+    trace("Back into ring0, esp: %p", read_esp());
+
+    /* Check register values */
+    assert(regs->edi == (TEST_EDI ^ 7));
+    assert(regs->esi == (TEST_ESI ^ 7));
+    assert(regs->edx == (TEST_EDX ^ 7));
+    assert(regs->ecx == (TEST_ECX ^ 7));
+    assert(regs->ebx == (TEST_EBX ^ 7));
+    assert(regs->eax == (TEST_EAX ^ 7));
+    assert(regs->ebp == (TEST_EBP ^ 7));
+
+    reboot();
+}
 
 void test_usermode()
 {
@@ -31,18 +58,24 @@ void test_usermode()
 
     stack += PAGE_SIZE - 1;
 
+    /* Set kernel stack to initial_kernel_stack */
+    tss_set_kernel_stack(initial_kernel_stack + PAGE_SIZE);
+
+    /* Install int80 handler so we can return into kernel from ring3 */
+    idt_install(0x80, int80_handler, true);
+
     /* Jump into our program */
     uint32_t eflags = read_eflags();
-    ring3jmp((uint32_t)stack,
-             eflags,
-             (uint32_t)usermode_program,
-             0,
-             0,
-             0,
-             0,
-             0,
-             0,
-             0);
+    ring3jmp((uint32_t)stack,                   /* esp */
+             eflags,                            /* eflags */
+             (uint32_t)usermode_program,        /* eip */
+             TEST_EDI,                          /* edi */
+             TEST_ESI,                          /* esi */
+             TEST_EDX,                          /* edx */ 
+             TEST_ECX,                          /* ecx */
+             TEST_EBX,                          /* ebx */
+             TEST_EAX,                          /* eax */
+             TEST_EBP);                         /* ebp */
     assert(!"Usermode jump failed!");
 }
 

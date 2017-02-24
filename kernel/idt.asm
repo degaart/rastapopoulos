@@ -8,68 +8,61 @@ lidt:
 
 %macro ISR_DEBUG 1
     isr_stub_%1:
-        mov [0x000B8000], BYTE %1
-        mov [0x000B8001], BYTE 0x28
+        mov     [0x000B8000], BYTE %1
+        mov     [0x000B8001], BYTE 0x28
         cli
         hlt
 %endmacro
 
 %macro ISR_NOERRCODE 1  ; define a macro, taking one parameter
     isr_stub_%1:
-        push byte 0
-        push dword %1
-        jmp isr_common_stub
+        push    byte 0
+        push    dword %1
+        jmp     isr_common_stub
 %endmacro
 
 %macro ISR_ERRCODE 1
     isr_stub_%1:
-        push dword %1
-        jmp isr_common_stub
+        push    dword %1
+        jmp     isr_common_stub
 %endmacro
 
+;
 ; Special case for abort class exceptions
 ; Disable interrupts, paging, and setup a dedicated stack
+;
 %macro ISR_ABORT 1
     isr_stub_%1:
+        ; Disable interrupts
         cli
 
-        ;mov eax, cr0
+        ; Disable paging
+        mov     eax, cr0
+        and     eax, 0xFFFFFFFF & ~0x80000000 ; The mask is there to get rid of nasm spurious warning
+        mov     cr0, eax
 
-        ;; The mask is there to get rid of nasm spurious warning
-        ;and eax, 0xFFFFFFFF & ~0x80000000 
-        ;mov cr0, eax
+        ; Setup dedicated stack
+        mov     eax, 0x7CFF
+        mov     esp, eax
 
-        ;mov eax, 0x7CFF
-        ;mov esp, eax
+        ; Print error message to debug port
+        xor     eax, eax
+        mov     dx, 0xE9
+        mov     esi, .msg
 
-        mov dx, 0xE9
-        mov al, 10
-        out dx, al
-
-        mov al, 'G'
-        out dx, al
-
-        mov al, 'P'
-        out dx, al
-        
-        mov al, 'F'
-        out dx, al
-
-        mov al, 10
-        out dx, al
+        .loop:
+            mov     al, [esi]
+            test    al, al
+            jz      .halt
+            out     dx, al
+            inc     esi
+            jmp     .loop
 
     .halt:
         jmp .halt
 
-        push word 0
-        push word 0
-        pushf
-        push word 0
-        push word 0
-        push byte 0
-        push dword %1
+    .msg: db "Abort-class interrupt. System halted", 10, 0
 
-        jmp isr_common_stub
 %endmacro
 
 ; This is our common ISR stub. It saves the processor state, sets
@@ -77,30 +70,29 @@ lidt:
 ; and finally restores the stack frame.
 extern isr_handler
 isr_common_stub:
+    pusha                       ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
 
-    pusha                    ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
+    xor     eax, eax
+    mov     ax, ds              ; Lower 16-bits of eax = ds.
+    push    eax                 ; save the data segment descriptor
 
-    xor eax, eax
-    mov ax, ds               ; Lower 16-bits of eax = ds.
-    push eax                 ; save the data segment descriptor
+    mov     ax, 0x10            ; load the kernel data segment descriptor
+    mov     ds, ax
+    mov     es, ax
+    mov     fs, ax
+    mov     gs, ax
 
-    mov ax, 0x10  ; load the kernel data segment descriptor
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
+    call    isr_handler
 
-    call isr_handler
+    pop     eax                 ; reload the original data segment descriptor
+    mov     ds, ax
+    mov     es, ax
+    mov     fs, ax
+    mov     gs, ax
 
-    pop eax        ; reload the original data segment descriptor
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
-    popa                     ; Pops edi,esi,ebp...
-    add esp, 8     ; Cleans up the pushed error code and pushed ISR number
-    iret           ; pops 5 things at once: CS, EIP, EFLAGS, SS, and ESP 
+    popa                        ; Pops edi,esi,ebp...
+    add     esp, 8              ; Cleans up the pushed error code and pushed ISR number
+    iret                        ; pops 5 things at once: CS, EIP, EFLAGS, SS, and ESP 
 
 ; Generate the ISR thunks
 %assign isr_index 0

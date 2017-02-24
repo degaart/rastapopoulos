@@ -28,3 +28,6 @@ extern unsigned char _DATA_END_[];
 extern unsigned char _BSS_START_[];
 extern unsigned char _BSS_END_[];
 
+extern unsigned char initial_kernel_stack[4096];
+
+

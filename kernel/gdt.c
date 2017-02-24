@@ -2,6 +2,9 @@
 #include "string.h"
 #include "debug.h"
 #include "registers.h"
+#include "pmm.h"
+#include "kernel.h"
+
 #include <stdint.h>
 
 #define GDT_ACCESSED        1
@@ -22,7 +25,7 @@
 #define GDT_GRAN1B          0
 #define GDT_GRAN4K         (1 << 7)
 
-struct tss_entry_t {
+struct tss_entry {
     uint16_t prev_tss;
     uint16_t reserved0;
     uint32_t esp0;
@@ -64,29 +67,29 @@ struct tss_entry_t {
     uint8_t iomap[(65536 / 8) + 1];
 } __attribute__((packed));
 
-struct gdt_entry_t {
-   uint16_t limit_low;           // The lower 16 bits of the limit.
-   uint16_t base_low;            // The lower 16 bits of the base.
-   uint8_t  base_middle;         // The next 8 bits of the base.
-   uint8_t  access;              // Access flags, determine what ring this segment can be used in.
-   uint8_t  granularity;         // Actually, also contains the bits 19:16 of segment limit
-   uint8_t  base_high;           // The last 8 bits of the base.
+struct gdt_entry {
+   uint16_t limit_low;          // The lower 16 bits of the limit.
+   uint16_t base_low;           // The lower 16 bits of the base.
+   uint8_t  base_middle;        // The next 8 bits of the base.
+   uint8_t  access;             // Access flags, determine what ring this segment can be used in.
+   uint8_t  granularity;        // Actually, also contains the bits 19:16 of segment limit
+   uint8_t  base_high;          // The last 8 bits of the base.
 } __attribute__((packed));
 
-struct gdt_ptr_t {
-   uint16_t limit;               // The upper 16 bits of all selector limits.
-   uint32_t base;    // The address of the first gdt_entry_t struct.
+struct gdt_ptr {
+   uint16_t limit;              // The upper 16 bits of all selector limits.
+   uint32_t base;               // The address of the first gdt_entry struct.
 } __attribute__((packed));
 
-static struct gdt_entry_t gdt_entries[6];
-static struct gdt_ptr_t   gdt_ptr;
-static struct tss_entry_t tss;
+static struct gdt_entry gdt_entries[6];
+static struct gdt_ptr   gdt_ptr;
+static struct tss_entry tss;
 
 static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran);
 
 void gdt_init()
 {
-    gdt_ptr.limit = (sizeof(struct gdt_entry_t) * (sizeof(gdt_entries)/sizeof(*gdt_entries))) - 1;
+    gdt_ptr.limit = (sizeof(struct gdt_entry) * (sizeof(gdt_entries)/sizeof(*gdt_entries))) - 1;
     gdt_ptr.base = (uint32_t)&gdt_entries;
 
     set_descriptor(0, 0x0, 0x0, 0x0, 0x0);  /* NULL descriptor */
@@ -123,6 +126,7 @@ void gdt_init()
      */
     bzero(&tss, sizeof(tss));
     tss.ss0 = KERNEL_DATA_SEG;
+    tss.esp0 = (uint32_t)(initial_kernel_stack + PAGE_SIZE);
     tss.cs = KERNEL_CODE_SEG | 3;
     tss.ss = tss.es = tss.ds = tss.fs = tss.gs = KERNEL_DATA_SEG | 3;
     tss.iomap_base = tss.iomap - (uint8_t*)&tss;
@@ -176,6 +180,11 @@ void gdt_iomap_set(unsigned port, unsigned value)
         tss.iomap[idx] |= mask;
     else
         tss.iomap[idx] &= ~mask;
+}
+
+void tss_set_kernel_stack(void* esp0)
+{
+    tss.esp0 = (uint32_t)esp0;
 }
 
 

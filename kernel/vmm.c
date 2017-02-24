@@ -48,9 +48,8 @@ struct pagetable {
     uint32_t entries[1024];
 };
 
-static struct pagedir* current_pagedir = NULL;
-extern unsigned char initial_kernel_stack[];
-static bool paging_enabled = false;
+static struct pagedir*  current_pagedir = NULL;
+static bool             paging_enabled = false;
 
 static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, uint32_t flags);
 

@@ -37,6 +37,13 @@ read_ebp:
     mov     eax, ebp
     ret
 
+; uint32_t read_esp()
+global read_esp
+read_esp:
+    mov     eax, esp
+    sub     eax, 4          ; 4 bytes for return address
+    ret
+
 ; void write_cr3(uint32_t val)
 global write_cr3
 write_cr3:
