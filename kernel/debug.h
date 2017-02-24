@@ -12,6 +12,8 @@
 
 #define breakpoint() __asm__ volatile("xchgw %bx, %bx")
 
+#define DEBUG_PORT 0xE9
+
 struct multiboot_info;
 
 void backtrace();

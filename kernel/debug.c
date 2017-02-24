@@ -7,7 +7,6 @@
 #include "registers.h"
 #include "util.h"
 
-#define DEBUG_PORT 0xE9
 
 struct debug_sym {
     const char* name;

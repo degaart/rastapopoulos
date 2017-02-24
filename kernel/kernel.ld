@@ -42,3 +42,7 @@ SECTIONS
 	}
 	_KERNEL_END_ = .;
 }
+
+
+
+
