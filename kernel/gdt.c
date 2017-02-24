@@ -165,4 +165,18 @@ static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t acces
     gdt_entries[num].access      = access;
 }
 
+void gdt_iomap_set(unsigned port, unsigned value)
+{
+    int idx = port / (sizeof(uint8_t)*8);
+    int off = port % (sizeof(uint8_t)*8);
+
+    uint8_t mask = 1 << off;
+
+    if(value)
+        tss.iomap[idx] |= mask;
+    else
+        tss.iomap[idx] &= ~mask;
+}
+
+
 

@@ -54,6 +54,19 @@ bool pmm_initialized()
     return initialized;
 }
 
+bool pmm_exists(uint32_t page)
+{
+    assert(!(page % PAGE_SIZE));
+
+    for(struct memregion* region = memregions; region; region = region->next) {
+        if(page >= region->addr && page < region->addr + region->len) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void pmm_reserve(uint32_t page)
 {
     assert(!(page % PAGE_SIZE));
@@ -68,8 +81,34 @@ void pmm_reserve(uint32_t page)
                 abort();
             }
             bitset_set(region->bitmap, index);
+            return;
         }
     }
+
+    trace("Error: page %p not found!");
+    abort();
+}
+
+void pmm_free(uint32_t page)
+{
+    assert(IS_ALIGNED(page, PAGE_SIZE));
+
+    for(struct memregion* region = memregions; region; region = region->next) {
+        if(page >= region->addr && page < region->addr + region->len) {
+            uint32_t offset = page - region->addr;
+            uint32_t index = offset / PAGE_SIZE;
+
+            if(!bitset_test(region->bitmap, index)) {
+                trace("Error: page %p already free!", page);
+                abort();
+            }
+            bitset_clear(region->bitmap, index);
+            return;
+        }
+    }
+
+    trace("Error: page %p not found!");
+    abort();
 }
 
 bool pmm_reserved(uint32_t page)

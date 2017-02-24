@@ -118,11 +118,14 @@ static void test_map()
 
     /* Because of identity-mapping again, we can test that my_page[i] == page_frame[i] */
     for(int i = 0; i < 1024; i++) {
-        breakpoint();
         assert(my_page[i] == ((uint32_t*)page_frame)[i]);
         my_page[i] = i ^ 7;
         assert(my_page[i] == ((uint32_t*)page_frame)[i]);
     }
+
+    /* Unmap it */
+    vmm_unmap((uint32_t)my_page);
+    pmm_free(page_frame);
 }
 
 static void* unmap_env[20];
@@ -148,6 +151,7 @@ static void test_unmap()
 
     /* Unmap that page */
     vmm_unmap((uint32_t)test_page);
+    pmm_free(page_frame);
 
     /* Install page fault handler so we can longjmp back */
     idt_install(14, unmap_pf_handler, false);

@@ -15,3 +15,10 @@ void gdt_init();
 void gdt_flush(void* gdtr);
 void tss_flush();
 
+/*
+ * The IOMAP controls usermode access to ports.
+ * Set port to 0 to allow usermode to access it
+ * By default, all ports are forbidden to usermode
+ */
+void gdt_iomap_set(unsigned port, unsigned value);
+

@@ -80,11 +80,13 @@ static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
 
 void test_bitset();
 void test_vmm();
+void test_usermode();
 
 static void run_tests()
 {
     test_bitset();
     test_vmm();
+    test_usermode();
 }
 
 void kmain(const struct multiboot_info* multiboot_info)
@@ -95,6 +97,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     
     // GDT
     gdt_init();
+    gdt_iomap_set(DEBUG_PORT, 0);
 
     // IDT
     idt_init();
@@ -113,22 +116,28 @@ void kmain(const struct multiboot_info* multiboot_info)
      * initial kernel heap
      */
     pmm_reserve(0x0);
-    for(uint32_t page = TRUNCATE(0x9FC00, PAGE_SIZE); page < 0x9FFFF; page += PAGE_SIZE)
-        pmm_reserve(page);
+    for(uint32_t page = TRUNCATE(0x9FC00, PAGE_SIZE); page < 0x9FFFF; page += PAGE_SIZE) {
+        if(pmm_exists(page))
+            pmm_reserve(page);
+    }
 
-    for(uint32_t page = TRUNCATE(0xA0000, PAGE_SIZE); page < 0xFFFFF; page += PAGE_SIZE)
-        pmm_reserve(page);
+    for(uint32_t page = TRUNCATE(0xA0000, PAGE_SIZE); page < 0xFFFFF; page += PAGE_SIZE) {
+        if(pmm_exists(page))
+            pmm_reserve(page);
+    }
 
     for(uint32_t page = TRUNCATE((uint32_t)multiboot_info, PAGE_SIZE); 
         page < (uint32_t)multiboot_info + sizeof(struct multiboot_info); 
         page += PAGE_SIZE) {
-        pmm_reserve(page);
+        if(pmm_exists(page))
+            pmm_reserve(page);
     }
 
     for(uint32_t page = TRUNCATE(KERNEL_START, PAGE_SIZE); 
         page < KERNEL_END; 
         page += PAGE_SIZE) {
-        pmm_reserve(page);
+        if(pmm_exists(page))
+            pmm_reserve(page);
     }
 
     struct kernel_heap_info heap_info;
@@ -136,7 +145,8 @@ void kmain(const struct multiboot_info* multiboot_info)
     for(uint32_t page = TRUNCATE(heap_info.heap_start, PAGE_SIZE); 
         page < heap_info.heap_start + heap_info.heap_size; 
         page += PAGE_SIZE) {
-        if(!pmm_reserved(page))
+
+        if(pmm_exists(page) && !pmm_reserved(page))
             pmm_reserve(page);
     }
 

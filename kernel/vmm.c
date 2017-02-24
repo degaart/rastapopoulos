@@ -208,6 +208,33 @@ void vmm_map(uint32_t va, uint32_t pa, uint32_t flags)
     //vmm_flush_tlb(va);
 }
 
+void vmm_remap(uint32_t va, uint32_t flags)
+{
+    assert(paging_enabled);
+
+    assert(IS_ALIGNED(va, PAGE_SIZE));
+    assert(flags & VMM_PAGE_PRESENT);       /* Use vmm_unmap to unmap */
+
+    uint32_t dir_index = PAGE_DIRECTORY_INDEX(va);
+    uint32_t table_index = PAGE_TABLE_INDEX(va);
+
+    /* Current pagedir available at 0xFFFFF000 because of recursive mapping */
+    struct pagedir* current_pagedir = (struct pagedir*)0xFFFFF000;
+
+    /* Check if present in page directory */
+    bool pde_present = current_pagedir->entries[dir_index] & PDE_PRESENT;
+    assert(pde_present);
+
+    /* Pagetables available at (0xFFC00000 + (pte * PAGE_SIZE)) */
+    struct pagetable* table = (struct pagetable*)(0xFFC00000 + (dir_index * PAGE_SIZE));
+    assert(table->entries[table_index] & PTE_PRESENT);
+
+    /* This will surely fail when we start using other bits of page table entries (e.g. PTE_ACCESSED) */
+    uint32_t frame = table->entries[table_index] & PTE_FRAME;
+    table->entries[table_index] = frame | flags;
+
+    write_cr3(read_cr3());
+}
 
 void vmm_flush_tlb(uint32_t va)
 {
