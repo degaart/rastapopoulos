@@ -13,7 +13,7 @@ global _kernel_entry
 _kernel_entry:
     ; Setup kernel stack
     ; NOTE: The bootloader has already disabled interrupts
-    mov esp, _initial_kernel_stack + 4096
+    mov esp, initial_kernel_stack + 4096
 
     ; Check multiboot bootloader
     cmp eax, 0x2BADB002
@@ -116,8 +116,8 @@ sti:
 
 section .bss
 align 4096
-global _initial_kernel_stack
-_initial_kernel_stack:
+global initial_kernel_stack
+initial_kernel_stack:
     resb 4096
 
 section .rodata
