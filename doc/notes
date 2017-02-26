@@ -1,0 +1,6 @@
+* Debugging:
+    ./run.sh debug
+    i686-pc-elf-gdb
+    target remote localhost:1234
+    symbol-file kernel/obj/kernel.elf
+

@@ -78,14 +78,17 @@ static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
     trace("_KERNEL_END_: %p", &_KERNEL_END_);
 }
 
-void test_bitset();
-void test_vmm();
-void test_usermode();
 
 static void run_tests()
 {
+    void test_bitset();
+    void test_vmm();
+    void test_usermode();
+    void test_kmalloc();
+
     test_bitset();
     test_vmm();
+    test_kmalloc();
     test_usermode();
 }
 

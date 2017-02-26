@@ -101,4 +101,11 @@ void idt_install(int num, isr_handler_t handler, bool usermode)
         idt_entries[num].flags &= ~IDT_DPL3;
 }
 
+isr_handler_t idt_get_handler(int num)
+{
+    return isr_handlers[num];
+}
+
+
+
 
