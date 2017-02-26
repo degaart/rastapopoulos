@@ -260,6 +260,12 @@ void vmm_unmap(uint32_t va)
     write_cr3(read_cr3());
 }
 
+bool vmm_paging_enabled()
+{
+    return paging_enabled;
+}
+
+
 
 
 

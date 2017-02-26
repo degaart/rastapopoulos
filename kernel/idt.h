@@ -15,6 +15,8 @@ typedef void (*isr_handler_t)(struct isr_regs* regs);
 void idt_init();
 void idt_flush();
 void idt_install(int num, isr_handler_t handler, bool usermode);
+isr_handler_t idt_get_handler(int num);
+
 
 
 

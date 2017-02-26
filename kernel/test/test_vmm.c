@@ -129,6 +129,7 @@ static void test_map()
 }
 
 static void* unmap_env[20];
+
 static void unmap_pf_handler(struct isr_regs* regs)
 {
     __builtin_longjmp(unmap_env, 1);
@@ -154,10 +155,13 @@ static void test_unmap()
     pmm_free(page_frame);
 
     /* Install page fault handler so we can longjmp back */
+    isr_handler_t old_handler = idt_get_handler(14);
     idt_install(14, unmap_pf_handler, false);
     int status = __builtin_setjmp(unmap_env);
-    if(status)
+    if(status) {
+        idt_install(14, old_handler, false);
         return;
+    }
 
     val = *test_page;
     val ^= 0xB00B5;
