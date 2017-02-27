@@ -15,6 +15,7 @@
 
 #define countof(a) sizeof(a) / sizeof(a[0])
 
+/* WARNING: This macro only works with powers of two */
 #define ALIGN(val, align) \
     (((val) + ((align) - 1)) & ~((align) - 1))
 
