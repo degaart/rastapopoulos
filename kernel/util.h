@@ -23,7 +23,7 @@
     (((val) / (align)) * (align))
 
 #define IS_ALIGNED(val, align) \
-    (((val) % (align)) == 0)
+    (( ((uint64_t)(val)) % ((uint64_t)(align)) ) == 0)
 
 
 
