@@ -164,24 +164,22 @@ struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
     unsigned char* end_of_heap = ((unsigned char*)last) + last->size;
     assert(IS_ALIGNED((uint32_t)end_of_heap, PAGE_SIZE));
 
-    if(vmm_paging_enabled()) {
-        for(unsigned char* page = end_of_heap; page < end_of_heap + size; page += PAGE_SIZE) {
-            if(heap->size >= heap->max_size)
-                break;
+    for(unsigned char* page = end_of_heap; page < end_of_heap + size; page += PAGE_SIZE) {
+        if(heap->size >= heap->max_size)
+            break;
 
+        if(vmm_paging_enabled()) {
             uint32_t frame = pmm_alloc();
             if(frame == PMM_INVALID_PAGE)
                 break;
 
             vmm_map((uint32_t)page, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-
-            heap->size += PAGE_SIZE;
-            allocated += PAGE_SIZE;
+        } else if(pmm_initialized()) {
+            pmm_reserve((uint32_t)page);
         }
-    } else if(heap->size + size < heap->max_size) {
-        allocated = size;
-    } else {
-        allocated = heap->max_size - heap->size;
+
+        heap->size += PAGE_SIZE;
+        allocated += PAGE_SIZE;
     }
 
     if(allocated) {
