@@ -3,424 +3,45 @@
 #include "../vmm.h"
 #include "../pmm.h"
 #include "../string.h"
+#include "../heap.h"
 
-#ifdef ENABLE_COVERAGE
-#define add_coverage(desc) add_coverage_point(__LINE__, desc)
-#else
-#define add_coverage(desc)
-#endif
-
-#define MAGIC_ALLOCATED             0x01234567
-#define MAGIC_FREE                  0x76543210 
-#define BLOCK_ALLOCATED             0x1
-
-
-/* 
- * TODO: We can get rid of the next pointer, 
- * just use current address + size
- */
-struct header {
-    struct header* next;
-    unsigned flags;
-    unsigned size;          /* Including the header */
-    uint32_t magic;
-};
-
-struct heap_header {
-    struct header* head;
-    unsigned size;          /* Including this header */
-    unsigned max_size;
-};
-
-struct heap_info {
-    void* address;
-    unsigned size;
-    unsigned free;
-};
-
-/*
- * Stores free and allocated blocks
- * Should be kept sorted by address
- */
-static struct heap_header* kernel_heap = NULL;
-
-/*
- * Test coverage points
- */
-struct coverage_point {
-    int line;
-    const char* desc;
-};
-static struct coverage_point coverage_points[32] = {0};
-
-static void dump_heap();
-
-static void add_coverage_point(int line, const char* desc)
-{
-    int i;
-    for(i = 0; 
-        i < countof(coverage_points) && coverage_points[i].line && coverage_points[i].line != line; 
-        i++) {
-    }
-
-    if(i < countof(coverage_points) && !coverage_points[i].line) {
-        coverage_points[i].line = line;
-        coverage_points[i].desc = desc;
-    }
-}
-
-static bool is_valid_block(struct header* header)
-{
-    return header->magic == MAGIC_FREE || 
-           header->magic == MAGIC_ALLOCATED;
-}
-
-static struct header* last_block()
-{
-    struct header* h;
-    for(h = kernel_heap->head; h && h->next; h = h->next)
-        assert(is_valid_block(h));
-    return h;
-}
-
-static struct header* prev_block(struct header* block)
-{
-    assert(is_valid_block(block));
-
-    if(block == kernel_heap->head)
-        return NULL;
-
-    struct header* prevh;
-    for(prevh = kernel_heap->head; prevh && prevh->next != block; prevh = prevh->next)
-        assert(is_valid_block(prevh));
-    return prevh;
-}
-
-static bool is_free(struct header* block)
-{
-    assert(is_valid_block(block));
-
-    bool result = (block->flags & BLOCK_ALLOCATED) == 0 &&
-                  block->magic == MAGIC_FREE;
-    return result;
-}
-
-static bool is_allocated(struct header* block)
-{
-
-    assert(is_valid_block(block));
-    bool result = (block->flags & BLOCK_ALLOCATED) != 0 &&
-                  block->magic == MAGIC_ALLOCATED;
-    return result;
-}
-
-static void set_allocated(struct header* block)
-{
-    assert(is_valid_block(block));
-
-    block->flags |= BLOCK_ALLOCATED;
-    block->magic = MAGIC_ALLOCATED;
-}
-
-static void set_free(struct header* block)
-{
-    assert(is_valid_block(block));
-
-    block->flags &= ~BLOCK_ALLOCATED;
-    block->magic = MAGIC_FREE;
-}
-
-static struct header* create_block(void* addr, unsigned size)
-{
-    struct header* result = addr;
-    memset(result, 0, sizeof(struct header));
-    result->size = size;
-    result->magic = MAGIC_FREE;
-    return result;
-}
-
-static struct header* merge_blocks(struct header* dest, struct header* source)
-{
-    assert(dest < source);
-
-    dest->size += source->size;
-    dest->next = source->next;
-
-    memset(source, 0, sizeof(struct header));
-
-    return dest;
-}
-
-void kernel_heap_init(void* address, unsigned size, unsigned max_size)
-{
-    assert(IS_ALIGNED((uint32_t)address, PAGE_SIZE));
-    assert(IS_ALIGNED(size, PAGE_SIZE));
-        
-    /* We start by putting the initial heap just after the kernel */
-    trace("Initializing heap at %p, size %d, max %d", address, size, max_size);
-    kernel_heap = (struct heap_header*)address;
-    memset(kernel_heap, 0, sizeof(struct heap_header));
-    kernel_heap->size = size;
-    kernel_heap->max_size = max_size;
-
-    unsigned char* head = (unsigned char*)address + sizeof(struct heap_header);
-    unsigned head_size = size - sizeof(struct heap_header);
-    kernel_heap->head = create_block(head, head_size);
-}
-
-struct heap_info heap_info()
-{
-    struct heap_info result = {0};
-    result.address = kernel_heap;
-    result.size = kernel_heap->size;
-    for(struct header* h = kernel_heap->head; h; h = h->next) {
-        if(is_free(h))
-            result.free += h->size - sizeof(struct header);
-    }
-    return result;
-}
-
-struct header* grow_heap(unsigned size)
-{
-    size = ALIGN(size, PAGE_SIZE);
-
-    struct header* last = last_block();
-    assert(last != NULL);
-
-    unsigned allocated = 0;
-    unsigned char* end_of_heap = ((unsigned char*)last) + last->size;
-    assert(IS_ALIGNED((uint32_t)end_of_heap, PAGE_SIZE));
-
-    if(vmm_paging_enabled()) {
-        for(unsigned char* page = end_of_heap; page < end_of_heap + size; page += PAGE_SIZE) {
-            if(kernel_heap->size >= kernel_heap->max_size)
-                break;
-
-            uint32_t frame = pmm_alloc();
-            if(frame == PMM_INVALID_PAGE)
-                break;
-
-            vmm_map((uint32_t)page, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-
-            kernel_heap->size += PAGE_SIZE;
-            allocated += PAGE_SIZE;
-        }
-    } else if(kernel_heap->size + size < kernel_heap->max_size) {
-        allocated = size;
-    } else {
-        allocated = kernel_heap->max_size - kernel_heap->size;
-    }
-
-    if(allocated) {
-        trace("Heap grown by %d bytes", allocated);
-
-        struct header* new_header = create_block(end_of_heap, allocated);
-        last->next = new_header;
-
-        if(is_free(last)) {
-            new_header = merge_blocks(last, new_header);
-        }
-
-        return new_header;
-    } else {
-        return NULL;
-    }
-}
-
-struct header* alloc_block_aligned(unsigned size, unsigned alignment)
-{
-    while(true) {
-        /* Walk blocklist to find fitting block */
-        struct header* prevh = NULL;
-        for(struct header* h = kernel_heap->head; h; prevh = h, h = h->next) {
-            if(is_free(h) && (h->size - sizeof(struct header) >= size)) {
-                /*
-                 * Memory layout
-                 * ----------
-                 * |header0 | --> h
-                 * ----------
-                 * |data0   | --> size: header1 - header0 - sizeof(struct header)
-                 * ----------
-                 * |header1 | --> data1 - sizeof(struct header)
-                 * ----------
-                 * |data1   | --> ALIGN(header0 + sizeof(struct header))
-                 * ----------
-                 * |header2 | --> data1 + data1.size
-                 * ----------
-                 * |data2   | --> size: h.size - 
-                 * |        |           sizeof(struct header) - data0.size -
-                 * |        |           sizeof(struct header) - data1.size -
-                 * |        |           sizeof(struct header)
-                 * ---------- --> header0 + h.size
-                 */
-                unsigned char* header0 = (unsigned char*)h;
-                unsigned char* data1 = (unsigned char*)ALIGN((uint32_t)header0 + sizeof(struct header), alignment);
-                if(data1 == header0 + sizeof(struct header)) {                              /* Aligned size corresponds to data start */
-                    add_coverage("aligned size == data start");
-
-                    if(h->size >= sizeof(struct header) + size) {                           /* Size of block is enough for header and data */
-                        add_coverage("block size > header + size");
-
-                        unsigned remaining = h->size - sizeof(struct header) - size;
-                        if(remaining > sizeof(struct header)) {                             /* The remaining bytes can be used as a new block */
-                            add_coverage("new block can be split");
-
-                            unsigned old_size = h->size;
-
-                            unsigned char* new_block_address = header0 + size + sizeof(struct header);
-                            unsigned new_block_size = h->size - sizeof(struct header) - size;
-                            struct header* new_block = create_block(new_block_address, new_block_size);
-                            new_block->next = h->next;
-
-                            h->size = sizeof(struct header) + size;
-                            h->next = new_block;
-                            set_allocated(h);
-
-                            assert(new_block->size + h->size == old_size);
-                            return h;
-                        } else {
-                            add_coverage("new block cannot be split");
-
-                            set_allocated(h);
-                            return h;
-                        }
-                    }
-                } else {
-                    add_coverage("3-way split");
-
-                    while(data1 - header0 < sizeof(struct header) * 2) {
-                        add_coverage("realign");
-                        data1 += alignment;
-                    }
-                    assert(data1 - header0 >= sizeof(struct header) * 2);
-
-                    unsigned total_size = h->size;
-                    if(total_size > (sizeof(struct header) * 2) + size) {
-                        add_coverage("fit aligned block");
-
-                        unsigned char* header1 = data1 - sizeof(struct header);
-
-                        h->size = header1 - header0;
-                        set_free(h);
-                        assert(is_valid_block(h));
-
-                        struct header* h2 = create_block(header1, total_size - h->size);
-                        set_allocated(h2);
-                        h2->next = h->next;
-                        h->next = h2;
-                        assert(is_valid_block(h2));
-
-                        assert(h->size + h2->size == total_size);
-
-                        if(h2->size > size + (sizeof(struct header) * 2)) {
-                            add_coverage("aligned block can be split");
-
-                            unsigned char* header3 = header1 + size + sizeof(struct header);
-                            unsigned size3 = h2->size - size - sizeof(struct header);
-                            struct header* h3 = create_block(header3, size3);
-                            set_free(h3);
-                            h3->next = h2->next;
-                            h2->next = h3;
-                            h2->size = size + sizeof(struct header);
-
-                            assert(is_valid_block(h3));
-
-                            assert(h->size + h2->size + h3->size == total_size);
-                        } else {
-                            add_coverage("aligned block cannot be split");
-                        }
-
-                        return h2;
-                    }
-                }
-            }
-        }
-
-        /* No fitting block found, add more memory to heap */
-        add_coverage("grow heap");
-        struct header* new_header = grow_heap(size);
-        if(!new_header)
-            break;
-    }
-    return NULL;
-}
-
-struct header* alloc_block(unsigned size)
-{
-    struct header* result = alloc_block_aligned(size, 4);
-    return result;
-}
-
-void free_block(struct header* block)
-{
-    if(!block)
-        return;
-
-    assert(is_valid_block(block));
-    assert(is_allocated(block));
-    set_free(block);
-
-    /* If previous block free, coalesce with previous block */
-    struct header* prevh = prev_block(block);
-    if(prevh && is_free(prevh)) {
-        block = merge_blocks(prevh, block);
-    }
-
-    if(block->next && is_free(block->next)) {
-        block = merge_blocks(block, block->next);
-    }
-}
-
-static void dump_heap()
-{
-    trace("Heap dump:");
-    for(struct header* h = kernel_heap->head; h; h = h->next) {
-        trace("\t%p: size: %d, allocated: %s, next: %p",
-              h,
-              h->size,
-              is_allocated(h) ? "true" : "false",
-              h->next);
-    }
-
-}
-
-static void test_simple_alloc()
+static void test_simple_alloc(struct heap* heap)
 {
     trace("Testing allocs with default alignment");
 
     /* Allocate 4 blocks of 4 bytes */
-    struct header* blocks[4];
+    struct heap_block_header* blocks[4];
     for(int i = 0; i < sizeof(blocks) / sizeof(blocks[4]); i++) {
         trace("Allocating block %d", i);
-        blocks[i] = alloc_block(sizeof(uint32_t));
-        assert(is_allocated(blocks[i]));
+        blocks[i] = heap_alloc_block(heap, sizeof(uint32_t));
+        assert(heap_is_allocated(heap, blocks[i]));
     }
 
     /* Free those 4 blocks */
     trace("Freeing block 0");
-    free_block(blocks[0]);
-    assert(is_allocated(blocks[1]));
-    assert(is_allocated(blocks[2]));
-    assert(is_allocated(blocks[3]));
+    heap_free_block(heap, blocks[0]);
+    assert(heap_is_allocated(heap, blocks[1]));
+    assert(heap_is_allocated(heap, blocks[2]));
+    assert(heap_is_allocated(heap, blocks[3]));
 
     trace("Freeing block 1");
-    free_block(blocks[1]);
-    assert(is_allocated(blocks[2]));
-    assert(is_allocated(blocks[3]));
+    heap_free_block(heap, blocks[1]);
+    assert(heap_is_allocated(heap, blocks[2]));
+    assert(heap_is_allocated(heap, blocks[3]));
 
     trace("Freeing block 2");
-    free_block(blocks[2]);
-    assert(is_allocated(blocks[3]));
+    heap_free_block(heap, blocks[2]);
+    assert(heap_is_allocated(heap, blocks[3]));
 
     trace("Freeing block 3");
-    free_block(blocks[3]);
+    heap_free_block(heap, blocks[3]);
 
     /* Normally, if we allocate again, we should have the same addresses as result */
-    struct header* new_blocks[4];
+    struct heap_block_header* new_blocks[4];
     for(int i = 0; i < sizeof(new_blocks) / sizeof(new_blocks[4]); i++) {
         trace("Allocating block %d again", i);
-        new_blocks[i] = alloc_block(sizeof(uint32_t));
-        assert(is_allocated(blocks[i]));
+        new_blocks[i] = heap_alloc_block(heap, sizeof(uint32_t));
+        assert(heap_is_allocated(heap, blocks[i]));
     }
 
     assert(blocks[0] == new_blocks[0]);
@@ -434,53 +55,53 @@ static void test_simple_alloc()
      * we should have the same 
      * address as block[1] because of coalescing
      */
-    free_block(blocks[1]);
-    free_block(blocks[3]);
-    free_block(blocks[2]);
+    heap_free_block(heap, blocks[1]);
+    heap_free_block(heap, blocks[3]);
+    heap_free_block(heap, blocks[2]);
     
-    new_blocks[1] = alloc_block(sizeof(uint32_t) * 4);
+    new_blocks[1] = heap_alloc_block(heap, sizeof(uint32_t) * 4);
     assert(new_blocks[1] == blocks[1]);
 
     /* Free all these allocated blocks so we have a clean heap again */
-    free_block(blocks[0]);
-    free_block(new_blocks[1]);
-    assert(kernel_heap->size == PAGE_SIZE);
+    heap_free_block(heap, blocks[0]);
+    heap_free_block(heap, new_blocks[1]);
+    assert(heap->size == PAGE_SIZE);
 
     /* Test heap growing code by allocating 4096 * 2 bytes */
-    struct header* big_block = alloc_block(PAGE_SIZE * 2);
+    struct heap_block_header* big_block = heap_alloc_block(heap, PAGE_SIZE * 2);
     assert(big_block != NULL);
-    assert(big_block->size == sizeof(struct header) + (PAGE_SIZE * 2));
+    assert(big_block->size == sizeof(struct heap_block_header) + (PAGE_SIZE * 2));
     
-    struct heap_info hi = heap_info();
+    struct heap_info hi = heap_info(heap);
     assert(hi.size == PAGE_SIZE * 3);
 
-    /* Which means we can basically allocate (4096 * 3) - (sizeof(struct header) * 2) - (4096 * 2)
+    /* Which means we can basically allocate (4096 * 3) - (sizeof(struct heap_block_header) * 2) - (4096 * 2)
      * whithout growing the heap
      */
-    unsigned alloc_size = (PAGE_SIZE * 3) - (sizeof(struct header) * 2) - (PAGE_SIZE * 2);
-    struct header* small_block = alloc_block(alloc_size);
+    unsigned alloc_size = (PAGE_SIZE * 3) - (sizeof(struct heap_block_header) * 2) - (PAGE_SIZE * 2);
+    struct heap_block_header* small_block = heap_alloc_block(heap, alloc_size);
 
-    hi = heap_info();
+    hi = heap_info(heap);
     assert(hi.size == PAGE_SIZE * 3);
 
     /* Free them to clean up heap */
-    free_block(small_block);
-    free_block(big_block);
+    heap_free_block(heap, small_block);
+    heap_free_block(heap, big_block);
 
     /* 
-     * Aaaaand we can then alloc (4096 * 3) - sizeof(struct header)
+     * Aaaaand we can then alloc (4096 * 3) - sizeof(struct heap_block_header)
      * without growing the heap
      */
-    alloc_size = (PAGE_SIZE * 3) - sizeof(struct header);
-    big_block = alloc_block(alloc_size);
+    alloc_size = (PAGE_SIZE * 3) - sizeof(struct heap_block_header);
+    big_block = heap_alloc_block(heap, alloc_size);
 
-    hi = heap_info();
+    hi = heap_info(heap);
     assert(hi.size == PAGE_SIZE * 3);
 
-    free_block(big_block);
+    heap_free_block(heap, big_block);
 }
 
-static void test_aligned_alloc()
+static void test_aligned_alloc(struct heap* heap)
 {
     trace("Testing aligned allocations");
 
@@ -488,32 +109,32 @@ static void test_aligned_alloc()
      * Allocating a block with a 64-byte alignment
      * should suffice to trigger our alignment code path
      */
-    struct header* b0 = alloc_block_aligned(64, 64);
-    assert(IS_ALIGNED((uint32_t)b0 + sizeof(struct header), 64));
-    assert(b0->size == sizeof(struct header) + 64);
-    free_block(b0);
+    struct heap_block_header* b0 = heap_alloc_block_aligned(heap, 64, 64);
+    assert(IS_ALIGNED((uint32_t)b0 + sizeof(struct heap_block_header), 64));
+    assert(b0->size == sizeof(struct heap_block_header) + 64);
+    heap_free_block(heap, b0);
 
-    struct header* b1 = alloc_block_aligned(3, 4);
-    assert(IS_ALIGNED((uint32_t)b1 + sizeof(struct header), 4));
+    struct heap_block_header* b1 = heap_alloc_block_aligned(heap, 3, 4);
+    assert(IS_ALIGNED((uint32_t)b1 + sizeof(struct heap_block_header), 4));
 
-    struct header* b2 = alloc_block_aligned(3, 4);
-    assert(IS_ALIGNED((uint32_t)b2 + sizeof(struct header), 4));
+    struct heap_block_header* b2 = heap_alloc_block_aligned(heap, 3, 4);
+    assert(IS_ALIGNED((uint32_t)b2 + sizeof(struct heap_block_header), 4));
 
-    struct header* b3 = alloc_block_aligned(12233 - sizeof(struct header) - 32, 4);
-    assert(IS_ALIGNED((uint32_t)b3 + sizeof(struct header), 4));
+    struct heap_block_header* b3 = heap_alloc_block_aligned(heap, 12233 - sizeof(struct heap_block_header) - 32, 4);
+    assert(IS_ALIGNED((uint32_t)b3 + sizeof(struct heap_block_header), 4));
 }
 
-static void test_heap_limits()
+static void test_heap_limits(struct heap* heap)
 {
     trace("Testing heap limits");
 
-    struct header* b0 = alloc_block(PAGE_SIZE);
+    struct heap_block_header* b0 = heap_alloc_block(heap, PAGE_SIZE);
     assert(b0);
 
-    struct header* b1 = alloc_block(PAGE_SIZE);
+    struct heap_block_header* b1 = heap_alloc_block(heap, PAGE_SIZE);
     assert(b1);
 
-    struct header* b2 = alloc_block(PAGE_SIZE);
+    struct heap_block_header* b2 = heap_alloc_block(heap, PAGE_SIZE);
     assert(!b2);
 }
 
@@ -525,30 +146,30 @@ void test_kmalloc()
     unsigned char* heap_start = (unsigned char*)0x3000000;
     vmm_map((uint32_t)heap_start, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
 
-    kernel_heap_init(heap_start, PAGE_SIZE, PAGE_SIZE * 3);
-    assert(is_free(kernel_heap->head));
+    struct heap* heap = heap_init(heap_start, PAGE_SIZE, PAGE_SIZE * 3);
+    assert(heap_is_free(heap, heap->head));
 
-    assert(kernel_heap->head->next == NULL);
+    assert(heap->head->next == NULL);
 
     /* Test allocs with default alignment */
-    test_simple_alloc();
+    test_simple_alloc(heap);
 
     /* Reinitialize heap */
-    struct heap_info hi = heap_info();
+    struct heap_info hi = heap_info(heap);
     assert(hi.size == PAGE_SIZE * 3);
-    kernel_heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
+    heap = heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
 
     /* Test aligned allocs */
-    hi = heap_info();
+    hi = heap_info(heap);
     assert(hi.size == PAGE_SIZE * 3);
-    kernel_heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
-    test_aligned_alloc();
+    heap = heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
+    test_aligned_alloc(heap);
 
     /* Test heap limits */
-    hi = heap_info();
+    hi = heap_info(heap);
     assert(hi.size == PAGE_SIZE * 3);
-    kernel_heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
-    test_heap_limits();
+    heap = heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
+    test_heap_limits(heap);
 
 #ifdef ENABLE_COVERAGE
     /* Dump coverage points */
