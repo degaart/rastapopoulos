@@ -96,32 +96,14 @@ static void test_map()
     trace("Testing vmm_map");
 
     /* Try mapping a new page at 32Mb */
-    uint32_t* my_page = (uint32_t*)(32 * 1024 * 1024);
+    volatile uint32_t* my_page = (uint32_t*)(32 * 1024 * 1024);
     uint32_t page_frame = pmm_alloc();
     vmm_map((uint32_t)my_page, page_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
 
-    /* 
-     * Because we have identity-mapped first 16Mb, it's guaranteed we can still access
-     * current pagedir and pagetable
-     * Check page was mapped successfully
-     */
-    uint32_t pde_index = PAGE_DIRECTORY_INDEX(KERNEL_START);
-    uint32_t pte_index = PAGE_TABLE_INDEX(KERNEL_START);
-
-    uint32_t* current_pagedir = (uint32_t*)read_cr3();
-    assert(current_pagedir[pde_index] & PDE_PRESENT);
-    assert(current_pagedir[pde_index] & PDE_WRITABLE);
-
-    uint32_t* pagetable = (uint32_t*)(current_pagedir[pde_index] & PDE_FRAME);
-    assert(pagetable[pte_index] & PTE_PRESENT);
-    assert(pagetable[pte_index] & PTE_WRITABLE);
-
-    /* Because of identity-mapping again, we can test that my_page[i] == page_frame[i] */
-    for(int i = 0; i < 1024; i++) {
-        assert(my_page[i] == ((uint32_t*)page_frame)[i]);
-        my_page[i] = i ^ 7;
-        assert(my_page[i] == ((uint32_t*)page_frame)[i]);
-    }
+    /* read and write from it */
+    uint32_t value = *my_page;
+    value ^= 7;
+    *my_page = value;
 
     /* Unmap it */
     vmm_unmap((uint32_t)my_page);
@@ -186,6 +168,4 @@ void test_vmm()
     /* Test vmm_unmap */
     test_unmap();
 }
-
-
 

@@ -59,12 +59,8 @@ void vmm_init()
 
     /* Create initial kernel pagedir */
     struct pagedir* pagedir = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
+    assert(IS_ALIGNED(pagedir, PAGE_SIZE));
     bzero(pagedir, sizeof(struct pagedir));
-
-    /* Identity-map first 16Mb */
-    for(uint32_t page = 0; page < 16 * 1024 * 1024; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-    }
 
     /* 
      * Last entry in pagedir should point to itself so we can modify it when paging is enabled
@@ -73,39 +69,32 @@ void vmm_init()
     assert((uint32_t)pagedir == (((uint32_t)pagedir) & PDE_FRAME));
     pagedir->entries[1023] = ((uint32_t)pagedir) | PDE_PRESENT | PDE_WRITABLE;
 
-#if 0
-    /* Map initial kernel stack */
-    vmm_map(initial_kernel_stack, 
-            initial_kernel_stack, 
-            VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-
     /* Kernel .text */
     for(uint32_t page = (uint32_t)_TEXT_START_; page < (uint32_t)_TEXT_END_; page += PAGE_SIZE) {
-        vmm_map(page, page, VMM_PAGE_PRESENT);
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT);
     }
 
     /* Kernel .rodata */
     for(uint32_t page = (uint32_t)_RODATA_START_; page < (uint32_t)_RODATA_END_; page += PAGE_SIZE) {
-        vmm_map(page, page, VMM_PAGE_PRESENT);
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT);
     }
 
     /* Kernel .data */
     for(uint32_t page = (uint32_t)_DATA_START_; page < (uint32_t)_DATA_END_; page += PAGE_SIZE) {
-        vmm_map(page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
-    /* Kernel .bss */
+    /* Kernel .bss (also stack, since initial stack is in bss) */
     for(uint32_t page = (uint32_t)_BSS_START_; page < (uint32_t)_BSS_END_; page += PAGE_SIZE) {
-        vmm_map(page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
     /* Kernel heap */
     struct kernel_heap_info heap_info;
     kernel_heap_info(&heap_info);
     for(uint32_t page = heap_info.heap_start; page < heap_info.heap_start + heap_info.heap_size; page += PAGE_SIZE) {
-        vmm_map(page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
-#endif
 
     /* Enable paging */
     write_cr3((uint32_t)pagedir);
