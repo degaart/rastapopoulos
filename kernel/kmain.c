@@ -96,6 +96,10 @@ void kmain(const struct multiboot_info* multiboot_info)
 {
     trace("*** Rastapopoulos booted ***");
 
+    // Init kernel heap
+    kmalloc_init();
+
+    // Load symbols
     load_symbols(multiboot_info);
     
     // GDT

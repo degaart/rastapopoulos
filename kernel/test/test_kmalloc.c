@@ -177,6 +177,12 @@ void test_kmalloc()
     for(int i = 0; i < countof(coverage_points) && coverage_points[i].line; i++)
         trace("\t%d %s", coverage_points[i].line, coverage_points[i].desc);
 #endif
+
+    /* Clean up paged memory */
+    hi = heap_info(heap);
+    for(unsigned char* page = heap_start; page < heap_start + hi.size; page += PAGE_SIZE) {
+        vmm_unmap((uint32_t)page);
+    }
 }
 
 
