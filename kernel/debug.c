@@ -6,7 +6,7 @@
 #include "multiboot.h"
 #include "registers.h"
 #include "util.h"
-
+#include "kmalloc.h"
 
 struct debug_sym {
     const char* name;
@@ -17,8 +17,8 @@ struct debug_sym {
 // TODO: Find a way to use dynamic memory here
 // For now, just use a static table until we implement kmalloc
 static unsigned             _debug_syms_count = 0;
-static struct debug_sym     _debug_syms[8192 * 4] = {};
-static char                 _debug_strings[8192 * 4];
+static struct debug_sym*    _debug_syms = NULL;
+static char*                _debug_strings = NULL;
 
 static void __log_callback(int ch, void* unused)
 {
@@ -103,11 +103,12 @@ void load_symbols(const struct multiboot_info* multiboot_info)
 
     // Dump all this
     if(sym_hdr && strtab_hdr) {
-        assert(strtab_hdr->sh_size <= sizeof(_debug_strings));
+        _debug_strings = kmalloc(strtab_hdr->sh_size);
         memcpy(_debug_strings, (void*)strtab_hdr->sh_addr, strtab_hdr->sh_size);
 
         unsigned sym_count = sym_hdr->sh_size / sizeof(elf32_sym_t);
-        assert(sym_count <= countof(_debug_syms));
+        _debug_syms = kmalloc(sym_count * sizeof(_debug_syms[0]));
+
         elf32_sym_t* syms = (elf32_sym_t*)sym_hdr->sh_addr;
         for(unsigned i = 0; i < sym_count; i++) {
             if(ELF32_ST_TYPE(syms[i].st_info) == STT_FUNC || 
