@@ -15,6 +15,10 @@
 #define BLOCK_ALLOCATED             0x1
 
 
+/* 
+ * TODO: We can get rid of the next pointer, 
+ * just use current address + size
+ */
 struct header {
     struct header* next;
     unsigned flags;
@@ -38,7 +42,7 @@ struct heap_info {
  * Stores free and allocated blocks
  * Should be kept sorted by address
  */
-static struct header* kernel_heap = NULL;
+static struct heap_header* kernel_heap = NULL;
 
 /*
  * Test coverage points
@@ -48,6 +52,8 @@ struct coverage_point {
     const char* desc;
 };
 static struct coverage_point coverage_points[32] = {0};
+
+static void dump_heap();
 
 static void add_coverage_point(int line, const char* desc)
 {
@@ -72,7 +78,7 @@ static bool is_valid_block(struct header* header)
 static struct header* last_block()
 {
     struct header* h;
-    for(h = kernel_heap; h && h->next; h = h->next)
+    for(h = kernel_heap->head; h && h->next; h = h->next)
         assert(is_valid_block(h));
     return h;
 }
@@ -81,11 +87,11 @@ static struct header* prev_block(struct header* block)
 {
     assert(is_valid_block(block));
 
-    if(block == kernel_heap)
+    if(block == kernel_heap->head)
         return NULL;
 
     struct header* prevh;
-    for(prevh = kernel_heap; prevh && prevh->next != block; prevh = prevh->next)
+    for(prevh = kernel_heap->head; prevh && prevh->next != block; prevh = prevh->next)
         assert(is_valid_block(prevh));
     return prevh;
 }
@@ -145,21 +151,29 @@ static struct header* merge_blocks(struct header* dest, struct header* source)
     return dest;
 }
 
-void kernel_heap_init(void* address, unsigned size)
+void kernel_heap_init(void* address, unsigned size, unsigned max_size)
 {
+    assert(IS_ALIGNED((uint32_t)address, PAGE_SIZE));
     assert(IS_ALIGNED(size, PAGE_SIZE));
         
     /* We start by putting the initial heap just after the kernel */
-    trace("Initializing kernel heap at %p, size %d", address, size);
-    kernel_heap = create_block(address, size);
+    trace("Initializing heap at %p, size %d, max %d", address, size, max_size);
+    kernel_heap = (struct heap_header*)address;
+    memset(kernel_heap, 0, sizeof(struct heap_header));
+    kernel_heap->size = size;
+    kernel_heap->max_size = max_size;
+
+    unsigned char* head = (unsigned char*)address + sizeof(struct heap_header);
+    unsigned head_size = size - sizeof(struct heap_header);
+    kernel_heap->head = create_block(head, head_size);
 }
 
 struct heap_info heap_info()
 {
     struct heap_info result = {0};
     result.address = kernel_heap;
-    for(struct header* h = kernel_heap; h; h = h->next) {
-        result.size += h->size;
+    result.size = kernel_heap->size;
+    for(struct header* h = kernel_heap->head; h; h = h->next) {
         if(is_free(h))
             result.free += h->size - sizeof(struct header);
     }
@@ -169,29 +183,48 @@ struct heap_info heap_info()
 struct header* grow_heap(unsigned size)
 {
     size = ALIGN(size, PAGE_SIZE);
-    trace("Growing heap by %d", size);
 
     struct header* last = last_block();
     assert(last != NULL);
 
+    unsigned allocated = 0;
     unsigned char* end_of_heap = ((unsigned char*)last) + last->size;
+    assert(IS_ALIGNED((uint32_t)end_of_heap, PAGE_SIZE));
+
     if(vmm_paging_enabled()) {
         for(unsigned char* page = end_of_heap; page < end_of_heap + size; page += PAGE_SIZE) {
+            if(kernel_heap->size >= kernel_heap->max_size)
+                break;
+
             uint32_t frame = pmm_alloc();
-            assert(frame != PMM_INVALID_PAGE);
+            if(frame == PMM_INVALID_PAGE)
+                break;
 
             vmm_map((uint32_t)page, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+
+            kernel_heap->size += PAGE_SIZE;
+            allocated += PAGE_SIZE;
         }
+    } else if(kernel_heap->size + size < kernel_heap->max_size) {
+        allocated = size;
+    } else {
+        allocated = kernel_heap->max_size - kernel_heap->size;
     }
 
-    struct header* new_header = create_block(end_of_heap, size);
-    last->next = new_header;
+    if(allocated) {
+        trace("Heap grown by %d bytes", allocated);
 
-    if(is_free(last)) {
-        new_header = merge_blocks(last, new_header);
+        struct header* new_header = create_block(end_of_heap, allocated);
+        last->next = new_header;
+
+        if(is_free(last)) {
+            new_header = merge_blocks(last, new_header);
+        }
+
+        return new_header;
+    } else {
+        return NULL;
     }
-
-    return new_header;
 }
 
 struct header* alloc_block_aligned(unsigned size, unsigned alignment)
@@ -199,7 +232,7 @@ struct header* alloc_block_aligned(unsigned size, unsigned alignment)
     while(true) {
         /* Walk blocklist to find fitting block */
         struct header* prevh = NULL;
-        for(struct header* h = kernel_heap; h; prevh = h, h = h->next) {
+        for(struct header* h = kernel_heap->head; h; prevh = h, h = h->next) {
             if(is_free(h) && (h->size - sizeof(struct header) >= size)) {
                 /*
                  * Memory layout
@@ -305,8 +338,11 @@ struct header* alloc_block_aligned(unsigned size, unsigned alignment)
 
         /* No fitting block found, add more memory to heap */
         add_coverage("grow heap");
-        grow_heap(size);
+        struct header* new_header = grow_heap(size);
+        if(!new_header)
+            break;
     }
+    return NULL;
 }
 
 struct header* alloc_block(unsigned size)
@@ -317,6 +353,9 @@ struct header* alloc_block(unsigned size)
 
 void free_block(struct header* block)
 {
+    if(!block)
+        return;
+
     assert(is_valid_block(block));
     assert(is_allocated(block));
     set_free(block);
@@ -335,7 +374,7 @@ void free_block(struct header* block)
 static void dump_heap()
 {
     trace("Heap dump:");
-    for(struct header* h = kernel_heap; h; h = h->next) {
+    for(struct header* h = kernel_heap->head; h; h = h->next) {
         trace("\t%p: size: %d, allocated: %s, next: %p",
               h,
               h->size,
@@ -464,6 +503,20 @@ static void test_aligned_alloc()
     assert(IS_ALIGNED((uint32_t)b3 + sizeof(struct header), 4));
 }
 
+static void test_heap_limits()
+{
+    trace("Testing heap limits");
+
+    struct header* b0 = alloc_block(PAGE_SIZE);
+    assert(b0);
+
+    struct header* b1 = alloc_block(PAGE_SIZE);
+    assert(b1);
+
+    struct header* b2 = alloc_block(PAGE_SIZE);
+    assert(!b2);
+}
+
 void test_kmalloc()
 {
     trace("Testing kmalloc()");
@@ -472,20 +525,30 @@ void test_kmalloc()
     unsigned char* heap_start = (unsigned char*)0x3000000;
     vmm_map((uint32_t)heap_start, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
 
-    kernel_heap_init(heap_start, PAGE_SIZE);
-    assert(is_free(kernel_heap));
+    kernel_heap_init(heap_start, PAGE_SIZE, PAGE_SIZE * 3);
+    assert(is_free(kernel_heap->head));
 
-    assert(kernel_heap->next == NULL);
+    assert(kernel_heap->head->next == NULL);
 
     /* Test allocs with default alignment */
     test_simple_alloc();
 
     /* Reinitialize heap */
     struct heap_info hi = heap_info();
-    kernel_heap_init(heap_start, hi.size);
+    assert(hi.size == PAGE_SIZE * 3);
+    kernel_heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
 
     /* Test aligned allocs */
+    hi = heap_info();
+    assert(hi.size == PAGE_SIZE * 3);
+    kernel_heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
     test_aligned_alloc();
+
+    /* Test heap limits */
+    hi = heap_info();
+    assert(hi.size == PAGE_SIZE * 3);
+    kernel_heap_init(heap_start, PAGE_SIZE * 3, PAGE_SIZE * 3);
+    test_heap_limits();
 
 #ifdef ENABLE_COVERAGE
     /* Dump coverage points */
