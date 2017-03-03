@@ -173,7 +173,7 @@ struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
             if(frame == PMM_INVALID_PAGE)
                 break;
 
-            vmm_map((uint32_t)page, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+            vmm_map(page, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
         } else if(pmm_initialized()) {
             pmm_reserve((uint32_t)page);
         }
@@ -183,7 +183,7 @@ struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
     }
 
     if(allocated) {
-        trace("Heap grown by %d bytes", allocated);
+        //trace("Heap grown by %d bytes", allocated);
 
         struct heap_block_header* new_header = create_block(heap, end_of_heap, allocated);
         last->next = new_header;

@@ -6,88 +6,22 @@
 #include "../util.h"
 #include "../idt.h"
 
-#define PTE_PRESENT             (1)
-#define PTE_WRITABLE            (1 << 1)
-#define PTE_USER                (1 << 2)
-#define PTE_WRITETHOUGH         (1 << 3)
-#define PTE_NOT_CACHEABLE       (1 << 4)
-#define PTE_ACCESSED            (1 << 5)
-#define PTE_DIRTY               (1 << 6)
-#define PTE_PAT                 (1 << 7)
-#define PTE_CPU_GLOBAL          (1 << 8)
-#define PTE_AVL0                (1 << 9)
-#define PTE_AVL1                (1 << 10)
-#define PTE_AVL2                (1 << 11)
-#define PTE_FRAME               0xFFFFF000
-#define PTE_OFFSET              0x00000FFF
-
-#define PDE_PRESENT             (1)
-#define PDE_WRITABLE            (1 << 1)
-#define PDE_USER                (1 << 2)
-#define PDE_PWT                 (1 << 3)
-#define PDE_PCD                 (1 << 4)
-#define PDE_ACCESSED            (1 << 5)
-#define PDE_AVL0                (1 << 6) /* Used only if 4mb page */
-#define PDE_AVL1                (1 << 7) /* Used only if 4mb page */
-#define PDE_AVL2                (1 << 8)
-#define PDE_AVL3                (1 << 9)
-#define PDE_AVL4                (1 << 10)
-#define PDE_AVL5                (1 << 11)
-#define PDE_FRAME               0xFFFFF000
-
-#define PAGE_DIRECTORY_INDEX(x) (((x) >> 22) & 0x3ff)
-#define PAGE_TABLE_INDEX(x) (((x) >> 12) & 0x3ff)
-
-static bool is_identity_mapped(uint32_t address)
+static bool is_identity_mapped(void* address)
 {
-    uint32_t* current_pagedir = (uint32_t*)read_cr3();
-
-    uint32_t pde_index = PAGE_DIRECTORY_INDEX(address);
-    uint32_t pte_index = PAGE_TABLE_INDEX(address);
-
-    assert(current_pagedir[pde_index] & PDE_PRESENT);
-    uint32_t* table = (uint32_t*) (current_pagedir[pde_index] & PDE_FRAME);
-
-    assert(table[pte_index] & PTE_PRESENT);
-    uint32_t va = table[pte_index] & PTE_FRAME;
-
-    bool result = (va == TRUNCATE(address, PAGE_SIZE));
-    return result;
+    void* frame = (void*) vmm_get_physical(address);
+    return frame == address;
 }
 
 static void test_identity_mapped()
 {
     trace("Testing kernel is properly identity-mapped");
 
-    /* Test kernel is properly identity-paged */
-    for(uint32_t page = KERNEL_START; page < KERNEL_END; page += PAGE_SIZE) {
+    /* Test kernel is properly identity-mapped */
+    for(unsigned char* page = (unsigned char*)KERNEL_START; 
+        page < (unsigned char*)KERNEL_END; 
+        page += PAGE_SIZE) {
+
         assert(is_identity_mapped(page));
-    }
-}
-
-static void test_recursive_mapping()
-{
-    trace("Testing recursive mapping");
-
-    /* Last PDE should point to cr3 */
-    uint32_t* cr3 = (uint32_t*)read_cr3();
-    uint32_t* last_pde = (uint32_t*)(cr3[1023] & PDE_FRAME);
-    assert(last_pde == cr3);
-
-    /* Which means we current pagedir is mapped at 0xFFFFF000 */
-    uint32_t* pagedir = (uint32_t*)0xFFFFF000;
-    for(int i = 0; i < 1024; i++)
-        assert(pagedir[i] == cr3[i]);
-
-    /* And we can access a particular page table at (0xFFC00000 + (pte * PAGE_SIZE)) */
-    uint32_t pde_index = PAGE_DIRECTORY_INDEX(KERNEL_START);
-    uint32_t pte_index = PAGE_TABLE_INDEX(KERNEL_START);
-
-    uint32_t* phys_pagetable = (uint32_t*)(cr3[pde_index] & PDE_FRAME);
-    uint32_t* va_pagetable = (uint32_t*)(0xFFC00000 + (pde_index * PAGE_SIZE));
-
-    for(int i = 0; i < 1024; i++) {
-        assert(phys_pagetable[i] == va_pagetable[i]);
     }
 }
 
@@ -98,7 +32,7 @@ static void test_map()
     /* Try mapping a new page at 32Mb */
     volatile uint32_t* my_page = (uint32_t*)(32 * 1024 * 1024);
     uint32_t page_frame = pmm_alloc();
-    vmm_map((uint32_t)my_page, page_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    vmm_map((uint32_t*)my_page, page_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
 
     /* read and write from it */
     uint32_t value = *my_page;
@@ -106,7 +40,7 @@ static void test_map()
     *my_page = value;
 
     /* Unmap it */
-    vmm_unmap((uint32_t)my_page);
+    vmm_unmap((uint32_t*)my_page);
     pmm_free(page_frame);
 }
 
@@ -125,7 +59,7 @@ static void test_unmap()
     /* Map a new page at 33Mb */
     volatile uint32_t* test_page = (uint32_t*)(33 * 1024 * 1024);
     uint32_t page_frame = pmm_alloc();
-    vmm_map((uint32_t)test_page, page_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    vmm_map((uint32_t*)test_page, page_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
 
     /* Test we can read and write from that page */
     uint32_t val = *test_page;
@@ -133,7 +67,7 @@ static void test_unmap()
     *test_page = val;
 
     /* Unmap that page */
-    vmm_unmap((uint32_t)test_page);
+    vmm_unmap((void*)test_page);
     pmm_free(page_frame);
 
     /* Install page fault handler so we can longjmp back */
@@ -152,6 +86,101 @@ static void test_unmap()
     assert(!"No page fault!");
 }
 
+static void test_clone_pagedir()
+{
+    trace("Testing vmm_clone_pagedir");
+
+    unsigned hi_kernel_space_start = 3U * 1024U * 1024U * 1024U;
+    unsigned bytes_per_pde = 4U * 1024U * 1024U;
+    unsigned char* userspace_start = (unsigned char*)(4U * 1024 * 1024);
+
+    /* Clone a pagedir using current pagedir's state */
+    trace("Clone current pagedir");
+    struct pagedir* pagedir = vmm_clone_pagedir();
+
+    /* 
+     * This new pagedir should be a perfect clone of current pagedir
+     * (except last entry and user-space)
+     */
+    uint32_t* current_pagedir = (uint32_t*)(read_cr3() & 0xFFFFF000);
+    uint32_t* new_pagedir = (uint32_t*)pagedir;
+    assert(new_pagedir[0] == current_pagedir[0]);       /* first 4Mb */
+
+    for(unsigned i = hi_kernel_space_start / bytes_per_pde; i < 1022; i++) {
+        assert(new_pagedir[i] == current_pagedir[i]);
+    }
+
+    assert(new_pagedir[1023] != current_pagedir[1023]);
+    assert(new_pagedir[1023] & 0x1);        /* PDE_PRESENT */
+    assert(new_pagedir[1023] & (1 << 1));   /* PDE_WRITABLE */
+
+    /*
+     * Now, map a page at start of userspace
+     * Fill it with predictable data
+     */
+    trace("Map page at start of userspace");
+    unsigned* userspace_data = (unsigned*)userspace_start;
+    uint32_t frame0 = pmm_alloc();
+    vmm_map(userspace_start, 
+            frame0, 
+            VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    trace("Fill with data");
+    for(unsigned i = 0; i < PAGE_SIZE / sizeof(unsigned); i ++) {
+        userspace_data[i] = i ^ 7;
+    }
+
+    /*
+     * Switch to new pagedir
+     */
+    trace("Switch to new pagedir");
+    vmm_switch_pagedir(pagedir);
+
+    /*
+     * Start of userspace shouldn't be mapped
+     */
+    uint32_t frame_flags = vmm_get_flags(userspace_data);
+    assert(!(frame_flags & VMM_PAGE_PRESENT));
+
+    /*
+     * Check new pagedir is properly recursive mapped
+     */
+    uint32_t* pagedir_view = (uint32_t*)0xFFFFF000;
+    for(int i = 0; i < 1024; i++) {
+        assert(new_pagedir[i] == pagedir_view[i]);
+    }
+    uint32_t* pagetable_view = (uint32_t*)(0xFFC00000 + PAGE_SIZE);
+
+
+    /*
+     * Map it to another page
+     * Fill with another set of predictable data
+     */
+    trace("Map another page");
+    uint32_t frame1 = pmm_alloc();
+    vmm_map(userspace_start,
+            frame1,
+            VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    trace("Fill with data");
+    for(unsigned i = 0; i < PAGE_SIZE / sizeof(unsigned); i++) {
+        userspace_data[i] = i ^ ~7;
+    }
+
+    /*
+     * Switch back to original pagedir
+     */
+    trace("Switch to original pagedir");
+    vmm_switch_pagedir((struct pagedir*)current_pagedir);
+
+    /*
+     * Check data has not been changed
+     */
+    trace("Check data");
+    for(unsigned i = 0; i < PAGE_SIZE / sizeof(unsigned); i++) {
+        assert(userspace_data[i] == (i ^ 7));
+    } 
+
+}
+
 void test_vmm()
 {
     trace("Testing vmm");
@@ -159,13 +188,17 @@ void test_vmm()
     /* Test kernel properly identity-mapped */
     test_identity_mapped();
 
-    /* Test last pagedir entry is recursively mapped to itself */
-    test_recursive_mapping();
-
     /* Test vmm_map */
     test_map();
 
     /* Test vmm_unmap */
     test_unmap();
+
+    /* testing pagedir cloning */
+    // test_clone_pagedir();
 }
+
+
+
+
 

@@ -25,5 +25,6 @@
 #define IS_ALIGNED(val, align) \
     (( ((uint64_t)(val)) % ((uint64_t)(align)) ) == 0)
 
+uint64_t rdtsc();
 
 

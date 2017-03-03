@@ -144,7 +144,7 @@ void test_kmalloc()
 
     /* Create heap at 48Mb */
     unsigned char* heap_start = (unsigned char*)0x3000000;
-    vmm_map((uint32_t)heap_start, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    vmm_map(heap_start, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
 
     struct heap* heap = heap_init(heap_start, PAGE_SIZE, PAGE_SIZE * 3);
     assert(heap_is_free(heap, heap->head));
@@ -181,7 +181,7 @@ void test_kmalloc()
     /* Clean up paged memory */
     hi = heap_info(heap);
     for(unsigned char* page = heap_start; page < heap_start + hi.size; page += PAGE_SIZE) {
-        vmm_unmap((uint32_t)page);
+        vmm_unmap(page);
     }
 }
 
