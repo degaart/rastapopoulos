@@ -44,6 +44,12 @@ read_esp:
     sub     eax, 4          ; 4 bytes for return address
     ret
 
+; uint32_t read_esi()
+global read_esi
+read_esi:
+    mov     eax, esi
+    ret
+
 ; void write_cr3(uint32_t val)
 global write_cr3
 write_cr3:

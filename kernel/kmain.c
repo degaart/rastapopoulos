@@ -78,18 +78,23 @@ static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
     trace("_KERNEL_END_: %p", &_KERNEL_END_);
 }
 
+#define RUN_TEST(fn) \
+    do { \
+        trace("Running test %s", #fn); \
+        void fn(); \
+        fn(); \
+    } while(0)
+
 
 static void run_tests()
 {
-    void test_bitset();
-    void test_vmm();
-    void test_usermode();
-    void test_kmalloc();
-
-    test_bitset();
-    test_vmm();
-    test_kmalloc();
-    test_usermode();
+    RUN_TEST(test_bitset);
+    RUN_TEST(test_vmm);
+#if 0
+    RUN_TEST(test_kmalloc);
+    RUN_TEST(test_scheduler);
+    RUN_TEST(test_usermode);
+#endif
 }
 
 void kmain(const struct multiboot_info* multiboot_info)
@@ -114,21 +119,14 @@ void kmain(const struct multiboot_info* multiboot_info)
     pmm_init(multiboot_info);
 
     /*
-     * Reserve specific areas of unpaged memory
-     * BDA:     0x00000400 - 0x000004FF
-     * EDBA:    0x0009FC00 - 0x0009FFFF
-     * VGA:     0x000A0000 - 0x000FFFFF
+     * Reserve currently used memory
+     * Low memory: 0x00000000 - 0x000FFFFF
      * multiboot_info
      * kernel code and data section
      * initial kernel heap
+     * TODO: Free conventional memory after we load multiboot modules
      */
-    pmm_reserve(0x0);
-    for(uint32_t page = TRUNCATE(0x9FC00, PAGE_SIZE); page < 0x9FFFF; page += PAGE_SIZE) {
-        if(pmm_exists(page))
-            pmm_reserve(page);
-    }
-
-    for(uint32_t page = TRUNCATE(0xA0000, PAGE_SIZE); page < 0xFFFFF; page += PAGE_SIZE) {
+    for(uint32_t page = 0; page < 0xFFFFF; page += PAGE_SIZE) {
         if(pmm_exists(page))
             pmm_reserve(page);
     }
@@ -136,7 +134,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     for(uint32_t page = TRUNCATE((uint32_t)multiboot_info, PAGE_SIZE); 
         page < (uint32_t)multiboot_info + sizeof(struct multiboot_info); 
         page += PAGE_SIZE) {
-        if(pmm_exists(page))
+        if(pmm_exists(page) && !pmm_reserved(page))
             pmm_reserve(page);
     }
 
@@ -171,4 +169,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     run_tests();
     reboot();
 }
+
+
+
 

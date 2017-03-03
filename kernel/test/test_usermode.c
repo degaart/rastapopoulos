@@ -49,12 +49,12 @@ void test_usermode()
 
     /* Map usermode_program into ring3 page */
     assert(IS_ALIGNED((uint32_t)usermode_program, PAGE_SIZE));
-    vmm_remap((uint32_t)usermode_program, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    vmm_remap(usermode_program, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
 
     /* Map a stack for our program at 32Mb */
     uint32_t stack_page = pmm_alloc();
     unsigned char* stack = (unsigned char*) 0x2000000;
-    vmm_map((uint32_t)stack, stack_page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    vmm_map(stack, stack_page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
 
     stack += PAGE_SIZE - 1;
 

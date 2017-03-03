@@ -3,6 +3,7 @@
 #include "pmm.h"
 #include "util.h"
 #include "heap.h"
+#include "debug.h"
 
 struct heap* kernel_heap = NULL;
 
@@ -37,6 +38,7 @@ void* kmalloc_a(unsigned size, unsigned alignment)
     struct heap_block_header* block = heap_alloc_block_aligned(kernel_heap,
                                                                size,
                                                                alignment);
+    assert(block);
     if(block) {
         result = ((unsigned char*)block) + sizeof(struct heap_block_header);
     }

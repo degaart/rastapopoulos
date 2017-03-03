@@ -10,6 +10,7 @@ extern uint32_t read_cr0();
 extern uint32_t read_eflags();
 extern uint32_t read_ebp();
 extern uint32_t read_esp();
+extern uint32_t read_esi();
 
 extern void write_cr3(uint32_t val);
 extern void write_cr2(uint32_t val);
