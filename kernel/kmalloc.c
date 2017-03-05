@@ -4,6 +4,7 @@
 #include "util.h"
 #include "heap.h"
 #include "debug.h"
+#include "registers.h"
 
 struct heap* kernel_heap = NULL;
 
@@ -14,11 +15,13 @@ void kmalloc_init()
      */
     unsigned char* heap_start = (unsigned char*)ALIGN(KERNEL_END, PAGE_SIZE);
     unsigned heap_limit = (4 * 1024 * 1024) - (unsigned)heap_start - 1;
-    kernel_heap = heap_init(heap_start, PAGE_SIZE, heap_limit);
+    kernel_heap = heap_init(heap_start, PAGE_SIZE * 64, heap_limit);
 }
 
 void* kmalloc(unsigned size)
 {
+    assert(size);
+
     void* result = kmalloc_a(size, sizeof(int));
     return result;
 }
@@ -34,7 +37,11 @@ void kfree(void* address)
 
 void* kmalloc_a(unsigned size, unsigned alignment)
 {
-    void* result = NULL;
+    static bool pagedir_allocated = false;
+
+    assert(size);
+
+    unsigned char* result = NULL;
     struct heap_block_header* block = heap_alloc_block_aligned(kernel_heap,
                                                                size,
                                                                alignment);
@@ -42,6 +49,7 @@ void* kmalloc_a(unsigned size, unsigned alignment)
     if(block) {
         result = ((unsigned char*)block) + sizeof(struct heap_block_header);
     }
+
     return result;
 }
 

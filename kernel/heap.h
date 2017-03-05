@@ -10,7 +10,7 @@ struct heap_block_header {
     struct heap_block_header* next;
     unsigned flags;
     unsigned size;          /* Including the header */
-    unsigned magic;
+    unsigned checksum;
 };
 
 /*

@@ -5,11 +5,50 @@
 #include "../kernel.h"
 #include "../util.h"
 #include "../idt.h"
+#include "../kmalloc.h"
 
 static bool is_identity_mapped(void* address)
 {
     void* frame = (void*) vmm_get_physical(address);
     return frame == address;
+}
+
+static void test_transient_map()
+{
+    trace("Testing transient maps");
+
+    /* Allocate frame, and create transient map */
+    uint32_t frame0 = pmm_alloc();
+    uint32_t* map0 = vmm_transient_map(frame0, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
+
+    /* Fill with predictable data */
+    for(int i = 0; i < 1024; i++)
+        map0[i] = i + 10000;
+
+    /* Create another transient map to same frame */
+    uint32_t* map1 = vmm_transient_map(frame0, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
+
+    /* Check data */
+    for(int i = 0; i < 1024; i++)
+        assert(map1[i] == i + 10000);
+
+    /* scramble data in second map */
+    for(int i = 0; i < 1024; i++)
+        map1[i] = i ^ 7;
+
+    /* Which should change first map */
+    for(int i = 0; i < 1024; i++)
+        assert(map0[i] == (i ^ 7));
+
+    /* Unmap first map */
+    vmm_transient_unmap(map0);
+
+    /* And check second map hasn't changed */
+    for(int i = 0; i < 1024; i++)
+        assert(map1[i] == (i ^ 7));
+
+    /* CLeanup */
+    vmm_transient_unmap(map1);
 }
 
 static void test_identity_mapped()
@@ -22,6 +61,24 @@ static void test_identity_mapped()
         page += PAGE_SIZE) {
 
         assert(is_identity_mapped(page));
+    }
+}
+
+static void test_recursive_mapping()
+{
+    /*
+     * Current pagedir available at 0xFFFFF000 and in cr3
+     */
+    uint32_t* pagedir0 = (uint32_t*)0xFFFFF000;
+    uint32_t* pagedir1 = vmm_transient_map(read_cr3(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    for(int i = 0; i < 1024; i++) {
+        if(pagedir0[i] != pagedir1[i]) {
+            trace("i: %d, pagedir0[i]: %p, pagedir1[i]: %p",
+                  i,
+                  pagedir0[i],
+                  pagedir1[i]);
+            abort();
+        }
     }
 }
 
@@ -102,8 +159,10 @@ static void test_clone_pagedir()
      * This new pagedir should be a perfect clone of current pagedir
      * (except last entry and user-space)
      */
-    uint32_t* current_pagedir = (uint32_t*)(read_cr3() & 0xFFFFF000);
+    uint32_t* current_pagedir = (uint32_t*)vmm_current_pagedir();
     uint32_t* new_pagedir = (uint32_t*)pagedir;
+    trace("new_pagedir[0]: %p, current_pagedir[0]: %p",
+          new_pagedir[0], current_pagedir[0]);
     assert(new_pagedir[0] == current_pagedir[0]);       /* first 4Mb */
 
     for(unsigned i = hi_kernel_space_start / bytes_per_pde; i < 1022; i++) {
@@ -176,6 +235,7 @@ static void test_clone_pagedir()
      */
     trace("Check data");
     for(unsigned i = 0; i < PAGE_SIZE / sizeof(unsigned); i++) {
+        assert(userspace_data[i] != (i ^ ~7));
         assert(userspace_data[i] == (i ^ 7));
     } 
 
@@ -188,6 +248,12 @@ void test_vmm()
     /* Test kernel properly identity-mapped */
     test_identity_mapped();
 
+    /* Test transient maps */
+    test_transient_map();
+
+    /* Test recursive mapping works correctly */
+    test_recursive_mapping();
+
     /* Test vmm_map */
     test_map();
 
@@ -195,7 +261,7 @@ void test_vmm()
     test_unmap();
 
     /* testing pagedir cloning */
-    // test_clone_pagedir();
+    test_clone_pagedir();
 }
 
 

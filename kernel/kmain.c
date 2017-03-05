@@ -88,13 +88,11 @@ static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
 
 static void run_tests()
 {
-    RUN_TEST(test_bitset);
     RUN_TEST(test_vmm);
-#if 0
     RUN_TEST(test_kmalloc);
+    RUN_TEST(test_bitset);
     RUN_TEST(test_scheduler);
     RUN_TEST(test_usermode);
-#endif
 }
 
 void kmain(const struct multiboot_info* multiboot_info)

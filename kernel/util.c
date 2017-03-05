@@ -10,3 +10,24 @@ uint64_t rdtsc()
     return result;
 }
 
+/*
+ * hash function from sbdm
+ */
+unsigned hash(void* data, unsigned size)
+{
+    unsigned hash = 0;
+    int c;
+    unsigned char* ptr = data;
+
+    while(size) {
+        hash = *ptr + (hash << 6) + (hash << 16) - hash;
+        ptr++;
+        size--;
+    }
+
+    return hash;
+}
+
+
+
+

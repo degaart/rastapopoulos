@@ -73,6 +73,7 @@ struct va_info_ex {
 };
 
 static bool             paging_enabled = false;
+static struct pagedir*  current_pagedir = NULL;
 
 static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, uint32_t flags);
 extern void invlpg(uint32_t va);
@@ -90,7 +91,7 @@ static void flush_tlb()
     write_cr3(read_cr3());
 }
 
-static struct pagedir* current_pagedir()
+struct pagedir* vmm_current_pagedir()
 {
     assert(paging_enabled);
 
@@ -98,13 +99,13 @@ static struct pagedir* current_pagedir()
     /* Current pagedir available at 0xFFFFF000 because of recursive mapping */
     struct pagedir* result = (struct pagedir*)0xFFFFF000;
     return result;
-#endif
-
+#else
     /* 
-     * but current pagedir is also guaranteed to be mapped into current address
-     * space
+     * NOTE: cr3() is the physical address of the pagedir, not it's virtual address!
+     * We cant use 0xFFFFF000 either because calling might save current pagedir and reuse it
      */
-    return (struct pagedir*)(read_cr3() & 0xFFFFF000);
+    return current_pagedir;
+#endif
 }
 
 static struct pagetable* get_pagetable(struct va_info info)
@@ -122,7 +123,7 @@ static void va_info_ex(struct va_info_ex* result, void* va)
     result->info = va_info(va);
 
     /* Get PDE */
-    struct pagedir* pagedir = current_pagedir();
+    struct pagedir* pagedir = vmm_current_pagedir();
     if(pagedir->entries[result->info.dir_index] & PDE_PRESENT) {
         result->pde = pagedir->entries[result->info.dir_index];
 
@@ -151,6 +152,7 @@ void vmm_init()
 
     /* Create initial kernel pagedir */
     struct pagedir* pagedir = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
+    trace("pagedir: %p", pagedir);
     assert(IS_ALIGNED(pagedir, PAGE_SIZE));
     bzero(pagedir, sizeof(struct pagedir));
 
@@ -188,19 +190,14 @@ void vmm_init()
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
+    current_pagedir = pagedir;
+
     /* Enable paging */
     write_cr3((uint32_t)pagedir);
-    uint32_t cr3 = read_cr3();
-    assert(cr3 == (uint32_t)pagedir);
 
     uint32_t cr0 = read_cr0();
     cr0 |= CR0_PG | CR0_WP; /* CR0_WP: ring0 cannot write to write-protected pages */
     write_cr0(cr0);
-
-    cr0 = read_cr0();
-
-    assert(cr0 & CR0_PG);
-    assert(cr0 & CR0_WP);
 
     paging_enabled = true;
 }
@@ -243,16 +240,27 @@ void vmm_map(void* va, uint32_t pa, uint32_t flags)
 {
     assert(paging_enabled);
 
+    assert(flags & VMM_PAGE_PRESENT);
     assert(IS_ALIGNED(va, PAGE_SIZE));
     assert(IS_ALIGNED(pa, PAGE_SIZE));
 
     struct va_info info = va_info((void*)va);
 
-    struct pagedir* pagedir = current_pagedir();
+    struct pagedir* pagedir = vmm_current_pagedir();
 
     /* Check if present in page directory */
     bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
     if(!pde_present) {
+#if 0
+        struct pagetable* table = kmalloc_a(sizeof(struct pagetable*), PAGE_SIZE);
+        trace("table: %p", table);
+        memset(table, 0, sizeof(struct pagetable));
+        table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
+
+        uint32_t table_pa = vmm_get_physical(table);
+        trace("table: %p, table_pa: %p", table, table_pa);
+        pagedir->entries[info.dir_index] = table_pa | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
+#else
         /* Alloc 4k frame for page table */
         uint32_t table_pa = pmm_alloc();
 
@@ -265,28 +273,13 @@ void vmm_map(void* va, uint32_t pa, uint32_t flags)
          */
         flush_tlb();
 
+        pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
+        assert(pde_present);
+
         struct pagetable* table = get_pagetable(info);
-
-        unsigned char* userspace_start = (unsigned char*)(4U * 1024 * 1024);
-        if(va == userspace_start) {
-            uint32_t* pagedir_view = (uint32_t*)0xFFFFF000;
-            trace("pagedir_view[info.dir_index]: 0x%X", pagedir_view[info.dir_index]);
-            assert(pagedir_view[info.dir_index] & PDE_PRESENT);
-            assert((pagedir_view[info.dir_index] & PDE_FRAME) == table_pa);
-
-            struct va_info_ex vaie;
-            va_info_ex(&vaie, table);
-
-            assert(vaie.pde & PDE_PRESENT);
-            assert(vaie.pde & PDE_WRITABLE);
-
-            trace("vaie.pte: 0x%X", vaie.pte);
-            assert(vaie.pte & PTE_PRESENT);
-            assert(vaie.pte & PTE_WRITABLE);
-        }
-
         bzero(table, sizeof(struct pagetable));
         table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
+#endif
     } else {
         struct pagetable* table = get_pagetable(info);
 
@@ -311,7 +304,7 @@ void vmm_remap(void* va, uint32_t flags)
 
     struct va_info info = va_info((void*)va);
 
-    struct pagedir* pagedir = current_pagedir();
+    struct pagedir* pagedir = vmm_current_pagedir();
 
     /* Check if present in page directory */
     bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
@@ -340,7 +333,7 @@ void vmm_unmap(void* va)
 
     struct va_info info = va_info((void*)va);
 
-    struct pagedir* pagedir = current_pagedir();
+    struct pagedir* pagedir = vmm_current_pagedir();
     bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
     assert(pde_present);
 
@@ -409,7 +402,7 @@ struct pagetable* clone_pagetable(unsigned dir_index)
 
 struct pagedir* vmm_clone_pagedir()
 {
-    struct pagedir* pagedir = current_pagedir();
+    struct pagedir* pagedir = vmm_current_pagedir();
 
     struct pagedir* result = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
     memset(result, 0, sizeof(struct pagedir));
@@ -421,6 +414,9 @@ struct pagedir* vmm_clone_pagedir()
      * end-4Mb - end:       pagedir address
      */
     result->entries[KERNEL_LO_PDE] = pagedir->entries[KERNEL_LO_PDE];
+    trace("result->entries[KERNEL_LO_PDE]: %p", result->entries[KERNEL_LO_PDE]);
+    trace("pagedir->entries[KERNEL_LO_PDE]: %p", pagedir->entries[KERNEL_LO_PDE]);
+
     for(unsigned i = USER_PDE_START; i <= USER_PDE_END; i++) {
         if(pagedir->entries[i] & PDE_PRESENT) {
             unsigned flags = pagedir->entries[i] & PDE_FLAGS;
@@ -432,11 +428,14 @@ struct pagedir* vmm_clone_pagedir()
 
             result->entries[i] = info.frame | flags;
         }
+        //assert(result->entries[0] == 0x0011B027);
     }
     for(int i = KERNEL_HI_PDE_START; i <= KERNEL_HI_PDE_END; i++) {
         result->entries[i] = pagedir->entries[i];
+        //assert(result->entries[0] == 0x0011B027);
     }
     result->entries[RECURSIVE_MAPPING_PDE] = ((uint32_t)vmm_get_physical(result)) | PDE_PRESENT | PDE_WRITABLE;
+    //assert(result->entries[0] == 0x0011B027);
     return result;
 }
 
@@ -445,6 +444,7 @@ void vmm_switch_pagedir(struct pagedir* pagedir)
     assert(IS_ALIGNED(pagedir, PAGE_SIZE));
     uint32_t pa = vmm_get_physical(pagedir);
     write_cr3(pa);
+    current_pagedir = pagedir;
 }
 
 uint32_t vmm_get_physical(void* va)
@@ -466,6 +466,52 @@ uint32_t vmm_get_flags(void* va)
 
     return info.flags;
 }
+
+struct transient_map {
+    struct transient_map* next;
+    uint32_t frame;
+    unsigned flags;
+    void* address;
+};
+static struct transient_map* transient_maps = NULL;
+
+void* vmm_transient_map(uint32_t frame, unsigned flags)
+{
+    void* address = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
+
+    struct transient_map* map = kmalloc(sizeof(struct transient_map));
+    map->next = transient_maps;
+    map->frame = vmm_get_physical(address);
+    map->flags = vmm_get_flags(address);
+    map->address = address;
+
+    transient_maps = map;
+
+    vmm_unmap(address);
+    vmm_map(address, frame, VMM_PAGE_PRESENT | flags);
+
+    return address;
+}
+
+void vmm_transient_unmap(void* address)
+{
+    struct transient_map* map = transient_maps;
+    struct transient_map* prevm = NULL;
+    for(map = transient_maps; map; prevm = map, map = map->next) {
+        if(map->address == address) {
+            if(prevm)
+                prevm->next = map->next;
+            else
+                transient_maps = map->next;
+
+            vmm_unmap(address);
+            vmm_map(address, map->frame, map->flags);
+
+            kfree(map);
+        }
+    }
+}
+
 
 
 

@@ -11,8 +11,6 @@
 #define add_coverage(desc)
 #endif
 
-#define MAGIC_ALLOCATED             0x01234567
-#define MAGIC_FREE                  0x76543210 
 #define BLOCK_ALLOCATED             0x1
 
 /*
@@ -25,6 +23,7 @@ struct coverage_point {
 static struct coverage_point coverage_points[32] = {0};
 
 static void dump_heap(struct heap* heap);
+
 
 static void add_coverage_point(int line, const char* desc)
 {
@@ -40,10 +39,25 @@ static void add_coverage_point(int line, const char* desc)
     }
 }
 
+static unsigned block_checksum(const struct heap_block_header* block)
+{
+    struct heap_block_header hdr = *block;
+    hdr.checksum = 0;
+
+    unsigned checksum = hash(&hdr, sizeof(hdr));
+    return checksum;
+}
+
+static void update_checksum(struct heap_block_header* block)
+{
+    block->checksum = block_checksum(block);
+}
+
 static bool is_valid_block(struct heap* heap, struct heap_block_header* header)
 {
-    return header->magic == MAGIC_FREE || 
-           header->magic == MAGIC_ALLOCATED;
+    unsigned checksum = block_checksum(header);
+    bool result = (checksum == header->checksum);
+    return result;
 }
 
 static struct heap_block_header* last_block(struct heap* heap)
@@ -71,8 +85,7 @@ bool heap_is_free(struct heap* heap, struct heap_block_header* block)
 {
     assert(is_valid_block(heap, block));
 
-    bool result = (block->flags & BLOCK_ALLOCATED) == 0 &&
-                  block->magic == MAGIC_FREE;
+    bool result = (block->flags & BLOCK_ALLOCATED) == 0;
     return result;
 }
 
@@ -80,8 +93,7 @@ bool heap_is_allocated(struct heap* heap, struct heap_block_header* block)
 {
 
     assert(is_valid_block(heap, block));
-    bool result = (block->flags & BLOCK_ALLOCATED) != 0 &&
-                  block->magic == MAGIC_ALLOCATED;
+    bool result = (block->flags & BLOCK_ALLOCATED) != 0;
     return result;
 }
 
@@ -90,7 +102,7 @@ static void set_allocated(struct heap* heap, struct heap_block_header* block)
     assert(is_valid_block(heap, block));
 
     block->flags |= BLOCK_ALLOCATED;
-    block->magic = MAGIC_ALLOCATED;
+    update_checksum(block);
 }
 
 static void set_free(struct heap* heap, struct heap_block_header* block)
@@ -98,7 +110,7 @@ static void set_free(struct heap* heap, struct heap_block_header* block)
     assert(is_valid_block(heap, block));
 
     block->flags &= ~BLOCK_ALLOCATED;
-    block->magic = MAGIC_FREE;
+    update_checksum(block);
 }
 
 static struct heap_block_header* create_block(struct heap* heap, void* addr, unsigned size)
@@ -106,7 +118,7 @@ static struct heap_block_header* create_block(struct heap* heap, void* addr, uns
     struct heap_block_header* result = addr;
     memset(result, 0, sizeof(struct heap_block_header));
     result->size = size;
-    result->magic = MAGIC_FREE;
+    update_checksum(result);
     return result;
 }
 
@@ -118,6 +130,7 @@ static struct heap_block_header* merge_blocks(struct heap* heap, struct heap_blo
     dest->next = source->next;
 
     memset(source, 0, sizeof(struct heap_block_header));
+    update_checksum(dest);
 
     return dest;
 }
@@ -156,6 +169,7 @@ struct heap_info heap_info(struct heap* heap)
 struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
 {
     size = ALIGN(size, PAGE_SIZE);
+    trace("Growing heap by %d", size);
 
     struct heap_block_header* last = last_block(heap);
     assert(last != NULL);
@@ -187,6 +201,7 @@ struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
 
         struct heap_block_header* new_header = create_block(heap, end_of_heap, allocated);
         last->next = new_header;
+        update_checksum(last);
 
         if(heap_is_free(heap, last)) {
             new_header = merge_blocks(heap, last, new_header);
@@ -242,9 +257,11 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                             unsigned new_block_size = h->size - sizeof(struct heap_block_header) - size;
                             struct heap_block_header* new_block = create_block(heap, new_block_address, new_block_size);
                             new_block->next = h->next;
+                            update_checksum(new_block);
 
                             h->size = sizeof(struct heap_block_header) + size;
                             h->next = new_block;
+                            update_checksum(h);
                             set_allocated(heap, h);
 
                             assert(new_block->size + h->size == old_size);
@@ -272,13 +289,20 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                         unsigned char* header1 = data1 - sizeof(struct heap_block_header);
 
                         h->size = header1 - header0;
+                        update_checksum(h);
+
                         set_free(heap, h);
                         assert(is_valid_block(heap, h));
 
                         struct heap_block_header* h2 = create_block(heap, header1, total_size - h->size);
                         set_allocated(heap, h2);
+
                         h2->next = h->next;
                         h->next = h2;
+
+                        update_checksum(h);
+                        update_checksum(h2);
+
                         assert(is_valid_block(heap, h2));
 
                         assert(h->size + h2->size == total_size);
@@ -290,9 +314,13 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                             unsigned size3 = h2->size - size - sizeof(struct heap_block_header);
                             struct heap_block_header* h3 = create_block(heap, header3, size3);
                             set_free(heap, h3);
+
                             h3->next = h2->next;
                             h2->next = h3;
                             h2->size = size + sizeof(struct heap_block_header);
+
+                            update_checksum(h2);
+                            update_checksum(h3);
 
                             assert(is_valid_block(heap, h3));
 

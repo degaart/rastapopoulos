@@ -26,5 +26,7 @@
     (( ((uint64_t)(val)) % ((uint64_t)(align)) ) == 0)
 
 uint64_t rdtsc();
+unsigned hash(void* data, unsigned size);
+
 
 
