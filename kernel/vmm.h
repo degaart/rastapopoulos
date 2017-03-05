@@ -25,9 +25,14 @@ void vmm_remap(void* va, uint32_t flags);
 void vmm_flush_tlb(void* va);
 bool vmm_paging_enabled();
 void vmm_switch_pagedir(struct pagedir* pagedir); /* VA, but translated internally into physical address */
+struct pagedir* vmm_current_pagedir();
 struct pagedir* vmm_clone_pagedir();
 uint32_t vmm_get_physical(void* va); /* Returns 0 if va is not mapped */
 uint32_t vmm_get_flags(void* va);
+
+void* vmm_transient_map(uint32_t frame, unsigned flags);
+void vmm_transient_unmap(void* address);
+
 
 
 
