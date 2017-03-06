@@ -73,7 +73,8 @@ struct va_info_ex {
 };
 
 static bool             paging_enabled = false;
-static struct pagedir*  current_pagedir = NULL;
+static struct pagedir*  current_pagedir = (struct pagedir*)0xFFFFF000;
+static struct pagedir*  current_pagedir_va = NULL;
 
 static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, uint32_t flags);
 extern void invlpg(uint32_t va);
@@ -91,23 +92,6 @@ static void flush_tlb()
     write_cr3(read_cr3());
 }
 
-struct pagedir* vmm_current_pagedir()
-{
-    assert(paging_enabled);
-
-#if 0
-    /* Current pagedir available at 0xFFFFF000 because of recursive mapping */
-    struct pagedir* result = (struct pagedir*)0xFFFFF000;
-    return result;
-#else
-    /* 
-     * NOTE: cr3() is the physical address of the pagedir, not it's virtual address!
-     * We cant use 0xFFFFF000 either because calling might save current pagedir and reuse it
-     */
-    return current_pagedir;
-#endif
-}
-
 static struct pagetable* get_pagetable(struct va_info info)
 {
     /* Pagetables available at (0xFFC00000 + (pde_index * PAGE_SIZE)) because of recursive mapping */
@@ -123,9 +107,9 @@ static void va_info_ex(struct va_info_ex* result, void* va)
     result->info = va_info(va);
 
     /* Get PDE */
-    struct pagedir* pagedir = vmm_current_pagedir();
-    if(pagedir->entries[result->info.dir_index] & PDE_PRESENT) {
-        result->pde = pagedir->entries[result->info.dir_index];
+    if(current_pagedir->entries[result->info.dir_index] & PDE_PRESENT) {
+        dump_var(current_pagedir->entries[result->info.dir_index]);
+        result->pde = current_pagedir->entries[result->info.dir_index];
 
         struct pagetable* pagetable = get_pagetable(result->info);
         if(pagetable->entries[result->info.table_index] & PTE_PRESENT) {
@@ -152,7 +136,6 @@ void vmm_init()
 
     /* Create initial kernel pagedir */
     struct pagedir* pagedir = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
-    trace("pagedir: %p", pagedir);
     assert(IS_ALIGNED(pagedir, PAGE_SIZE));
     bzero(pagedir, sizeof(struct pagedir));
 
@@ -190,7 +173,7 @@ void vmm_init()
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
-    current_pagedir = pagedir;
+    current_pagedir_va = pagedir;
 
     /* Enable paging */
     write_cr3((uint32_t)pagedir);
@@ -246,26 +229,19 @@ void vmm_map(void* va, uint32_t pa, uint32_t flags)
 
     struct va_info info = va_info((void*)va);
 
-    struct pagedir* pagedir = vmm_current_pagedir();
-
     /* Check if present in page directory */
-    bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
+    bool pde_present = current_pagedir->entries[info.dir_index] & PDE_PRESENT;
     if(!pde_present) {
-#if 0
-        struct pagetable* table = kmalloc_a(sizeof(struct pagetable*), PAGE_SIZE);
-        trace("table: %p", table);
-        memset(table, 0, sizeof(struct pagetable));
-        table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
-
-        uint32_t table_pa = vmm_get_physical(table);
-        trace("table: %p, table_pa: %p", table, table_pa);
-        pagedir->entries[info.dir_index] = table_pa | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
-#else
-        /* Alloc 4k frame for page table */
+        /*
+         * NOTE: Do not call kmalloc in this function as kmalloc
+         * might call vmm_map
+         *
+         * Alloc 4k frame for page table
+         */
         uint32_t table_pa = pmm_alloc();
 
         /* And stash into pagedir */
-        pagedir->entries[info.dir_index] = ((uint32_t)table_pa) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
+        current_pagedir->entries[info.dir_index] = ((uint32_t)table_pa) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
 
         /*
          * Reload cr3
@@ -273,13 +249,12 @@ void vmm_map(void* va, uint32_t pa, uint32_t flags)
          */
         flush_tlb();
 
-        pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
+        pde_present = current_pagedir->entries[info.dir_index] & PDE_PRESENT;
         assert(pde_present);
 
         struct pagetable* table = get_pagetable(info);
         bzero(table, sizeof(struct pagetable));
         table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
-#endif
     } else {
         struct pagetable* table = get_pagetable(info);
 
@@ -304,10 +279,8 @@ void vmm_remap(void* va, uint32_t flags)
 
     struct va_info info = va_info((void*)va);
 
-    struct pagedir* pagedir = vmm_current_pagedir();
-
     /* Check if present in page directory */
-    bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
+    bool pde_present = current_pagedir->entries[info.dir_index] & PDE_PRESENT;
     assert(pde_present);
 
     /* Pagetables available at (0xFFC00000 + (pte * PAGE_SIZE)) */
@@ -333,8 +306,7 @@ void vmm_unmap(void* va)
 
     struct va_info info = va_info((void*)va);
 
-    struct pagedir* pagedir = vmm_current_pagedir();
-    bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
+    bool pde_present = current_pagedir->entries[info.dir_index] & PDE_PRESENT;
     assert(pde_present);
 
     struct pagetable* table = get_pagetable(info);
@@ -360,50 +332,12 @@ struct pagetable* clone_pagetable(unsigned dir_index)
 
     /* Create new pagetable */
     struct pagetable* result = kmalloc_a(sizeof(struct pagetable), PAGE_SIZE);
-    memset(result, 0, sizeof(struct pagetable));
-
-    /* Create scratch space for pageframe copying */
-    void* scratch = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
-
-    struct va_info_ex scratch_info;
-    va_info_ex(&scratch_info, scratch);
-    vmm_unmap(scratch);
-
-    /* Copy entries */
-    for(unsigned table_index = 0; table_index < 1024; table_index++) {
-        if(pagetable->entries[table_index] & PTE_PRESENT) {
-            unsigned flags = pagetable->entries[table_index] & PTE_FLAGS;
-
-            uint32_t frame = pmm_alloc();
-            assert(frame != PMM_INVALID_PAGE);
-
-            /*
-             * source page frame contents available in current address space
-             * need to map new page frame into current address space for copying
-             */
-            void* source = get_va(dir_index, table_index);
-            void* dest = scratch;
-
-            vmm_map(dest,
-                    frame,
-                    VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-            memcpy(dest, source, PAGE_SIZE);
-            vmm_unmap(dest);
-
-            pagetable->entries[table_index] = frame | flags;
-        }
-    }
-
-    /* Remap back scratch space */
-    vmm_map(scratch, scratch_info.frame, scratch_info.flags);
-
+    memcpy(result, pagetable, sizeof(struct pagetable));
     return result;
 }
 
 struct pagedir* vmm_clone_pagedir()
 {
-    struct pagedir* pagedir = vmm_current_pagedir();
-
     struct pagedir* result = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
     memset(result, 0, sizeof(struct pagedir));
 
@@ -413,13 +347,11 @@ struct pagedir* vmm_clone_pagedir()
      * 3Gb   - end-4Mb:     copy pagedir entry
      * end-4Mb - end:       pagedir address
      */
-    result->entries[KERNEL_LO_PDE] = pagedir->entries[KERNEL_LO_PDE];
-    trace("result->entries[KERNEL_LO_PDE]: %p", result->entries[KERNEL_LO_PDE]);
-    trace("pagedir->entries[KERNEL_LO_PDE]: %p", pagedir->entries[KERNEL_LO_PDE]);
-
+    result->entries[KERNEL_LO_PDE] = current_pagedir->entries[KERNEL_LO_PDE];
     for(unsigned i = USER_PDE_START; i <= USER_PDE_END; i++) {
-        if(pagedir->entries[i] & PDE_PRESENT) {
-            unsigned flags = pagedir->entries[i] & PDE_FLAGS;
+        if(current_pagedir->entries[i] & PDE_PRESENT) {
+            unsigned flags = current_pagedir->entries[i] & PDE_FLAGS;
+            assert(flags & PDE_PRESENT);
 
             struct pagetable* new_pagetable = clone_pagetable(i);
 
@@ -428,23 +360,12 @@ struct pagedir* vmm_clone_pagedir()
 
             result->entries[i] = info.frame | flags;
         }
-        //assert(result->entries[0] == 0x0011B027);
     }
     for(int i = KERNEL_HI_PDE_START; i <= KERNEL_HI_PDE_END; i++) {
-        result->entries[i] = pagedir->entries[i];
-        //assert(result->entries[0] == 0x0011B027);
+        result->entries[i] = current_pagedir->entries[i];
     }
     result->entries[RECURSIVE_MAPPING_PDE] = ((uint32_t)vmm_get_physical(result)) | PDE_PRESENT | PDE_WRITABLE;
-    //assert(result->entries[0] == 0x0011B027);
     return result;
-}
-
-void vmm_switch_pagedir(struct pagedir* pagedir)
-{
-    assert(IS_ALIGNED(pagedir, PAGE_SIZE));
-    uint32_t pa = vmm_get_physical(pagedir);
-    write_cr3(pa);
-    current_pagedir = pagedir;
 }
 
 uint32_t vmm_get_physical(void* va)
@@ -512,7 +433,37 @@ void vmm_transient_unmap(void* address)
     }
 }
 
+struct pagedir* vmm_current_pagedir()
+{
+    assert(paging_enabled);
 
+    /* 
+     * NOTE: cr3() is the physical address of the pagedir, not it's virtual address!
+     * We cant use 0xFFFFF000 either because calling code might save current pagedir and reuse it
+     */
+    return current_pagedir_va;
+}
+
+void vmm_switch_pagedir(struct pagedir* pagedir)
+{
+    assert(IS_ALIGNED(pagedir, PAGE_SIZE));
+    
+    /*
+     * Copy kernel mappings into new pagedir
+     */
+    pagedir->entries[KERNEL_LO_PDE] = current_pagedir->entries[KERNEL_LO_PDE];
+    for(int i = KERNEL_HI_PDE_START; i <= KERNEL_HI_PDE_END; i++) {
+        pagedir->entries[i] = current_pagedir->entries[i];
+    }
+
+    uint32_t pa = vmm_get_physical(pagedir);
+    assert((pagedir->entries[RECURSIVE_MAPPING_PDE] & PDE_FRAME) == pa);
+    assert(pagedir->entries[RECURSIVE_MAPPING_PDE] & PDE_PRESENT);
+    assert(pagedir->entries[RECURSIVE_MAPPING_PDE] & PDE_WRITABLE);
+
+    write_cr3(pa);
+    current_pagedir_va = pagedir;
+}
 
 
 

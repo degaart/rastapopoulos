@@ -37,8 +37,6 @@ void kfree(void* address)
 
 void* kmalloc_a(unsigned size, unsigned alignment)
 {
-    static bool pagedir_allocated = false;
-
     assert(size);
 
     unsigned char* result = NULL;
