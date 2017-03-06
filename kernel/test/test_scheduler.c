@@ -120,6 +120,10 @@ static void kernel_task_entry()
     reboot();
 }
 
+static void usermode_entry() __attribute__((align(4096)))
+{
+}
+
 void test_scheduler()
 {
     trace("Testing scheduler");
