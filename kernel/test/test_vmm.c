@@ -71,18 +71,14 @@ static void test_identity_mapped()
 static void test_recursive_mapping()
 {
     /*
-     * Current pagedir available at 0xFFFFF000 and in cr3
+     * Current pagedir available at 0xFFFFF000 and in cr3, and also in vmm_current_pagedir
      */
     uint32_t* pagedir0 = (uint32_t*)0xFFFFF000;
     uint32_t* pagedir1 = vmm_transient_map(read_cr3(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    uint32_t* pagedir2 = (uint32_t*)vmm_current_pagedir();
     for(int i = 0; i < 1024; i++) {
-        if(pagedir0[i] != pagedir1[i]) {
-            trace("i: %d, pagedir0[i]: %p, pagedir1[i]: %p",
-                  i,
-                  pagedir0[i],
-                  pagedir1[i]);
-            abort();
-        }
+        assert(pagedir0[i] == pagedir1[i]);
+        assert(pagedir1[i] == pagedir2[i]);
     }
     vmm_transient_unmap(pagedir1);
 }
@@ -198,6 +194,7 @@ static void test_clone_pagedir()
      */
     trace("Switch to new pagedir");
     vmm_switch_pagedir(pagedir);
+    test_recursive_mapping();
 
     /*
      * Start of userspace shouldn't be mapped
@@ -242,7 +239,6 @@ static void test_clone_pagedir()
         assert(userspace_data[i] != (i ^ ~7));
         assert(userspace_data[i] == (i ^ 7));
     } 
-
 }
 
 void test_vmm()

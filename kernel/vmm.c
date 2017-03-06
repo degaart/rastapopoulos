@@ -108,7 +108,6 @@ static void va_info_ex(struct va_info_ex* result, void* va)
 
     /* Get PDE */
     if(current_pagedir->entries[result->info.dir_index] & PDE_PRESENT) {
-        dump_var(current_pagedir->entries[result->info.dir_index]);
         result->pde = current_pagedir->entries[result->info.dir_index];
 
         struct pagetable* pagetable = get_pagetable(result->info);
