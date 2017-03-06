@@ -16,6 +16,35 @@
 uint32_t KERNEL_START = (uint32_t) &_KERNEL_START_;
 uint32_t KERNEL_END = (uint32_t) &_KERNEL_END_;
 
+static void pf_handler(struct isr_regs* regs)
+{
+    bool user_mode = regs->err_code & (1 << 2); /* user or supervisor mode */
+    bool write = regs->err_code & (1 << 1);     /* was a read or a write */
+    bool prot_violation = regs->err_code & 1;   /* not-present page or page protection violation */
+    void* address = (void*)read_cr2();
+
+    trace(
+        "Page fault at address %p: %s %s %s\n"
+        "\tds:  0x%X\n"
+        "\teax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X\n"
+        "\tesi: 0x%X edi: 0x%X\n"
+        "\terr: 0x%X\n"
+        "\tcs:  0x%X eip: 0x%X eflags: 0x%X\n"
+        "\tss:  0x%X esp: 0x%X\n",
+        address,
+        user_mode ? "ring3" : "ring0",
+        write ? "write" : "read",
+        prot_violation ? "access-violation" : "page-not-present",
+        regs->ds,
+        regs->eax, regs->ebx, regs->ecx, regs->edx,
+        regs->esi, regs->edi,
+        regs->err_code,
+        regs->cs, regs->eip, regs->eflags, 
+        regs->ss, regs->esp
+    );
+    abort();
+}
+
 void reboot()
 {
     trace("*** Rastapopoulos rebooted ***\n\n\n");
@@ -112,6 +141,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     // IDT
     idt_init();
     idt_flush();
+    idt_install(14, pf_handler, true);
 
     // Physical memory manager
     pmm_init(multiboot_info);

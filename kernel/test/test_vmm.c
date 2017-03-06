@@ -7,6 +7,10 @@
 #include "../idt.h"
 #include "../kmalloc.h"
 
+#define PAGE_DIRECTORY_INDEX(x) (((x) >> 22) & 0x3ff)
+#define PAGE_TABLE_INDEX(x) (((x) >> 12) & 0x3ff)
+#define PAGE_GET_PHYSICAL_ADDRESS(x) (*x & ~0xfff)
+
 static bool is_identity_mapped(void* address)
 {
     void* frame = (void*) vmm_get_physical(address);
@@ -80,6 +84,7 @@ static void test_recursive_mapping()
             abort();
         }
     }
+    vmm_transient_unmap(pagedir1);
 }
 
 static void test_map()
@@ -208,7 +213,6 @@ static void test_clone_pagedir()
         assert(new_pagedir[i] == pagedir_view[i]);
     }
     uint32_t* pagetable_view = (uint32_t*)(0xFFC00000 + PAGE_SIZE);
-
 
     /*
      * Map it to another page

@@ -28,5 +28,8 @@
 uint64_t rdtsc();
 unsigned hash(void* data, unsigned size);
 
+#define dump_var(var) \
+    trace("%s: %p", #var, var)
+
 
 
