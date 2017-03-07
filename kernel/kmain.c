@@ -191,7 +191,7 @@ void kmain(const struct multiboot_info* multiboot_info)
 
     // System timer
     timer_init();
-    timer_schedule(reboot_timer, NULL, 3000, false);
+    //timer_schedule(reboot_timer, NULL, 3000, false);
 
     // Run tests
     run_tests();
