@@ -4,6 +4,7 @@
 #include "registers.h"
 #include "pmm.h"
 #include "kernel.h"
+#include "locks.h"
 
 #include <stdint.h>
 
@@ -184,11 +185,16 @@ void gdt_iomap_set(unsigned port, unsigned value)
 
 void tss_set_kernel_stack(void* esp0)
 {
+    enter_critical_section();
     tss.esp0 = (uint32_t)esp0;
+    leave_critical_section();
 }
 
 void* tss_get_kernel_stack()
 {
-    return (void*)tss.esp;
+    enter_critical_section();
+    void* result = (void*)tss.esp;
+    leave_critical_section();
+    return result;
 }
 

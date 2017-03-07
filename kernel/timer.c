@@ -4,6 +4,7 @@
 #include "util.h"
 #include "debug.h"
 #include "kernel.h"
+#include "locks.h"
 
 #define PORT_COMMAND    0x43
 #define PORT_DATA       0x40
@@ -76,6 +77,8 @@ uint32_t timer_schedule(timer_callback_t callback, void* data, uint32_t period, 
 {
     assert(timer_count < countof(timers) - 1);
 
+    enter_critical_section();
+
     uint32_t id = next_timer_id++;
     timers[timer_count].id = id;
     timers[timer_count].callback = callback;
@@ -84,11 +87,15 @@ uint32_t timer_schedule(timer_callback_t callback, void* data, uint32_t period, 
     timers[timer_count].recurring = recurring;
 
     timer_count++;
+
+    leave_critical_section();
     return id;
 }
 
 void timer_unschedule(uint32_t id)
 {
+    enter_critical_section();
+
     int index = -1;
     for(int i = 0; i < timer_count; i++) {
         if(timers[i].id == id) {
@@ -96,13 +103,15 @@ void timer_unschedule(uint32_t id)
             break;
         }
     }
-    if(index == -1)
-        return;
 
-    if(index != timer_count) {
-        timers[index] = timers[timer_count];
+    if(index != -1) {
+        if(index != timer_count) {
+            timers[index] = timers[timer_count];
+        }
+        timer_count--;
     }
-    timer_count--;
+
+    leave_critical_section();
 }
 
 
