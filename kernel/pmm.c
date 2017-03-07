@@ -6,6 +6,7 @@
 #include "util.h"
 #include "bitset.h"
 #include "kernel.h"
+#include "locks.h"
 
 struct memregion {
     uint32_t addr;
@@ -58,18 +59,26 @@ bool pmm_exists(uint32_t page)
 {
     assert(!(page % PAGE_SIZE));
 
+    enter_critical_section();
+
+    bool result = false;
     for(struct memregion* region = memregions; region; region = region->next) {
         if(page >= region->addr && page < region->addr + region->len) {
-            return true;
+            result = true;
+            break;
         }
     }
 
-    return false;
+    leave_critical_section();
+
+    return result;
 }
 
 void pmm_reserve(uint32_t page)
 {
     assert(!(page % PAGE_SIZE));
+
+    enter_critical_section();
 
     for(struct memregion* region = memregions; region; region = region->next) {
         if(page >= region->addr && page < region->addr + region->len) {
@@ -81,6 +90,8 @@ void pmm_reserve(uint32_t page)
                 abort();
             }
             bitset_set(region->bitmap, index);
+
+            leave_critical_section();
             return;
         }
     }
@@ -93,6 +104,7 @@ void pmm_free(uint32_t page)
 {
     assert(IS_ALIGNED(page, PAGE_SIZE));
 
+    enter_critical_section();
     for(struct memregion* region = memregions; region; region = region->next) {
         if(page >= region->addr && page < region->addr + region->len) {
             uint32_t offset = page - region->addr;
@@ -103,6 +115,7 @@ void pmm_free(uint32_t page)
                 abort();
             }
             bitset_clear(region->bitmap, index);
+            leave_critical_section();
             return;
         }
     }
@@ -115,6 +128,7 @@ bool pmm_reserved(uint32_t page)
 {
     assert(!(page % PAGE_SIZE));
 
+    enter_critical_section();
     bool result = true;
     for(struct memregion* region = memregions; region; region = region->next) {
         if(page >= region->addr && page < region->addr + region->len) {
@@ -126,20 +140,25 @@ bool pmm_reserved(uint32_t page)
         }
     }
 
+    leave_critical_section();
     return result;
 }
 
 uint32_t pmm_alloc()
 {
+    uint32_t result = PMM_INVALID_PAGE;
+
+    enter_critical_section();
     for(struct memregion* region = memregions; region; region = region->next) {
         uint32_t index = bitset_find(region->bitmap, 0);
         if(index != BITSET_INVALID_INDEX) {
             bitset_set(region->bitmap, index);
-            uint32_t page = region->addr + (index * PAGE_SIZE);
-            return page;
+            result = region->addr + (index * PAGE_SIZE);
+            break;
         }
     }
-    return PMM_INVALID_PAGE;
+    leave_critical_section();
+    return result;
 }
 
 

@@ -6,6 +6,7 @@
 #include "string.h"
 #include "util.h"
 #include "kernel.h"
+#include "locks.h"
 
 #define PTE_PRESENT             (1)
 #define PTE_WRITABLE            (1 << 1)
@@ -89,7 +90,9 @@ static struct va_info va_info(void* va)
 
 static void flush_tlb()
 {
+    enter_critical_section();
     write_cr3(read_cr3());
+    leave_critical_section();
 }
 
 static struct pagetable* get_pagetable(struct va_info info)
@@ -237,6 +240,8 @@ void vmm_map(void* va, uint32_t pa, uint32_t flags)
     assert(IS_ALIGNED(va, PAGE_SIZE));
     assert(IS_ALIGNED(pa, PAGE_SIZE));
 
+    enter_critical_section();
+
     struct va_info info = va_info((void*)va);
 
     /* Check if present in page directory */
@@ -278,6 +283,8 @@ void vmm_map(void* va, uint32_t pa, uint32_t flags)
 
     /* TODO: Replace with vmm_flush_tlb */
     flush_tlb();
+
+    leave_critical_section();
 }
 
 void vmm_remap(void* va, uint32_t flags)
@@ -286,6 +293,8 @@ void vmm_remap(void* va, uint32_t flags)
 
     assert(IS_ALIGNED(va, PAGE_SIZE));
     assert(flags & VMM_PAGE_PRESENT);       /* Use vmm_unmap to unmap */
+
+    enter_critical_section();
 
     struct va_info info = va_info((void*)va);
 
@@ -302,6 +311,8 @@ void vmm_remap(void* va, uint32_t flags)
     table->entries[info.table_index] = frame | flags;
 
     flush_tlb();
+
+    leave_critical_section();
 }
 
 void vmm_flush_tlb(void* va)
@@ -314,6 +325,8 @@ void vmm_unmap(void* va)
     assert(paging_enabled);
     assert(IS_ALIGNED(va, PAGE_SIZE));
 
+    enter_critical_section();
+
     struct va_info info = va_info((void*)va);
 
     bool pde_present = current_pagedir->entries[info.dir_index] & PDE_PRESENT;
@@ -325,6 +338,8 @@ void vmm_unmap(void* va)
     table->entries[info.table_index] &= ~PTE_PRESENT;
 
     flush_tlb();
+
+    leave_critical_section();
 }
 
 bool vmm_paging_enabled()
@@ -351,6 +366,8 @@ struct pagedir* vmm_clone_pagedir()
     struct pagedir* result = kmalloc_a(sizeof(struct pagedir), PAGE_SIZE);
     memset(result, 0, sizeof(struct pagedir));
 
+    enter_critical_section();
+
     /*
      * 0x000 - 4Mb:         copy pagedir entry
      * 4Mb   - 3Gb:         copy pagetable entries
@@ -375,6 +392,8 @@ struct pagedir* vmm_clone_pagedir()
         result->entries[i] = current_pagedir->entries[i];
     }
     result->entries[RECURSIVE_MAPPING_PDE] = ((uint32_t)vmm_get_physical(result)) | PDE_PRESENT | PDE_WRITABLE;
+
+    leave_critical_section();
     return result;
 }
 
@@ -382,8 +401,12 @@ uint32_t vmm_get_physical(void* va)
 {
     assert(IS_ALIGNED(va, PAGE_SIZE));
 
+    enter_critical_section();
+
     struct va_info_ex info;
     va_info_ex(&info, va);
+
+    leave_critical_section();
 
     return info.frame;
 }
@@ -392,8 +415,12 @@ uint32_t vmm_get_flags(void* va)
 {
     assert(IS_ALIGNED(va, PAGE_SIZE));
 
+    enter_critical_section();
+
     struct va_info_ex info;
     va_info_ex(&info, va);
+
+    leave_critical_section();
 
     return info.flags;
 }
@@ -410,6 +437,8 @@ void* vmm_transient_map(uint32_t frame, unsigned flags)
 {
     void* address = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
 
+    enter_critical_section();
+
     struct transient_map* map = kmalloc(sizeof(struct transient_map));
     map->next = transient_maps;
     map->frame = vmm_get_physical(address);
@@ -421,11 +450,14 @@ void* vmm_transient_map(uint32_t frame, unsigned flags)
     vmm_unmap(address);
     vmm_map(address, frame, VMM_PAGE_PRESENT | flags);
 
+    leave_critical_section();
     return address;
 }
 
 void vmm_transient_unmap(void* address)
 {
+    enter_critical_section();
+
     struct transient_map* map = transient_maps;
     struct transient_map* prevm = NULL;
     for(map = transient_maps; map; prevm = map, map = map->next) {
@@ -441,6 +473,8 @@ void vmm_transient_unmap(void* address)
             kfree(map);
         }
     }
+
+    leave_critical_section();
 }
 
 struct pagedir* vmm_current_pagedir()
@@ -457,6 +491,8 @@ struct pagedir* vmm_current_pagedir()
 void vmm_switch_pagedir(struct pagedir* pagedir)
 {
     assert(IS_ALIGNED(pagedir, PAGE_SIZE));
+
+    enter_critical_section();
     
     /*
      * Copy kernel mappings into new pagedir
@@ -473,6 +509,8 @@ void vmm_switch_pagedir(struct pagedir* pagedir)
 
     write_cr3(pa);
     current_pagedir_va = pagedir;
+
+    leave_critical_section();
 }
 
 

@@ -251,7 +251,7 @@ void test_scheduler()
     proc0->name = "task0";
     proc0->pagedir = vmm_clone_pagedir();
     proc0->kernel_stack = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
-    proc0->user_stack = NULL;                    /* 64KB of user stack */
+    proc0->user_stack = NULL;
     proc0->current_ring = Ring0;
     proc0->kernel_esp = proc0->kernel_stack + PAGE_SIZE - 1;
     proc0->registers.eflags = read_eflags() /*| EFLAGS_IF*/;
@@ -266,7 +266,7 @@ void test_scheduler()
     proc1->name = "task1";
     proc1->pagedir = vmm_clone_pagedir();
     proc1->kernel_stack = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
-    proc1->user_stack = NULL;                    /* 64KB of user stack */
+    proc1->user_stack = NULL;
     proc1->current_ring = Ring0;
     proc1->kernel_esp = proc1->kernel_stack + PAGE_SIZE - 1;
     proc1->registers.eflags = read_eflags() /*| EFLAGS_IF */;

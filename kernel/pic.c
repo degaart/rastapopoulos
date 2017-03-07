@@ -2,6 +2,7 @@
 #include "io.h"
 #include "debug.h"
 #include "string.h"
+#include "locks.h"
 
 #define PIC0_COMMAND            0x20
 #define PIC0_DATA               0x21
@@ -57,12 +58,18 @@ void pic_init()
 
 void pic_install(int irq, irq_handler_t handler)
 {
+    enter_critical_section();
+
     irq_handlers[irq] = handler;
+
+    leave_critical_section();
 }
 
 void pic_remove(int irq)
 {
+    enter_critical_section();
     irq_handlers[irq] = NULL;
+    leave_critical_section();
 }
 
 static void eoi(unsigned irq)
@@ -84,6 +91,7 @@ static void irq_stub(struct isr_regs* regs)
     int irq = regs->int_no - 0x20;
     eoi(irq);
 
+    enter_critical_section();
     if(irq_handlers[irq]) {
         irq_handlers[irq](irq, regs);
         warn_unhandled |= (1 << irq);
@@ -94,6 +102,7 @@ static void irq_stub(struct isr_regs* regs)
             warn_unhandled &= ~(1 << irq);
         }
     }
+    leave_critical_section();
 }
 
 

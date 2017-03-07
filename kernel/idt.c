@@ -3,6 +3,7 @@
 #include "gdt.h"
 #include "debug.h"
 #include "kernel.h"
+#include "locks.h"
 
 #define IDT_PRESENT        (1 << 7)
 #define IDT_DPL0           (0)
@@ -94,16 +95,23 @@ void isr_handler(struct isr_regs regs)
 
 void idt_install(int num, isr_handler_t handler, bool usermode)
 {
+    enter_critical_section();
+
     isr_handlers[num] = handler;
     if(usermode)
         idt_entries[num].flags |= IDT_DPL3;
     else
         idt_entries[num].flags &= ~IDT_DPL3;
+
+    leave_critical_section();
 }
 
 isr_handler_t idt_get_handler(int num)
 {
-    return isr_handlers[num];
+    enter_critical_section();
+    isr_handler_t result = isr_handlers[num];
+    leave_critical_section();
+    return result;
 }
 
 
