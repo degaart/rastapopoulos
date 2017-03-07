@@ -160,10 +160,21 @@ void vmm_init()
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
+    /* Kernel .user (usermode code section) */
+    for(uint32_t page = (uint32_t)_USER_START_; page < (uint32_t)_USER_END_; page += PAGE_SIZE) {
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER);
+    }
+
+    /* Kernel .userdata (usermode data section) */
+    for(uint32_t page = (uint32_t)_USER_DATA_START_; page < (uint32_t)_USER_DATA_END_; page += PAGE_SIZE) {
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    }
+
     /* Kernel .bss (also stack, since initial stack is in bss) */
     for(uint32_t page = (uint32_t)_BSS_START_; page < (uint32_t)_BSS_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
+
 
     /* Kernel heap */
     struct kernel_heap_info heap_info;

@@ -16,6 +16,7 @@ void gdt_flush(void* gdtr);
 
 void tss_flush();
 void tss_set_kernel_stack(void* esp0);
+void* tss_get_kernel_stack();
 
 /*
  * The IOMAP controls usermode access to ports.

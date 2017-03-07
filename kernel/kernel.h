@@ -25,6 +25,10 @@ extern unsigned char _RODATA_START_[];
 extern unsigned char _RODATA_END_[];
 extern unsigned char _DATA_START_[];
 extern unsigned char _DATA_END_[];
+extern unsigned char _USER_START_[];
+extern unsigned char _USER_END_[];
+extern unsigned char _USER_DATA_START_[];
+extern unsigned char _USER_DATA_END_[];
 extern unsigned char _BSS_START_[];
 extern unsigned char _BSS_END_[];
 

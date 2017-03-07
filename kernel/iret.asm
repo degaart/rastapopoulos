@@ -34,8 +34,9 @@ iret:
     rep     movsb
 
     ; switch pagedir
-    mov     eax, [iret_data + iret_t.i_cr3]
-    mov     cr3, eax
+    ; TODO: Reenable this
+    ; mov     eax, [iret_data + iret_t.i_cr3]
+    ; mov     cr3, eax
     
     ; Segment regs
     mov     eax, [iret_data + iret_t.i_ds]

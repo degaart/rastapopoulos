@@ -33,6 +33,22 @@ SECTIONS
 		_DATA_END_ = .;
 	}
 
+    . = ALIGN(4096);
+    .user :
+    {
+        _USER_START_ = .;
+        *(.user)
+        _USER_END_ = .;
+    }
+
+    . = ALIGN(4096);
+    .userdata :
+    {
+        _USER_DATA_START_ = .;
+        *(.userdata)
+        _USER_DATA_END_ = .;
+    }
+    
 	. = ALIGN(4096);
 	.bss :
 	{
@@ -40,6 +56,7 @@ SECTIONS
 		*(.bss)
 		_BSS_END_ = .;
 	}
+
 	_KERNEL_END_ = .;
 }
 
