@@ -2,7 +2,7 @@
 #include "string.h"
 #include "debug.h"
 
-void itoa(char* str, unsigned n)
+void USERFUNC itoa(char* str, unsigned n)
 {
     if(n == 0) {
         *str = '0';
@@ -34,7 +34,7 @@ void itoa(char* str, unsigned n)
     }
 }
 
-void itox(char* str, unsigned n)
+void USERFUNC itox(char* str, unsigned n)
 {
 		char* out = str;
 		unsigned nibble = 8;
@@ -52,7 +52,7 @@ void itox(char* str, unsigned n)
         *out = '\0';
 }
 
-uint32_t xtoa(const char* str)
+uint32_t USERFUNC xtoa(const char* str)
 {
     const char* p = str;
     
@@ -72,10 +72,10 @@ uint32_t xtoa(const char* str)
     return res;
 }
 
-int formatv(format_callback_t callback, 
-            void* callback_params,
-            const char* fmt,
-            va_list args) 
+int USERFUNC formatv(format_callback_t callback, 
+                     void* callback_params,
+                     const char* fmt,
+                     va_list args) 
 {
     int ret = 0;
     while(*fmt) {
@@ -155,10 +155,10 @@ int formatv(format_callback_t callback,
     return ret;
 }
 
-int format(format_callback_t callback, 
-           void* callback_params,
-           const char* fmt,
-           ...) 
+int USERFUNC format(format_callback_t callback, 
+                    void* callback_params,
+                    const char* fmt,
+                    ...) 
 {
     va_list args;
 
@@ -168,19 +168,19 @@ int format(format_callback_t callback,
     return ret;
 }
 
-void memset(void* buffer, int ch, uint32_t size)
+void USERFUNC memset(void* buffer, int ch, uint32_t size)
 {
     uint8_t* ptr = (uint8_t*)buffer;
     for(unsigned i=0; i<size; i++)
         ptr[i] = ch;
 }
 
-void bzero(void* buffer, uint32_t size)
+void USERFUNC bzero(void* buffer, uint32_t size)
 {
     memset(buffer, 0, size);
 }
 
-void memcpy(void* dest, const void* source, size_t size)
+void USERFUNC memcpy(void* dest, const void* source, size_t size)
 {
     uint8_t* src = (uint8_t*)source;
     uint8_t* dst = (uint8_t*)dest;
@@ -189,7 +189,7 @@ void memcpy(void* dest, const void* source, size_t size)
         *(dst++) = *(src++);
 }
 
-int memcmp(const void* p0, const void* p1, size_t size)
+int USERFUNC memcmp(const void* p0, const void* p1, size_t size)
 {
     if(!size)
         return 0;
@@ -206,7 +206,7 @@ int memcmp(const void* p0, const void* p1, size_t size)
     return 0;
 }
 
-size_t strlen(const char* str)
+size_t USERFUNC strlen(const char* str)
 {
     size_t len = 0;
     while(*(str++))
@@ -214,7 +214,7 @@ size_t strlen(const char* str)
     return len;
 }
 
-void strlcpy(char* dst, const char* src, unsigned siz)
+void USERFUNC strlcpy(char* dst, const char* src, unsigned siz)
 {
     while(siz > 1 && *src) {
         *dst = *src;
@@ -226,7 +226,7 @@ void strlcpy(char* dst, const char* src, unsigned siz)
     *dst = '\0';
 }
 
-void strlcat(char* dst, const char* src, unsigned siz)
+void USERFUNC strlcat(char* dst, const char* src, unsigned siz)
 {
     while(*dst && siz) {
         dst++;
@@ -241,7 +241,7 @@ void strlcat(char* dst, const char* src, unsigned siz)
     *dst = '\0';
 }
 
-int strcmp(const char* s0, const char* s1)
+int USERFUNC strcmp(const char* s0, const char* s1)
 {
     while(1) {
         if(!*s0 || !*s0)
@@ -259,7 +259,7 @@ typedef struct {
     int siz;
 } snprintf_t;
 
-static void snprintf_callback(int ch, void* param)
+static USERFUNC void snprintf_callback(int ch, void* param)
 {
     snprintf_t* buf = (snprintf_t*)param;
     if(buf->siz) {
@@ -269,7 +269,7 @@ static void snprintf_callback(int ch, void* param)
     }
 }
 
-int vsnprintf(char* buffer, size_t size, const char* fmt, va_list args)
+int USERFUNC vsnprintf(char* buffer, size_t size, const char* fmt, va_list args)
 {
     snprintf_t buf;
     buf.buf = buffer;
@@ -279,7 +279,7 @@ int vsnprintf(char* buffer, size_t size, const char* fmt, va_list args)
     return ret + 1;
 }
 
-int snprintf(char* buffer, size_t size, const char* fmt, ...)
+int USERFUNC snprintf(char* buffer, size_t size, const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -288,7 +288,7 @@ int snprintf(char* buffer, size_t size, const char* fmt, ...)
     return ret;
 }
 
-int vsncatf(char* buffer, size_t size, const char* fmt, va_list args)
+int USERFUNC vsncatf(char* buffer, size_t size, const char* fmt, va_list args)
 {
     size_t len = strlen(buffer);
     if(len + 1 >= size)
@@ -297,7 +297,7 @@ int vsncatf(char* buffer, size_t size, const char* fmt, va_list args)
     return ret;
 }
 
-int sncatf(char* buffer, size_t size, const char* fmt, ...)
+int USERFUNC sncatf(char* buffer, size_t size, const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
