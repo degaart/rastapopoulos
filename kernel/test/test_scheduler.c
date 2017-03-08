@@ -40,7 +40,13 @@ static void switch_process(struct process* proc)
         ctx.ss = USER_DATA_SEG | RPL3;
     }
 
+    static unsigned counter = 0;
+    counter++;
+
+    uint32_t frame = vmm_get_physical(proc->pagedir);
+
     ctx.cr3 = vmm_get_physical(proc->pagedir);
+    vmm_switch_pagedir(proc->pagedir);
 
     ctx.esp = proc->registers.esp;
     ctx.eflags = proc->registers.eflags;
@@ -53,7 +59,6 @@ static void switch_process(struct process* proc)
     ctx.ebx = proc->registers.ebx;
     ctx.eax = proc->registers.eax;
     ctx.ebp = proc->registers.ebp;
-
 
     iret(&ctx);
     
@@ -72,8 +77,8 @@ static void save_process_state(struct process* process, const struct isr_regs* r
     } else {
         /* sizeof(eip, cs, eflags, useresp, ss), pushed by processor upon interrupt */
         process->registers.esp = regs->esp + (5 * sizeof(uint32_t));
+        process->kernel_esp = (void*)regs->esp;
     }
-    process->kernel_esp = tss_get_kernel_stack();
 }
 
 #define SYSCALL_YIELD   0
@@ -82,7 +87,6 @@ static void save_process_state(struct process* process, const struct isr_regs* r
 static void int80_handler(struct isr_regs* regs)
 {
     struct process* current_process = proc_table + current_proc_index;
-    save_process_state(current_process, regs);
 
     switch(regs->eax) {
         case SYSCALL_YIELD:
@@ -281,7 +285,6 @@ void test_scheduler()
     proc0->registers.eip = (uint32_t)task0_entry;
     proc0->registers.esp = (uint32_t)proc0->kernel_esp;
     proc0->registers.esi = proc0->pid;
-    trace("task0 esp: %p", proc0->kernel_esp);
 
     /* Create second task1 */
     struct process* proc1 = proc_table + 1;
@@ -296,7 +299,6 @@ void test_scheduler()
     proc1->registers.eip = (uint32_t)task1_entry;
     proc1->registers.esp = (uint32_t)proc1->kernel_esp;
     proc1->registers.esi = proc1->pid;
-    trace("task1 esp: %p", proc1->kernel_esp);
 
     proc_count = 2;
 
