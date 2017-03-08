@@ -24,7 +24,6 @@ extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
                         uint32_t esi, uint32_t edi);
 
-
 static struct process* create_process(const char* name, void (*entry_point)())
 {
     enter_critical_section();
@@ -121,15 +120,8 @@ static void int80_handler(struct isr_regs* regs)
             break;
         case SYSCALL_TRACE:
         {
-            const char* format = (const char*)regs->ebx;
-            void* arg0 = (void*)regs->ecx;
-            void* arg1 = (void*)regs->edx;
-            void* arg2 = (void*)regs->esi;
-            void* arg3 = (void*)regs->edi;
-
             char* buffer = kmalloc(1024);
-            snprintf(buffer, 1024, "(%s) ", current_process->name);
-            sncatf(buffer, 1024, format, arg0, arg1, arg2, arg3);
+            snprintf(buffer, 1024, "(%s) %s", current_process->name, regs->ebx);
             trace(buffer);
             kfree(buffer);
             break;
@@ -234,15 +226,17 @@ static uint8_t USERFUNC user_inb(uint16_t port)
     return ret;
 }
 
-char USERDATA user_message[] = "deadbeef";
-char USERDATA user_format[] = "%d";
-
 void USERFUNC usermode_entry0()
 {
     unsigned counter = 0;
+    char msg[64];
     while(1) {
         wait(WAIT_FACTOR / 2);
-        syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
+
+        static const char USERDATA fmt[] = "counter: %d";
+        snprintf(msg, sizeof(msg), fmt, counter);
+
+        syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
         counter++;
     }
 }
@@ -250,9 +244,14 @@ void USERFUNC usermode_entry0()
 void USERFUNC usermode_entry1()
 {
     unsigned counter = 0;
+    char msg[64];
     while(1) {
         wait(WAIT_FACTOR / 3);
-        syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
+
+        static const char USERDATA fmt[] = "counter: %d";
+        snprintf(msg, sizeof(msg), fmt, counter);
+
+        syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
         counter++;
     }
 }
@@ -260,9 +259,14 @@ void USERFUNC usermode_entry1()
 void USERFUNC usermode_entry2()
 {
     unsigned counter = 0;
+    char msg[64];
     while(1) {
         wait(WAIT_FACTOR / 3);
-        syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
+
+        static const char USERDATA fmt[] = "counter: %d";
+        snprintf(msg, sizeof(msg), fmt, counter);
+
+        syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
         counter++;
     }
 }
