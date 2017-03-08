@@ -11,18 +11,47 @@
 #include "../registers.h"
 #include "../timer.h"
 #include "../io.h"
+#include "../locks.h"
 
 #define USERFUNC __attribute__((section(".user")))
 #define USERDATA __attribute__((section(".userdata")))
 
-static struct process proc_table[10] = {0};
+static struct process proc_table[64] = {0};
 static int current_proc_index = 0;
 static int proc_count = 0;
+
+static struct process* processes = NULL;
 
 extern void burn_cpu_cycles(unsigned count);
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
                         uint32_t esi, uint32_t edi);
+
+
+static struct process* create_process(const char* name, void (*entry_point)())
+{
+    enter_critical_section();
+
+    struct process* proc = proc_table + proc_count;
+
+    proc->pid = proc_count;
+    proc->name = name;
+    proc->pagedir = vmm_clone_pagedir();
+    proc->kernel_stack = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
+    proc->user_stack = NULL;
+    proc->current_ring = Ring0;
+    proc->kernel_esp = proc->kernel_stack + PAGE_SIZE - 1;
+    proc->registers.eflags = read_eflags() | EFLAGS_IF;
+    proc->registers.eip = (uint32_t)entry_point;
+    proc->registers.esp = (uint32_t)proc->kernel_esp;
+    proc->registers.esi = proc->pid;
+
+    proc_count++;
+
+    leave_critical_section();
+
+    return proc;
+}
 
 static void switch_process(struct process* proc)
 {
@@ -132,6 +161,8 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     /* switch to next task */
     current_proc_index = (current_proc_index + 1) % proc_count;
     struct process* next_task = proc_table + current_proc_index;
+
+    //trace("Switching to %s", next_task->name);
     switch_process(proc_table + current_proc_index);
 
     panic("Invalid code path");
@@ -169,29 +200,10 @@ unsigned USERFUNC wait(unsigned seconds)
 
 #define WAIT_FACTOR 5000000
 
-static void task0_entry()
-{
-    int pid = read_esi();
-    struct process* proc = proc_table + pid;
-
-    struct task_data* data = (struct task_data*)0x400000;
-
-    trace("%s started", proc->name);
-    int counter = 0;
-    while(counter < 10) {
-        wait(WAIT_FACTOR);
-        trace("%s: %d", proc->name, counter);
-        syscall(SYSCALL_YIELD, 0, 0, 0, 0, 0);
-        counter++;
-    }
-
-    trace("%s done", proc->name);
-    reboot();
-}
-
-void USERFUNC usermode_entry();
-
-static void task1_entry()
+/*
+ * Set up user-mode stack and jump to user-mode procedure
+ */
+static void setup_usermode()
 {
     int pid = read_esi();
     struct process* proc = proc_table + pid;
@@ -202,7 +214,7 @@ static void task1_entry()
     proc->user_stack = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
     vmm_remap(proc->user_stack, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE|VMM_PAGE_USER);
     proc->registers.esp = (uint32_t)proc->user_stack + PAGE_SIZE - 1;
-    proc->registers.eip = (uint32_t)usermode_entry;
+    proc->registers.eip = proc->registers.eax;
     proc->current_ring = Ring3;
 
     current_proc_index = 1;
@@ -228,7 +240,7 @@ static uint8_t USERFUNC user_inb(uint16_t port)
 char USERDATA user_message[] = "deadbeef";
 char USERDATA user_format[] = "%d";
 
-void USERFUNC usermode_entry()
+void USERFUNC usermode_entry0()
 {
     unsigned counter = 0;
     while(1) {
@@ -236,6 +248,63 @@ void USERFUNC usermode_entry()
         syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
         counter++;
     }
+}
+
+void USERFUNC usermode_entry1()
+{
+    unsigned counter = 0;
+    while(1) {
+        wait(WAIT_FACTOR / 3);
+        syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
+        counter++;
+    }
+}
+
+void USERFUNC usermode_entry2()
+{
+    unsigned counter = 0;
+    while(1) {
+        wait(WAIT_FACTOR / 4);
+        syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
+        counter++;
+    }
+}
+
+static void kernel_task_entry()
+{
+    int pid = read_esi();
+    struct process* proc = proc_table + pid;
+
+    struct task_data* data = (struct task_data*)0x400000;
+
+    trace("%s started", proc->name);
+    int counter = 0;
+    while(counter < 10) {
+        wait(WAIT_FACTOR);
+        trace("%s: %d", proc->name, counter);
+        syscall(SYSCALL_YIELD, 0, 0, 0, 0, 0);
+        counter++;
+
+        if(counter == 2) {
+            enter_critical_section();
+            struct process* proc = create_process("task1", setup_usermode);
+            proc->registers.eax = (uint32_t)usermode_entry0;
+            leave_critical_section();
+        } else if(counter == 4) {
+            enter_critical_section();
+            struct process* proc = create_process("task2", setup_usermode);
+            proc->registers.eax = (uint32_t)usermode_entry1;
+            leave_critical_section();
+        } else if(counter == 6) {
+            enter_critical_section();
+            struct process* proc = create_process("task3", setup_usermode);
+            proc->registers.eax = (uint32_t)usermode_entry2;
+            leave_critical_section();
+        }
+    }
+
+    trace("%s done", proc->name);
+    reboot();
 }
 
 void test_scheduler()
@@ -272,38 +341,11 @@ void test_scheduler()
 
     unsigned eflags = read_eflags() | EFLAGS_IF;
 
-    /* Create first task0 */
-    struct process* proc0 = proc_table;
-    proc0->pid = 0;
-    proc0->name = "task0";
-    proc0->pagedir = vmm_clone_pagedir();
-    proc0->kernel_stack = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
-    proc0->user_stack = NULL;
-    proc0->current_ring = Ring0;
-    proc0->kernel_esp = proc0->kernel_stack + PAGE_SIZE - 1;
-    proc0->registers.eflags = eflags;
-    proc0->registers.eip = (uint32_t)task0_entry;
-    proc0->registers.esp = (uint32_t)proc0->kernel_esp;
-    proc0->registers.esi = proc0->pid;
-
-    /* Create second task1 */
-    struct process* proc1 = proc_table + 1;
-    proc1->pid = 1;
-    proc1->name = "task1";
-    proc1->pagedir = vmm_clone_pagedir();
-    proc1->kernel_stack = kmalloc_a(PAGE_SIZE, PAGE_SIZE);
-    proc1->user_stack = NULL;
-    proc1->current_ring = Ring0;
-    proc1->kernel_esp = proc1->kernel_stack + PAGE_SIZE - 1;
-    proc1->registers.eflags = eflags;
-    proc1->registers.eip = (uint32_t)task1_entry;
-    proc1->registers.esp = (uint32_t)proc1->kernel_esp;
-    proc1->registers.esi = proc1->pid;
-
-    proc_count = 2;
+    /* Create kernel_task */
+    struct process* kernel_task = create_process("kernel_task", kernel_task_entry);
 
     /* Switch to task0 */
-    switch_process(proc0);
+    switch_process(kernel_task);
 }
 
 
