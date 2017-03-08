@@ -7,6 +7,7 @@
 #include "registers.h"
 #include "util.h"
 #include "kmalloc.h"
+#include "locks.h"
 
 struct debug_sym {
     const char* name;
@@ -27,6 +28,8 @@ static void __log_callback(int ch, void* unused)
 
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
 {
+    enter_critical_section();
+
     format(__log_callback, NULL, "[%s:%d][%s] ", file, line, func);
 
     va_list args;
@@ -35,6 +38,8 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     va_end(args);
 
     __log_callback('\n', NULL);
+
+    leave_critical_section();
 }
 
 void backtrace()
