@@ -57,55 +57,80 @@ static void switch_process(struct process* proc)
 
     iret(&ctx);
     
-    assert(!"Invalid code path");
+    panic("Invalid code path");
 }
+
+static void save_process_state(struct process* process, const struct isr_regs* regs)
+{
+    /* save current task state */
+    memcpy(&process->registers, regs, sizeof(*regs));
+    process->current_ring = (regs->cs & 0x3) ? Ring3 : Ring0;
+
+    if(process->current_ring == Ring3) {
+        /* esp refers to kernel stack, useresp was pushed by processor upon interrupt */
+        process->registers.esp = regs->useresp; 
+    } else {
+        /* sizeof(eip, cs, eflags, useresp, ss), pushed by processor upon interrupt */
+        process->registers.esp = regs->esp + (5 * sizeof(uint32_t));
+    }
+    process->kernel_esp = tss_get_kernel_stack();
+}
+
+#define SYSCALL_YIELD   0
+#define SYSCALL_TRACE   1
 
 static void int80_handler(struct isr_regs* regs)
 {
-    /* save current task state */
-    struct process* current_task = proc_table + current_proc_index;
-    memcpy(&current_task->registers, regs, sizeof(*regs));
-    current_task->current_ring = (regs->cs & 0x3) ? Ring3 : Ring0;
-
-    if(current_task->current_ring == Ring3) {
-        /* esp refers to kernel stack, useresp was pushed by processor upon interrupt */
-        current_task->registers.esp = regs->useresp; 
-    } else {
-        /* sizeof(eip, cs, eflags, useresp, ss), pushed by processor upon interrupt */
-        current_task->registers.esp = regs->esp + (5 * sizeof(uint32_t));
-    }
-    current_task->kernel_esp = tss_get_kernel_stack();
-
+    struct process* current_process = proc_table + current_proc_index;
+    save_process_state(current_process, regs);
 
     switch(regs->eax) {
-        case 0: /* Yield */
+        case SYSCALL_YIELD:
+            sti();
+            hlt();
             break;
-        case 1: /* Jump to userspace */
+        case SYSCALL_TRACE:
+        {
+            const char* format = (const char*)regs->ebx;
+            void* arg0 = (void*)regs->ecx;
+            void* arg1 = (void*)regs->edx;
+            void* arg2 = (void*)regs->esi;
+            void* arg3 = (void*)regs->edi;
 
+            char* buffer = kmalloc(1024);
+            snprintf(buffer, 1024, "(%s) ", current_process->name);
+            sncatf(buffer, 1024, format, arg0, arg1, arg2, arg3);
+            trace(buffer);
+            kfree(buffer);
+            break;
+        }
+        default:
+            panic("Invalid syscall");
             break;
     }
 
+#if 0
     /* Switch to next task */
     current_proc_index = (current_proc_index + 1) % proc_count;
     struct process* next_task = proc_table + current_proc_index;
     switch_process(proc_table + current_proc_index);
 
-    assert(!"Invalid code path");
+    panic("Invalid code path");
+#endif
 }
 
 static void scheduler_timer(void* data, const struct isr_regs* regs)
 {
     /* save current process state */
-    struct process* current_task = proc_table + current_proc_index;
-    memcpy(&current_task->registers, regs, sizeof(*regs));
-    
-    /* Switch to next task */
+    struct process* current_process = proc_table + current_proc_index;
+    save_process_state(current_process, regs);
+
+    /* switch to next task */
     current_proc_index = (current_proc_index + 1) % proc_count;
     struct process* next_task = proc_table + current_proc_index;
-    trace("Switching to %s", next_task->name);
     switch_process(proc_table + current_proc_index);
 
-    assert(!"Invalid code path");
+    panic("Invalid code path");
 }
 
 #define CMOS_ADDRESS            0x70
@@ -125,15 +150,20 @@ static unsigned cmos_seconds()
 }
 
 /*
- * busy-wait for specified number of seconds
+ * Burn cpu cycles
  */
-static void wait(unsigned seconds)
+unsigned USERFUNC wait(unsigned seconds)
 {
-    unsigned start_seconds = cmos_seconds();
-    for(unsigned i = 0; i < seconds; i++) {
-        while(cmos_seconds() == start_seconds);
+    volatile unsigned result = 0;
+    for(unsigned i = 2; i < seconds; i++) {
+        if((seconds % i == 0)) {
+            result++;
+        }
     }
+    return result;
 }
+
+#define WAIT_FACTOR 5000000
 
 static void task0_entry()
 {
@@ -145,9 +175,9 @@ static void task0_entry()
     trace("%s started", proc->name);
     int counter = 0;
     while(counter < 10) {
-        //wait(1);
+        wait(WAIT_FACTOR);
         trace("%s: %d", proc->name, counter);
-        syscall(0, 0, 0, 0, 0, 0);
+        syscall(SYSCALL_YIELD, 0, 0, 0, 0, 0);
         counter++;
     }
 
@@ -174,18 +204,7 @@ static void task1_entry()
     current_proc_index = 1;
     switch_process(proc);
 
-#if 0
-    int counter = 0;
-    while(counter < 10) {
-        //wait(2);
-        trace("%s: %d", proc->name, counter);
-        syscall(0, 0, 0, 0, 0, 0);
-        counter++;
-    }
-#endif
-
-    trace("%s done", proc->name);
-    reboot();
+    panic("Invalid code path");
 }
 
 static void USERFUNC user_outb(uint16_t port, uint8_t val)
@@ -203,14 +222,16 @@ static uint8_t USERFUNC user_inb(uint16_t port)
 }
 
 char USERDATA user_message[] = "deadbeef";
+char USERDATA user_format[] = "%d";
 
 void USERFUNC usermode_entry()
 {
-    for(const char* p = user_message; *p; p++)
-        user_outb(0xE9, *p);
-
-    while(1)
-        syscall(0, 0, 0, 0, 0, 0);
+    unsigned counter = 0;
+    while(1) {
+        wait(WAIT_FACTOR / 2);
+        syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
+        counter++;
+    }
 }
 
 void test_scheduler()
@@ -245,6 +266,8 @@ void test_scheduler()
     /* Add scheduler timer */
     timer_schedule(scheduler_timer, NULL, 50, true);
 
+    unsigned eflags = read_eflags() | EFLAGS_IF;
+
     /* Create first task0 */
     struct process* proc0 = proc_table;
     proc0->pid = 0;
@@ -254,7 +277,7 @@ void test_scheduler()
     proc0->user_stack = NULL;
     proc0->current_ring = Ring0;
     proc0->kernel_esp = proc0->kernel_stack + PAGE_SIZE - 1;
-    proc0->registers.eflags = read_eflags() /*| EFLAGS_IF*/;
+    proc0->registers.eflags = eflags;
     proc0->registers.eip = (uint32_t)task0_entry;
     proc0->registers.esp = (uint32_t)proc0->kernel_esp;
     proc0->registers.esi = proc0->pid;
@@ -269,7 +292,7 @@ void test_scheduler()
     proc1->user_stack = NULL;
     proc1->current_ring = Ring0;
     proc1->kernel_esp = proc1->kernel_stack + PAGE_SIZE - 1;
-    proc1->registers.eflags = read_eflags() /*| EFLAGS_IF */;
+    proc1->registers.eflags = eflags;
     proc1->registers.eip = (uint32_t)task1_entry;
     proc1->registers.esp = (uint32_t)proc1->kernel_esp;
     proc1->registers.esi = proc1->pid;

@@ -290,8 +290,8 @@ int snprintf(char* buffer, size_t size, const char* fmt, ...)
 
 int vsncatf(char* buffer, size_t size, const char* fmt, va_list args)
 {
-    int len = strlen(buffer);
-    if(len < 0 || (len+1) >= size)
+    size_t len = strlen(buffer);
+    if(len + 1 >= size)
         return 0;
     int ret = vsnprintf(buffer + len, size - len, fmt, args);
     return ret;
