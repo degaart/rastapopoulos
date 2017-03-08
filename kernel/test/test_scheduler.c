@@ -13,9 +13,6 @@
 #include "../io.h"
 #include "../locks.h"
 
-#define USERFUNC __attribute__((section(".user")))
-#define USERDATA __attribute__((section(".userdata")))
-
 static struct process proc_table[64] = {0};
 static int current_proc_index = 0;
 static int proc_count = 0;
@@ -264,7 +261,7 @@ void USERFUNC usermode_entry2()
 {
     unsigned counter = 0;
     while(1) {
-        wait(WAIT_FACTOR / 4);
+        wait(WAIT_FACTOR / 3);
         syscall(SYSCALL_TRACE, (uint32_t)user_format, counter, 0, 0, 0);
         counter++;
     }

@@ -34,4 +34,7 @@ extern unsigned char _BSS_END_[];
 
 extern unsigned char initial_kernel_stack[4096];
 
+#define USERFUNC __attribute__((section(".user")))
+#define USERDATA __attribute__((section(".userdata")))
+
 
