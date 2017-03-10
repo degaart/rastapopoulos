@@ -217,6 +217,22 @@ unsigned USERFUNC wait(unsigned seconds)
     return result;
 }
 
+/*
+ * Check if number is primer
+ */
+unsigned USERFUNC is_prime(unsigned num)
+{
+    if(num == 1)
+        return 1;
+
+    for(unsigned i = 2; i < num; i++) {
+        if(!(num % i))
+            return 0;
+    }
+
+    return 1;
+}
+
 #define WAIT_FACTOR 5000000
 
 /*
@@ -390,13 +406,60 @@ static void test_fork()
     switch_process(proc);
 }
 
-static struct pagedir* pagedirs[2];
-static struct iret contexts[2];
-static int current_context = 0;
-extern void save_context(struct iret* context);
+struct task {
+    int pid;
+    struct pagedir* pagedir;
+    struct iret context;
+    struct task* next;
+};
+
+static struct task* tasks = NULL;
+static int next_pid_value = 0;
+static struct task* current_task = NULL;
+
+static struct task* task_create()
+{
+    struct task* result = kmalloc(sizeof(struct task));
+    bzero(result, sizeof(struct task));
+
+    enter_critical_section();
+    result->pid = next_pid_value++;
+    result->pagedir = vmm_clone_pagedir();
+    result->next = tasks;
+    tasks = result;
+    leave_critical_section();
+
+    return result;
+}
 
 static void timer1(void* data, const struct isr_regs* regs)
 {
+#if 1
+    /* Save current process context */
+    current_task->context.esp = regs->esp + (5 * sizeof(uint32_t));               /* TODO: Check this value */
+    current_task->context.eflags = regs->eflags;
+    current_task->context.eip = regs->eip;
+    current_task->context.edi = regs->edi;
+    current_task->context.esi = regs->esi;
+    current_task->context.edx = regs->edx;
+    current_task->context.ecx = regs->ecx;
+    current_task->context.ebx = regs->ebx;
+    current_task->context.eax = regs->eax;
+    current_task->context.ebp = regs->ebp;
+
+    assert(current_task);
+    if(current_task->next)
+        current_task = current_task->next;
+    else
+        current_task = tasks;
+    assert(current_task);
+    assert(current_task->context.cs == KERNEL_CODE_SEG);
+    assert(current_task->context.ds == KERNEL_DATA_SEG);
+    assert(current_task->context.ss == KERNEL_DATA_SEG);
+
+    vmm_copy_kernel_mappings(current_task->pagedir);
+    iret(&current_task->context);
+#else
     /* Save current process context */
     struct iret* ctx = contexts + current_context;
     ctx->esp = regs->esp + (5 * sizeof(uint32_t));               /* TODO: Check this value */
@@ -419,17 +482,38 @@ static void timer1(void* data, const struct isr_regs* regs)
     // TODO: vmm_copy_kernel_mappings
     vmm_copy_kernel_mappings(pagedirs[current_context]);
     iret(ctx);
+#endif
     
     panic("Invalid code path");
 }
 
-static unsigned entry1()
+static unsigned fork()
 {
     volatile unsigned in_parent = 0xDEADBEEF;
     uint32_t esp = read_esp();
     dump_var(read_cr3());
     dump_var(esp);
 
+    enter_critical_section();
+
+    struct task* new_task = task_create();
+    new_task->context = current_task->context;
+    new_task->context.eflags = read_eflags();
+    asm volatile("movl %%ebp, %0" : "=a"(new_task->context.ebp));
+    asm volatile("movl %%ebx, %0" : "=a"(new_task->context.ebx));
+    asm volatile("movl %%esi, %0" : "=a"(new_task->context.esi));
+    asm volatile("movl %%edi, %0" : "=a"(new_task->context.edi));
+    new_task->context.esp = read_esp();
+    new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
+    vmm_copy_kernel_mappings(new_task->pagedir);
+    new_task->context.eip = (uint32_t)&&after_clone;
+    in_parent = 0xB16B00B5;
+
+after_clone:
+    leave_critical_section();
+    return in_parent != 0xDEADBEEF;
+
+#if 0
     struct iret* new_ctx = contexts + 1;
     memcpy(new_ctx, contexts, sizeof(struct iret));
 
@@ -458,15 +542,16 @@ after_clone:
     dump_var(read_cr3());
     dump_var(read_esp());
     return in_parent == 0xDEADBEEF;
-
-    //reboot();
+#endif
 }
+
+static int done = 0;
 
 static void entry0()
 {
     unsigned int canary = 0xDEADBEEF;
 
-#if 1
+#if 0
     timer_schedule(timer1, NULL, 50, true);
 
     unsigned counter = 0;
@@ -483,10 +568,38 @@ static void entry0()
                 sti();
         }
     }
-#else
+#elif 1
+
+    unsigned start_val;
+    unsigned end_val;
+    timer_schedule(timer1, NULL, 50, true);
+    unsigned ret = fork();
+    if(ret) {
+        start_val = 5000000;
+    } else {
+        start_val = 5001000;
+    }
+    end_val = start_val + 1000;
+    //sti();
+
+    for(unsigned i = start_val; i < end_val; i++) {
+        if(is_prime(i)) {
+            trace("%d", i);
+        }
+    }
+
+#elif 0
     entry1();
     dump_var(canary);
 #endif
+
+    enter_critical_section();
+    done++;
+    leave_critical_section();
+
+    while(done < 2) {
+        hlt();
+    }
     reboot();
 }
 
@@ -497,21 +610,19 @@ static void test_fork2()
     vmm_map((void*)0xBFFFF000, stack_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     memset((void*)0xBFFFF000, 0xCC, PAGE_SIZE);
 
-    /* Clone current pagedir */
-    struct pagedir* pagedir = vmm_clone_pagedir();
-    pagedirs[0] = pagedir;
+    /* Create first */
+    struct task* task = task_create();
+    task->context.cs = KERNEL_CODE_SEG;
+    task->context.ds = KERNEL_DATA_SEG;
+    task->context.ss = KERNEL_DATA_SEG;
+    task->context.cr3 = (uint32_t)vmm_get_physical(task->pagedir);
+    task->context.esp = 0xC0000000;
+    task->context.eflags = read_eflags() | EFLAGS_IF;
+    task->context.eip = (uint32_t)entry0;
 
-    struct iret* context = contexts;
-    bzero(context, sizeof(struct iret));
+    current_task = task;
 
-    context->cs = KERNEL_CODE_SEG;
-    context->ds = context->ss = KERNEL_DATA_SEG;
-    context->cr3 = (uint32_t)vmm_get_physical(pagedir);
-    context->esp = 0xC0000000;
-    context->eflags = read_eflags();
-    context->eip = (uint32_t)entry0;
-
-    iret(context);
+    iret(&task->context);
     panic("Invalid code path");
 }
 
