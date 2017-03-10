@@ -29,9 +29,16 @@ static void __log_callback(int ch, void* unused)
 
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
 {
+    // strip path from file
+    const char* basename = file + strlen(file);
+    while(basename >= file && *basename != '/')
+        basename--;
+    if(*basename == '/')
+        basename++;
+
     enter_critical_section();
 
-    format(__log_callback, NULL, "[%s:%d][%s] ", file, line, func);
+    format(__log_callback, NULL, "[%s:%d][%s] ", basename, line, func);
 
     va_list args;
     va_start(args, fmt);
@@ -43,6 +50,18 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     leave_critical_section();
 }
 
+const char* lookup_function(uint32_t address)
+{
+    const char* result = NULL;
+    for(unsigned sym_index = 0; sym_index < _debug_syms_count; sym_index++) {
+        if(address >= _debug_syms[sym_index].start && address < _debug_syms[sym_index].end) {
+            result = _debug_syms[sym_index].name;
+            break;
+        }
+    }
+    return result;
+}
+
 void backtrace()
 {
     uint32_t* ebp = (uint32_t*)read_ebp();
@@ -52,7 +71,7 @@ void backtrace()
     uint32_t stack_end = (uint32_t) (initial_kernel_stack + 4096);
 #else
     uint32_t stack_start = TRUNCATE(read_esp(), PAGE_SIZE);
-    uint32_t stack_end = stack_start + PAGE_SIZE - 1;
+    uint32_t stack_end = stack_start + PAGE_SIZE;
 #endif
 
     uint32_t data[255];
@@ -74,6 +93,7 @@ void backtrace()
     
     trace("Backtrace:");
     for(unsigned i = 0; i < index; i++) {
+#if 0
         const char* name = NULL;
         for(unsigned sym_index = 0; sym_index < _debug_syms_count; sym_index++) {
             if(data[i] >= _debug_syms[sym_index].start && data[i] < _debug_syms[sym_index].end) {
@@ -81,6 +101,8 @@ void backtrace()
                 break;
             }
         }
+#endif
+        const char* name = lookup_function(data[i]);
         trace("\t0x%X %s", data[i], name ? name : "??");
     }
 }

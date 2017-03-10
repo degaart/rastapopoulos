@@ -22,6 +22,7 @@ static void pf_handler(struct isr_regs* regs)
     bool write = regs->err_code & (1 << 1);     /* was a read or a write */
     bool prot_violation = regs->err_code & 1;   /* not-present page or page protection violation */
     void* address = (void*)read_cr2();
+    const char* function = lookup_function(regs->eip);
 
     trace(
         "Page fault at address %p: %s %s %s\n"
@@ -29,7 +30,7 @@ static void pf_handler(struct isr_regs* regs)
         "\teax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X\n"
         "\tesi: 0x%X edi: 0x%X\n"
         "\terr: 0x%X\n"
-        "\tcs:  0x%X eip: 0x%X eflags: 0x%X\n"
+        "\tcs:  0x%X eip: 0x%X (%s) eflags: 0x%X\n"
         "\tss:  0x%X esp: 0x%X\n"
         "\tcr3: %p\n",
         address,
@@ -40,9 +41,31 @@ static void pf_handler(struct isr_regs* regs)
         regs->eax, regs->ebx, regs->ecx, regs->edx,
         regs->esi, regs->edi,
         regs->err_code,
-        regs->cs, regs->eip, regs->eflags, 
+        regs->cs, regs->eip, function ? function : "??", regs->eflags, 
         regs->ss, regs->esp,
         read_cr3()
+    );
+    abort();
+}
+
+static void gpf_handler(struct isr_regs* regs)
+{
+    const char* function = lookup_function(regs->eip);
+
+    trace(
+        "General protection fault:\n"
+        "\tdescriptor: %p\n"
+        "\tds:  0x%X\n"
+        "\teax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X\n"
+        "\tesi: 0x%X edi: 0x%X\n"
+        "\tcs:  0x%X eip: 0x%X (%s) eflags: 0x%X\n"
+        "\tss:  0x%X esp: 0x%X\n",
+        regs->err_code,
+        regs->ds,
+        regs->eax, regs->ebx, regs->ecx, regs->edx,
+        regs->esi, regs->edi,
+        regs->cs, regs->eip, function ? function : "??", regs->eflags, 
+        regs->ss, regs->esp
     );
     abort();
 }
@@ -143,6 +166,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     idt_init();
     idt_flush();
     idt_install(14, pf_handler, true);
+    idt_install(13, gpf_handler, true);
 
     // Physical memory manager
     pmm_init(multiboot_info);

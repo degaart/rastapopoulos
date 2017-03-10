@@ -168,6 +168,11 @@ void vmm_init()
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER);
     }
 
+    /* Kernel .userrodata (usermode read-only data section) */
+    for(uint32_t page = (uint32_t)_USER_RODATA_START_; page < (uint32_t)_USER_RODATA_END_; page += PAGE_SIZE) {
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER);
+    }
+
     /* Kernel .userdata (usermode data section) */
     for(uint32_t page = (uint32_t)_USER_DATA_START_; page < (uint32_t)_USER_DATA_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);

@@ -13,6 +13,7 @@
 #include "../io.h"
 #include "../locks.h"
 
+#if 0
 typedef void (*task_entry_t)(void);
 
 #define USER_STACK_START    0xBFFFF000
@@ -217,22 +218,6 @@ unsigned USERFUNC wait(unsigned seconds)
     return result;
 }
 
-/*
- * Check if number is primer
- */
-unsigned USERFUNC is_prime(unsigned num)
-{
-    if(num == 1)
-        return 1;
-
-    for(unsigned i = 2; i < num; i++) {
-        if(!(num % i))
-            return 0;
-    }
-
-    return 1;
-}
-
 #define WAIT_FACTOR 5000000
 
 /*
@@ -281,7 +266,7 @@ void USERFUNC usermode_entry2()
     while(1) {
         wait(WAIT_FACTOR / 3);
 
-        static const char USERDATA fmt[] = "counter: %d";
+        static const char USERRODATA fmt[] = "counter: %d";
         snprintf(msg, sizeof(msg), fmt, counter);
 
         syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
@@ -296,7 +281,7 @@ void USERFUNC usermode_entry1()
     while(1) {
         wait(WAIT_FACTOR / 3);
 
-        static const char USERDATA fmt[] = "counter: %d";
+        static const char USERRODATA fmt[] = "counter: %d";
         snprintf(msg, sizeof(msg), fmt, counter);
 
         syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
@@ -311,7 +296,7 @@ void USERFUNC usermode_entry0()
     while(1) {
         wait(WAIT_FACTOR / 2);
 
-        static const char USERDATA fmt[] = "counter: %d";
+        static const char USERRODATA fmt[] = "counter: %d";
         snprintf(msg, sizeof(msg), fmt, counter);
 
         syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
@@ -320,11 +305,11 @@ void USERFUNC usermode_entry0()
         if(counter == 2) {
             unsigned pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
             if(pid) {
-                static const char USERDATA msg1[] = "In parent";
+                static const char USERRODATA msg1[] = "In parent";
                 syscall(SYSCALL_TRACE, (uint32_t)msg1, 0, 0, 0, 0);
                 while(1);
             } else {
-                static const char USERDATA msg2[] = "In child";
+                static const char USERRODATA msg2[] = "In child";
                 syscall(SYSCALL_TRACE, (uint32_t)msg2, 0, 0, 0, 0);
                 while(1);
             }
@@ -405,8 +390,14 @@ static void test_fork()
     /* Switch to task0 */
     switch_process(proc);
 }
+#endif
 
-//========================================================================================================//
+/*********************************************************************************************************
+ * So the plan is to create 3 tasks
+ *  task0 stays in kernel mode all the time
+ *  task1 stays in user-mode all the time
+ *  task2 swings back and forth from kernel to user-mode
+ *********************************************************************************************************/
 struct task {
     int pid;
     struct pagedir* pagedir;
@@ -414,9 +405,40 @@ struct task {
     struct task* next;
 };
 
+#define USER_STACK          ((unsigned char*)0xBFFFD000)
+#define KERNEL_STACK        ((unsigned char*)0xBFFFF000)
+
 static struct task* tasks = NULL;
 static int next_pid_value = 0;
 static struct task* current_task = NULL;
+
+
+static void USERFUNC user_outb(uint16_t port, uint8_t val)
+{
+    asm volatile ( "outb %0, %1" : : "a"(val), "Nd"(port) );
+}
+
+static uint8_t USERFUNC user_inb(uint16_t port)
+{
+    uint8_t ret;
+    asm volatile ( "inb %1, %0"
+                   : "=a"(ret)
+                   : "Nd"(port) );
+    return ret;
+}
+
+unsigned USERFUNC is_prime(unsigned num)
+{
+    if(num == 1)
+        return 1;
+
+    for(unsigned i = 2; i < num; i++) {
+        if(!(num % i))
+            return 0;
+    }
+
+    return 1;
+}
 
 static struct task* task_create()
 {
@@ -439,7 +461,17 @@ static void timer1(void* data, const struct isr_regs* regs)
      * Save current process context
      * From ring0: useresp is invalid
      */
-    current_task->context.esp = regs->esp + (5 * sizeof(uint32_t));
+    unsigned descriptor_mask = ~0x3;
+    if((regs->cs & descriptor_mask) == KERNEL_CODE_SEG) {
+        current_task->context.esp = regs->esp + (5 * sizeof(uint32_t));
+    } else if((regs->cs & descriptor_mask) == USER_CODE_SEG) {
+        current_task->context.esp = regs->useresp;
+    } else {
+        panic("Invalid cs value: %p", regs->cs);
+    }
+
+    current_task->context.cs = regs->cs;
+    current_task->context.ds = current_task->context.ss = regs->ds;
     current_task->context.eflags = regs->eflags;
     current_task->context.eip = regs->eip;
     current_task->context.edi = regs->edi;
@@ -455,12 +487,12 @@ static void timer1(void* data, const struct isr_regs* regs)
         current_task = current_task->next;
     else
         current_task = tasks;
+
     assert(current_task);
-    assert(current_task->context.cs == KERNEL_CODE_SEG);
-    assert(current_task->context.ds == KERNEL_DATA_SEG);
-    assert(current_task->context.ss == KERNEL_DATA_SEG);
 
     vmm_copy_kernel_mappings(current_task->pagedir);
+
+    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
     iret(&current_task->context);
     
     panic("Invalid code path");
@@ -468,7 +500,7 @@ static void timer1(void* data, const struct isr_regs* regs)
 
 static unsigned fork()
 {
-    volatile unsigned in_parent = 0xDEADBEEF;
+    volatile unsigned result = 0;
     uint32_t esp = read_esp();
     dump_var(read_cr3());
     dump_var(esp);
@@ -486,60 +518,115 @@ static unsigned fork()
     new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
     vmm_copy_kernel_mappings(new_task->pagedir);
     new_task->context.eip = (uint32_t)&&after_clone;
-    in_parent = 0xB16B00B5;
+    result = new_task->pid;
 
 after_clone:
     leave_critical_section();
-    return in_parent != 0xDEADBEEF;
+    return result;
 }
 
-static int done = 0;
+static volatile int mixed_done = 0;
+static volatile int USERDATA user_done = 0;
 
-static void entry0()
+static void ring0()
 {
-    unsigned int canary = 0xDEADBEEF;
-
-    unsigned start_val;
-    unsigned end_val;
-    timer_schedule(timer1, NULL, 50, true);
-    unsigned ret = fork();
-    if(ret) {
-        start_val = 5000000;
-    } else {
-        start_val = 5001000;
-    }
-    end_val = start_val + 1000;
-
+    unsigned start_val = 5001000;
+    unsigned end_val = start_val + 1000;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
             trace("%d", i);
         }
     }
 
-    enter_critical_section();
-    done++;
-    leave_critical_section();
-
-    while(done < 2) {
+    while(!mixed_done && !user_done)
         hlt();
-    }
+
     reboot();
+}
+
+static void USERFUNC ring3()
+{
+    unsigned start_val = 5003000;
+    unsigned end_val = start_val + 1000;
+    for(unsigned i = start_val; i < end_val; i++) {
+        if(is_prime(i)) {
+            /* Do nothing */
+            static char USERDATA msg[64];
+            static const char USERRODATA fmt[] = "[%s:%d][%s] %d\n";
+            static const char USERRODATA file[] = "test_scheduler.c";
+            static const char USERRODATA func[] = "ring3";
+
+            snprintf(msg, sizeof(msg), fmt, file, __LINE__, func, i);
+            for(const char* p = msg; *p; p++)
+                user_outb(0xE9, *p);
+        }
+    }
+    user_done = 1;
+    while(1);
+}
+
+static void ring3_thunk()
+{
+    struct task* task = current_task;
+    task->context.cs = USER_CODE_SEG | RPL3;
+    task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
+    vmm_map(USER_STACK, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    memset(USER_STACK, 0xCC, PAGE_SIZE);
+    task->context.esp = (uint32_t)(USER_STACK + PAGE_SIZE);
+
+    task->context.eflags |= EFLAGS_IF;
+    task->context.eip = (uint32_t)ring3;
+
+    iret(&task->context);
+}
+
+static void mixed()
+{
+    int pid = fork();
+    if(!pid)
+        ring3_thunk();
+
+    unsigned start_val = 5002000;
+    unsigned end_val = start_val + 1000;
+    for(unsigned i = start_val; i < end_val; i++) {
+        if(is_prime(i)) {
+            trace("%d", i);
+        }
+    }
+    mixed_done = 1;
+    while(1);
+}
+
+static void entry0()
+{
+    unsigned start_val;
+    unsigned end_val;
+    timer_schedule(timer1, NULL, 50, true);
+    unsigned ret = fork();
+    if(ret) {
+        ring0();
+    } else {
+        mixed();
+    }
+    panic("Invalid code path");
 }
 
 static void test_fork2()
 {
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
-    vmm_map((void*)0xBFFFF000, stack_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-    memset((void*)0xBFFFF000, 0xCC, PAGE_SIZE);
+    vmm_map(KERNEL_STACK, stack_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    memset(KERNEL_STACK, 0xCC, PAGE_SIZE);
+
+    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
 
     /* Create first */
     struct task* task = task_create();
     task->context.cs = KERNEL_CODE_SEG;
     task->context.ds = KERNEL_DATA_SEG;
     task->context.ss = KERNEL_DATA_SEG;
-    task->context.cr3 = (uint32_t)vmm_get_physical(task->pagedir);
-    task->context.esp = 0xC0000000;
+    task->context.cr3 = vmm_get_physical(task->pagedir);
+    task->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
     task->context.eflags = read_eflags() | EFLAGS_IF;
     task->context.eip = (uint32_t)entry0;
 

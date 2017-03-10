@@ -26,6 +26,7 @@ struct multiboot_info;
 
 void backtrace();
 void load_symbols(const struct multiboot_info* multiboot_info);
+const char* lookup_function(uint32_t address);
 void __log(const char* func, const char* file, int line, const char* fmt, ...);
 void __assertion_failed(const char* function, const char* file, int line, const char* expression);
 
