@@ -41,7 +41,7 @@ read_ebp:
 global read_esp
 read_esp:
     mov     eax, esp
-    sub     eax, 4          ; 4 bytes for return address
+    add     eax, 4          ; 4 bytes for return address
     ret
 
 ; uint32_t read_esi()

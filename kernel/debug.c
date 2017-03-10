@@ -8,6 +8,7 @@
 #include "util.h"
 #include "kmalloc.h"
 #include "locks.h"
+#include "pmm.h"
 
 struct debug_sym {
     const char* name;
@@ -46,8 +47,13 @@ void backtrace()
 {
     uint32_t* ebp = (uint32_t*)read_ebp();
 
+#if 0
     uint32_t stack_start = (uint32_t) (initial_kernel_stack);
     uint32_t stack_end = (uint32_t) (initial_kernel_stack + 4096);
+#else
+    uint32_t stack_start = TRUNCATE(read_esp(), PAGE_SIZE);
+    uint32_t stack_end = stack_start + PAGE_SIZE - 1;
+#endif
 
     uint32_t data[255];
     unsigned index = 0;

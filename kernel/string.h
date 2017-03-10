@@ -25,6 +25,7 @@ void strlcpy(char* dst, const char* src, unsigned siz);
 size_t strlen(const char* str);
 void strlcat(char* dst, const char* src, unsigned siz);
 int strcmp(const char* s0, const char* s1);
+char* strdup(const char* str);
 int vsnprintf(char* buffer, size_t size, const char* fmt, va_list args);
 int snprintf(char* buffer, size_t size, const char* fmt, ...);
 int vsncatf(char* buffer, size_t size, const char* fmt, va_list args);

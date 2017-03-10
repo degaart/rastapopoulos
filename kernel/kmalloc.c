@@ -23,6 +23,7 @@ void* kmalloc(unsigned size)
 {
     assert(size);
 
+    /* TODO: Align to 64 bits */
     void* result = kmalloc_a(size, sizeof(int));
     return result;
 }

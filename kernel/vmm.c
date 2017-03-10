@@ -443,17 +443,18 @@ struct pagedir* vmm_clone_pagedir()
             };
 
             struct pagetable* src = get_pagetable(info);
-            struct pagetable* dst = kmalloc_a(sizeof(struct pagetable), PAGE_SIZE);
+
+            uint32_t dst_frame = pmm_alloc();
+            struct pagetable* dst = vmm_transient_map(dst_frame, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
 
             trace("Cloning pagedir entry %d", i);
             clone_pagetable(dst, src);
             trace("Done cloning pagedir entry %d", i);
 
+            vmm_transient_unmap(dst);
+
             uint32_t flags = current_pagedir->entries[i] & PDE_FLAGS;
-            
-            struct va_info_ex info_ex;
-            va_info_ex(&info_ex, dst);
-            result->entries[i] = info_ex.frame | flags;
+            result->entries[i] = dst_frame | flags;
         }
     }
     for(int i = KERNEL_HI_PDE_START; i <= KERNEL_HI_PDE_END; i++) {
