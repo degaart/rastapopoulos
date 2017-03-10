@@ -49,7 +49,7 @@ static void pf_handler(struct isr_regs* regs)
 
 void reboot()
 {
-    trace("*** Rastapopoulos rebooted ***\n\n\n");
+    trace("*** Rebooted ***\n\n\n");
 
     uint8_t good = 0x02;
     while (good & 0x02)
@@ -72,7 +72,7 @@ void halt()
 
 static void reboot_timer(void* data, const struct isr_regs* regs)
 {
-    trace("*** Rebooting Rastapopoulos ***\n\n\n");
+    trace("*** Rebooting ***\n\n\n");
     reboot();
 }
 
@@ -127,7 +127,7 @@ static void run_tests()
 
 void kmain(const struct multiboot_info* multiboot_info)
 {
-    trace("*** Rastapopoulos booted ***");
+    trace("*** Booted ***");
 
     // Init kernel heap
     kmalloc_init();
