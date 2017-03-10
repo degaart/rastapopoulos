@@ -406,6 +406,7 @@ static void test_fork()
     switch_process(proc);
 }
 
+//========================================================================================================//
 struct task {
     int pid;
     struct pagedir* pagedir;
@@ -434,9 +435,11 @@ static struct task* task_create()
 
 static void timer1(void* data, const struct isr_regs* regs)
 {
-#if 1
-    /* Save current process context */
-    current_task->context.esp = regs->esp + (5 * sizeof(uint32_t));               /* TODO: Check this value */
+    /*
+     * Save current process context
+     * From ring0: useresp is invalid
+     */
+    current_task->context.esp = regs->esp + (5 * sizeof(uint32_t));
     current_task->context.eflags = regs->eflags;
     current_task->context.eip = regs->eip;
     current_task->context.edi = regs->edi;
@@ -459,30 +462,6 @@ static void timer1(void* data, const struct isr_regs* regs)
 
     vmm_copy_kernel_mappings(current_task->pagedir);
     iret(&current_task->context);
-#else
-    /* Save current process context */
-    struct iret* ctx = contexts + current_context;
-    ctx->esp = regs->esp + (5 * sizeof(uint32_t));               /* TODO: Check this value */
-    ctx->eflags = regs->eflags;
-    ctx->eip = regs->eip;
-    ctx->edi = regs->edi;
-    ctx->esi = regs->esi;
-    ctx->edx = regs->edx;
-    ctx->ecx = regs->ecx;
-    ctx->ebx = regs->ebx;
-    ctx->eax = regs->eax;
-    ctx->ebp = regs->ebp;
-
-    current_context = (current_context + 1) % 2;
-
-    ctx = contexts + current_context;
-    assert(ctx->ss != 0);
-    //ctx->eflags &= ~EFLAGS_IF;
-
-    // TODO: vmm_copy_kernel_mappings
-    vmm_copy_kernel_mappings(pagedirs[current_context]);
-    iret(ctx);
-#endif
     
     panic("Invalid code path");
 }
@@ -512,37 +491,6 @@ static unsigned fork()
 after_clone:
     leave_critical_section();
     return in_parent != 0xDEADBEEF;
-
-#if 0
-    struct iret* new_ctx = contexts + 1;
-    memcpy(new_ctx, contexts, sizeof(struct iret));
-
-    new_ctx->eflags = read_eflags();
-    asm volatile("movl %%ebp, %0" : "=a"(new_ctx->ebp));
-    asm volatile("movl %%ebx, %0" : "=a"(new_ctx->ebx));
-    asm volatile("movl %%esi, %0" : "=a"(new_ctx->esi));
-    asm volatile("movl %%edi, %0" : "=a"(new_ctx->edi));
-
-    /* Clone current pagedir */
-    struct pagedir* new_pagedir = vmm_clone_pagedir();
-    pagedirs[1] = new_pagedir;
-    new_ctx->esp = read_esp();
-    in_parent = 0xB16B00B5;
-
-    new_ctx->cr3 = (uint32_t)vmm_get_physical(new_pagedir);
-    vmm_copy_kernel_mappings(new_pagedir);
-
-    new_ctx->eip = (uint32_t)&&after_clone;
-
-    //iret(new_ctx);
-
-    /* Stack state is the state upon calling vmm_clone_pagedir() */
-after_clone:
-    dump_var(in_parent);
-    dump_var(read_cr3());
-    dump_var(read_esp());
-    return in_parent == 0xDEADBEEF;
-#endif
 }
 
 static int done = 0;
@@ -550,25 +498,6 @@ static int done = 0;
 static void entry0()
 {
     unsigned int canary = 0xDEADBEEF;
-
-#if 0
-    timer_schedule(timer1, NULL, 50, true);
-
-    unsigned counter = 0;
-    while(1) {
-        wait(WAIT_FACTOR);
-        dump_var(read_cr3());
-        counter++;
-        if(counter == 2) {
-            unsigned ret = entry1();
-            dump_var(ret);
-            if(ret)
-                trace("Here");
-            //else
-                sti();
-        }
-    }
-#elif 1
 
     unsigned start_val;
     unsigned end_val;
@@ -580,18 +509,12 @@ static void entry0()
         start_val = 5001000;
     }
     end_val = start_val + 1000;
-    //sti();
 
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
             trace("%d", i);
         }
     }
-
-#elif 0
-    entry1();
-    dump_var(canary);
-#endif
 
     enter_critical_section();
     done++;
