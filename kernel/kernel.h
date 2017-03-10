@@ -27,6 +27,8 @@ extern unsigned char _DATA_START_[];
 extern unsigned char _DATA_END_[];
 extern unsigned char _USER_START_[];
 extern unsigned char _USER_END_[];
+extern unsigned char _USER_RODATA_START_[];
+extern unsigned char _USER_RODATA_END_[];
 extern unsigned char _USER_DATA_START_[];
 extern unsigned char _USER_DATA_END_[];
 extern unsigned char _BSS_START_[];
@@ -35,6 +37,7 @@ extern unsigned char _BSS_END_[];
 extern unsigned char initial_kernel_stack[4096];
 
 #define USERFUNC __attribute__((section(".user")))
+#define USERRODATA __attribute__((section(".userrodata")))
 #define USERDATA __attribute__((section(".userdata")))
 
 

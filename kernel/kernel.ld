@@ -42,6 +42,14 @@ SECTIONS
     }
 
     . = ALIGN(4096);
+    .userrodata :
+    {
+        _USER_RODATA_START_ = .;
+        *(.userrodata)
+        _USER_RODATA_END_ = .;
+    }
+    
+    . = ALIGN(4096);
     .userdata :
     {
         _USER_DATA_START_ = .;
