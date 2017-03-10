@@ -412,6 +412,12 @@ static struct task* tasks = NULL;
 static int next_pid_value = 0;
 static struct task* current_task = NULL;
 
+static volatile int mixed_done = 0;
+static volatile int USERDATA user_done = 0;
+
+extern uint32_t syscall(uint32_t eax, uint32_t ebx,
+                        uint32_t ecx, uint32_t edx,
+                        uint32_t esi, uint32_t edi);
 
 static void USERFUNC user_outb(uint16_t port, uint8_t val)
 {
@@ -453,6 +459,29 @@ static struct task* task_create()
     leave_critical_section();
 
     return result;
+}
+
+#define SYSCALL_TRACE       0
+#define SYSCALL_EXIT        1
+
+static void syscall_handler(struct isr_regs* regs)
+{
+    unsigned syscall_num = regs->eax;
+    switch(syscall_num) {
+        case SYSCALL_TRACE:
+        {
+            char* buffer = kmalloc(1024);
+            snprintf(buffer, 1024, "(%d) %s", current_task->pid, regs->ebx);
+            trace(buffer);
+            kfree(buffer);
+            break;
+        }
+        case SYSCALL_EXIT:
+        {
+            mixed_done = 1;
+            break;
+        }
+    }
 }
 
 static void timer1(void* data, const struct isr_regs* regs)
@@ -525,9 +554,6 @@ after_clone:
     return result;
 }
 
-static volatile int mixed_done = 0;
-static volatile int USERDATA user_done = 0;
-
 static void ring0()
 {
     unsigned start_val = 5001000;
@@ -580,33 +606,53 @@ static void ring3_thunk()
     iret(&task->context);
 }
 
-static void mixed()
+static void USERFUNC mixed()
 {
-    int pid = fork();
-    if(!pid)
-        ring3_thunk();
-
     unsigned start_val = 5002000;
     unsigned end_val = start_val + 1000;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
-            trace("%d", i);
+            static char USERDATA msg[64];
+            static const char USERRODATA fmt[] = "%d";
+            snprintf(msg, sizeof(msg), fmt, i);
+            syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
         }
     }
-    mixed_done = 1;
+    syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
     while(1);
+}
+
+static void mixed_thunk()
+{
+    // TODO: Move this into mixed()
+    int pid = fork();
+    if(!pid)
+        ring3_thunk();
+
+    struct task* task = current_task;
+    task->context.cs = USER_CODE_SEG | RPL3;
+    task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
+    vmm_map(USER_STACK, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    memset(USER_STACK, 0xCC, PAGE_SIZE);
+    task->context.esp = (uint32_t)(USER_STACK + PAGE_SIZE);
+
+    task->context.eflags |= EFLAGS_IF;
+    task->context.eip = (uint32_t)mixed;
+
+    iret(&task->context);
 }
 
 static void entry0()
 {
-    unsigned start_val;
-    unsigned end_val;
     timer_schedule(timer1, NULL, 50, true);
+
+    idt_install(0x80, syscall_handler, true);
+
     unsigned ret = fork();
     if(ret) {
         ring0();
     } else {
-        mixed();
+        mixed_thunk();
     }
     panic("Invalid code path");
 }
