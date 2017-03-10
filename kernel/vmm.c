@@ -230,6 +230,55 @@ static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, ui
 }
 
 /*
+ * Map pages using another pagedir
+ */
+void vmm_pagedir_map(struct pagedir* pagedir, void* va, uint32_t pa, uint32_t flags)
+{
+    panic("Bad code");
+
+    assert(paging_enabled);
+
+    assert(flags & VMM_PAGE_PRESENT);
+    assert(IS_ALIGNED(va, PAGE_SIZE));
+    assert(IS_ALIGNED(pa, PAGE_SIZE));
+
+    struct va_info info = va_info((void*)va);
+
+    /* Check if present in page directory */
+    bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
+    if(!pde_present) {
+        /*
+         * NOTE: Do not call kmalloc in this function as kmalloc
+         * might call vmm_map
+         *
+         * Alloc 4k frame for page table
+         */
+        uint32_t table_pa = pmm_alloc();
+
+        /* And stash into pagedir */
+        pagedir->entries[info.dir_index] = ((uint32_t)table_pa) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
+
+        struct pagetable* table = vmm_transient_map(table_pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        bzero(table, sizeof(struct pagetable));
+
+        table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
+
+        vmm_transient_unmap(table);
+    } else {
+        uint32_t table_pa = pagedir->entries[info.dir_index] & PDE_FRAME;
+        struct pagetable* table = vmm_transient_map(table_pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+
+        if(table->entries[info.table_index] & PTE_PRESENT) {
+            trace("VA %p already mapped", va);
+            abort();
+        }
+
+        table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
+        vmm_transient_unmap(table);
+    }
+}
+
+/*
  * Map pages while paging is enabled
  */
 void vmm_map(void* va, uint32_t pa, uint32_t flags)
@@ -347,18 +396,29 @@ bool vmm_paging_enabled()
     return paging_enabled;
 }
 
-struct pagetable* clone_pagetable(unsigned dir_index)
+static void clone_pagetable(struct pagetable* dst, struct pagetable* src)
 {
-    /* Get pagetable corresponding to address */
-    struct va_info info = { .dir_index = dir_index,
-                            .table_index = 0 };
+    bzero(dst, sizeof(struct pagetable));
 
-    struct pagetable* pagetable = get_pagetable(info);
+    for(unsigned i = 0; i < 1024; i++) {
+        if(src->entries[i] & PTE_PRESENT) {
+            uint32_t frame = src->entries[i] & PTE_FRAME;
+            uint32_t flags = src->entries[i] & PTE_FLAGS;
 
-    /* Create new pagetable */
-    struct pagetable* result = kmalloc_a(sizeof(struct pagetable), PAGE_SIZE);
-    memcpy(result, pagetable, sizeof(struct pagetable));
-    return result;
+            trace("%d -> %p", i, frame);
+
+            uint32_t new_frame = pmm_alloc();
+
+            /* TODO: No need map for source buf */
+            void* src_buf = vmm_transient_map(frame, VMM_PAGE_PRESENT);
+            void* dst_buf = vmm_transient_map(new_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+            memcpy(dst_buf, src_buf, PAGE_SIZE);
+            vmm_transient_unmap(dst_buf);
+            vmm_transient_unmap(src_buf);
+
+            dst->entries[i] = new_frame | flags;
+        }
+    }
 }
 
 struct pagedir* vmm_clone_pagedir()
@@ -377,15 +437,23 @@ struct pagedir* vmm_clone_pagedir()
     result->entries[KERNEL_LO_PDE] = current_pagedir->entries[KERNEL_LO_PDE];
     for(unsigned i = USER_PDE_START; i <= USER_PDE_END; i++) {
         if(current_pagedir->entries[i] & PDE_PRESENT) {
-            unsigned flags = current_pagedir->entries[i] & PDE_FLAGS;
-            assert(flags & PDE_PRESENT);
+            struct va_info info = {
+                .dir_index = i,
+                .table_index = 0
+            };
 
-            struct pagetable* new_pagetable = clone_pagetable(i);
+            struct pagetable* src = get_pagetable(info);
+            struct pagetable* dst = kmalloc_a(sizeof(struct pagetable), PAGE_SIZE);
 
-            struct va_info_ex info;
-            va_info_ex(&info, new_pagetable);
+            trace("Cloning pagedir entry %d", i);
+            clone_pagetable(dst, src);
+            trace("Done cloning pagedir entry %d", i);
 
-            result->entries[i] = info.frame | flags;
+            uint32_t flags = current_pagedir->entries[i] & PDE_FLAGS;
+            
+            struct va_info_ex info_ex;
+            va_info_ex(&info_ex, dst);
+            result->entries[i] = info_ex.frame | flags;
         }
     }
     for(int i = KERNEL_HI_PDE_START; i <= KERNEL_HI_PDE_END; i++) {
@@ -458,6 +526,7 @@ void vmm_transient_unmap(void* address)
 {
     enter_critical_section();
 
+    bool found = false;
     struct transient_map* map = transient_maps;
     struct transient_map* prevm = NULL;
     for(map = transient_maps; map; prevm = map, map = map->next) {
@@ -471,9 +540,16 @@ void vmm_transient_unmap(void* address)
             vmm_map(address, map->frame, map->flags);
 
             kfree(map);
+            kfree(address);
+            found = true;
+            break;
         }
     }
 
+    if(!found) {
+        panic("Invalid transient map address");
+    }
+    
     leave_critical_section();
 }
 
@@ -492,6 +568,19 @@ void vmm_switch_pagedir(struct pagedir* pagedir)
 {
     assert(IS_ALIGNED(pagedir, PAGE_SIZE));
 
+    vmm_copy_kernel_mappings(pagedir);
+
+    enter_critical_section();
+    uint32_t pa = vmm_get_physical(pagedir);
+    write_cr3(pa);
+    current_pagedir_va = pagedir;
+    leave_critical_section();
+}
+
+void vmm_copy_kernel_mappings(struct pagedir* pagedir)
+{
+    assert(IS_ALIGNED(pagedir, PAGE_SIZE));
+
     enter_critical_section();
     
     /*
@@ -506,9 +595,6 @@ void vmm_switch_pagedir(struct pagedir* pagedir)
     assert((pagedir->entries[RECURSIVE_MAPPING_PDE] & PDE_FRAME) == pa);
     assert(pagedir->entries[RECURSIVE_MAPPING_PDE] & PDE_PRESENT);
     assert(pagedir->entries[RECURSIVE_MAPPING_PDE] & PDE_WRITABLE);
-
-    write_cr3(pa);
-    current_pagedir_va = pagedir;
 
     leave_critical_section();
 }
