@@ -1,6 +1,7 @@
 #include "kernel.h"
 #include "string.h"
 #include "debug.h"
+#include "kmalloc.h"
 
 void USERFUNC itoa(char* str, unsigned n)
 {
@@ -303,4 +304,15 @@ int USERFUNC sncatf(char* buffer, size_t size, const char* fmt, ...)
     va_start(args, fmt);
     return vsncatf(buffer, size, fmt, args);
 }
+
+char* strdup(const char* str)
+{
+    size_t size = strlen(str);
+    char* buffer = kmalloc(size + 1);
+    memcpy(buffer, str, size + 1);
+    return buffer;
+}
+
+
+
 

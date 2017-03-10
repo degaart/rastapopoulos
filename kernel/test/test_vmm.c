@@ -68,6 +68,7 @@ static void test_identity_mapped()
     }
 }
 
+#if 0
 static void test_recursive_mapping()
 {
     /*
@@ -82,6 +83,7 @@ static void test_recursive_mapping()
     }
     vmm_transient_unmap(pagedir1);
 }
+#endif
 
 static void test_map()
 {
@@ -144,6 +146,7 @@ static void test_unmap()
     assert(!"No page fault!");
 }
 
+#if 0
 static void test_clone_pagedir()
 {
     trace("Testing vmm_clone_pagedir");
@@ -240,6 +243,7 @@ static void test_clone_pagedir()
         assert(userspace_data[i] == (i ^ 7));
     } 
 }
+#endif
 
 void test_vmm()
 {
@@ -251,8 +255,10 @@ void test_vmm()
     /* Test transient maps */
     test_transient_map();
 
+#if 0
     /* Test recursive mapping works correctly */
     test_recursive_mapping();
+#endif
 
     /* Test vmm_map */
     test_map();
@@ -260,8 +266,10 @@ void test_vmm()
     /* Test vmm_unmap */
     test_unmap();
 
+#if 0
     /* testing pagedir cloning */
     test_clone_pagedir();
+#endif
 }
 
 

@@ -30,7 +30,8 @@ static void pf_handler(struct isr_regs* regs)
         "\tesi: 0x%X edi: 0x%X\n"
         "\terr: 0x%X\n"
         "\tcs:  0x%X eip: 0x%X eflags: 0x%X\n"
-        "\tss:  0x%X esp: 0x%X\n",
+        "\tss:  0x%X esp: 0x%X\n"
+        "\tcr3: %p\n",
         address,
         user_mode ? "ring3" : "ring0",
         write ? "write" : "read",
@@ -40,7 +41,8 @@ static void pf_handler(struct isr_regs* regs)
         regs->esi, regs->edi,
         regs->err_code,
         regs->cs, regs->eip, regs->eflags, 
-        regs->ss, regs->esp
+        regs->ss, regs->esp,
+        read_cr3()
     );
     abort();
 }

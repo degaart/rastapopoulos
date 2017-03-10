@@ -1,21 +1,6 @@
 section .text
 
-struc iret_t
-    .i_cs      resd 1
-    .i_ds      resd 1
-    .i_ss      resd 1
-    .i_cr3     resd 1
-    .i_esp     resd 1
-    .i_eflags  resd 1
-    .i_eip     resd 1
-    .i_edi     resd 1
-    .i_esi     resd 1
-    .i_edx     resd 1
-    .i_ecx     resd 1
-    .i_ebx     resd 1
-    .i_eax     resd 1
-    .i_ebp     resd 1
-endstruc
+%include "iret.inc"
 
 global iret
 iret:
@@ -34,8 +19,8 @@ iret:
     rep     movsb
 
     ; switch pagedir
-    ; mov     eax, [iret_data + iret_t.i_cr3]
-    ; mov     cr3, eax
+    mov     eax, [iret_data + iret_t.i_cr3]
+    mov     cr3, eax
     
     ; Segment regs
     mov     eax, [iret_data + iret_t.i_ds]
@@ -44,20 +29,25 @@ iret:
     mov     fs, ax
     mov     gs, ax
 
-    ; Switch stack
-    mov     esp, [iret_data + iret_t.i_esp]
 
     ; iret stack layout
     mov     eax, [iret_data + iret_t.i_cs]
     and     eax, 0x03
     cmp     eax, 0x03
-    jne     .no_stack_switch
+    jne     .switch_stack
 
     ; if we are switching into ring3, we need to push esp and ss
     push    dword [iret_data + iret_t.i_ss]
     push    dword [iret_data + iret_t.i_esp]
+    jmp     .continue_push
 
-.no_stack_switch:
+.switch_stack:
+    ; Switch stack
+    mov     eax, [iret_data + iret_t.i_ds]
+    mov     ss, eax
+    mov     esp, [iret_data + iret_t.i_esp]
+
+.continue_push:
     ; push the rest of iret regs
     push    dword [iret_data + iret_t.i_eflags]
     push    dword [iret_data + iret_t.i_cs]
@@ -77,5 +67,6 @@ iret:
 
 section .bss
     iret_data: resb iret_t_size
+
 
 
