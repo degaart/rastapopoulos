@@ -19,6 +19,29 @@
  *  task1 stays in user-mode all the time
  *  task2 swings back and forth from kernel to user-mode
  *********************************************************************************************************/
+
+/*
+ * Address-space layout for each task
+ *
+ *  ---------------------------------------------   0x00000000
+ *   shared low kernel space
+ *  ---------------------------------------------   0x00400000
+ *   process-specific user space
+ *  ---------------------------------------------
+ *   free address space
+ *  ---------------------------------------------   0xBFFFC000
+ *   process-specific user stack
+ *  ---------------------------------------------   0xBFFFD000
+ *   guard page
+ *  ---------------------------------------------   0xBFFFE000
+ *   process-specific kernel stack
+ *  ---------------------------------------------   0xBFFFF000
+ *   guard page
+ *  ---------------------------------------------   0xC0000000
+ *   shared high kernel space
+ *  ---------------------------------------------   0xFFFFFFFF
+ */
+
 struct task {
     int pid;
     struct pagedir* pagedir;
@@ -26,8 +49,8 @@ struct task {
     struct task* next;
 };
 
-#define USER_STACK          ((unsigned char*)0xBFFFD000)
-#define KERNEL_STACK        ((unsigned char*)0xBFFFF000)
+#define USER_STACK          ((unsigned char*)0xBFFFC000)
+#define KERNEL_STACK        ((unsigned char*)0xBFFFE000)
 
 static struct task* tasks = NULL;
 static int next_pid_value = 0;
@@ -82,8 +105,72 @@ static struct task* task_create()
     return result;
 }
 
+static unsigned fork()
+{
+    volatile unsigned result = 0;
+    uint32_t esp = read_esp();
+    dump_var(read_cr3());
+    dump_var(esp);
+
+    enter_critical_section();
+
+    struct task* new_task = task_create();
+    new_task->context.eflags = read_eflags();
+    asm volatile("movl %%ebp, %0" : "=a"(new_task->context.ebp));
+    asm volatile("movl %%ebx, %0" : "=a"(new_task->context.ebx));
+    asm volatile("movl %%esi, %0" : "=a"(new_task->context.esi));
+    asm volatile("movl %%edi, %0" : "=a"(new_task->context.edi));
+    new_task->context.cs = KERNEL_CODE_SEG;
+    new_task->context.ds = new_task->context.ss = KERNEL_DATA_SEG;
+    new_task->context.esp = read_esp();
+    new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
+    vmm_copy_kernel_mappings(new_task->pagedir);
+    new_task->context.eip = (uint32_t)&&after_clone;
+    result = new_task->pid;
+
+after_clone:
+    asm volatile ("" : : : "memory");       /* re-read all variables */
+    leave_critical_section();
+    return result;
+}
+
+static void save_task_state(struct task* task, const struct isr_regs* regs)
+{
+    /*
+     * Save current process context
+     * From ring0: useresp is invalid
+     */
+    unsigned descriptor_mask = ~0x3;
+    if((regs->cs & descriptor_mask) == KERNEL_CODE_SEG) {
+        task->context.esp = regs->esp + (5 * sizeof(uint32_t));
+    } else if((regs->cs & descriptor_mask) == USER_CODE_SEG) {
+        task->context.esp = regs->useresp;
+    } else {
+        panic("Invalid cs value: %p", regs->cs);
+    }
+
+    task->context.cs = regs->cs;
+    task->context.ds = task->context.ss = regs->ds;
+    task->context.eflags = regs->eflags;
+    task->context.eip = regs->eip;
+    task->context.edi = regs->edi;
+    task->context.esi = regs->esi;
+    task->context.edx = regs->edx;
+    task->context.ecx = regs->ecx;
+    task->context.ebx = regs->ebx;
+    task->context.eax = regs->eax;
+    task->context.ebp = regs->ebp;
+}
+
 #define SYSCALL_TRACE       0
 #define SYSCALL_EXIT        1
+#define SYSCALL_FORK        2
+
+static void syscall_fork_handler(struct isr_regs* regs)
+{
+    unsigned pid = fork();
+    regs->eax = pid;
+}
 
 static void syscall_handler(struct isr_regs* regs)
 {
@@ -102,40 +189,23 @@ static void syscall_handler(struct isr_regs* regs)
             mixed_done = 1;
             break;
         }
+        case SYSCALL_FORK:
+        {
+            syscall_fork_handler(regs);
+            break;
+        }
         default:
             panic("Invalid syscall: %d", syscall_num);
             break;
     }
 }
 
-static void timer1(void* data, const struct isr_regs* regs)
+static void scheduler_timer(void* data, const struct isr_regs* regs)
 {
-    /*
-     * Save current process context
-     * From ring0: useresp is invalid
-     */
-    unsigned descriptor_mask = ~0x3;
-    if((regs->cs & descriptor_mask) == KERNEL_CODE_SEG) {
-        current_task->context.esp = regs->esp + (5 * sizeof(uint32_t));
-    } else if((regs->cs & descriptor_mask) == USER_CODE_SEG) {
-        current_task->context.esp = regs->useresp;
-    } else {
-        panic("Invalid cs value: %p", regs->cs);
-    }
-
-    current_task->context.cs = regs->cs;
-    current_task->context.ds = current_task->context.ss = regs->ds;
-    current_task->context.eflags = regs->eflags;
-    current_task->context.eip = regs->eip;
-    current_task->context.edi = regs->edi;
-    current_task->context.esi = regs->esi;
-    current_task->context.edx = regs->edx;
-    current_task->context.ecx = regs->ecx;
-    current_task->context.ebx = regs->ebx;
-    current_task->context.eax = regs->eax;
-    current_task->context.ebp = regs->ebp;
-
     assert(current_task);
+
+    save_task_state(current_task, regs);
+
     if(current_task->next)
         current_task = current_task->next;
     else
@@ -149,33 +219,6 @@ static void timer1(void* data, const struct isr_regs* regs)
     iret(&current_task->context);
     
     panic("Invalid code path");
-}
-
-static unsigned fork()
-{
-    volatile unsigned result = 0;
-    uint32_t esp = read_esp();
-    dump_var(read_cr3());
-    dump_var(esp);
-
-    enter_critical_section();
-
-    struct task* new_task = task_create();
-    new_task->context = current_task->context;
-    new_task->context.eflags = read_eflags();
-    asm volatile("movl %%ebp, %0" : "=a"(new_task->context.ebp));
-    asm volatile("movl %%ebx, %0" : "=a"(new_task->context.ebx));
-    asm volatile("movl %%esi, %0" : "=a"(new_task->context.esi));
-    asm volatile("movl %%edi, %0" : "=a"(new_task->context.edi));
-    new_task->context.esp = read_esp();
-    new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
-    vmm_copy_kernel_mappings(new_task->pagedir);
-    new_task->context.eip = (uint32_t)&&after_clone;
-    result = new_task->pid;
-
-after_clone:
-    leave_critical_section();
-    return result;
 }
 
 static void ring0()
@@ -232,6 +275,12 @@ static void ring3_thunk()
 
 static void USERFUNC mixed()
 {
+    unsigned pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+    if(!pid) {
+        ring3();
+        return;
+    }
+
     unsigned start_val = 5002000;
     unsigned end_val = start_val + 1000;
     for(unsigned i = start_val; i < end_val; i++) {
@@ -248,11 +297,6 @@ static void USERFUNC mixed()
 
 static void mixed_thunk()
 {
-    // TODO: Move this into mixed()
-    int pid = fork();
-    if(!pid)
-        ring3_thunk();
-
     struct task* task = current_task;
     task->context.cs = USER_CODE_SEG | RPL3;
     task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
@@ -268,10 +312,6 @@ static void mixed_thunk()
 
 static void entry0()
 {
-    timer_schedule(timer1, NULL, 50, true);
-
-    idt_install(0x80, syscall_handler, true);
-
     unsigned ret = fork();
     if(ret) {
         ring0();
@@ -281,8 +321,14 @@ static void entry0()
     panic("Invalid code path");
 }
 
-static void test_fork2()
+static void test_fork()
 {
+    /* Install scheduler timer */
+    timer_schedule(scheduler_timer, NULL, 50, true);
+
+    /* Install syscall handler */
+    idt_install(0x80, syscall_handler, true);
+
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
     vmm_map(KERNEL_STACK, stack_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
@@ -290,7 +336,7 @@ static void test_fork2()
 
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
 
-    /* Create first */
+    /* Create first task */
     struct task* task = task_create();
     task->context.cs = KERNEL_CODE_SEG;
     task->context.ds = KERNEL_DATA_SEG;
@@ -310,8 +356,7 @@ void test_scheduler()
 {
     trace("Testing scheduler");
 
-    //test_fork();
-    test_fork2();
+    test_fork();
 }
 
 
