@@ -115,21 +115,20 @@ static unsigned fork()
     enter_critical_section();
 
     struct task* new_task = task_create();
+    new_task->context.esp = read_esp();
     new_task->context.eflags = read_eflags();
-    asm volatile("movl %%ebp, %0" : "=a"(new_task->context.ebp));
-    asm volatile("movl %%ebx, %0" : "=a"(new_task->context.ebx));
-    asm volatile("movl %%esi, %0" : "=a"(new_task->context.esi));
-    asm volatile("movl %%edi, %0" : "=a"(new_task->context.edi));
+    new_task->context.ebp = read_ebp();
+    new_task->context.ebx = read_ebx();         /* maybe not needed because of the barrier() */ 
+    new_task->context.esi = read_esi();         /* maybe not needed because of the barrier() */
+    new_task->context.edi = read_edi();         /* maybe not needed because of the barrier() */
     new_task->context.cs = KERNEL_CODE_SEG;
     new_task->context.ds = new_task->context.ss = KERNEL_DATA_SEG;
-    new_task->context.esp = read_esp();
     new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
-    vmm_copy_kernel_mappings(new_task->pagedir);
     new_task->context.eip = (uint32_t)&&after_clone;
     result = new_task->pid;
 
 after_clone:
-    asm volatile ("" : : : "memory");       /* re-read all variables */
+    barrier();  /* re-read all variables from stack */
     leave_critical_section();
     return result;
 }

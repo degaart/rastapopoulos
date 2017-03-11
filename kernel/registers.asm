@@ -37,6 +37,12 @@ read_ebp:
     mov     eax, ebp
     ret
 
+; uint32_t read_ebx()
+global read_ebx
+read_ebx:
+    mov     eax, ebx
+    ret
+
 ; uint32_t read_esp()
 global read_esp
 read_esp:
@@ -48,6 +54,12 @@ read_esp:
 global read_esi
 read_esi:
     mov     eax, esi
+    ret
+
+; uint32_t read_edi()
+global read_edi
+read_edi:
+    mov     eax, edi
     ret
 
 ; void write_cr3(uint32_t val)
