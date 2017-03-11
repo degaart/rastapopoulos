@@ -1,6 +1,6 @@
 ; vim: set ft=asm:
 
-struc iret_t
+struc context_t
     .i_cs      resd 1
     .i_ds      resd 1
     .i_ss      resd 1

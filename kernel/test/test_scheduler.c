@@ -6,19 +6,12 @@
 #include "../kernel.h"
 #include "../string.h"
 #include "../gdt.h"
-#include "../iret.h"
+#include "../context.h"
 #include "../kmalloc.h"
 #include "../registers.h"
 #include "../timer.h"
 #include "../io.h"
 #include "../locks.h"
-
-/*********************************************************************************************************
- * So the plan is to create 3 tasks
- *  task0 stays in kernel mode all the time
- *  task1 stays in user-mode all the time
- *  task2 swings back and forth from kernel to user-mode
- *********************************************************************************************************/
 
 /*
  * Address-space layout for each task
@@ -44,8 +37,9 @@
 
 struct task {
     int pid;
+    char name[32];
     struct pagedir* pagedir;
-    struct iret context;
+    struct context context;
     struct task* next;
 };
 
@@ -53,8 +47,10 @@ struct task {
 #define KERNEL_STACK        ((unsigned char*)0xBFFFE000)
 
 static struct task* tasks = NULL;
+static struct task* kernel_task = NULL;
 static int next_pid_value = 0;
 static struct task* current_task = NULL;
+static struct task* exited_tasks = NULL;
 
 static volatile int mixed_done = 0;
 static volatile int USERDATA user_done = 0;
@@ -90,12 +86,13 @@ unsigned USERFUNC is_prime(unsigned num)
     return 1;
 }
 
-static struct task* task_create()
+static struct task* task_create(const char* name)
 {
     struct task* result = kmalloc(sizeof(struct task));
     bzero(result, sizeof(struct task));
 
     enter_critical_section();
+    strlcpy(result->name, name, sizeof(result->name));
     result->pid = next_pid_value++;
     result->pagedir = vmm_clone_pagedir();
     result->next = tasks;
@@ -105,7 +102,7 @@ static struct task* task_create()
     return result;
 }
 
-static unsigned fork()
+static unsigned kfork()
 {
     volatile unsigned result = 0;
     uint32_t esp = read_esp();
@@ -114,7 +111,7 @@ static unsigned fork()
 
     enter_critical_section();
 
-    struct task* new_task = task_create();
+    struct task* new_task = task_create(current_task->name);
     new_task->context.esp = read_esp();
     new_task->context.eflags = read_eflags();
     new_task->context.ebp = read_ebp();
@@ -164,39 +161,91 @@ static void save_task_state(struct task* task, const struct isr_regs* regs)
 #define SYSCALL_TRACE       0
 #define SYSCALL_EXIT        1
 #define SYSCALL_FORK        2
+#define SYSCALL_SET_DONE    3
 
-static void syscall_fork_handler(struct isr_regs* regs)
+static int syscall_trace_handler(struct isr_regs* regs)
 {
-    unsigned pid = fork();
-    regs->eax = pid;
+    char* buffer = kmalloc(1024);
+    snprintf(buffer, 1024, "(%d) %s", current_task->pid, regs->ebx);
+    trace(buffer);
+    kfree(buffer);
+    return 0;
+}
+
+static int syscall_exit_handler(struct isr_regs* regs)
+{
+    /*
+     * TODO: Remove this syscall and instead send message
+     * to kernel_task
+     */
+    struct task* task = current_task;
+
+    /* 
+     * Cannot destroy task inside itself 'cause then the pagedir would be invalidated
+     * Instead, place it into a task recycle bin and let kernel_task handle its destruction
+     */
+    assert(task != kernel_task);
+
+    /* Get next task to run */
+    current_task = task->next;
+    if(!current_task)
+        current_task = tasks;
+    assert(current_task != task);
+
+    /* Remove task from our list */
+    struct task* prevt = NULL;
+    struct task* t = NULL;
+    for(t = tasks; t && t != task; prevt = t, t = t->next);
+    assert(t);
+
+    if(prevt)
+        prevt->next = task->next;
+    else
+        tasks = task->next;
+
+    /* Add to exited tasks */
+    task->next = exited_tasks;
+    exited_tasks = task;
+
+    /* Switch to next available task */
+    vmm_copy_kernel_mappings(current_task->pagedir);
+    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
+    switch_context(&current_task->context);
+
+    panic("Invalid code path");
+    return 0;
+}
+
+static unsigned syscall_set_done_handler(struct isr_regs* regs)
+{
+    mixed_done = 1;
+    return 0;
+}
+
+static int syscall_fork_handler(struct isr_regs* regs)
+{
+    unsigned pid = kfork();
+    return pid;
 }
 
 static void syscall_handler(struct isr_regs* regs)
 {
+#define X(syscall, fn)          \
+    case syscall:               \
+        regs->eax = fn(regs);   \
+        break;
+
     unsigned syscall_num = regs->eax;
     switch(syscall_num) {
-        case SYSCALL_TRACE:
-        {
-            char* buffer = kmalloc(1024);
-            snprintf(buffer, 1024, "(%d) %s", current_task->pid, regs->ebx);
-            trace(buffer);
-            kfree(buffer);
-            break;
-        }
-        case SYSCALL_EXIT:
-        {
-            mixed_done = 1;
-            break;
-        }
-        case SYSCALL_FORK:
-        {
-            syscall_fork_handler(regs);
-            break;
-        }
+        X(SYSCALL_TRACE, syscall_trace_handler);
+        X(SYSCALL_EXIT, syscall_exit_handler);
+        X(SYSCALL_FORK, syscall_fork_handler);
+        X(SYSCALL_SET_DONE, syscall_set_done_handler);
         default:
             panic("Invalid syscall: %d", syscall_num);
             break;
     }
+#undef X
 }
 
 static void scheduler_timer(void* data, const struct isr_regs* regs)
@@ -215,7 +264,7 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     vmm_copy_kernel_mappings(current_task->pagedir);
 
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
-    iret(&current_task->context);
+    switch_context(&current_task->context);
     
     panic("Invalid code path");
 }
@@ -269,18 +318,23 @@ static void ring3_thunk()
     task->context.eflags |= EFLAGS_IF;
     task->context.eip = (uint32_t)ring3;
 
-    iret(&task->context);
+    switch_context(&task->context);
 }
 
-static void USERFUNC mixed()
+static void USERFUNC user_entry()
 {
+    unsigned start_val = 5001000;
+
+    /* Fork into two other tasks */
     unsigned pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
     if(!pid) {
-        ring3();
-        return;
+        start_val = 5002000;
+    } else {
+        pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+        if(!pid)
+            start_val = 5003000;
     }
 
-    unsigned start_val = 5002000;
     unsigned end_val = start_val + 1000;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
@@ -290,33 +344,64 @@ static void USERFUNC mixed()
             syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
         }
     }
+
+    static char done_msg[] = "Done";
+    syscall(SYSCALL_TRACE, (uint32_t)done_msg, 0, 0, 0, 0);
+
     syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
+    panic("Invalid code path");             /* Should give a page fault */
     while(1);
 }
 
-static void mixed_thunk()
+static void create_user_task()
 {
     struct task* task = current_task;
+
+    strlcpy(task->name, "usertask", sizeof(task->name));
     task->context.cs = USER_CODE_SEG | RPL3;
     task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
     vmm_map(USER_STACK, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
     memset(USER_STACK, 0xCC, PAGE_SIZE);
+
     task->context.esp = (uint32_t)(USER_STACK + PAGE_SIZE);
 
     task->context.eflags |= EFLAGS_IF;
-    task->context.eip = (uint32_t)mixed;
+    task->context.eip = (uint32_t)user_entry;
 
-    iret(&task->context);
+    switch_context(&task->context);
+    panic("Invalid code path");
 }
 
-static void entry0()
+static void kernel_task_entry()
 {
-    unsigned ret = fork();
-    if(ret) {
-        ring0();
-    } else {
-        mixed_thunk();
+    /* initialization: create first user task, which will fork into 3 instances */
+    unsigned pid = kfork();
+    if(!pid) {
+        create_user_task();
+        panic("Invalid code path");
     }
+
+    /* Sit idle until we get a task to reap */
+    while(1) {
+        hlt();
+
+        enter_critical_section();
+        if(exited_tasks) {
+            struct task* task = exited_tasks;
+            while(task) {
+                struct task* next = task->next;
+                vmm_destroy_pagedir(task->pagedir);
+                kfree(task);
+
+                task = next;
+            }
+            exited_tasks = NULL;
+        }
+        if(!tasks->next)
+            break;
+        leave_critical_section();
+    }
+    reboot();
     panic("Invalid code path");
 }
 
@@ -335,19 +420,20 @@ static void test_fork()
 
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
 
-    /* Create first task */
-    struct task* task = task_create();
+    /* Create kernel_task */
+    struct task* task = task_create("kernel_task");
     task->context.cs = KERNEL_CODE_SEG;
     task->context.ds = KERNEL_DATA_SEG;
     task->context.ss = KERNEL_DATA_SEG;
     task->context.cr3 = vmm_get_physical(task->pagedir);
     task->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
     task->context.eflags = read_eflags() | EFLAGS_IF;
-    task->context.eip = (uint32_t)entry0;
+    task->context.eip = (uint32_t)kernel_task_entry;
 
     current_task = task;
+    kernel_task = task;
 
-    iret(&task->context);
+    switch_context(&task->context);
     panic("Invalid code path");
 }
 
@@ -357,5 +443,6 @@ void test_scheduler()
 
     test_fork();
 }
+
 
 

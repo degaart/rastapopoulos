@@ -95,6 +95,11 @@ static void flush_tlb()
     leave_critical_section();
 }
 
+/* 
+ * TODO: Unpack parameters, some calling code dont have a va_info
+ * Still require two params so we cannot possibly be confused on wether
+ * to pass a dir index or a table index
+ */
 static struct pagetable* get_pagetable(struct va_info info)
 {
     /* Pagetables available at (0xFFC00000 + (pde_index * PAGE_SIZE)) because of recursive mapping */
@@ -469,6 +474,30 @@ struct pagedir* vmm_clone_pagedir()
 
     leave_critical_section();
     return result;
+}
+
+void vmm_destroy_pagedir(struct pagedir* pagedir)
+{
+    for(unsigned i = USER_PDE_START; i <= USER_PDE_END; i++) {
+        if(pagedir->entries[i] & PDE_PRESENT) {
+            uint32_t table_frame = pagedir->entries[i] & PDE_FRAME;
+
+            struct pagetable* table = vmm_transient_map(table_frame,
+                                                        VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+
+            for(unsigned i = 0; i < 1024; i++) {
+                if(table->entries[i] & PTE_PRESENT) {
+                    uint32_t frame = table->entries[i] & PTE_FRAME;
+                    pmm_free(frame);
+                }
+            }
+
+            vmm_transient_unmap(table);
+            pmm_free(table_frame);
+        }
+    }
+
+    kfree(pagedir);
 }
 
 uint32_t vmm_get_physical(void* va)
