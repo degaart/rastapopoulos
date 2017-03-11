@@ -352,7 +352,6 @@ struct heap_block_header* heap_alloc_block(struct heap* heap, unsigned size)
 
 void heap_free_block(struct heap* heap, struct heap_block_header* block)
 {
-#if 0
     if(!block)
         return;
 
@@ -369,7 +368,6 @@ void heap_free_block(struct heap* heap, struct heap_block_header* block)
     if(block->next && heap_is_free(heap, block->next)) {
         block = merge_blocks(heap, block, block->next);
     }
-#endif
 }
 
 void heap_dump(struct heap* heap)

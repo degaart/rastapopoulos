@@ -27,6 +27,7 @@ void vmm_flush_tlb(void* va);
 bool vmm_paging_enabled();
 void vmm_copy_kernel_mappings(struct pagedir* pagedir); /* copy current kernel mappings into specified pagedir */
 void vmm_switch_pagedir(struct pagedir* pagedir); /* VA, but translated internally into physical address */
+void vmm_destroy_pagedir(struct pagedir* pagedir);
 
 #if 0
 struct pagedir* vmm_current_pagedir();
