@@ -59,20 +59,6 @@ extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
                         uint32_t esi, uint32_t edi);
 
-static void USERFUNC user_outb(uint16_t port, uint8_t val)
-{
-    asm volatile ( "outb %0, %1" : : "a"(val), "Nd"(port) );
-}
-
-static uint8_t USERFUNC user_inb(uint16_t port)
-{
-    uint8_t ret;
-    asm volatile ( "inb %1, %0"
-                   : "=a"(ret)
-                   : "Nd"(port) );
-    return ret;
-}
-
 unsigned USERFUNC is_prime(unsigned num)
 {
     if(num == 1)
@@ -161,7 +147,6 @@ static void save_task_state(struct task* task, const struct isr_regs* regs)
 #define SYSCALL_TRACE       0
 #define SYSCALL_EXIT        1
 #define SYSCALL_FORK        2
-#define SYSCALL_SET_DONE    3
 
 static int syscall_trace_handler(struct isr_regs* regs)
 {
@@ -216,12 +201,6 @@ static int syscall_exit_handler(struct isr_regs* regs)
     return 0;
 }
 
-static unsigned syscall_set_done_handler(struct isr_regs* regs)
-{
-    mixed_done = 1;
-    return 0;
-}
-
 static int syscall_fork_handler(struct isr_regs* regs)
 {
     unsigned pid = kfork();
@@ -240,7 +219,6 @@ static void syscall_handler(struct isr_regs* regs)
         X(SYSCALL_TRACE, syscall_trace_handler);
         X(SYSCALL_EXIT, syscall_exit_handler);
         X(SYSCALL_FORK, syscall_fork_handler);
-        X(SYSCALL_SET_DONE, syscall_set_done_handler);
         default:
             panic("Invalid syscall: %d", syscall_num);
             break;
@@ -269,58 +247,6 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     panic("Invalid code path");
 }
 
-static void ring0()
-{
-    unsigned start_val = 5001000;
-    unsigned end_val = start_val + 1000;
-    for(unsigned i = start_val; i < end_val; i++) {
-        if(is_prime(i)) {
-            trace("%d", i);
-        }
-    }
-
-    while(!mixed_done && !user_done)
-        hlt();
-
-    reboot();
-}
-
-static void USERFUNC ring3()
-{
-    unsigned start_val = 5003000;
-    unsigned end_val = start_val + 1000;
-    for(unsigned i = start_val; i < end_val; i++) {
-        if(is_prime(i)) {
-            /* Do nothing */
-            static char USERDATA msg[64];
-            static const char USERRODATA fmt[] = "[%s:%d][%s] %d\n";
-            static const char USERRODATA file[] = "test_scheduler.c";
-            static const char USERRODATA func[] = "ring3";
-
-            snprintf(msg, sizeof(msg), fmt, file, __LINE__, func, i);
-            for(const char* p = msg; *p; p++)
-                user_outb(0xE9, *p);
-        }
-    }
-    user_done = 1;
-    while(1);
-}
-
-static void ring3_thunk()
-{
-    struct task* task = current_task;
-    task->context.cs = USER_CODE_SEG | RPL3;
-    task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
-    vmm_map(USER_STACK, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
-    memset(USER_STACK, 0xCC, PAGE_SIZE);
-    task->context.esp = (uint32_t)(USER_STACK + PAGE_SIZE);
-
-    task->context.eflags |= EFLAGS_IF;
-    task->context.eip = (uint32_t)ring3;
-
-    switch_context(&task->context);
-}
-
 static void USERFUNC user_entry()
 {
     unsigned start_val = 5001000;
@@ -335,7 +261,7 @@ static void USERFUNC user_entry()
             start_val = 5003000;
     }
 
-    unsigned end_val = start_val + 1000;
+    unsigned end_val = start_val + 500;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
             static char USERDATA msg[64];
