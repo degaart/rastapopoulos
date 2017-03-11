@@ -9,14 +9,18 @@ extern uint32_t read_cr1();
 extern uint32_t read_cr0();
 extern uint32_t read_eflags();
 extern uint32_t read_ebp();
-extern uint32_t read_esp();
+extern uint32_t read_ebx();
 extern uint32_t read_esi();
+extern uint32_t read_edi();
+extern uint32_t read_esp();
 
 extern void write_cr3(uint32_t val);
 extern void write_cr2(uint32_t val);
 extern void write_cr1(uint32_t val);
 extern void write_cr0(uint32_t val);
 extern void write_eflags(uint32_t val);
+
+#define barrier() asm volatile ("":::"memory")
 
 #define CR0_PG  (1 << 31)
 #define CR0_CD  (1 << 30)
