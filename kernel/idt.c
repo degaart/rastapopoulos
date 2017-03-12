@@ -68,6 +68,9 @@ static void set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags)
     idt_entries[num].flags   = flags;
 }
 
+/*
+ * TODO: Use a pointer here, instead of passing this struct by value
+ */
 void isr_handler(struct isr_regs regs)
 {
     if(isr_handlers[regs.int_no]) {

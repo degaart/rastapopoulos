@@ -35,6 +35,9 @@
  *  ---------------------------------------------   0xFFFFFFFF
  */
 
+#define USER_STACK          ((unsigned char*)0xBFFFC000)
+#define KERNEL_STACK        ((unsigned char*)0xBFFFE000)
+
 struct task {
     int pid;
     char name[32];
@@ -43,21 +46,93 @@ struct task {
     struct task* next;
 };
 
-#define USER_STACK          ((unsigned char*)0xBFFFC000)
-#define KERNEL_STACK        ((unsigned char*)0xBFFFE000)
+struct queue {
+    struct task* head;
+};
 
-static struct task* tasks = NULL;
+static struct queue ready_queue = {0};
+static struct queue exited_queue = {0};
+static struct queue sleeping_queue = {0};
+static struct queue waiting_queue = {0};
+
 static struct task* kernel_task = NULL;
-static int next_pid_value = 0;
 static struct task* current_task = NULL;
-static struct task* exited_tasks = NULL;
 
-static volatile int mixed_done = 0;
-static volatile int USERDATA user_done = 0;
+static int next_pid_value = 0;
 
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
                         uint32_t esi, uint32_t edi);
+
+/*
+ * Push item to top of queue
+ */
+static void queue_push(struct queue* queue, struct task* item)
+{
+    enter_critical_section();
+    item->next = queue->head;
+    queue->head = item;
+    leave_critical_section();
+}
+
+/*
+ * Append item to end of queue
+ */
+static void queue_append(struct queue* queue, struct task* task)
+{
+    enter_critical_section();
+
+    struct task* tail = queue->head;
+    while(tail) {
+        if(!tail->next)
+            break;
+        tail = tail->next;
+    }
+
+    if(!tail) {
+        queue->head = task;
+        task->next = NULL;
+    } else {
+        tail->next = task;
+        task->next = NULL;
+    }
+
+    leave_critical_section();
+}
+
+/*
+ * Pop item from head of queue
+ */
+static struct task* queue_pop(struct queue* queue)
+{
+    struct task* result = NULL;
+
+    enter_critical_section();
+    result = queue->head;
+    if(result) {
+        queue->head = result->next;
+        result->next = NULL;
+    }
+    leave_critical_section();
+
+    return result;
+}
+
+/*
+ * Get next item, or first item if end of queue
+ */
+static struct task* queue_next(struct queue* queue, struct task* item)
+{
+    struct task* result = NULL;
+
+    enter_critical_section();
+    result = item->next;
+    if(!result)
+        result = queue->head;
+    leave_critical_section();
+
+    return result;
+}
 
 unsigned USERFUNC is_prime(unsigned num)
 {
@@ -72,18 +147,20 @@ unsigned USERFUNC is_prime(unsigned num)
     return 1;
 }
 
+/*
+ * Create a new task structure (but does not push it to any queues)
+ */
 static struct task* task_create(const char* name)
 {
     struct task* result = kmalloc(sizeof(struct task));
     bzero(result, sizeof(struct task));
 
     enter_critical_section();
-    strlcpy(result->name, name, sizeof(result->name));
     result->pid = next_pid_value++;
-    result->pagedir = vmm_clone_pagedir();
-    result->next = tasks;
-    tasks = result;
     leave_critical_section();
+
+    strlcpy(result->name, name, sizeof(result->name));
+    result->pagedir = vmm_clone_pagedir();
 
     return result;
 }
@@ -95,7 +172,6 @@ static unsigned kfork()
     dump_var(read_cr3());
     dump_var(esp);
 
-    enter_critical_section();
 
     struct task* new_task = task_create(current_task->name);
     new_task->context.esp = read_esp();
@@ -108,11 +184,12 @@ static unsigned kfork()
     new_task->context.ds = new_task->context.ss = KERNEL_DATA_SEG;
     new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
     new_task->context.eip = (uint32_t)&&after_clone;
+
+    queue_append(&ready_queue, new_task);
     result = new_task->pid;
 
 after_clone:
     barrier();  /* re-read all variables from stack */
-    leave_critical_section();
     return result;
 }
 
@@ -144,9 +221,18 @@ static void save_task_state(struct task* task, const struct isr_regs* regs)
     task->context.ebp = regs->ebp;
 }
 
+struct wake_task_data {
+    struct task* task;
+};
+
+static void wake_task_timer(void* data, const struct isr_regs* regs)
+{
+}
+
 #define SYSCALL_TRACE       0
 #define SYSCALL_EXIT        1
 #define SYSCALL_FORK        2
+#define SYSCALL_SLEEP       3
 
 static int syscall_trace_handler(struct isr_regs* regs)
 {
@@ -171,28 +257,14 @@ static int syscall_exit_handler(struct isr_regs* regs)
      */
     assert(task != kernel_task);
 
-    /* Get next task to run */
-    current_task = task->next;
-    if(!current_task)
-        current_task = tasks;
-    assert(current_task != task);
-
-    /* Remove task from our list */
-    struct task* prevt = NULL;
-    struct task* t = NULL;
-    for(t = tasks; t && t != task; prevt = t, t = t->next);
-    assert(t);
-
-    if(prevt)
-        prevt->next = task->next;
-    else
-        tasks = task->next;
+    /* Pop next task from ready queue */
+    current_task = queue_pop(&ready_queue);
+    assert(current_task);
 
     /* Add to exited tasks */
-    task->next = exited_tasks;
-    exited_tasks = task;
+    queue_push(&exited_queue, task);
 
-    /* Switch to next available task */
+    /* Switch task */
     vmm_copy_kernel_mappings(current_task->pagedir);
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
     switch_context(&current_task->context);
@@ -205,6 +277,15 @@ static int syscall_fork_handler(struct isr_regs* regs)
 {
     unsigned pid = kfork();
     return pid;
+}
+
+static int syscall_sleep_handler(struct isr_regs* regs)
+{
+    unsigned millis = regs->ebx;
+
+    /* Remove task from running queue */
+    //task_pop(tasks);
+    return 0;
 }
 
 static void syscall_handler(struct isr_regs* regs)
@@ -228,19 +309,19 @@ static void syscall_handler(struct isr_regs* regs)
 
 static void scheduler_timer(void* data, const struct isr_regs* regs)
 {
+    /* Save current task state */
     assert(current_task);
-
     save_task_state(current_task, regs);
 
-    if(current_task->next)
-        current_task = current_task->next;
-    else
-        current_task = tasks;
+    /* Push current task into ready queue */
+    queue_append(&ready_queue, current_task);
 
+    /* Pop next task from ready queue */
+    current_task = queue_pop(&ready_queue);
     assert(current_task);
 
+    /* Switch to new task */
     vmm_copy_kernel_mappings(current_task->pagedir);
-
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
     switch_context(&current_task->context);
     
@@ -312,18 +393,15 @@ static void kernel_task_entry()
         hlt();
 
         enter_critical_section();
-        if(exited_tasks) {
-            struct task* task = exited_tasks;
-            while(task) {
-                struct task* next = task->next;
+        if(exited_queue.head) {
+            struct task* task;
+            while((task = queue_pop(&exited_queue))) {
                 vmm_destroy_pagedir(task->pagedir);
                 kfree(task);
-
-                task = next;
             }
-            exited_tasks = NULL;
+            exited_queue.head = NULL;
         }
-        if(!tasks->next)
+        if(!ready_queue.head)
             break;
         leave_critical_section();
     }
