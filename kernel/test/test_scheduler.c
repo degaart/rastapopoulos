@@ -53,7 +53,6 @@ struct queue {
 static struct queue ready_queue = {0};
 static struct queue exited_queue = {0};
 static struct queue sleeping_queue = {0};
-static struct queue waiting_queue = {0};
 
 static struct task* kernel_task = NULL;
 static struct task* current_task = NULL;
@@ -134,7 +133,21 @@ static struct task* queue_next(struct queue* queue, struct task* item)
     return result;
 }
 
-unsigned USERFUNC is_prime(unsigned num)
+static unsigned USERFUNC fibonacci(unsigned n)
+{
+    unsigned result;
+
+    if (n == 0)
+        result = 0;
+    else if (n == 1)
+        result = 1;
+    else
+        result = fibonacci(n - 1) + fibonacci(n - 2);
+
+    return result;
+} 
+
+static unsigned USERFUNC is_prime(unsigned num)
 {
     if(num == 1)
         return 1;
@@ -328,8 +341,23 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     panic("Invalid code path");
 }
 
+static void USERFUNC fibonacci_entry()
+{
+    for(unsigned i = 0; i < 37; i++) {
+        unsigned fib = fibonacci(i);
+
+        static char USERDATA msg[64];
+        static const char USERRODATA fmt[] = "fib(%d): %d";
+        snprintf(msg, sizeof(msg), fmt, i, fib);
+
+        syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
+    }
+}
+
 static void USERFUNC user_entry()
 {
+    static char done_msg[] = "Done";
+
     unsigned start_val = 5001000;
 
     /* Fork into two other tasks */
@@ -338,8 +366,15 @@ static void USERFUNC user_entry()
         start_val = 5002000;
     } else {
         pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
-        if(!pid)
+        if(!pid) {
             start_val = 5003000;
+        } else {
+            pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+            if(!pid) {
+                fibonacci_entry();
+                goto exit;
+            }
+        }
     }
 
     unsigned end_val = start_val + 500;
@@ -352,7 +387,7 @@ static void USERFUNC user_entry()
         }
     }
 
-    static char done_msg[] = "Done";
+exit:
     syscall(SYSCALL_TRACE, (uint32_t)done_msg, 0, 0, 0, 0);
 
     syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
