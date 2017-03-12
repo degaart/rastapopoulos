@@ -19,6 +19,7 @@
     } while(0)
 
 #define breakpoint() __asm__ volatile("xchgw %bx, %bx")
+#define invalid_code_path() panic("Invalid code path")
 
 #define DEBUG_PORT 0xE9
 

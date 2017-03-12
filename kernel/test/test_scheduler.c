@@ -133,6 +133,33 @@ static struct task* queue_next(struct queue* queue, struct task* item)
     return result;
 }
 
+/*
+ * Remove item from queue
+ */
+static void queue_remove(struct queue* queue, struct task* item)
+{
+    enter_critical_section();
+
+    if(queue->head == item) {
+        queue->head = item->next;
+        item->next = NULL;
+    } else {
+        struct task* prev = queue->head;
+        while(prev) {
+            if(prev->next == item)
+                break;
+        }
+
+        /* If this fails, task was not on the queue */
+        assert(prev);
+
+        prev->next = item->next;
+        item->next = NULL;
+    }
+
+    leave_critical_section();
+}
+
 static unsigned USERFUNC fibonacci(unsigned n)
 {
     unsigned result;
@@ -178,13 +205,13 @@ static struct task* task_create(const char* name)
     return result;
 }
 
+/* Fork a kernel-mode task */
 static unsigned kfork()
 {
     volatile unsigned result = 0;
     uint32_t esp = read_esp();
     dump_var(read_cr3());
     dump_var(esp);
-
 
     struct task* new_task = task_create(current_task->name);
     new_task->context.esp = read_esp();
@@ -234,12 +261,31 @@ static void save_task_state(struct task* task, const struct isr_regs* regs)
     task->context.ebp = regs->ebp;
 }
 
-struct wake_task_data {
-    struct task* task;
-};
+/* Switch to specified task */
+static void task_switch(struct task* task)
+{
+    assert(task);
+    current_task = task;
+
+    vmm_copy_kernel_mappings(task->pagedir);
+    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
+    switch_context(&task->context);
+
+    panic("Invalid code path");
+}
 
 static void wake_task_timer(void* data, const struct isr_regs* regs)
 {
+    struct task* task = data;
+    assert(task);
+
+    /* Remove task from sleeping queue */
+    queue_remove(&sleeping_queue, task);
+
+    /* Switch to task */
+    task_switch(task);
+
+    panic("Invalid code path");
 }
 
 #define SYSCALL_TRACE       0
@@ -270,17 +316,12 @@ static int syscall_exit_handler(struct isr_regs* regs)
      */
     assert(task != kernel_task);
 
-    /* Pop next task from ready queue */
-    current_task = queue_pop(&ready_queue);
-    assert(current_task);
-
     /* Add to exited tasks */
     queue_push(&exited_queue, task);
 
-    /* Switch task */
-    vmm_copy_kernel_mappings(current_task->pagedir);
-    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
-    switch_context(&current_task->context);
+    /* Pop next task from ready queue */
+    struct task* next_task = queue_pop(&ready_queue);
+    task_switch(next_task);
 
     panic("Invalid code path");
     return 0;
@@ -296,8 +337,20 @@ static int syscall_sleep_handler(struct isr_regs* regs)
 {
     unsigned millis = regs->ebx;
 
-    /* Remove task from running queue */
-    //task_pop(tasks);
+    /* Must save task state */
+    save_task_state(current_task, regs);
+    
+    /* Push task into sleeping queue */
+    queue_push(&sleeping_queue, current_task);
+
+    /* Schedule timer to wake task */
+    timer_schedule(wake_task_timer, current_task, millis, false);
+
+    /* Switch to  next task */
+    struct task* next_task = queue_pop(&ready_queue);
+    task_switch(next_task);
+
+    invalid_code_path();
     return 0;
 }
 
@@ -313,6 +366,7 @@ static void syscall_handler(struct isr_regs* regs)
         X(SYSCALL_TRACE, syscall_trace_handler);
         X(SYSCALL_EXIT, syscall_exit_handler);
         X(SYSCALL_FORK, syscall_fork_handler);
+        X(SYSCALL_SLEEP, syscall_sleep_handler);
         default:
             panic("Invalid syscall: %d", syscall_num);
             break;
@@ -330,15 +384,9 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     queue_append(&ready_queue, current_task);
 
     /* Pop next task from ready queue */
-    current_task = queue_pop(&ready_queue);
-    assert(current_task);
-
-    /* Switch to new task */
-    vmm_copy_kernel_mappings(current_task->pagedir);
-    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
-    switch_context(&current_task->context);
-    
-    panic("Invalid code path");
+    struct task* next_task = queue_pop(&ready_queue);
+    task_switch(next_task);
+    invalid_code_path();
 }
 
 static void USERFUNC fibonacci_entry()
@@ -349,6 +397,19 @@ static void USERFUNC fibonacci_entry()
         static char USERDATA msg[64];
         static const char USERRODATA fmt[] = "fib(%d): %d";
         snprintf(msg, sizeof(msg), fmt, i, fib);
+
+        syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
+    }
+}
+
+static void USERFUNC sleeper_entry()
+{
+    for(unsigned i = 0; i < 10; i++) {
+        syscall(SYSCALL_SLEEP, 100, 0, 0, 0, 0);
+
+        static char USERDATA msg[64];
+        static const char USERRODATA fmt[] = "sleeper slept for %d";
+        snprintf(msg, sizeof(msg), fmt, i);
 
         syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
     }
@@ -373,7 +434,13 @@ static void USERFUNC user_entry()
             if(!pid) {
                 fibonacci_entry();
                 goto exit;
-            }
+            } /*else {
+                pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+                if(!pid) {
+                    sleeper_entry();
+                    goto exit;
+                }
+            }*/
         }
     }
 
@@ -391,7 +458,7 @@ exit:
     syscall(SYSCALL_TRACE, (uint32_t)done_msg, 0, 0, 0, 0);
 
     syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
-    panic("Invalid code path");             /* Should give a page fault */
+    invalid_code_path();             /* Should give a page fault */
     while(1);
 }
 
@@ -468,12 +535,11 @@ static void test_fork()
     task->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
     task->context.eflags = read_eflags() | EFLAGS_IF;
     task->context.eip = (uint32_t)kernel_task_entry;
-
-    current_task = task;
     kernel_task = task;
 
-    switch_context(&task->context);
-    panic("Invalid code path");
+    /* Switch to kernel task */
+    task_switch(task);
+    invalid_code_path();
 }
 
 void test_scheduler()
