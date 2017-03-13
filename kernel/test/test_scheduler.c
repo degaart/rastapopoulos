@@ -12,6 +12,7 @@
 #include "../timer.h"
 #include "../io.h"
 #include "../locks.h"
+#include "../list.h"
 
 /*
  * Address-space layout for each task
@@ -54,19 +55,14 @@ struct task {
     char name[32];
     struct pagedir* pagedir;
     struct context context;
-    struct task* next;
     struct message_queue message_queue;
 
     uint64_t sleep_deadline;
 };
 
-struct queue {
-    struct task* head;
-};
-
-static struct queue ready_queue = {0};
-static struct queue exited_queue = {0};
-static struct queue sleeping_queue = {0};
+static struct list ready_queue = {0};
+static struct list exited_queue = {0};
+static struct list sleeping_queue = {0};
 
 static struct task* kernel_task = NULL;
 static struct task* current_task = NULL;
@@ -76,103 +72,6 @@ static int next_pid_value = 0;
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
                         uint32_t esi, uint32_t edi);
-
-/*
- * Push item to top of queue
- */
-static void queue_push(struct queue* queue, struct task* item)
-{
-    enter_critical_section();
-    item->next = queue->head;
-    queue->head = item;
-    leave_critical_section();
-}
-
-/*
- * Append item to end of queue
- */
-static void queue_append(struct queue* queue, struct task* task)
-{
-    enter_critical_section();
-
-    struct task* tail = queue->head;
-    while(tail) {
-        if(!tail->next)
-            break;
-        tail = tail->next;
-    }
-
-    if(!tail) {
-        queue->head = task;
-        task->next = NULL;
-    } else {
-        tail->next = task;
-        task->next = NULL;
-    }
-
-    leave_critical_section();
-}
-
-/*
- * Pop item from head of queue
- */
-static struct task* queue_pop(struct queue* queue)
-{
-    struct task* result = NULL;
-
-    enter_critical_section();
-    result = queue->head;
-    if(result) {
-        queue->head = result->next;
-        result->next = NULL;
-    }
-    leave_critical_section();
-
-    return result;
-}
-
-/*
- * Get next item, or first item if end of queue
- */
-static struct task* queue_next(struct queue* queue, struct task* item)
-{
-    struct task* result = NULL;
-
-    enter_critical_section();
-    result = item->next;
-    if(!result)
-        result = queue->head;
-    leave_critical_section();
-
-    return result;
-}
-
-/*
- * Remove item from queue
- */
-static void queue_remove(struct queue* queue, struct task* item)
-{
-    enter_critical_section();
-
-    if(queue->head == item) {
-        queue->head = item->next;
-        item->next = NULL;
-    } else {
-        struct task* prev = queue->head;
-        while(prev) {
-            if(prev->next == item)
-                break;
-        }
-
-        /* If this fails, task was not on the queue */
-        assert(prev);
-
-        prev->next = item->next;
-        item->next = NULL;
-    }
-
-    leave_critical_section();
-}
 
 static unsigned USERFUNC fibonacci(unsigned n)
 {
@@ -239,7 +138,10 @@ static unsigned kfork()
     new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
     new_task->context.eip = (uint32_t)&&after_clone;
 
-    queue_append(&ready_queue, new_task);
+    enter_critical_section();
+    list_append(&ready_queue, new_task);
+    leave_critical_section();
+
     result = new_task->pid;
 
 after_clone:
@@ -320,10 +222,10 @@ static int syscall_exit_handler(struct isr_regs* regs)
     assert(task != kernel_task);
 
     /* Add to exited tasks */
-    queue_push(&exited_queue, task);
+    list_push(&exited_queue, task);
 
     /* Pop next task from ready queue */
-    struct task* next_task = queue_pop(&ready_queue);
+    struct task* next_task = list_pop(&ready_queue);
     task_switch(next_task);
 
     panic("Invalid code path");
@@ -348,10 +250,10 @@ static int syscall_sleep_handler(struct isr_regs* regs)
     current_task->sleep_deadline = now + millis;
     
     /* Push task into sleeping queue */
-    queue_push(&sleeping_queue, current_task);
+    list_push(&sleeping_queue, current_task);
 
     /* Switch to  next task */
-    struct task* next_task = queue_pop(&ready_queue);
+    struct task* next_task = list_pop(&ready_queue);
     assert(next_task);
     task_switch(next_task);
 
@@ -389,13 +291,14 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     save_task_state(current_task, regs);
 
     /* Push current task into ready queue */
-    queue_append(&ready_queue, current_task);
+    list_append(&ready_queue, current_task);
 
     /* Handle sleeping tasks */
     uint64_t ts = timer_timestamp();
-    struct task* awake_task = NULL;
-    for(struct task* t = sleeping_queue.head; t; t = t->next) {
-        if(ts >= t->sleep_deadline) {
+    struct list_node* awake_task = NULL;
+    for(struct list_node* t = sleeping_queue.head; t; t = t->next) {
+        struct task* task = t->data;
+        if(ts >= task->sleep_deadline) {
             /* Switch to this */
             awake_task = t;
             break;
@@ -405,10 +308,10 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     /* Determine next task to run */
     struct task* next_task = NULL;
     if(awake_task) {
-        queue_remove(&sleeping_queue, awake_task);
-        next_task = awake_task;
+        list_remove(&sleeping_queue, awake_task);
+        next_task = awake_task->data;
     } else {
-        next_task = queue_pop(&ready_queue);
+        next_task = list_pop(&ready_queue);
     }
 
     /* Switch to next task */
@@ -530,11 +433,10 @@ static void kernel_task_entry()
         enter_critical_section();
         if(exited_queue.head) {
             struct task* task;
-            while((task = queue_pop(&exited_queue))) {
+            while((task = list_pop(&exited_queue))) {
                 vmm_destroy_pagedir(task->pagedir);
                 kfree(task);
             }
-            exited_queue.head = NULL;
         }
         if(!ready_queue.head)
             break;
