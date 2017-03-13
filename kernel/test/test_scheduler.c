@@ -281,6 +281,9 @@ static void task_switch(struct task* task)
 #define SYSCALL_FORK        2
 #define SYSCALL_SLEEP       3
 
+typedef int (*syscall_handler_t)(struct isr_regs* regs);
+static syscall_handler_t syscall_handlers[80] = {0};
+
 static int syscall_trace_handler(struct isr_regs* regs)
 {
     char* buffer = kmalloc(1024);
@@ -346,22 +349,25 @@ static int syscall_sleep_handler(struct isr_regs* regs)
 
 static void syscall_handler(struct isr_regs* regs)
 {
-#define X(syscall, fn)          \
-    case syscall:               \
-        regs->eax = fn(regs);   \
-        break;
-
+    syscall_handler_t handler = NULL;
     unsigned syscall_num = regs->eax;
-    switch(syscall_num) {
-        X(SYSCALL_TRACE, syscall_trace_handler);
-        X(SYSCALL_EXIT, syscall_exit_handler);
-        X(SYSCALL_FORK, syscall_fork_handler);
-        X(SYSCALL_SLEEP, syscall_sleep_handler);
-        default:
-            panic("Invalid syscall: %d", syscall_num);
-            break;
+
+    if(syscall_num < countof(syscall_handlers))
+        handler = syscall_handlers[syscall_num];
+
+    if(handler) {
+        regs->eax = handler(regs);
+    } else {
+        panic("Invalid syscall number: %d", syscall_num);
     }
-#undef X
+}
+
+static void syscall_add(unsigned num, syscall_handler_t handler)
+{
+    if(num < countof(syscall_handlers))
+        syscall_handlers[num] = handler;
+    else
+        panic("Invalid syscall number: %d", num);
 }
 
 static void scheduler_timer(void* data, const struct isr_regs* regs)
@@ -474,7 +480,10 @@ exit:
     while(1);
 }
 
-static void create_user_task()
+/*
+ * transform current task into an user task
+ */
+static void make_user_task(void (*entry_point)())
 {
     struct task* task = current_task;
 
@@ -487,8 +496,7 @@ static void create_user_task()
     task->context.esp = (uint32_t)(USER_STACK + PAGE_SIZE);
 
     task->context.eflags |= EFLAGS_IF;
-    task->context.eip = (uint32_t)user_entry;
-    //task->context.eip = (uint32_t)sleeper_entry;
+    task->context.eip = (uint32_t)entry_point;
 
     switch_context(&task->context);
     panic("Invalid code path");
@@ -499,7 +507,7 @@ static void kernel_task_entry()
     /* initialization: create first user task, which will fork into 3 instances */
     unsigned pid = kfork();
     if(!pid) {
-        create_user_task();
+        make_user_task(user_entry);
         panic("Invalid code path");
     }
 
@@ -531,6 +539,12 @@ static void test_fork()
 
     /* Install syscall handler */
     idt_install(0x80, syscall_handler, true);
+
+    /* Install syscalls */
+    syscall_add(SYSCALL_TRACE, syscall_trace_handler);
+    syscall_add(SYSCALL_EXIT, syscall_exit_handler);
+    syscall_add(SYSCALL_FORK, syscall_fork_handler);
+    syscall_add(SYSCALL_SLEEP, syscall_sleep_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
