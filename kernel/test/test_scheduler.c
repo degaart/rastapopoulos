@@ -44,6 +44,8 @@ struct task {
     struct pagedir* pagedir;
     struct context context;
     struct task* next;
+
+    uint64_t sleep_deadline;
 };
 
 struct queue {
@@ -274,20 +276,6 @@ static void task_switch(struct task* task)
     panic("Invalid code path");
 }
 
-static void wake_task_timer(void* data, const struct isr_regs* regs)
-{
-    struct task* task = data;
-    assert(task);
-
-    /* Remove task from sleeping queue */
-    queue_remove(&sleeping_queue, task);
-
-    /* Switch to task */
-    task_switch(task);
-
-    panic("Invalid code path");
-}
-
 #define SYSCALL_TRACE       0
 #define SYSCALL_EXIT        1
 #define SYSCALL_FORK        2
@@ -339,15 +327,17 @@ static int syscall_sleep_handler(struct isr_regs* regs)
 
     /* Must save task state */
     save_task_state(current_task, regs);
+
+    /* Determine deadline */
+    uint64_t now = timer_timestamp();
+    current_task->sleep_deadline = now + millis;
     
     /* Push task into sleeping queue */
     queue_push(&sleeping_queue, current_task);
 
-    /* Schedule timer to wake task */
-    timer_schedule(wake_task_timer, current_task, millis, false);
-
     /* Switch to  next task */
     struct task* next_task = queue_pop(&ready_queue);
+    assert(next_task);
     task_switch(next_task);
 
     invalid_code_path();
@@ -383,8 +373,27 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     /* Push current task into ready queue */
     queue_append(&ready_queue, current_task);
 
-    /* Pop next task from ready queue */
-    struct task* next_task = queue_pop(&ready_queue);
+    /* Handle sleeping tasks */
+    uint64_t ts = timer_timestamp();
+    struct task* awake_task = NULL;
+    for(struct task* t = sleeping_queue.head; t; t = t->next) {
+        if(ts >= t->sleep_deadline) {
+            /* Switch to this */
+            awake_task = t;
+            break;
+        }
+    }
+
+    /* Determine next task to run */
+    struct task* next_task = NULL;
+    if(awake_task) {
+        queue_remove(&sleeping_queue, awake_task);
+        next_task = awake_task;
+    } else {
+        next_task = queue_pop(&ready_queue);
+    }
+
+    /* Switch to next task */
     task_switch(next_task);
     invalid_code_path();
 }
@@ -404,8 +413,8 @@ static void USERFUNC fibonacci_entry()
 
 static void USERFUNC sleeper_entry()
 {
-    for(unsigned i = 0; i < 10; i++) {
-        syscall(SYSCALL_SLEEP, 100, 0, 0, 0, 0);
+    for(unsigned i = 0; i < 29; i++) {
+        syscall(SYSCALL_SLEEP, 1000, 0, 0, 0, 0);
 
         static char USERDATA msg[64];
         static const char USERRODATA fmt[] = "sleeper slept for %d";
@@ -413,6 +422,9 @@ static void USERFUNC sleeper_entry()
 
         syscall(SYSCALL_TRACE, (uint32_t)msg, 0, 0, 0, 0);
     }
+
+    syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
+    invalid_code_path();
 }
 
 static void USERFUNC user_entry()
@@ -434,13 +446,13 @@ static void USERFUNC user_entry()
             if(!pid) {
                 fibonacci_entry();
                 goto exit;
-            } /*else {
+            } else {
                 pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
                 if(!pid) {
                     sleeper_entry();
                     goto exit;
                 }
-            }*/
+            }
         }
     }
 
@@ -476,6 +488,7 @@ static void create_user_task()
 
     task->context.eflags |= EFLAGS_IF;
     task->context.eip = (uint32_t)user_entry;
+    //task->context.eip = (uint32_t)sleeper_entry;
 
     switch_context(&task->context);
     panic("Invalid code path");
