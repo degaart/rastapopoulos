@@ -1,99 +1,7 @@
 #include "../debug.h"
-#include "../util.h"
-#include "../pmm.h"
-#include "../vmm.h"
-#include "../kernel.h"
 #include "../string.h"
-#include "../gdt.h"
-#include "../context.h"
 #include "../kmalloc.h"
-#include "../registers.h"
-#include "../timer.h"
-#include "../io.h"
-#include "../locks.h"
-
-/* ( ͡° ͜ʖ ͡°)*/
-struct list_node {
-    struct list_node* next;
-    struct list_node* prev;
-    void* data;
-};
-
-struct list {
-    struct list_node* head;
-    struct list_node* tail;
-};
-
-void list_init(struct list* list)
-{
-    bzero(list, sizeof(struct list));
-}
-
-struct list_node* list_append(struct list* list, void* data)
-{
-    struct list_node* node = kmalloc(sizeof(struct list_node));
-    node->next = NULL;
-    node->prev = list->tail;
-    node->data = data;
-
-    if(list->tail) {
-        list->tail->next = node;
-        list->tail = node;
-    } else {
-        assert(!list->tail);
-        list->head = list->tail = node;
-    }
-    return node;
-}
-
-struct list_node* list_push(struct list* list, void* data)
-{
-    struct list_node* node = kmalloc(sizeof(struct list_node));
-    node->prev = NULL;
-    node->next = list->head;
-    node->data = data;
-
-    if(list->head) {
-        list->head->prev = node;
-        list->head = node;
-    } else {
-        assert(!list->tail);
-        list->head = list->tail = node;
-    }
-
-    return node;
-}
-
-void list_remove(struct list* list, struct list_node* node)
-{
-    if(node->prev)
-        node->prev->next = node->next;
-    if(node->next)
-        node->next->prev = node->prev;
-    if(list->head == node)
-        list->head = node->next;
-    if(list->tail == node)
-        list->tail = node->prev;
-}
-
-void* list_pop(struct list* list)
-{
-    void* result = NULL;
-    if(list->head) {
-        struct list_node* node = list->head;
-        result = node->data;
-        if(node->next) {
-            node->next->prev = NULL;
-        }
-        list->head = node->next;
-
-        if(list->tail == node)
-            list->tail = node->prev;
-
-        kfree(node);
-    }
-    return result;
-}
+#include "../list.h"
 
 static void test_append()
 {
@@ -142,6 +50,8 @@ static void test_append()
 
     n = n->next;
     assert(n == NULL);
+
+    list_destroy(&l, NULL);
 }
 
 static void test_push()
@@ -187,6 +97,8 @@ static void test_push()
 
     n = n->next;
     assert(n == NULL);
+
+    list_destroy(&l, NULL);
 }
 
 static void test_remove()
@@ -279,6 +191,8 @@ static void test_remove()
 
     n = l.head;
     assert(n == NULL);
+
+    list_destroy(&l, NULL);
 }
 
 static void test_pop()
@@ -319,6 +233,8 @@ static void test_pop()
     assert(l.tail == NULL);
     data = list_pop(&l);
     assert(data == NULL);
+
+    list_destroy(&l, NULL);
 }
 
 void test_list()
