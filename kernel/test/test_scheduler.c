@@ -38,12 +38,24 @@
 #define USER_STACK          ((unsigned char*)0xBFFFC000)
 #define KERNEL_STACK        ((unsigned char*)0xBFFFE000)
 
+struct message {
+    size_t len;
+    int sender;
+    struct message* next;
+    unsigned char data[];
+};
+
+struct message_queue {
+    struct message* head;
+};
+
 struct task {
     int pid;
     char name[32];
     struct pagedir* pagedir;
     struct context context;
     struct task* next;
+    struct message_queue message_queue;
 
     uint64_t sleep_deadline;
 };
@@ -483,7 +495,7 @@ exit:
 /*
  * transform current task into an user task
  */
-static void make_user_task(void (*entry_point)())
+static void jump_to_usermode(void (*entry_point)())
 {
     struct task* task = current_task;
 
@@ -507,7 +519,7 @@ static void kernel_task_entry()
     /* initialization: create first user task, which will fork into 3 instances */
     unsigned pid = kfork();
     if(!pid) {
-        make_user_task(user_entry);
+        jump_to_usermode(user_entry);
         panic("Invalid code path");
     }
 
