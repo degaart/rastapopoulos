@@ -23,8 +23,7 @@ void* kmalloc(unsigned size)
 {
     assert(size);
 
-    /* TODO: Align to 64 bits */
-    void* result = kmalloc_a(size, sizeof(int));
+    void* result = kmalloc_a(size, sizeof(uint64_t));
     return result;
 }
 
@@ -51,7 +50,9 @@ void* kmalloc_a(unsigned size, unsigned alignment)
     struct heap_block_header* block = heap_alloc_block_aligned(kernel_heap,
                                                                size,
                                                                alignment);
-    assert(block);
+    if(!block)
+        panic("Kernel heap exhausted");
+
     if(block) {
         result = ((unsigned char*)block) + sizeof(struct heap_block_header);
     }
