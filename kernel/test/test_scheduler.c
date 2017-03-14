@@ -92,8 +92,6 @@ static void USERFUNC msgwait(unsigned port);
 #define KernelMessageExit       2
 #define KernelMessageSleep      3
 #define KernelMessageSleepAck   4
-#define KernelMessageFork       5
-#define KernelMessageForkAck    6
 
 #if 0
 static unsigned USERFUNC fibonacci(unsigned n)
@@ -295,6 +293,9 @@ static void task_switch(struct task* task)
 #define SYSCALL_MSGSEND     1
 #define SYSCALL_MSGRECV     2
 #define SYSCALL_MSGWAIT     3
+#define SYSCALL_MSGPEEK     4
+#define SYSCALL_YIELD       5
+#define SYSCALL_FORK        6
 
 typedef uint32_t (*syscall_handler_t)(struct isr_regs* regs);
 static syscall_handler_t syscall_handlers[80] = {0};
@@ -323,12 +324,6 @@ static uint32_t syscall_exit_handler(struct isr_regs* regs)
 
     panic("Invalid code path");
     return 0;
-}
-
-static uint32_t syscall_fork_handler(struct isr_regs* regs)
-{
-    unsigned pid = kfork();
-    return pid;
 }
 
 static uint32_t syscall_sleep_handler(struct isr_regs* regs)
@@ -486,6 +481,55 @@ static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
     return 0;
 }
 
+/*
+ * Check if specified port has pending messages
+ * Params:
+ *  ebx:    port number
+ * Returns:
+ *  0       No pending messages
+ *  1       Pending messages
+ */
+static uint32_t syscall_msgpeek_handler(struct isr_regs* regs)
+{
+    uint32_t result = 0;
+    unsigned port_number = regs->ebx;
+
+    struct port* port = port_get(port_number);
+    if(port) {
+        if(current_task->pid == port->receiver) {
+            result = port->queue.head != NULL;
+        }
+    }
+    return result;
+}
+
+/*
+ * Put current task into tail of ready queue and switch to next ready task
+ */
+static uint32_t syscall_yield_handler(struct isr_regs* regs)
+{
+    save_task_state(current_task, regs);
+    list_append(&ready_queue, current_task);
+    struct task* next_task = list_pop(&ready_queue);
+    if(!next_task)
+        next_task = idle_task;
+    task_switch(next_task);
+    invalid_code_path();
+    return 0;
+}
+
+/* 
+ * Fork current process
+ * Returns:
+ *  Parent process:         pid of child process
+ *  Child process:          0
+ */
+static uint32_t syscall_fork_handler(struct isr_regs* regs)
+{
+    unsigned pid = kfork();
+    return pid;
+}
+
 static void syscall_handler(struct isr_regs* regs)
 {
     syscall_handler_t handler = NULL;
@@ -565,6 +609,22 @@ static unsigned USERFUNC msgrecv(unsigned port, struct message* buffer, size_t b
 static void USERFUNC msgwait(unsigned port)
 {
     syscall(SYSCALL_MSGWAIT, port, 0, 0, 0, 0);
+}
+
+static bool USERFUNC msgpeek(unsigned port)
+{
+    unsigned ret = syscall(SYSCALL_MSGPEEK,
+                           port,
+                           0,
+                           0,
+                           0,
+                           0);
+    return ret != 0;
+}
+
+static void USERFUNC yield()
+{
+    syscall(SYSCALL_YIELD, 0, 0, 0, 0, 0);
 }
 
 #if 0
@@ -710,6 +770,18 @@ static void producer_entry()
         size_t outsize;
         unsigned recv_ret = msgrecv(ack_port, msg, bufsize, &outsize);
         assert(recv_ret == 0);
+
+        /* Sleep for 100 ms */
+        msg->reply_port = ack_port;
+        msg->code = KernelMessageSleep;
+        msg->len = sizeof(uint32_t);
+        *((uint32_t*)msg->data) = 500;
+
+        send_ret = msgsend(1, msg);
+        assert(send_ret != false);
+
+        recv_ret = msgrecv(ack_port, msg, bufsize, &outsize);
+        assert(recv_ret == 0);
     }
 
     msg->reply_port = ack_port;
@@ -735,7 +807,7 @@ static void kernel_task_entry()
     unsigned kernel_port = port_open();
     assert(kernel_port == 1);
 
-    /* initialization: create first user task, which will fork into 3 instances */
+    /* Create first user task, which will fork into 3 instances */
     unsigned pid = kfork();
     if(!pid) {
         //jump_to_usermode(user_entry);
@@ -743,7 +815,16 @@ static void kernel_task_entry()
         panic("Invalid code path");
     }
 
-    /* Sit idle until we get a task to reap */
+    /* List of sleeping processes and their wake deadlines */
+    struct sleeping_task {
+        uint64_t deadline;
+        int pid;
+        unsigned reply_port;
+    };
+    struct list sleeping_tasks = {0};
+    list_init(&sleeping_tasks);
+
+    /* Read messages in a loop */
     size_t bufsiz = sizeof(struct message) + 64;
     struct message* msg = kmalloc(bufsiz);
 
@@ -751,42 +832,90 @@ static void kernel_task_entry()
         size_t outsiz;
         bzero(msg, bufsiz);
 
-        unsigned recv_ret = msgrecv(kernel_port, msg, bufsiz, &outsiz);
-        assert(recv_ret == 0);
+        bool msg_avail = msgpeek(kernel_port);
+        if(msg_avail) {
+            unsigned recv_ret = msgrecv(kernel_port, msg, bufsiz, &outsiz);
+            assert(recv_ret == 0);
 
-        switch(msg->code) {
-            case KernelMessageTrace:
-            {
-                trace("(%d) %s", msg->sender, msg->data);
+            switch(msg->code) {
+                case KernelMessageTrace:
+                {
+                    trace("(%d) %s", msg->sender, msg->data);
 
-                struct message ack = {0};
-                ack.code = KernelMessageTraceAck;
-                ack.len = 0;
-                bool send_ret = msgsend(msg->reply_port, &ack);
-                assert(send_ret);
-                break;
+                    struct message ack = {0};
+                    ack.code = KernelMessageTraceAck;
+                    ack.len = 0;
+                    bool send_ret = msgsend(msg->reply_port, &ack);
+                    assert(send_ret);
+                    break;
+                }
+                case KernelMessageExit:
+                {
+                    struct task_info task_info = task_getinfo(msg->sender);
+                    assert(task_info.task);
+                    assert(task_info.node);
+                    assert(task_info.queue);
+
+                    trace("Killing task %d", task_info.task->pid);
+
+                    enter_critical_section();
+                    list_remove(task_info.queue, task_info.node);
+                    vmm_destroy_pagedir(task_info.task->pagedir);
+                    kfree(task_info.task);
+                    leave_critical_section();
+
+                    break;
+                }
+                case KernelMessageSleep:
+                {
+                    uint32_t* millis = (uint32_t*)msg->data;
+                    assert(msg->len >= sizeof(uint32_t));
+
+                    struct sleeping_task* st = kmalloc(sizeof(struct sleeping_task));
+                    st->deadline = timer_timestamp() + *millis;
+                    st->pid = msg->sender;
+                    st->reply_port = msg->reply_port;
+
+                    list_append(&sleeping_tasks, st);
+                    break;
+                }
+                default:
+                    panic("Invalid kernel message: %d", msg->code);
+                    break;
             }
-            case KernelMessageExit:
-            {
-                struct task_info task_info = task_getinfo(msg->sender);
-                assert(task_info.task);
-                assert(task_info.node);
-                assert(task_info.queue);
-
-                trace("Killing task %d", task_info.task->pid);
-
-                enter_critical_section();
-                list_remove(task_info.queue, task_info.node);
-                vmm_destroy_pagedir(task_info.task->pagedir);
-                kfree(task_info.task);
-                leave_critical_section();
-
-                break;
-            }
-            default:
-                panic("Invalid kernel message: %d", msg->code);
-                break;
         }
+
+        /* Wake sleeping processes */
+        uint64_t now = timer_timestamp();
+        struct list_node* n = sleeping_tasks.head;
+        while(n) {
+            struct list_node* next = n->next;
+
+            struct sleeping_task* st = n->data;
+            if(now >= st->deadline) {
+                struct message ack = {0};
+                ack.code = KernelMessageSleepAck;
+                ack.len = 0;
+                bool send_ret = msgsend(st->reply_port, &ack);
+                assert(send_ret);
+
+                kfree(st);
+                list_remove(&sleeping_tasks, n);
+            }
+            n = next;
+        }
+
+        /* If no more processes to run, reboot */
+        enter_critical_section();
+        if(!ready_queue.head && !sleeping_queue.head && !msgwait_queue.head) {
+            trace("No more processes to run. Rebooting");
+            reboot();
+        }
+        leave_critical_section();
+
+        /* Yield */
+        yield();
+
 #if 0
         bool has_messages = msgpeek(kernel_port);
         if(has_messages) {
@@ -844,6 +973,9 @@ static void test_fork()
     syscall_register(SYSCALL_MSGSEND, syscall_msgsend_handler);
     syscall_register(SYSCALL_MSGRECV, syscall_msgrecv_handler);
     syscall_register(SYSCALL_MSGWAIT, syscall_msgwait_handler);
+    syscall_register(SYSCALL_MSGPEEK, syscall_msgpeek_handler);
+    syscall_register(SYSCALL_YIELD, syscall_yield_handler);
+    syscall_register(SYSCALL_FORK, syscall_fork_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
