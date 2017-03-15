@@ -7,10 +7,10 @@
  * just use current address + size
  */
 struct heap_block_header {
-    struct heap_block_header* next;
+    unsigned checksum;
     unsigned flags;
     unsigned size;          /* Including the header */
-    unsigned checksum;
+    struct heap_block_header* next;
 };
 
 /*

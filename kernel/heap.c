@@ -83,7 +83,10 @@ static struct heap_block_header* prev_block(struct heap* heap, struct heap_block
 
 bool heap_is_free(struct heap* heap, struct heap_block_header* block)
 {
-    assert(is_valid_block(heap, block));
+    //assert(is_valid_block(heap, block));
+    if(!is_valid_block(heap, block)) {
+        panic("Invalid block detected at %p", block);
+    }
 
     bool result = (block->flags & BLOCK_ALLOCATED) == 0;
     return result;

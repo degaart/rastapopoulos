@@ -415,8 +415,6 @@ static void clone_pagetable(struct pagetable* dst, struct pagetable* src)
             uint32_t frame = src->entries[i] & PTE_FRAME;
             uint32_t flags = src->entries[i] & PTE_FLAGS;
 
-            trace("%d -> %p", i, frame);
-
             uint32_t new_frame = pmm_alloc();
 
             /* TODO: No need map for source buf */
@@ -457,9 +455,7 @@ struct pagedir* vmm_clone_pagedir()
             uint32_t dst_frame = pmm_alloc();
             struct pagetable* dst = vmm_transient_map(dst_frame, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
 
-            trace("Cloning pagedir entry %d", i);
             clone_pagetable(dst, src);
-            trace("Done cloning pagedir entry %d", i);
 
             vmm_transient_unmap(dst);
 

@@ -53,6 +53,8 @@ void list_remove(struct list* list, struct list_node* node)
         list->head = node->next;
     if(list->tail == node)
         list->tail = node->prev;
+
+    kfree(node);
 }
 
 void* list_pop(struct list* list)

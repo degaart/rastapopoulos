@@ -26,7 +26,8 @@
     (( ((uint64_t)(val)) % ((uint64_t)(align)) ) == 0)
 
 uint64_t rdtsc();
-unsigned hash(void* data, unsigned size);
+unsigned hash2(const void* data, unsigned size, unsigned start_hash);
+unsigned hash(const void* data, unsigned size);
 
 #define dump_var(var) \
     trace("%s: %p", #var, var)

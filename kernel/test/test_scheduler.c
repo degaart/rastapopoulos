@@ -53,6 +53,7 @@ struct port {
 };
 
 struct message {
+    uint32_t checksum;
     unsigned sender;            /* Sending process pid */
     unsigned reply_port;        /* Port number to send response to */
     unsigned code;              /* Message code, interpretation depends on receiver */
@@ -198,8 +199,6 @@ static unsigned kfork()
 {
     volatile unsigned result = 0;
     uint32_t esp = read_esp();
-    dump_var(read_cr3());
-    dump_var(esp);
 
     struct task* new_task = task_create(current_task->name);
     new_task->context.esp = read_esp();
@@ -265,6 +264,17 @@ static void task_switch(struct task* task)
     panic("Invalid code path");
 }
 
+/* Calculate message checksum */
+static uint32_t USERFUNC message_checksum(const struct message* msg)
+{
+    unsigned checksum = hash2(&msg->sender, sizeof(msg->sender), 0);
+    checksum = hash2(&msg->reply_port, sizeof(msg->reply_port), checksum);
+    checksum = hash2(&msg->code, sizeof(msg->code), checksum);
+    checksum = hash2(&msg->len, sizeof(msg->len), checksum);
+    checksum = hash2(msg->data, msg->len, checksum);
+    return checksum;
+}
+
 /****************************************************************************
  * syscall handlers
  ****************************************************************************/
@@ -312,14 +322,22 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     unsigned port_number = regs->ebx;
     struct message* msg = (struct message*)regs->ecx;
 
+    /* Validate message */
+    unsigned checksum = message_checksum(msg);
+    assert(checksum == msg->checksum);
+
     struct port* port = port_get(port_number);
     if(!port)
         return 0;
     
     /* Copy message into kernel space */
-    struct message* msg_copy = kmalloc(sizeof(struct message) + msg->len);
-    memcpy(msg_copy, msg, sizeof(struct message) + msg->len);
+    size_t bufsize = sizeof(struct message) + msg->len;
+    struct message* msg_copy = kmalloc(bufsize);
+    memcpy(msg_copy, msg, bufsize);
+    assert(msg_copy->checksum == checksum);
+
     msg_copy->sender = current_task->pid;
+    msg_copy->checksum = message_checksum(msg_copy);
 
     /* Add message to port's queue */
     list_append(&port->queue, msg_copy);
@@ -357,24 +375,39 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
  */
 static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
 {
+    assert(!interrupts_enabled());
+
     unsigned port_number = regs->ebx;
     struct message* buffer = (struct message*)regs->ecx;
     uint32_t buffer_size = regs->edx;
     uint32_t* outsize = (uint32_t*)regs->esi;
 
-    struct port* port = port_get(port_number);
-    if(!port)
-        return 1;
+    struct port* port = NULL;
+    while(true) {
+        port = port_get(port_number);
+        if(!port)
+            return 1;
 
-    if(current_task->pid != port->receiver)
-        return 2;
+        if(current_task->pid != port->receiver)
+            return 2;
 
-    while(!port->queue.head) {
-        //syscall(SYSCALL_MSGWAIT, port->number, 0, 0, 0, 0);
-        msgwait(port->number);
+        if(port->queue.head)
+            break;
+
+        //msgwait(port->number);
+        sti();
+        hlt();
+        cli();
     }
 
     struct message* message = port->queue.head->data;
+
+    /* Validate message */
+    unsigned checksum = message_checksum(message);
+    if(checksum != message->checksum) {
+        panic("Corrupted message from %d to %d", message->sender, current_task->pid);
+    }
+    assert(checksum == message->checksum);
 
     *outsize = sizeof(struct message) + message->len;
     if(buffer_size >= sizeof(struct message) + message->len) {
@@ -395,6 +428,8 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
  */
 static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
 {
+    assert(!interrupts_enabled());
+    
     unsigned port_number = regs->ebx;
 
     save_task_state(current_task, regs);
@@ -508,6 +543,15 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
 /****************************************************************************
  * usermode syscall helpers
  ****************************************************************************/
+
+/*
+ * Per-task infomation/control block
+ */
+struct ucb {
+    unsigned ack_port;          /* port for receiving acks from kernel */
+};
+static struct ucb* USERDATA task_ucb = (struct ucb*)0x400000;
+
 static unsigned USERFUNC port_open()
 {
     unsigned result = syscall(SYSCALL_PORTOPEN,
@@ -521,6 +565,9 @@ static unsigned USERFUNC port_open()
 
 static bool USERFUNC msgsend(unsigned port, const struct message* msg)
 {
+    unsigned checksum = message_checksum(msg);
+    assert(checksum == msg->checksum);
+
     unsigned result = syscall(SYSCALL_MSGSEND, 
                               port, 
                               (uint32_t)msg, 
@@ -532,12 +579,18 @@ static bool USERFUNC msgsend(unsigned port, const struct message* msg)
 
 static unsigned USERFUNC msgrecv(unsigned port, struct message* buffer, size_t buffer_size, size_t* outsize)
 {
+    /* Buffer validation */
+    bzero(buffer, buffer_size);
     unsigned result = syscall(SYSCALL_MSGRECV,
                               port,
                               (uint32_t)buffer,
                               buffer_size,
                               (uint32_t)outsize,
                               0);
+
+    unsigned checksum = message_checksum(buffer);
+    assert(buffer->checksum == checksum);
+
     return result;
 }
 
@@ -562,15 +615,24 @@ static void USERFUNC yield()
     syscall(SYSCALL_YIELD, 0, 0, 0, 0, 0);
 }
 
-/*
- * Per-task infomation/control block
- */
-struct ucb {
-    unsigned ack_port;          /* port for receiving acks from kernel */
-};
-static struct ucb* task_ucb = (struct ucb*)0x400000;
+static int USERFUNC user_fork()
+{
+    int pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
 
-static void USERFUNC user_trace(const char* format, ...)
+    if(!pid) {
+        task_ucb->ack_port = port_open();
+    }
+
+    return pid;
+}
+
+#define user_trace(fmt, ...) \
+    do {                                                \
+        static const char USERRODATA _fmt_[] = fmt;     \
+        __user_trace(_fmt_, ##__VA_ARGS__);             \
+    } while(0)
+
+static void USERFUNC __user_trace(const char* format, ...)
 {
     va_list args;
 
@@ -581,9 +643,11 @@ static void USERFUNC user_trace(const char* format, ...)
     vsnprintf((char*)msg->data, sizeof(buffer) - sizeof(struct message), format, args);
     va_end(args);
 
+    msg->sender = 0;
     msg->reply_port = task_ucb->ack_port;
     msg->code = KernelMessageTrace;
     msg->len = strlen((const char*)msg->data) + 1;
+    msg->checksum = message_checksum(msg);
 
     bool ret = msgsend(1, msg);
     assert(ret);
@@ -592,6 +656,8 @@ static void USERFUNC user_trace(const char* format, ...)
     size_t outsize;
     unsigned recv_ret = msgrecv(task_ucb->ack_port, msg, sizeof(buffer), &outsize);
     assert(recv_ret == 0);
+
+    assert(msg->checksum == message_checksum(msg));
     assert(msg->sender == 0);
     assert(msg->code == KernelMessageTraceAck);
 }
@@ -600,10 +666,12 @@ static void USERFUNC user_sleep(unsigned ms)
 {
     unsigned char buffer[128];
     struct message* msg = (struct message*)buffer;
+    msg->sender = 0;
     msg->reply_port = task_ucb->ack_port;
     msg->code = KernelMessageSleep;
     msg->len = sizeof(uint32_t);
     *((uint32_t*)msg->data) = ms;
+    msg->checksum = message_checksum(msg);
 
     bool ret = msgsend(1, msg);
     assert(ret);
@@ -611,6 +679,7 @@ static void USERFUNC user_sleep(unsigned ms)
     size_t outsize;
     unsigned recv_ret = msgrecv(task_ucb->ack_port, msg, sizeof(buffer), &outsize);
     assert(recv_ret == 0);
+    assert(msg->checksum == message_checksum(msg));
     assert(msg->sender == 0);
     assert(msg->code == KernelMessageSleepAck);
 }
@@ -618,9 +687,11 @@ static void USERFUNC user_sleep(unsigned ms)
 static void USERFUNC user_exit()
 {
     struct message msg;
+    msg.sender = 0;
     msg.reply_port = task_ucb->ack_port;
     msg.code = KernelMessageExit;
     msg.len = 0;
+    msg.checksum = message_checksum(&msg);
 
     bool ret = msgsend(1, &msg);
     assert(ret);
@@ -630,10 +701,22 @@ static void USERFUNC user_exit()
     invalid_code_path();
 }
 
+static void USERFUNC send_ack(unsigned port, unsigned code, uint32_t result)
+{
+    unsigned char buffer[sizeof(struct message) + sizeof(uint32_t)] = {0};
+    struct message* msg = (struct message*)buffer;
+    msg->code = code;
+    msg->len = sizeof(uint32_t);
+    *((uint32_t*)msg->data) = result;
+    msg->checksum = message_checksum(msg);
+
+    bool ret = msgsend(port, msg);
+    assert(ret);
+}
+
 /****************************************************************************
  * test usermode programs
  ****************************************************************************/
-#if 0
 static unsigned USERFUNC fibonacci(unsigned n)
 {
     unsigned result;
@@ -665,52 +748,40 @@ static void USERFUNC fibonacci_entry()
 {
     for(unsigned i = 0; i < 37; i++) {
         unsigned fib = fibonacci(i);
-
-        static char USERDATA msg[64];
-        static const char USERRODATA fmt[] = "fib(%d): %d";
-        snprintf(msg, sizeof(msg), fmt, i, fib);
-
-        user_trace(msg);
+        user_trace("fib(%d): %d", i, fib);
     }
 }
 
 static void USERFUNC sleeper_entry()
 {
-    for(unsigned i = 0; i < 29; i++) {
-        syscall(SYSCALL_SLEEP, 1000, 0, 0, 0, 0);
-
-        static char USERDATA msg[64];
-        static const char USERRODATA fmt[] = "sleeper: %d";
-        snprintf(msg, sizeof(msg), fmt, i);
-
-        user_trace(msg);
+    for(unsigned i = 0; i < 20; i++) {
+        user_sleep(1000);
+        user_trace("sleeper: %d", i);
     }
 
-    syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
+    user_exit();
     invalid_code_path();
 }
 
 static void USERFUNC user_entry()
 {
-    static char USERDATA done_msg[] = "Done";
-
     unsigned start_val = 5001000;
 
-    /* Fork into two other tasks */
-    unsigned pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+    /* Fork into other tasks */
+    unsigned pid = user_fork();
     if(!pid) {
         start_val = 5002000;
     } else {
-        pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+        pid = user_fork();
         if(!pid) {
             start_val = 5003000;
         } else {
-            pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+            pid = user_fork();
             if(!pid) {
                 fibonacci_entry();
                 goto exit;
             } else {
-                pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
+                pid = user_fork();
                 if(!pid) {
                     sleeper_entry();
                     goto exit;
@@ -722,19 +793,14 @@ static void USERFUNC user_entry()
     unsigned end_val = start_val + 500;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
-            static char USERDATA msg[64];
-            static const char USERRODATA fmt[] = "%d";
-            snprintf(msg, sizeof(msg), fmt, i);
-            user_trace(msg);
+            user_trace("%d", i);
         }
     }
 
 exit:
-    user_trace(done_msg);
-
-    syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
-    invalid_code_path();             /* Should give a page fault */
-    while(1);
+    user_trace("Done");
+    user_exit();
+    invalid_code_path();
 }
 
 /*
@@ -742,6 +808,14 @@ exit:
  */
 static void jump_to_usermode(void (*entry_point)())
 {
+    /* Create ucb */
+    vmm_map(task_ucb, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    bzero(task_ucb, sizeof(struct ucb));
+
+    /* Create port for receiving acks from kernel_task */
+    task_ucb->ack_port = port_open();
+
+    /* Jump to usermode */
     struct task* task = current_task;
 
     strlcpy(task->name, "usertask", sizeof(task->name));
@@ -754,12 +828,10 @@ static void jump_to_usermode(void (*entry_point)())
 
     task->context.eflags |= EFLAGS_IF;
     task->context.eip = (uint32_t)entry_point;
-    task->context.eax = kernel_port->number;
 
     switch_context(&task->context);
     panic("Invalid code path");
 }
-#endif
 
 /****************************************************************************
  * kernel_task and initialization
@@ -807,8 +879,8 @@ static void kernel_task_entry()
     /* Create first user task, which will fork into 3 instances */
     unsigned pid = kfork();
     if(!pid) {
-        //jump_to_usermode(user_entry);
-        producer_entry();
+        jump_to_usermode(user_entry);
+        //producer_entry();
         panic("Invalid code path");
     }
 
@@ -838,12 +910,7 @@ static void kernel_task_entry()
                 case KernelMessageTrace:
                 {
                     trace("(%d) %s", msg->sender, msg->data);
-
-                    struct message ack = {0};
-                    ack.code = KernelMessageTraceAck;
-                    ack.len = 0;
-                    bool send_ret = msgsend(msg->reply_port, &ack);
-                    assert(send_ret);
+                    send_ack(msg->reply_port, KernelMessageTraceAck, 0);
                     break;
                 }
                 case KernelMessageExit:
@@ -890,12 +957,7 @@ static void kernel_task_entry()
 
             struct sleeping_task* st = n->data;
             if(now >= st->deadline) {
-                struct message ack = {0};
-                ack.code = KernelMessageSleepAck;
-                ack.len = 0;
-                bool send_ret = msgsend(st->reply_port, &ack);
-                assert(send_ret);
-
+                send_ack(st->reply_port, KernelMessageSleepAck, 0);
                 kfree(st);
                 list_remove(&sleeping_tasks, n);
             }
