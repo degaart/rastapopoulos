@@ -9,7 +9,8 @@ CFLAGS="-masm=intel \
     -Werror \
     -g \
     -std=gnu99 \
-    -fno-asynchronous-unwind-tables"
+    -fno-asynchronous-unwind-tables \
+    -fno-strict-aliasing"
 
 clang \
     -c -o "obj/$(basename "$1")".o \

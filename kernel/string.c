@@ -186,8 +186,9 @@ void USERFUNC memcpy(void* dest, const void* source, size_t size)
     uint8_t* src = (uint8_t*)source;
     uint8_t* dst = (uint8_t*)dest;
 
-    for(; size; size--)
+    while(size--) {
         *(dst++) = *(src++);
+    }
 }
 
 int USERFUNC memcmp(const void* p0, const void* p1, size_t size)
