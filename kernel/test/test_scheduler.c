@@ -264,6 +264,17 @@ static void task_switch(struct task* task)
     panic("Invalid code path");
 }
 
+/* Switch to next ready task, or idle task */
+static void task_switch_next()
+{
+    struct task* next_task = NULL;
+    next_task = list_pop(&ready_queue);
+    if(!next_task)
+        next_task = idle_task;
+
+    task_switch(next_task);
+}
+
 /* Calculate message checksum */
 static uint32_t USERFUNC message_checksum(const struct message* msg)
 {
@@ -394,10 +405,10 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
         if(port->queue.head)
             break;
 
-        //msgwait(port->number);
-        sti();
-        hlt();
-        cli();
+        msgwait(port->number);
+        //sti();
+        //hlt();
+        //cli();
     }
 
     struct message* message = port->queue.head->data;
@@ -437,10 +448,7 @@ static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
     list_append(&msgwait_queue, current_task);
 
     /* Switch to next task */
-    struct task* next_task = list_pop(&ready_queue);
-    if(!next_task)
-        next_task = idle_task;
-    task_switch(next_task);
+    task_switch_next();
     invalid_code_path();
     return 0;
 }
@@ -474,10 +482,7 @@ static uint32_t syscall_yield_handler(struct isr_regs* regs)
 {
     save_task_state(current_task, regs);
     list_append(&ready_queue, current_task);
-    struct task* next_task = list_pop(&ready_queue);
-    if(!next_task)
-        next_task = idle_task;
-    task_switch(next_task);
+    task_switch_next();
     invalid_code_path();
     return 0;
 }
@@ -527,16 +532,10 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     save_task_state(current_task, regs);
 
     /* Push current task into ready queue */
-    list_append(&ready_queue, current_task);
+    if(current_task != idle_task)
+        list_append(&ready_queue, current_task);
 
-    /* Determine next task to run */
-    struct task* next_task = NULL;
-    next_task = list_pop(&ready_queue);
-    if(!next_task)
-        next_task = idle_task;
-
-    /* Switch to next task */
-    task_switch(next_task);
+    task_switch_next();
     invalid_code_path();
 }
 
