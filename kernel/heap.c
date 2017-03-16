@@ -4,6 +4,7 @@
 #include "string.h"
 #include "pmm.h"
 #include "vmm.h"
+#include "locks.h"
 
 #ifdef ENABLE_COVERAGE
 #define add_coverage(desc) add_coverage_point(__LINE__, desc)
@@ -23,7 +24,6 @@ struct coverage_point {
 static struct coverage_point coverage_points[32] = {0};
 
 static void dump_heap(struct heap* heap);
-
 
 static void add_coverage_point(int line, const char* desc)
 {
@@ -81,7 +81,7 @@ static struct heap_block_header* prev_block(struct heap* heap, struct heap_block
     return prevh;
 }
 
-bool heap_is_free(struct heap* heap, struct heap_block_header* block)
+static bool heap_is_free(struct heap* heap, struct heap_block_header* block)
 {
     //assert(is_valid_block(heap, block));
     if(!is_valid_block(heap, block)) {
@@ -92,7 +92,7 @@ bool heap_is_free(struct heap* heap, struct heap_block_header* block)
     return result;
 }
 
-bool heap_is_allocated(struct heap* heap, struct heap_block_header* block)
+static bool heap_is_allocated(struct heap* heap, struct heap_block_header* block)
 {
 
     assert(is_valid_block(heap, block));
@@ -149,6 +149,8 @@ struct heap* heap_init(void* address, unsigned size, unsigned max_size)
     memset(result, 0, sizeof(struct heap));
     result->size = size;
     result->max_size = max_size;
+    result->lock = 0;
+    assert(IS_ALIGNED(&result->lock, sizeof(uint32_t)));
 
     unsigned char* head = (unsigned char*)address + sizeof(struct heap);
     unsigned head_size = size - sizeof(struct heap);
@@ -169,7 +171,7 @@ struct heap_info heap_info(struct heap* heap)
     return result;
 }
 
-struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
+static struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
 {
     size = ALIGN(size, PAGE_SIZE);
     trace("Growing heap by %d", size);
@@ -218,6 +220,11 @@ struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
 
 struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned size, unsigned alignment)
 {
+    bool locked = heap_lock(heap);
+    if(!locked) {
+        panic("Concurrent heap modification detected");
+    }
+
     while(true) {
         /* Walk blocklist to find fitting block */
         struct heap_block_header* prevh = NULL;
@@ -268,11 +275,19 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                             set_allocated(heap, h);
 
                             assert(new_block->size + h->size == old_size);
+
+                            bool unlocked = heap_unlock(heap);
+                            assert(unlocked);
+
                             return h;
                         } else {
                             add_coverage("new block cannot be split");
 
                             set_allocated(heap, h);
+
+                            bool unlocked = heap_unlock(heap);
+                            assert(unlocked);
+
                             return h;
                         }
                     }
@@ -332,6 +347,9 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                             add_coverage("aligned block cannot be split");
                         }
 
+                        bool unlocked = heap_unlock(heap);
+                        assert(unlocked);
+
                         return h2;
                     }
                 }
@@ -344,6 +362,10 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
         if(!new_header)
             break;
     }
+
+    bool unlocked = heap_unlock(heap);
+    assert(unlocked);
+
     return NULL;
 }
 
@@ -358,6 +380,11 @@ void heap_free_block(struct heap* heap, struct heap_block_header* block)
     if(!block)
         return;
 
+    bool locked = heap_lock(heap);
+    if(!locked) {
+        panic("Concurrent heap modification detected");
+    }
+
     assert(is_valid_block(heap, block));
     assert(heap_is_allocated(heap, block));
     set_free(heap, block);
@@ -371,6 +398,9 @@ void heap_free_block(struct heap* heap, struct heap_block_header* block)
     if(block->next && heap_is_free(heap, block->next)) {
         block = merge_blocks(heap, block, block->next);
     }
+
+    bool unlocked = heap_unlock(heap);
+    assert(unlocked);
 }
 
 void heap_dump(struct heap* heap)
@@ -385,4 +415,20 @@ void heap_dump(struct heap* heap)
     }
 
 }
+
+bool heap_lock(struct heap* heap)
+{
+    uint32_t result = cmpxchg(&heap->lock, 1, 0);
+    return result == 0;
+}
+
+bool heap_unlock(struct heap* heap)
+{
+    uint32_t result = cmpxchg(&heap->lock, 0, 1);
+    return result == 1;
+}
+
+
+
+
 

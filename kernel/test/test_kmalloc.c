@@ -5,6 +5,8 @@
 #include "../string.h"
 #include "../heap.h"
 
+#if 0
+
 static void test_simple_alloc(struct heap* heap)
 {
     trace("Testing allocs with default alignment");
@@ -185,6 +187,6 @@ void test_kmalloc()
     }
 }
 
-
+#endif
 
 
