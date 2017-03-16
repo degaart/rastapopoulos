@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 /* 
  * TODO: We can get rid of the next pointer, 
@@ -21,6 +22,7 @@ struct heap {
     struct heap_block_header* head;
     unsigned size;          /* Including this header */
     unsigned max_size;
+    volatile uint32_t lock;
 };
 
 struct heap_info {
@@ -31,13 +33,13 @@ struct heap_info {
 
 struct heap* heap_init(void* address, unsigned size, unsigned max_size);
 struct heap_info heap_info(struct heap* heap);
-struct heap_block_header* heap_grow(struct heap* heap, unsigned size);
 struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned size, unsigned alignment);
 struct heap_block_header* heap_alloc_block(struct heap* heap, unsigned size);
 void heap_free_block(struct heap* heap, struct heap_block_header* block);
-bool heap_is_allocated(struct heap* heap, struct heap_block_header* block);
-bool heap_is_free(struct heap* heap, struct heap_block_header* block);
 void heap_dump(struct heap* heap);
+bool heap_lock(struct heap* heap);
+bool heap_unlock(struct heap* heap);
+
 
 
 
