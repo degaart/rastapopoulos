@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "locks.h"
 
 /* 
  * TODO: We can get rid of the next pointer, 
@@ -22,7 +23,7 @@ struct heap {
     struct heap_block_header* head;
     unsigned size;          /* Including this header */
     unsigned max_size;
-    volatile uint32_t lock;
+    spinlock_t lock;
 };
 
 struct heap_info {

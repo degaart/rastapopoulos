@@ -49,7 +49,7 @@ struct port {
     unsigned number;            /* Port number */
     int receiver;
     struct list queue;          /* Message queue */
-    struct list waiting_queue;  /* Tasks waiting on this port */
+    spinlock_t lock;
 };
 
 struct message {
@@ -66,15 +66,20 @@ struct task {
     char name[32];
     struct pagedir* pagedir;
     struct context context;
-    struct list message_queue;
     unsigned wait_port;
 };
 
 static struct list ready_queue = {0};
+static spinlock_t ready_queue_lock = SPINLOCK_INIT;
+
 static struct list sleeping_queue = {0};
+static spinlock_t sleeping_queue_lock = SPINLOCK_INIT;
+
 static struct list msgwait_queue = {0};
+static spinlock_t msgwait_queue_lock = SPINLOCK_INIT;
 
 static struct list port_list = {0};
+static spinlock_t port_list_lock = SPINLOCK_INIT;
 
 static struct task* kernel_task = NULL;
 static struct task* current_task = NULL;
@@ -113,7 +118,6 @@ static struct task* task_create(const char* name)
 
     strlcpy(result->name, name, sizeof(result->name));
     result->pagedir = vmm_clone_pagedir();
-    list_init(&result->message_queue);
 
     return result;
 }
@@ -138,6 +142,7 @@ static struct task_info task_getinfo(int pid)
         result.task = idle_task;
 
     if(!result.task) {
+        checked_lock(&ready_queue_lock);
         for(struct list_node* n = ready_queue.head; n; n = n->next) {
             struct task* task = n->data;
             if(task->pid == pid) {
@@ -147,9 +152,11 @@ static struct task_info task_getinfo(int pid)
                 break;
             }
         }
+        checked_unlock(&ready_queue_lock);
     }
 
     if(!result.task) {
+        checked_lock(&sleeping_queue_lock);
         for(struct list_node* n = sleeping_queue.head; n; n = n->next) {
             struct task* task = n->data;
             if(task->pid == pid) {
@@ -159,9 +166,11 @@ static struct task_info task_getinfo(int pid)
                 break;
             }
         }
+        checked_unlock(&sleeping_queue_lock);
     }
 
     if(!result.task) {
+        checked_lock(&msgwait_queue_lock);
         for(struct list_node* n = msgwait_queue.head; n; n = n->next) {
             struct task* task = n->data;
             if(task->pid == pid) {
@@ -171,6 +180,7 @@ static struct task_info task_getinfo(int pid)
                 break;
             }
         }
+        checked_unlock(&msgwait_queue_lock);
     }
 
     leave_critical_section();
@@ -184,12 +194,14 @@ static struct port* port_get(unsigned number)
     struct port* port = NULL;
 
     enter_critical_section();
+    checked_lock(&port_list_lock);
     for(struct list_node* n = port_list.head; n; n = n->next) {
         if(((struct port*)n->data)->number == number) {
             port = n->data;
             break;
         }
     }
+    checked_unlock(&port_list_lock);
     leave_critical_section();
     return port;
 }
@@ -213,7 +225,9 @@ static unsigned kfork()
     new_task->context.eip = (uint32_t)&&after_clone;
 
     enter_critical_section();
+    checked_lock(&ready_queue_lock);
     list_append(&ready_queue, new_task);
+    checked_unlock(&ready_queue_lock);
     leave_critical_section();
 
     result = new_task->pid;
@@ -255,6 +269,8 @@ static void save_task_state(struct task* task, const struct isr_regs* regs)
 static void task_switch(struct task* task)
 {
     assert(task);
+    
+    cli();
     current_task = task;
 
     vmm_copy_kernel_mappings(task->pagedir);
@@ -268,7 +284,13 @@ static void task_switch(struct task* task)
 static void task_switch_next()
 {
     struct task* next_task = NULL;
+
+    cli();
+
+    checked_lock(&ready_queue_lock);
     next_task = list_pop(&ready_queue);
+    checked_unlock(&ready_queue_lock);
+
     if(!next_task)
         next_task = idle_task;
 
@@ -313,7 +335,12 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
     enter_critical_section();
     result->number = next_port_value++;
     result->receiver = current_task->pid;
+    result->lock = SPINLOCK_INIT;
+
+    checked_lock(&port_list_lock);
     list_append(&port_list, result);
+    checked_unlock(&port_list_lock);
+
     leave_critical_section();
 
     return result->number;
@@ -351,9 +378,12 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     msg_copy->checksum = message_checksum(msg_copy);
 
     /* Add message to port's queue */
+    checked_lock(&port->lock);
     list_append(&port->queue, msg_copy);
+    checked_unlock(&port->lock);
 
     /* Wake any process waiting on this port */
+    checked_lock(&msgwait_queue_lock);
     struct list_node* task_node = msgwait_queue.head;
     while(task_node) {
         struct list_node* next = task_node->next;
@@ -361,11 +391,15 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
         struct task* task = task_node->data;
         if(task->wait_port == port_number) {
             list_remove(&msgwait_queue, task_node);
+
+            checked_lock(&ready_queue_lock);
             list_push(&ready_queue, task);
+            checked_unlock(&ready_queue_lock);
         }
 
         task_node = next;
     }
+    checked_unlock(&msgwait_queue_lock);
 
     return 1;
 }
@@ -402,15 +436,25 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
         if(current_task->pid != port->receiver)
             return 2;
 
-        if(port->queue.head)
+        checked_lock(&port->lock);
+        bool empty = port->queue.head == NULL;
+        checked_unlock(&port->lock);
+
+        if(!empty)
             break;
 
+#if 1
         msgwait(port->number);
-        //sti();
-        //hlt();
-        //cli();
+#else
+        sti();
+        hlt();
+        cli();
+#endif
     }
 
+    uint32_t result;
+
+    checked_lock(&port->lock);
     struct message* message = port->queue.head->data;
 
     /* Validate message */
@@ -424,12 +468,13 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
     if(buffer_size >= sizeof(struct message) + message->len) {
         memcpy(buffer, message, sizeof(struct message) + message->len);
         list_pop(&port->queue);
-        return 0;
+        result = 0;
     } else {
-        return 3;
+        result = 3;
     }
+    checked_unlock(&port->lock);
 
-    return 0;
+    return result;
 }
 
 /*
@@ -445,7 +490,11 @@ static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
 
     save_task_state(current_task, regs);
     current_task->wait_port = port_number;
+
+
+    checked_lock(&msgwait_queue_lock);
     list_append(&msgwait_queue, current_task);
+    checked_unlock(&msgwait_queue_lock);
 
     /* Switch to next task */
     task_switch_next();
@@ -468,9 +517,11 @@ static uint32_t syscall_msgpeek_handler(struct isr_regs* regs)
 
     struct port* port = port_get(port_number);
     if(port) {
+        checked_lock(&port->lock);
         if(current_task->pid == port->receiver) {
             result = port->queue.head != NULL;
         }
+        checked_unlock(&port->lock);
     }
     return result;
 }
@@ -481,7 +532,11 @@ static uint32_t syscall_msgpeek_handler(struct isr_regs* regs)
 static uint32_t syscall_yield_handler(struct isr_regs* regs)
 {
     save_task_state(current_task, regs);
+
+    checked_lock(&ready_queue_lock);
     list_append(&ready_queue, current_task);
+    checked_unlock(&ready_queue_lock);
+
     task_switch_next();
     invalid_code_path();
     return 0;
@@ -532,8 +587,11 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     save_task_state(current_task, regs);
 
     /* Push current task into ready queue */
-    if(current_task != idle_task)
+    if(current_task != idle_task) {
+        checked_lock(&ready_queue_lock);
         list_append(&ready_queue, current_task);
+        checked_unlock(&ready_queue_lock);
+    }
 
     task_switch_next();
     invalid_code_path();
@@ -914,6 +972,8 @@ static void kernel_task_entry()
                 }
                 case KernelMessageExit:
                 {
+                    enter_critical_section();
+
                     struct task_info task_info = task_getinfo(msg->sender);
                     assert(task_info.task);
                     assert(task_info.node);
@@ -921,10 +981,13 @@ static void kernel_task_entry()
 
                     trace("Killing task %d", task_info.task->pid);
 
-                    enter_critical_section();
+                    // By the time we get here, the task might have changed queue
+                    // Instead, make destroying the task from its current queue atomic
+                    // at the syscall level
                     list_remove(task_info.queue, task_info.node);
                     vmm_destroy_pagedir(task_info.task->pagedir);
                     kfree(task_info.task);
+
                     leave_critical_section();
 
                     break;

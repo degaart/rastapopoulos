@@ -149,7 +149,7 @@ struct heap* heap_init(void* address, unsigned size, unsigned max_size)
     memset(result, 0, sizeof(struct heap));
     result->size = size;
     result->max_size = max_size;
-    result->lock = 0;
+    result->lock = SPINLOCK_INIT;
     assert(IS_ALIGNED(&result->lock, sizeof(uint32_t)));
 
     unsigned char* head = (unsigned char*)address + sizeof(struct heap);
@@ -418,14 +418,14 @@ void heap_dump(struct heap* heap)
 
 bool heap_lock(struct heap* heap)
 {
-    uint32_t result = cmpxchg(&heap->lock, 1, 0);
-    return result == 0;
+    bool result = spinlock_try_lock(&heap->lock);
+    return result;
 }
 
 bool heap_unlock(struct heap* heap)
 {
-    uint32_t result = cmpxchg(&heap->lock, 0, 1);
-    return result == 1;
+    bool result = spinlock_try_unlock(&heap->lock);
+    return result;
 }
 
 
