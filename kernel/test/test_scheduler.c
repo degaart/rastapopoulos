@@ -919,10 +919,6 @@ static void idle_task_entry()
 
 static void producer_entry()
 {
-    /* Create ucb */
-    vmm_map(task_ucb, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
-    bzero(task_ucb, sizeof(struct ucb));
-
     /* Create port for receiving acks from kernel_task */
     task_ucb->ack_port = port_open();
 
@@ -945,6 +941,10 @@ static void kernel_task_entry()
 {
     /* init port list */
     list_init(&port_list);
+
+    /* Create ucb */
+    vmm_map(task_ucb, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    bzero(task_ucb, sizeof(struct ucb));
 
     /* Create port for receiving messages from usermode programs */
     unsigned kernel_port = port_open();
@@ -1190,8 +1190,8 @@ void test_scheduler()
     trace("Testing scheduler");
 
     //heap_record_start();
-    //test_ipc();
-    test_fork();
+    test_ipc();
+    //test_fork();
     //heap_record_stop();
 }
 
