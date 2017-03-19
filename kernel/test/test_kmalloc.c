@@ -164,7 +164,7 @@ void test_kmalloc()
 {
     trace("Testing kmalloc()");
 
-#if 0
+#if 1
     /* Create heap at 48Mb */
     unsigned char* heap_start = (unsigned char*)0x3000000;
     vmm_map(heap_start, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);

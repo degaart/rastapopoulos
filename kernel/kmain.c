@@ -148,10 +148,10 @@ static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
 static void run_tests()
 {
     //RUN_TEST(test_vmm);
-    RUN_TEST(test_kmalloc);
+    //RUN_TEST(test_kmalloc);
     //RUN_TEST(test_bitset);
     //RUN_TEST(test_list);
-    //RUN_TEST(test_scheduler);
+    RUN_TEST(test_scheduler);
     //RUN_TEST(test_locks);
 }
 
