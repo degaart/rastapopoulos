@@ -206,37 +206,6 @@ static struct port* port_get(unsigned number)
     return port;
 }
 
-/* Fork a kernel-mode task */
-static unsigned kfork()
-{
-    volatile unsigned result = 0;
-    uint32_t esp = read_esp();
-
-    struct task* new_task = task_create(current_task->name);
-    new_task->context.esp = read_esp();
-    new_task->context.eflags = read_eflags();
-    new_task->context.ebp = read_ebp();
-    new_task->context.ebx = read_ebx();         /* maybe not needed because of the barrier() */ 
-    new_task->context.esi = read_esi();         /* maybe not needed because of the barrier() */
-    new_task->context.edi = read_edi();         /* maybe not needed because of the barrier() */
-    new_task->context.cs = KERNEL_CODE_SEG;
-    new_task->context.ds = new_task->context.ss = KERNEL_DATA_SEG;
-    new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
-    new_task->context.eip = (uint32_t)&&after_clone;
-
-    enter_critical_section();
-    checked_lock(&ready_queue_lock);
-    list_append(&ready_queue, new_task);
-    checked_unlock(&ready_queue_lock);
-    leave_critical_section();
-
-    result = new_task->pid;
-
-after_clone:
-    barrier();  /* re-read all variables from stack */
-    return result;
-}
-
 static void save_task_state(struct task* task, const struct isr_regs* regs)
 {
     /*
@@ -561,8 +530,22 @@ static uint32_t syscall_yield_handler(struct isr_regs* regs)
  */
 static uint32_t syscall_fork_handler(struct isr_regs* regs)
 {
-    unsigned pid = kfork();
-    return pid;
+    volatile unsigned result = 0;
+
+    struct task* new_task = task_create(current_task->name);
+    save_task_state(new_task, regs);
+    new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
+    new_task->context.eax = 0;
+
+    enter_critical_section();
+    checked_lock(&ready_queue_lock);
+    list_append(&ready_queue, new_task);
+    checked_unlock(&ready_queue_lock);
+    leave_critical_section();
+
+    result = new_task->pid;
+
+    return result;
 }
 
 static uint32_t syscall_setname_handler(struct isr_regs* regs)
@@ -695,7 +678,7 @@ static int USERFUNC user_fork()
 {
     int pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
 
-    if(!pid) {
+    if(!pid && task_ucb) {
         task_ucb->ack_port = port_open();
     }
 
@@ -968,10 +951,11 @@ static void kernel_task_entry()
     assert(kernel_port == 1);
 
     /* Create first user task, which will fork into 3 instances */
-    unsigned pid = kfork();
+    //unsigned pid = kfork();
+    unsigned pid = user_fork();
     if(!pid) {
-        jump_to_usermode(user_entry);
-        //producer_entry();
+        //jump_to_usermode(user_entry);
+        producer_entry();
         panic("Invalid code path");
     }
 
@@ -1075,7 +1059,7 @@ static void kernel_task_entry()
     panic("Invalid code path");
 }
 
-static void test_fork()
+static void test_ipc()
 {
     /* Install scheduler timer */
     timer_schedule(scheduler_timer, NULL, 50, true);
@@ -1126,13 +1110,89 @@ static void test_fork()
     invalid_code_path();
 }
 
+static void child_entry()
+{
+    for(int i = 0; i < 30; i++) {
+        trace("In child: %d", i);
+        yield();
+    }
+    reboot();
+}
+
+static void parent_entry()
+{
+    task_ucb = NULL;
+
+    int pid = user_fork();
+    if(!pid) {
+        child_entry();
+    }
+
+    for(int i = 0; i < 30; i++) {
+        trace("In parent: %d", i);
+        yield();
+    }
+    reboot();
+}
+
+static void test_fork()
+{
+    trace("Testing fork()");
+
+    /* Install syscall handler */
+    idt_install(0x80, syscall_handler, true);
+
+    /* Install syscalls */
+    syscall_register(SYSCALL_PORTOPEN, syscall_portopen_handler);
+    syscall_register(SYSCALL_MSGSEND, syscall_msgsend_handler);
+    syscall_register(SYSCALL_MSGRECV, syscall_msgrecv_handler);
+    syscall_register(SYSCALL_MSGWAIT, syscall_msgwait_handler);
+    syscall_register(SYSCALL_MSGPEEK, syscall_msgpeek_handler);
+    syscall_register(SYSCALL_YIELD, syscall_yield_handler);
+    syscall_register(SYSCALL_FORK, syscall_fork_handler);
+    syscall_register(SYSCALL_SETNAME, syscall_setname_handler);
+
+    /* Map kernel stack */ 
+    uint32_t stack_frame = pmm_alloc();
+    vmm_map(KERNEL_STACK, stack_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    memset(KERNEL_STACK, 0xCC, PAGE_SIZE);
+
+    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
+
+    /* Create kernel_task */
+    struct task* task = task_create("parent");
+    task->context.cs = KERNEL_CODE_SEG;
+    task->context.ds = KERNEL_DATA_SEG;
+    task->context.ss = KERNEL_DATA_SEG;
+    task->context.cr3 = vmm_get_physical(task->pagedir);
+    task->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
+    task->context.eflags = read_eflags() | EFLAGS_IF;
+    task->context.eip = (uint32_t)parent_entry;
+    kernel_task = task;
+
+    /* Create idle_task */
+    struct task* task1 = task_create("idle_task");
+    task1->context.cs = KERNEL_CODE_SEG;
+    task1->context.ds = task1->context.ss = KERNEL_DATA_SEG;
+    task1->context.cr3 = vmm_get_physical(task1->pagedir);
+    task1->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
+    task1->context.eflags = read_eflags() | EFLAGS_IF;
+    task1->context.eip = (uint32_t)idle_task_entry;
+    idle_task = task1;
+
+    /* Switch to kernel task */
+    task_switch(task);
+    invalid_code_path();
+}
+
 void test_scheduler()
 {
     trace("Testing scheduler");
 
-    heap_record_start();
+    //heap_record_start();
+    //test_ipc();
     test_fork();
-    heap_record_stop();
+    //heap_record_stop();
 }
 
 
