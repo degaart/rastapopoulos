@@ -1,0 +1,6 @@
+url: gettext-0.18.3.2.tar.gz
+version: 0.18.3
+extract-dir: gettext-0.18.3.2
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-static
+build: make -j$NJOBS
+install: make install

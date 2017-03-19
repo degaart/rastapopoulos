@@ -154,40 +154,46 @@ void vmm_init()
     pagedir->entries[1023] = ((uint32_t)pagedir) | PDE_PRESENT | PDE_WRITABLE;
 
     /* Kernel .text */
+    //trace(".text %p - %p", _TEXT_START_, _TEXT_END_);
     for(uint32_t page = (uint32_t)_TEXT_START_; page < (uint32_t)_TEXT_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT);
     }
 
     /* Kernel .rodata */
+    //trace(".rodata %p - %p", _RODATA_START_, _RODATA_END_);
     for(uint32_t page = (uint32_t)_RODATA_START_; page < (uint32_t)_RODATA_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT);
+        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER); // TODO: Remove user mapping
     }
 
     /* Kernel .data */
+    //trace(".data %p - %p", _DATA_START_, _DATA_END_);
     for(uint32_t page = (uint32_t)_DATA_START_; page < (uint32_t)_DATA_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
     /* Kernel .user (usermode code section) */
+    //trace(".user %p - %p", _USER_START_, _USER_END_);
     for(uint32_t page = (uint32_t)_USER_START_; page < (uint32_t)_USER_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER);
     }
 
     /* Kernel .userrodata (usermode read-only data section) */
+    //trace(".userrodata %p - %p", _USER_RODATA_START_, _USER_RODATA_END_);
     for(uint32_t page = (uint32_t)_USER_RODATA_START_; page < (uint32_t)_USER_RODATA_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER);
     }
 
     /* Kernel .userdata (usermode data section) */
+    //trace(".userdata %p - %p", _USER_DATA_START_, _USER_DATA_END_);
     for(uint32_t page = (uint32_t)_USER_DATA_START_; page < (uint32_t)_USER_DATA_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
     }
 
     /* Kernel .bss (also stack, since initial stack is in bss) */
+    //trace(".bss %p - %p", _BSS_START_, _BSS_END_);
     for(uint32_t page = (uint32_t)_BSS_START_; page < (uint32_t)_BSS_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
-
 
     /* Kernel heap */
     struct kernel_heap_info heap_info;

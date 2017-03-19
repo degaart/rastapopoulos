@@ -1,0 +1,10 @@
+url: bin2c-1.0.zip
+version: 1.0
+extract-dir: bin2c
+build:
+    cd "$EXTRACT_DIR" && gcc -o bin2c bin2c.c
+
+install:
+    /usr/bin/install -d -m 0755 "$PREFIX/bin"
+    /usr/bin/install -m 0755 "$EXTRACT_DIR/bin2c" "$PREFIX/bin"
+

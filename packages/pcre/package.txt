@@ -1,0 +1,25 @@
+url: pcre-8.38.tar.bz2
+version: 8.38
+extract-dir: pcre-8.38
+configure:
+    "$EXTRACT_DIR/configure" \
+        --prefix="$PREFIX" \
+        --disable-dependency-tracking \
+        --enable-shared \
+        --disable-static \
+        --enable-utf \
+        --enable-pcre16 \
+        --enable-pcre32 \
+        --enable-jit    \
+        --enable-unicode-properties
+
+build:
+    make -j${NJOBS}
+
+install:
+    make install
+
+detect:
+    pcre-config --version
+
+

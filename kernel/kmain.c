@@ -16,6 +16,9 @@
 uint32_t KERNEL_START = (uint32_t) &_KERNEL_START_;
 uint32_t KERNEL_END = (uint32_t) &_KERNEL_END_;
 
+const char* current_task_name();
+int current_task_pid();
+
 static void pf_handler(struct isr_regs* regs)
 {
     bool user_mode = regs->err_code & (1 << 2); /* user or supervisor mode */
@@ -32,7 +35,8 @@ static void pf_handler(struct isr_regs* regs)
         "\terr: 0x%X\n"
         "\tcs:  0x%X eip: 0x%X (%s) eflags: 0x%X\n"
         "\tss:  0x%X esp: 0x%X\n"
-        "\tcr3: %p\n",
+        "\tcr3: %p\n"
+        "\tcurrent task: %d %s\n",
         address,
         user_mode ? "ring3" : "ring0",
         write ? "write" : "read",
@@ -43,7 +47,8 @@ static void pf_handler(struct isr_regs* regs)
         regs->err_code,
         regs->cs, regs->eip, function ? function : "??", regs->eflags, 
         regs->ss, regs->esp,
-        read_cr3()
+        read_cr3(),
+        current_task_pid(), current_task_name() ? current_task_name() : ""
     );
     abort();
 }
@@ -143,10 +148,10 @@ static void dump_multiboot_info(const struct multiboot_info* multiboot_info)
 static void run_tests()
 {
     //RUN_TEST(test_vmm);
-    //RUN_TEST(test_kmalloc);
+    RUN_TEST(test_kmalloc);
     //RUN_TEST(test_bitset);
     //RUN_TEST(test_list);
-    RUN_TEST(test_scheduler);
+    //RUN_TEST(test_scheduler);
     //RUN_TEST(test_locks);
 }
 

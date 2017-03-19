@@ -1,0 +1,7 @@
+url: mtools-4.0.18.tar.bz2
+version: 4.0.18
+extract-dir: mtools-4.0.18
+configure: LDFLAGS="$LDFLAGS -liconv" "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-debug
+build: make -j$NJOBS
+install: make install
+

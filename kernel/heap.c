@@ -81,7 +81,7 @@ static struct heap_block_header* prev_block(struct heap* heap, struct heap_block
     return prevh;
 }
 
-static bool heap_is_free(struct heap* heap, struct heap_block_header* block)
+bool heap_is_free(struct heap* heap, struct heap_block_header* block)
 {
     //assert(is_valid_block(heap, block));
     if(!is_valid_block(heap, block)) {
@@ -92,7 +92,7 @@ static bool heap_is_free(struct heap* heap, struct heap_block_header* block)
     return result;
 }
 
-static bool heap_is_allocated(struct heap* heap, struct heap_block_header* block)
+bool heap_is_allocated(struct heap* heap, struct heap_block_header* block)
 {
 
     assert(is_valid_block(heap, block));
@@ -427,6 +427,8 @@ bool heap_unlock(struct heap* heap)
     bool result = spinlock_try_unlock(&heap->lock);
     return result;
 }
+
+
 
 
 

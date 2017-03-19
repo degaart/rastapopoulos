@@ -7,7 +7,7 @@ set -eou pipefail
 find . -name '*.asm' -exec ./compile-asm.sh '{}' ';'
 find . -name '*.c' -exec ./compile.sh '{}' ';'
 
-i686-pc-elf-ld \
+i386-pc-elf-ld \
     -T kernel.ld \
     -o obj/kernel.elf \
     -Map obj/kernel.map \

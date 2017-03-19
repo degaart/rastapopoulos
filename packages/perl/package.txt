@@ -1,0 +1,14 @@
+name: perl
+url: perl-5.18.2.tar.bz2
+extract-dir: perl-5.18.2
+version: 5.18.2
+build: 
+	cd "$EXTRACT_DIR" && make -j${NJOBS}
+
+install: 
+	cd "$EXTRACT_DIR" && make install
+
+configure: 
+	cd "$EXTRACT_DIR" && sh Configure -des "-Dprefix=$PREFIX"
+
+detect: perl --version|grep -Eo 'perl .+ \(v[^ )]+\)'|grep -Eo '\(v[^ )]+\)'|sed -e 's/(//' -e 's/)//' -e s'/v//'

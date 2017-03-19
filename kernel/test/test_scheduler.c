@@ -308,6 +308,16 @@ static uint32_t USERFUNC message_checksum(const struct message* msg)
     return checksum;
 }
 
+const char* current_task_name()
+{
+    return current_task ? current_task->name : NULL;
+}
+
+int current_task_pid()
+{
+    return current_task ? current_task->pid : -1;
+}
+
 /****************************************************************************
  * syscall handlers
  ****************************************************************************/
@@ -318,6 +328,7 @@ static uint32_t USERFUNC message_checksum(const struct message* msg)
 #define SYSCALL_MSGPEEK     4
 #define SYSCALL_YIELD       5
 #define SYSCALL_FORK        6
+#define SYSCALL_SETNAME     7
 
 typedef uint32_t (*syscall_handler_t)(struct isr_regs* regs);
 static syscall_handler_t syscall_handlers[80] = {0};
@@ -554,6 +565,13 @@ static uint32_t syscall_fork_handler(struct isr_regs* regs)
     return pid;
 }
 
+static uint32_t syscall_setname_handler(struct isr_regs* regs)
+{
+    const char* new_name = (const char*)regs->ebx;
+    strlcpy(current_task->name, new_name, sizeof(current_task->name));
+    return 0;
+}
+
 static void syscall_handler(struct isr_regs* regs)
 {
     syscall_handler_t handler = NULL;
@@ -576,6 +594,7 @@ static void syscall_register(unsigned num, syscall_handler_t handler)
     else
         panic("Invalid syscall number: %d", num);
 }
+
 
 /****************************************************************************
  * scheduler timer
@@ -771,6 +790,11 @@ static void USERFUNC send_ack(unsigned port, unsigned code, uint32_t result)
     assert(ret);
 }
 
+static void USERFUNC setname(const char* new_name)
+{
+    syscall(SYSCALL_SETNAME, (uint32_t)new_name, 0, 0, 0, 0);
+}
+
 /****************************************************************************
  * test usermode programs
  ****************************************************************************/
@@ -803,6 +827,9 @@ static unsigned USERFUNC is_prime(unsigned num)
 
 static void USERFUNC fibonacci_entry()
 {
+    static const char USERRODATA proc_name[] = "fibonacci";
+    setname(proc_name);
+
     for(unsigned i = 0; i < 37; i++) {
         unsigned fib = fibonacci(i);
         user_trace("fib(%d): %d", i, fib);
@@ -811,6 +838,9 @@ static void USERFUNC fibonacci_entry()
 
 static void USERFUNC sleeper_entry()
 {
+    static const char USERRODATA proc_name[] = "sleeper";
+    setname(proc_name);
+
     for(unsigned i = 0; i < 20; i++) {
         user_sleep(1000);
         user_trace("sleeper: %d", i);
@@ -822,6 +852,9 @@ static void USERFUNC sleeper_entry()
 
 static void USERFUNC user_entry()
 {
+    static const char USERRODATA proc_name[] = "primes";
+    setname(proc_name);
+
     unsigned start_val = 5001000;
 
     /* Fork into other tasks */
@@ -870,6 +903,7 @@ static void jump_to_usermode(void (*entry_point)())
     bzero(task_ucb, sizeof(struct ucb));
 
     /* Create port for receiving acks from kernel_task */
+    assert(task_ucb);
     task_ucb->ack_port = port_open();
 
     /* Jump to usermode */
@@ -1057,6 +1091,7 @@ static void test_fork()
     syscall_register(SYSCALL_MSGPEEK, syscall_msgpeek_handler);
     syscall_register(SYSCALL_YIELD, syscall_yield_handler);
     syscall_register(SYSCALL_FORK, syscall_fork_handler);
+    syscall_register(SYSCALL_SETNAME, syscall_setname_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
@@ -1095,7 +1130,9 @@ void test_scheduler()
 {
     trace("Testing scheduler");
 
+    heap_record_start();
     test_fork();
+    heap_record_stop();
 }
 
 

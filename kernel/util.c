@@ -35,4 +35,3 @@ unsigned USERFUNC hash(const void* data, unsigned size)
     return hash2(data, size, 0);
 }
 
-

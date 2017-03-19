@@ -1,0 +1,14 @@
+url: objconv-2.44.tar.gz
+version: 2.44
+extract-dir: objconv-2.44
+build:
+    cd "$EXTRACT_DIR"
+    sh build.sh
+
+install:
+    mkdir -p "$PREFIX/bin"
+    install -m0755 "$EXTRACT_DIR/objconv" "$PREFIX/bin"
+
+
+
+

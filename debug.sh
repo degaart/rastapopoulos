@@ -1,1 +1,1 @@
-i686-pc-elf-gdb -tui --command=debug.gdb
+i386-pc-elf-gdb -tui --command=debug.gdb

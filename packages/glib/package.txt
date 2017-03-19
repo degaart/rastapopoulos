@@ -1,0 +1,13 @@
+url: glib-2.51.5.tar.xz
+version: 2.51.5
+extract-dir: glib-2.51.5
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-maintainer-mode --disable-dependency-tracking --disable-silent-rules --disable-dtrace --disable-libelf --localstatedir="$PREFIX/var" --disable-static
+build: make -j$NJOBS
+install: make install
+depends:
+    pkg-config
+    gettext
+    libffi
+    python >= 2.7
+    pcre >= 8.13
+

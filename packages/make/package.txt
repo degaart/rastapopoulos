@@ -1,0 +1,8 @@
+url: make-4.1.tar.bz2
+version: 4.1
+extract-dir: make-4.1
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}"
+build: make -j$NJOBS
+install: make install
+detect: make --version|head -n1|grep -Eo 'GNU Make [^ ]+'|cut -d' ' -f3
+

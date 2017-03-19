@@ -1,0 +1,6 @@
+url: jpegsrc.v9a.tar.gz
+version: 9a
+extract-dir: jpeg-9a
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-dependency-tracking --disable-static
+build: make -j$NJOBS
+install: make install

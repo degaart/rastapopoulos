@@ -1,0 +1,62 @@
+diff -rupN ca-certificates-20160607.orig/make-ca.sh ca-certificates-20160607/make-ca.sh
+--- ca-certificates-20160607.orig/make-ca.sh	2016-07-08 14:45:25.000000000 +0300
++++ ca-certificates-20160607/make-ca.sh	2016-07-08 14:45:51.000000000 +0300
+@@ -11,7 +11,7 @@
+ # Version 20120211
+ 
+ # Some data in the certs have UTF-8 characters
+-export LANG=en_US.utf8
++export LANG=en_US.UTF-8
+ 
+ certdata="certdata.txt"
+ 
+@@ -29,7 +29,7 @@ fi
+ 
+ VERSION=$(echo $REVISION | cut -f2 -d" ")
+ 
+-TEMPDIR=$(mktemp -d)
++TEMPDIR=$(mktemp -d /tmp/ca-certificates.XXXXXXXX)
+ TRUSTATTRIBUTES="CKA_TRUST_SERVER_AUTH"
+ BUNDLE="BLFS-ca-bundle-${VERSION}.crt"
+ CONVERTSCRIPT="./make-cert.pl"
+@@ -57,7 +57,7 @@ done
+ unset CERTBEGINLIST CERTDATA CERTENDLIST certbegin certend
+ 
+ mkdir -p certs
+-rm -f certs/*      # Make sure the directory is clean
++rm -f certs/* || true 
+ 
+ for tempfile in ${TEMPDIR}/certs/*.tmp; do
+   # Make sure that the cert is trusted...
+@@ -70,7 +70,7 @@ for tempfile in ${TEMPDIR}/certs/*.tmp; 
+     perl ${CONVERTSCRIPT} > tempfile.crt
+     keyhash=$(openssl x509 -noout -in tempfile.crt -hash)
+     echo "Certificate ${keyhash} is not trusted!  Removing..."
+-    rm -f tempfile.cer tempfile.crt "${tempfile}"
++    rm -f tempfile.cer tempfile.crt "${tempfile}" || true
+     continue
+   fi
+ 
+@@ -81,7 +81,7 @@ for tempfile in ${TEMPDIR}/certs/*.tmp; 
+   perl ${CONVERTSCRIPT} > tempfile.crt
+   keyhash=$(openssl x509 -noout -in tempfile.crt -hash)
+   mv tempfile.crt "certs/${keyhash}.pem"
+-  rm -f tempfile.cer "${tempfile}"
++  rm -f tempfile.cer "${tempfile}" || true
+   echo "Created ${keyhash}.pem"
+ done
+ 
+@@ -89,11 +89,11 @@ done
+ # MD5 Collision Proof of Concept CA
+ if test -f certs/8f111d69.pem; then
+   echo "Certificate 8f111d69 is not trusted!  Removing..."
+-  rm -f certs/8f111d69.pem
++  rm -f certs/8f111d69.pem || true
+ fi
+ 
+ # Finally, generate the bundle and clean up.
+ cat certs/*.pem >  ${BUNDLE}
+-rm -r "${TEMPDIR}"
++rm -r "${TEMPDIR}" || true
+ 
+ 

@@ -1,0 +1,12 @@
+Required packages:
+    bin2c
+    clang
+    grub2
+    binutils
+    make
+    mtools
+    nasm
+    qemu
+    gdb
+
+

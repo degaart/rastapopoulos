@@ -1,0 +1,10 @@
+url: autoconf-2.69.tar.xz
+version: 2.69
+extract-dir: autoconf-2.69
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}"
+build: make -j$NJOBS
+install: make install
+depends:
+    m4 >= 1.4.13
+
+detect: autoconf --version|head -n1|grep -Eo "autoconf \(GNU Autoconf\) [^ ]+"|sed s'/autoconf (GNU Autoconf)//'

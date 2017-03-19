@@ -1,0 +1,8 @@
+url: binutils-2.28.tar.bz2
+version: 2.28
+extract-dir: binutils-2.28
+configure:
+    "${EXTRACT_DIR}"/configure --target="$TARGET" --prefix="$PREFIX" --with-sysroot="$PREFIX" --disable-nls --disable-werror --disable-multilib
+
+build: make -j$NJOBS
+install: make install

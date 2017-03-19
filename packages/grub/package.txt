@@ -1,0 +1,23 @@
+url: grub-2.02-rc2.tar.gz
+version: 2.02-rc2
+extract-dir: grub-2.02-rc2
+configure:
+    cd "$EXTRACT_DIR"
+    ./autogen.sh
+    cd "$BUILD_DIR"
+    "$EXTRACT_DIR"/configure \
+        --prefix="$PREFIX" \
+        --target="$TARGET"
+
+build:
+    make -j$NJOBS
+
+install:
+    make install
+
+depends:
+    automake
+    libtool
+    gcc
+
+
