@@ -1,0 +1,21 @@
+url: gdb-7.12.tar.xz
+version: 7.12
+extract-dir: gdb-7.12
+configure:
+    "$EXTRACT_DIR/configure" \
+        --prefix="$PREFIX" \
+        --program-prefix="${TARGET}-" \
+        --target=$TARGET \
+        --with-libelf="$PREFIX"
+
+build:
+    make -j$NJOBS
+
+install:
+    make install
+
+depends:
+    libelf
+    pkg-config
+    python
+

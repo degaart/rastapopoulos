@@ -1,0 +1,12 @@
+url: libpng-1.6.4.tar.xz
+version: 1.6.4
+extract-dir: libpng-1.6.4
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-dependency-tracking --disable-silent-rules
+build: make -j$NJOBS
+install: make install
+depends:
+    autoconf
+    automake
+    libtool
+    zlib
+

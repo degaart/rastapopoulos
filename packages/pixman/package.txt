@@ -1,0 +1,11 @@
+url: xorg/pixman-0.30.2.tar.gz
+version: 0.30.2
+extract-dir: pixman-0.30.2
+configure:
+    "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-dependency-tracking --disable-gtk --disable-silent-rules --disable-mmx
+
+build: make -j$NJOBS
+install: make install
+depends:
+    libpng
+

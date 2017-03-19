@@ -1,0 +1,21 @@
+name: zlib
+url: zlib-1.2.8.tar.xz
+extract-dir: zlib-1.2.8
+version: 1.2.8
+build: cd "$EXTRACT_DIR" && make -j${NJOBS}
+install: cd "$EXTRACT_DIR" && make install
+configure: cd "$EXTRACT_DIR" && ./configure --prefix="$PREFIX"
+detect:
+    tmpfile1="/tmp/detect-zlib.$$.c"
+    tmpfile2="/tmp/detect-zlib.$$.exe"
+    trap "rm -f $tmpfile1 $tmpfile2" EXIT
+    cat << EOF > $tmpfile1
+    #include <zlib.h>
+    #include <stdio.h>
+    int main() {
+        printf("%s\n", ZLIB_VERSION);
+        return 0;
+    }
+    EOF
+    gcc -o "$tmpfile2" "$tmpfile1"
+    "$tmpfile2"

@@ -1,0 +1,11 @@
+diff -rupN Python-2.7.11.orig/configure Python-2.7.11/configure
+--- Python-2.7.11.orig/configure	2016-02-28 11:39:20.000000000 +0300
++++ Python-2.7.11/configure	2016-02-28 11:39:55.000000000 +0300
+@@ -6113,6 +6113,7 @@ $as_echo "$CC" >&6; }
+ 		    fi
+ 	    fi
+ 	    CONFIGURE_MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET-${cur_target}}
++            CONFIGURE_MACOSX_DEPLOYMENT_TARGET=10.5
+ 
+ 	    # Make sure that MACOSX_DEPLOYMENT_TARGET is set in the
+ 	    # environment with a value that is the same as what we'll use

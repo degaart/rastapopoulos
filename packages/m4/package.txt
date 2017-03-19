@@ -1,0 +1,8 @@
+url: m4-1.4.17.tar.xz
+version: 1.4.17
+extract-dir: m4-1.4.17
+configure: "$EXTRACT_DIR"/configure --prefix="$PREFIX" --disable-dependency-tracking
+build: make -j$NJOBS
+install: make install
+detect: m4 --version|head -n1|awk '{ print $NF }'
+

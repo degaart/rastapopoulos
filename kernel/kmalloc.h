@@ -17,4 +17,6 @@ void kfree(void* address);
  */
 void kernel_heap_info(struct kernel_heap_info* heap_info);
 
+void heap_record_start();
+void heap_record_stop();
 

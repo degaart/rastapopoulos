@@ -1,0 +1,10 @@
+url: libffi-3.2.1.tar.gz
+version: 3.2.1
+extract-dir: libffi-3.2.1
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-dependency-tracking --disable-debug
+build: make
+install: make install
+depends:
+    autoconf
+    automake
+    libtool

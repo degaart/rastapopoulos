@@ -1,0 +1,14 @@
+diff -rupN ca-certificates-20160607.orig/make-ca.sh ca-certificates-20160607/make-ca.sh
+--- ca-certificates-20160607.orig/make-ca.sh	2016-12-06 18:34:59.000000000 +0300
++++ ca-certificates-20160607/make-ca.sh	2016-12-06 18:35:32.000000000 +0300
+@@ -29,7 +29,9 @@ fi
+ 
+ VERSION=$(echo $REVISION | cut -f2 -d" ")
+ 
+-TEMPDIR=$(mktemp -d /tmp/ca-certificates.XXXXXXXX)
++TEMPDIR="/tmp/ca-certicates-$$"
++mkdir -pv "$TEMPDIR"
++
+ TRUSTATTRIBUTES="CKA_TRUST_SERVER_AUTH"
+ BUNDLE="BLFS-ca-bundle-${VERSION}.crt"
+ CONVERTSCRIPT="./make-cert.pl"

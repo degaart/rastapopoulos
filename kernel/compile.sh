@@ -5,20 +5,22 @@ echo "[CC] $1"
 
 # -fno-asynchronous-unwind-tables
 CFLAGS="-masm=intel \
-    -march=i386 -target i686-pc-elf -ffreestanding -fno-builtin -nostdlib \
+    -ffreestanding -fno-builtin -nostdlib \
     -Werror \
-    -g \
+    -O0 -g \
     -std=gnu99 \
     -fno-asynchronous-unwind-tables \
     -fno-strict-aliasing"
 
-clang \
+i386-pc-elf-gcc \
     -c -o "obj/$(basename "$1")".o \
+    -pipe \
     ${CFLAGS} \
     "$1"
 
-clang \
+i386-pc-elf-gcc \
     -S \
     -o "obj/$(basename "$1")".S \
+    -pipe \
     ${CFLAGS} \
     "$1"

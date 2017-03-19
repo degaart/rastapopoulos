@@ -1,0 +1,31 @@
+url: cmake-3.6.2.tar.gz
+version: 3.6.2
+extract-dir: cmake-3.6.2
+configure:
+    if cmake --version > /dev/null 2>&1; then
+        cmake \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DCMAKE_OSX_ARCHITECTURES="$BUILDENV_OSX_ARCH" \
+            -DCMAKE_OSX_SYSROOT="$BUILDENV_OSX_SYSROOT" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$BUILDENV_OSX_DEPLOYMENT_TARGET" \
+            "$EXTRACT_DIR"
+    else
+        "$EXTRACT_DIR"/configure \
+            --prefix="$PREFIX" \
+            --parallel=$NJOBS \
+            -- \
+            -DCMAKE_OSX_ARCHITECTURES="$BUILDENV_OSX_ARCH" \
+            -DCMAKE_OSX_SYSROOT="$BUILDENV_OSX_SYSROOT" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$BUILDENV_OSX_DEPLOYMENT_TARGET"
+    fi
+
+build: make -j$NJOBS
+install: make install
+detect:
+    # This is fucking stupid
+    # We explicitly remove /usr/local/bin from PATH to prevent homebrew from
+    # screwing things aroung. BUT, now we are using /usr/local/bin for our taps
+    # And then, cmake isn't detected. Simple as that
+    cmake --version|head -n1|cut -d' ' -f3
+

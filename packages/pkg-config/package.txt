@@ -1,0 +1,9 @@
+url: pkg-config-lite-0.27.1-1.tar.gz
+version: 0.27.1-1
+extract-dir: pkg-config-lite-0.27.1-1
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-dependency-tracking --disable-host-tool --with-internal-glib --with-pc-path="$PREFIX/lib/pkgconfig:/usr/lib/pkgconfig"
+build: make -j$NJOBS
+install: make install
+detect: pkg-config --version
+
+

@@ -183,13 +183,39 @@ void USERFUNC bzero(void* buffer, uint32_t size)
 
 void USERFUNC memcpy(void* dest, const void* source, size_t size)
 {
+#if 0
     uint8_t* src = (uint8_t*)source;
     uint8_t* dst = (uint8_t*)dest;
 
     while(size--) {
         *(dst++) = *(src++);
     }
+#elif 0
+    const unsigned char* src = (const unsigned char*)source;
+    unsigned char* dst = (unsigned char*)dst;
+    for(size_t i = 0; i < size; i++) {
+        dst[i] = src[i];
+    }
+#else
+    // Stolen from xv6
+    const char *s;
+    char *d;
+
+    s = source;
+    d = dest;
+    size_t n = size;
+    if(s < d && s + n > d){
+        s += n;
+        d += n;
+        while(n-- > 0)
+            *--d = *--s;
+    } else {
+        while(n-- > 0)
+            *d++ = *s++;
+    }
+#endif
 }
+
 
 int USERFUNC memcmp(const void* p0, const void* p1, size_t size)
 {

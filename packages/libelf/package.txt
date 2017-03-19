@@ -1,0 +1,6 @@
+url: libelf-0.8.13.tar.gz
+version: 0.8.13
+extract-dir: libelf-0.8.13
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-dependency-tracking
+build: make -j$NJOBS
+install: make install

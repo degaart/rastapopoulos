@@ -1,0 +1,9 @@
+url: mpc-1.0.3.tar.gz
+version: 1.0.3
+extract-dir: mpc-1.0.3
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-static --with-gmp="$PREFIX" --with-mpfr="$PREFIX"
+build: make -j$NJOBS
+install: make install
+depends:
+    gmp
+    mpfr

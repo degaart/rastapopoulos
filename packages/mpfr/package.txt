@@ -1,0 +1,7 @@
+url: mpfr-3.1.5.tar.bz2
+version: 3.1.5
+extract-dir: mpfr-3.1.5
+configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-static --with-gmp="$PREFIX"
+build: make -j$NJOBS
+install: make install
+depends: gmp
