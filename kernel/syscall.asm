@@ -18,17 +18,14 @@ syscall:
 
     cmp     eax, 2
     jne     .call_int
-    xchg    bx, bx
     
 
 .call_int:
-    ; xchg    bx, bx
     int     0x80
-    ; xchg    bx, bx
 
     pop     edi
     pop     esi
-    pop     edx
+    pop     ebx
 
     pop     ebp
     ret
