@@ -4,7 +4,7 @@ set -eou pipefail
 
 pushd . > /dev/null
 cd kernel
-./build.sh || {
+make || {
     echo "Build failed"
     exit 1
 }
