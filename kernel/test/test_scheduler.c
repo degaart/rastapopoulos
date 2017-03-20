@@ -954,8 +954,8 @@ static void kernel_task_entry()
     //unsigned pid = kfork();
     unsigned pid = user_fork();
     if(!pid) {
-        //jump_to_usermode(user_entry);
-        producer_entry();
+        jump_to_usermode(user_entry);
+        //producer_entry();
         panic("Invalid code path");
     }
 
