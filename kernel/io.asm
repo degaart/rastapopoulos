@@ -2,7 +2,7 @@
 ; IO assembly  helper functions
 ;
 
-section .text
+section .user
 
 ; void outb(uint16_t port, uint8_t val);
 global outb

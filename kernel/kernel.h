@@ -39,5 +39,6 @@ extern unsigned char initial_kernel_stack[4096];
 #define USERFUNC __attribute__((section(".user")))
 #define USERRODATA __attribute__((section(".userrodata")))
 #define USERDATA __attribute__((section(".userdata")))
+#define USERSTR(var, str) static const char USERRODATA var[] = str
 
 
