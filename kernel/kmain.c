@@ -12,6 +12,8 @@
 #include "util.h"
 #include "kmalloc.h"
 #include "vmm.h"
+#include "syscall.h"
+#include "ipc.h"
 
 uint32_t KERNEL_START = (uint32_t) &_KERNEL_START_;
 uint32_t KERNEL_END = (uint32_t) &_KERNEL_END_;
@@ -223,7 +225,12 @@ void kmain(const struct multiboot_info* multiboot_info)
 
     // System timer
     timer_init();
-    //timer_schedule(reboot_timer, NULL, 3000, false);
+
+    // Syscall handlers
+    syscall_init();
+
+    // IPC System
+    ipc_init();
 
     // Run tests
     run_tests();

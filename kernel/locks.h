@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "debug.h"
 
 typedef uint32_t if_state_t;
 
