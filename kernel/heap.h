@@ -40,12 +40,5 @@ void heap_free_block(struct heap* heap, struct heap_block_header* block);
 void heap_dump(struct heap* heap);
 bool heap_lock(struct heap* heap);
 bool heap_unlock(struct heap* heap);
-
-
-
-
-
-
-
-
+void heap_check(struct heap* heap, const char* file, int line);
 

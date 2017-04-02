@@ -4,27 +4,19 @@
 #include "../pmm.h"
 #include "../string.h"
 #include "../heap.h"
-#include "kmalloc-dump.h"
+#include "../kmalloc.h"
+#include "heap_records.h"
 
 #if 1
 
 bool heap_is_free(struct heap* heap, struct heap_block_header* block);
 bool heap_is_allocated(struct heap* heap, struct heap_block_header* block);
 
-#define RecordTypeKmalloc       1
-#define RecordTypeKfree         2
-
-struct record {
-    int type;
-    size_t size;
-    int align;
-    void* buffer;
-};
-
 static void test_complex()
 {
-    trace("Testing complex kmalloc-kfree chain");
-
+    //trace("Testing complex kmalloc-kfree chain");
+    void* p = kmalloc_a(100, 8);
+    dump_var(p);
 }
 
 static void test_simple_alloc(struct heap* heap)
@@ -162,9 +154,8 @@ static void test_heap_limits(struct heap* heap)
 
 void test_kmalloc()
 {
+#if 0
     trace("Testing kmalloc()");
-
-#if 1
     /* Create heap at 48Mb */
     unsigned char* heap_start = (unsigned char*)0x3000000;
     vmm_map(heap_start, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);

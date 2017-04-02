@@ -6,41 +6,10 @@
 #include "debug.h"
 #include "registers.h"
 #include "locks.h"
+#include "string.h"
 
 struct heap* kernel_heap = NULL;
-
-#define RecordTypeKmalloc       1
-#define RecordTypeKfree         2
-
-struct record {
-    void* buffer;
-    uint16_t size;      // Expressed as log2
-    uint8_t type;
-    uint8_t align;
-} __attribute((packed))__;
-static struct record records[16384] = {0};
-static struct record* record_ptr = records;
-static bool record_enabled = false;
-#define MAX_RECORDS countof(records)
-
-static void add_record(int type,  size_t size, int align, void* buffer)
-{
-    if(record_enabled) {
-        assert(record_ptr < records + MAX_RECORDS);
-
-        record_ptr->type = type;
-
-        if(type == RecordTypeKmalloc && !is_pow2(align)) {
-            panic("Invalid alignment: %d", align);
-        }
-        record_ptr->align = log2(align);
-
-        assert(size < 65536);
-        record_ptr->size = size;
-        record_ptr->buffer = buffer;
-        record_ptr++;
-    }
-}
+static bool trace_enabled = false;
 
 void kmalloc_init()
 {
@@ -68,10 +37,20 @@ void kfree(void* address)
     if(address) {
         struct heap_block_header* block =
             (struct heap_block_header*)((unsigned char*)address - sizeof(struct heap_block_header));
+
+        if(trace_enabled) {
+            trace("kfree(%p); /* block: %p, flags: %p, size: %d, next: %p */", 
+                  address,
+                  block,
+                  block->flags,
+                  block->size,
+                  block->next);
+        }
+
         heap_free_block(kernel_heap, block);
     }
 
-    add_record(RecordTypeKfree, 0, 0, address); 
+
     leave_critical_section();
 }
 
@@ -90,9 +69,18 @@ void* kmalloc_a(unsigned size, unsigned alignment)
 
     if(block) {
         result = ((unsigned char*)block) + sizeof(struct heap_block_header);
+
+        if(trace_enabled) {
+            trace("kmalloc_a(%d, %d); /* block: %p, buffer: %p, flags: %p, size: %d, next: %p */",
+                  size, alignment,
+                  block,
+                  result,
+                  block->flags,
+                  block->size,
+                  block->next);
+        }
     }
 
-    add_record(RecordTypeKmalloc, size, alignment, result);
     leave_critical_section();
 
     return result;
@@ -109,17 +97,23 @@ void kernel_heap_info(struct kernel_heap_info* buffer)
     leave_critical_section();
 }
 
-void heap_record_start()
+void heap_trace_start()
 {
-    trace("Starting heap recording. MAX_RECORDS: %d", MAX_RECORDS);
-    record_enabled = true;
-    record_ptr = records;
+    trace_enabled = true;
 }
 
-void heap_record_stop()
+void heap_trace_stop()
 {
-    record_enabled = false;
+    trace_enabled = false;
 }
+
+void __kernel_heap_check(const char* file, int line)
+{
+    heap_check(kernel_heap, file, line);
+}
+
+
+
 
 
 

@@ -350,17 +350,26 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     
     /* Copy message into kernel space */
     size_t bufsize = sizeof(struct message) + msg->len;
+    kernel_heap_check();
+
     struct message* msg_copy = kmalloc(bufsize);
+    kernel_heap_check();
+
+
     memcpy(msg_copy, msg, bufsize);
+    kernel_heap_check();
+
     assert(msg_copy->checksum == checksum);
 
     msg_copy->sender = current_task->pid;
     msg_copy->checksum = message_checksum(msg_copy);
+    kernel_heap_check();
 
     /* Add message to port's queue */
     checked_lock(&port->lock);
     list_append(&port->queue, msg_copy);
     checked_unlock(&port->lock);
+    kernel_heap_check();
 
     /* Wake any process waiting on this port */
     checked_lock(&msgwait_queue_lock);
@@ -375,11 +384,14 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
             checked_lock(&ready_queue_lock);
             list_push(&ready_queue, task);
             checked_unlock(&ready_queue_lock);
+            kernel_heap_check();
         }
 
         task_node = next;
     }
     checked_unlock(&msgwait_queue_lock);
+
+    kernel_heap_check();
 
     return 1;
 }
@@ -424,7 +436,12 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
             break;
 
 #if 1
+        // Gotcha: here is the pesky bug
+        trace("%s msgwait esp: %p", current_task->name, read_esp());
         msgwait(port->number);
+        trace("%s esp after msgwait: %p", current_task->name, read_esp());
+        assert(!interrupts_enabled());
+        kernel_heap_check();
 #else
         sti();
         hlt();
@@ -470,7 +487,6 @@ static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
 
     save_task_state(current_task, regs);
     current_task->wait_port = port_number;
-
 
     checked_lock(&msgwait_queue_lock);
     list_append(&msgwait_queue, current_task);
@@ -564,7 +580,15 @@ static void syscall_handler(struct isr_regs* regs)
         handler = syscall_handlers[syscall_num];
 
     if(handler) {
+        trace("syscall: %d, pid: %d, name: %s", 
+              syscall_num, 
+              current_task->pid, 
+              current_task->name);
+
+        save_task_state(current_task, regs);
+        kernel_heap_check();
         regs->eax = handler(regs);
+        kernel_heap_check();
     } else {
         panic("Invalid syscall number: %d", syscall_num);
     }
@@ -817,6 +841,10 @@ static void USERFUNC fibonacci_entry()
         unsigned fib = fibonacci(i);
         user_trace("fib(%d): %d", i, fib);
     }
+
+    user_trace("Done");
+    user_exit();
+    invalid_code_path();
 }
 
 static void USERFUNC sleeper_entry()
@@ -881,9 +909,11 @@ exit:
  */
 static void jump_to_usermode(void (*entry_point)())
 {
+#if 0
     /* Create ucb */
     vmm_map(task_ucb, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
     bzero(task_ucb, sizeof(struct ucb));
+#endif
 
     /* Create port for receiving acks from kernel_task */
     assert(task_ucb);
@@ -954,7 +984,8 @@ static void kernel_task_entry()
     //unsigned pid = kfork();
     unsigned pid = user_fork();
     if(!pid) {
-        jump_to_usermode(user_entry);
+        //jump_to_usermode(user_entry);
+        jump_to_usermode(fibonacci_entry);
         //producer_entry();
         panic("Invalid code path");
     }
@@ -1187,12 +1218,13 @@ static void test_fork()
 
 void test_scheduler()
 {
+    //heap_trace_start();
+
     trace("Testing scheduler");
 
-    //heap_record_start();
     test_ipc();
     //test_fork();
-    //heap_record_stop();
+    heap_trace_stop();
 }
 
 

@@ -21,6 +21,14 @@ struct bitset* bitset_new(uint32_t size)
     return result;
 }
 
+unsigned bitset_alloc_size(uint32_t size)
+{
+    uint32_t element_count = ALIGN(size, BIT_PER_ELEMENT) / BIT_PER_ELEMENT;
+    uint32_t alloc_size = sizeof(struct bitset) + (sizeof(uint32_t) * element_count);
+    assert(element_count * BIT_PER_ELEMENT >= size);
+    return alloc_size;
+}
+
 bool bitset_test(const struct bitset* bitset, uint32_t offset)
 {
     assert(offset < bitset->size);
