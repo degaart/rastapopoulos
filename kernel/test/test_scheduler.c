@@ -45,14 +45,19 @@
  * Identified by a single, unique number
  * Single receiver, multiple senders
  */
+list_declare(message_list, message);
+
 struct port {
+    list_declare_node(port) node;
     unsigned number;            /* Port number */
     int receiver;
-    struct list queue;          /* Message queue */
+    struct message_list queue; /* message queue */
     spinlock_t lock;
 };
+list_declare(port_list, port);
 
 struct message {
+    list_declare_node(message) node;
     uint32_t checksum;
     unsigned sender;            /* Sending process pid */
     unsigned reply_port;        /* Port number to send response to */
@@ -62,23 +67,25 @@ struct message {
 };
 
 struct task {
+    list_declare_node(task) node;
     int pid;
     char name[32];
     struct pagedir* pagedir;
     struct context context;
     unsigned wait_port;
 };
+list_declare(task_list, task);
 
-static struct list ready_queue = {0};
+static struct task_list ready_queue = {0};
 static spinlock_t ready_queue_lock = SPINLOCK_INIT;
 
-static struct list sleeping_queue = {0};
+static struct task_list sleeping_queue = {0};
 static spinlock_t sleeping_queue_lock = SPINLOCK_INIT;
 
-static struct list msgwait_queue = {0};
+static struct task_list msgwait_queue = {0};
 static spinlock_t msgwait_queue_lock = SPINLOCK_INIT;
 
-static struct list port_list = {0};
+static struct port_list port_list = {0};
 static spinlock_t port_list_lock = SPINLOCK_INIT;
 
 static struct task* kernel_task = NULL;
@@ -127,8 +134,7 @@ static struct task* task_create(const char* name)
  */
 struct task_info {
     struct task* task;
-    struct list* queue;
-    struct list_node* node;
+    struct task_list* queue;
 };
 static struct task_info task_getinfo(int pid)
 {
@@ -143,12 +149,11 @@ static struct task_info task_getinfo(int pid)
 
     if(!result.task) {
         checked_lock(&ready_queue_lock);
-        for(struct list_node* n = ready_queue.head; n; n = n->next) {
-            struct task* task = n->data;
+
+        list_foreach(task, task, &ready_queue, node) {
             if(task->pid == pid) {
                 result.task = task;
                 result.queue = &ready_queue;
-                result.node = n;
                 break;
             }
         }
@@ -157,12 +162,10 @@ static struct task_info task_getinfo(int pid)
 
     if(!result.task) {
         checked_lock(&sleeping_queue_lock);
-        for(struct list_node* n = sleeping_queue.head; n; n = n->next) {
-            struct task* task = n->data;
+        list_foreach(task, task, &sleeping_queue, node) {
             if(task->pid == pid) {
                 result.task = task;
                 result.queue = &sleeping_queue;
-                result.node = n;
                 break;
             }
         }
@@ -171,12 +174,10 @@ static struct task_info task_getinfo(int pid)
 
     if(!result.task) {
         checked_lock(&msgwait_queue_lock);
-        for(struct list_node* n = msgwait_queue.head; n; n = n->next) {
-            struct task* task = n->data;
+        list_foreach(task, task, &msgwait_queue, node) {
             if(task->pid == pid) {
                 result.task = task;
                 result.queue = &msgwait_queue;
-                result.node = n;
                 break;
             }
         }
@@ -195,9 +196,10 @@ static struct port* port_get(unsigned number)
 
     enter_critical_section();
     checked_lock(&port_list_lock);
-    for(struct list_node* n = port_list.head; n; n = n->next) {
-        if(((struct port*)n->data)->number == number) {
-            port = n->data;
+
+    list_foreach(port, check, &port_list, node) {
+        if(check->number == number) {
+            port = check;
             break;
         }
     }
@@ -257,7 +259,10 @@ static void task_switch_next()
     cli();
 
     checked_lock(&ready_queue_lock);
-    next_task = list_pop(&ready_queue);
+    next_task = list_head(&ready_queue);
+    if(next_task) {
+        list_remove(&ready_queue, next_task, node);
+    }
     checked_unlock(&ready_queue_lock);
 
     if(!next_task)
@@ -316,9 +321,10 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
     result->number = next_port_value++;
     result->receiver = current_task->pid;
     result->lock = SPINLOCK_INIT;
+    list_init(&result->queue);
 
     checked_lock(&port_list_lock);
-    list_append(&port_list, result);
+    list_append(&port_list, result, node);
     checked_unlock(&port_list_lock);
 
     leave_critical_section();
@@ -355,8 +361,9 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     struct message* msg_copy = kmalloc(bufsize);
     kernel_heap_check();
 
-
     memcpy(msg_copy, msg, bufsize);
+    list_next(msg_copy, node) = NULL;
+    list_prev(msg_copy, node) = NULL;
     kernel_heap_check();
 
     assert(msg_copy->checksum == checksum);
@@ -367,27 +374,21 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
 
     /* Add message to port's queue */
     checked_lock(&port->lock);
-    list_append(&port->queue, msg_copy);
+    list_append(&port->queue, msg_copy, node);
     checked_unlock(&port->lock);
     kernel_heap_check();
 
     /* Wake any process waiting on this port */
     checked_lock(&msgwait_queue_lock);
-    struct list_node* task_node = msgwait_queue.head;
-    while(task_node) {
-        struct list_node* next = task_node->next;
-
-        struct task* task = task_node->data;
+    list_foreach(task, task, &msgwait_queue, node) {
         if(task->wait_port == port_number) {
-            list_remove(&msgwait_queue, task_node);
+            list_remove(&msgwait_queue, task, node);
 
             checked_lock(&ready_queue_lock);
-            list_push(&ready_queue, task);
+            list_append(&ready_queue, task, node);
             checked_unlock(&ready_queue_lock);
             kernel_heap_check();
         }
-
-        task_node = next;
     }
     checked_unlock(&msgwait_queue_lock);
 
@@ -429,30 +430,21 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
             return 2;
 
         checked_lock(&port->lock);
-        bool empty = port->queue.head == NULL;
+        bool empty = list_empty(&port->queue);
         checked_unlock(&port->lock);
 
         if(!empty)
             break;
 
-#if 1
-        // Gotcha: here is the pesky bug
-        trace("%s msgwait esp: %p", current_task->name, read_esp());
         msgwait(port->number);
-        trace("%s esp after msgwait: %p", current_task->name, read_esp());
         assert(!interrupts_enabled());
         kernel_heap_check();
-#else
-        sti();
-        hlt();
-        cli();
-#endif
     }
 
     uint32_t result;
 
     checked_lock(&port->lock);
-    struct message* message = port->queue.head->data;
+    struct message* message = list_head(&port->queue);
 
     /* Validate message */
     unsigned checksum = message_checksum(message);
@@ -464,7 +456,7 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
     *outsize = sizeof(struct message) + message->len;
     if(buffer_size >= sizeof(struct message) + message->len) {
         memcpy(buffer, message, sizeof(struct message) + message->len);
-        list_pop(&port->queue);
+        list_remove(&port->queue, message, node);
         result = 0;
     } else {
         result = 3;
@@ -489,7 +481,7 @@ static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
     current_task->wait_port = port_number;
 
     checked_lock(&msgwait_queue_lock);
-    list_append(&msgwait_queue, current_task);
+    list_append(&msgwait_queue, current_task, node);
     checked_unlock(&msgwait_queue_lock);
 
     /* Switch to next task */
@@ -515,7 +507,8 @@ static uint32_t syscall_msgpeek_handler(struct isr_regs* regs)
     if(port) {
         checked_lock(&port->lock);
         if(current_task->pid == port->receiver) {
-            result = port->queue.head != NULL;
+            if(!list_empty(&port->queue))
+                result = 1;
         }
         checked_unlock(&port->lock);
     }
@@ -530,7 +523,7 @@ static uint32_t syscall_yield_handler(struct isr_regs* regs)
     save_task_state(current_task, regs);
 
     checked_lock(&ready_queue_lock);
-    list_append(&ready_queue, current_task);
+    list_append(&ready_queue, current_task, node);
     checked_unlock(&ready_queue_lock);
 
     task_switch_next();
@@ -555,7 +548,7 @@ static uint32_t syscall_fork_handler(struct isr_regs* regs)
 
     enter_critical_section();
     checked_lock(&ready_queue_lock);
-    list_append(&ready_queue, new_task);
+    list_append(&ready_queue, new_task, node);
     checked_unlock(&ready_queue_lock);
     leave_critical_section();
 
@@ -580,10 +573,12 @@ static void syscall_handler(struct isr_regs* regs)
         handler = syscall_handlers[syscall_num];
 
     if(handler) {
+#ifdef SYSCALL_TRACE
         trace("syscall: %d, pid: %d, name: %s", 
               syscall_num, 
               current_task->pid, 
               current_task->name);
+#endif
 
         save_task_state(current_task, regs);
         kernel_heap_check();
@@ -615,7 +610,7 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     /* Push current task into ready queue */
     if(current_task != idle_task) {
         checked_lock(&ready_queue_lock);
-        list_append(&ready_queue, current_task);
+        list_append(&ready_queue, current_task, node);
         checked_unlock(&ready_queue_lock);
     }
 
@@ -894,7 +889,7 @@ static void USERFUNC user_entry()
     unsigned end_val = start_val + 500;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
-            user_trace("%d", i);
+            user_trace("prime: %d", i);
         }
     }
 
@@ -909,12 +904,6 @@ exit:
  */
 static void jump_to_usermode(void (*entry_point)())
 {
-#if 0
-    /* Create ucb */
-    vmm_map(task_ucb, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
-    bzero(task_ucb, sizeof(struct ucb));
-#endif
-
     /* Create port for receiving acks from kernel_task */
     assert(task_ucb);
     task_ucb->ack_port = port_open();
@@ -969,9 +958,6 @@ static void producer_entry()
 
 static void kernel_task_entry()
 {
-    /* init port list */
-    list_init(&port_list);
-
     /* Create ucb */
     vmm_map(task_ucb, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
     bzero(task_ucb, sizeof(struct ucb));
@@ -984,8 +970,8 @@ static void kernel_task_entry()
     //unsigned pid = kfork();
     unsigned pid = user_fork();
     if(!pid) {
-        //jump_to_usermode(user_entry);
-        jump_to_usermode(fibonacci_entry);
+        jump_to_usermode(user_entry);
+        //jump_to_usermode(fibonacci_entry);
         //producer_entry();
         panic("Invalid code path");
     }
@@ -995,9 +981,9 @@ static void kernel_task_entry()
         uint64_t deadline;
         int pid;
         unsigned reply_port;
+        list_declare_node(sleeping_task) node;
     };
-    struct list sleeping_tasks = {0};
-    list_init(&sleeping_tasks);
+    list_declare(sleeping_task_list, sleeping_task) sleeping_tasks = {0};
 
     /* Read messages in a loop */
     size_t bufsiz = sizeof(struct message) + 64;
@@ -1025,7 +1011,6 @@ static void kernel_task_entry()
 
                     struct task_info task_info = task_getinfo(msg->sender);
                     assert(task_info.task);
-                    assert(task_info.node);
                     assert(task_info.queue);
 
                     trace("Killing task %d", task_info.task->pid);
@@ -1033,7 +1018,7 @@ static void kernel_task_entry()
                     // By the time we get here, the task might have changed queue
                     // Instead, make destroying the task from its current queue atomic
                     // at the syscall level
-                    list_remove(task_info.queue, task_info.node);
+                    list_remove(task_info.queue, task_info.task, node);
                     vmm_destroy_pagedir(task_info.task->pagedir);
                     kfree(task_info.task);
 
@@ -1050,8 +1035,9 @@ static void kernel_task_entry()
                     st->deadline = timer_timestamp() + *millis;
                     st->pid = msg->sender;
                     st->reply_port = msg->reply_port;
-
-                    list_append(&sleeping_tasks, st);
+                    st->node.prev = st->node.next = NULL;
+                    list_append(&sleeping_tasks, st, node);
+    
                     break;
                 }
                 default:
@@ -1062,22 +1048,18 @@ static void kernel_task_entry()
 
         /* Wake sleeping processes */
         uint64_t now = timer_timestamp();
-        struct list_node* n = sleeping_tasks.head;
-        while(n) {
-            struct list_node* next = n->next;
-
-            struct sleeping_task* st = n->data;
-            if(now >= st->deadline) {
-                send_ack(st->reply_port, KernelMessageSleepAck, 0);
-                kfree(st);
-                list_remove(&sleeping_tasks, n);
+        list_foreach(sleeping_task, task, &sleeping_tasks, node) {
+            if(now >= task->deadline) {
+                send_ack(task->reply_port, KernelMessageSleepAck, 0);
+                list_remove(&sleeping_tasks, task, node);
             }
-            n = next;
         }
 
         /* If no more processes to run, reboot */
         enter_critical_section();
-        if(!ready_queue.head && !sleeping_queue.head && !msgwait_queue.head) {
+        if(list_empty(&ready_queue) &&
+           list_empty(&sleeping_queue) &&
+           list_empty(&msgwait_queue)) {
             trace("No more processes to run. Rebooting");
             reboot();
         }
@@ -1092,6 +1074,12 @@ static void kernel_task_entry()
 
 static void test_ipc()
 {
+    /* Init global data */
+    list_init(&ready_queue);
+    list_init(&sleeping_queue);
+    list_init(&msgwait_queue);
+    list_init(&port_list);
+
     /* Install scheduler timer */
     timer_schedule(scheduler_timer, NULL, 50, true);
 
@@ -1169,6 +1157,12 @@ static void parent_entry()
 static void test_fork()
 {
     trace("Testing fork()");
+
+    /* Init global data */
+    list_init(&ready_queue);
+    list_init(&sleeping_queue);
+    list_init(&msgwait_queue);
+    list_init(&port_list);
 
     /* Install syscall handler */
     idt_install(0x80, syscall_handler, true);
