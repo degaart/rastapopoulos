@@ -347,6 +347,7 @@ static void USERFUNC init_entry()
 void test_scheduler()
 {
     trace("Testing scheduler");
+
     scheduler_start(init_entry);
 }
 
