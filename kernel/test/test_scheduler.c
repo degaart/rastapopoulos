@@ -72,7 +72,9 @@ struct task {
     char name[32];
     struct pagedir* pagedir;
     struct context context;
+
     unsigned wait_port;
+    uint64_t sleep_deadline;
 };
 list_declare(task_list, task);
 
@@ -85,11 +87,13 @@ static spinlock_t sleeping_queue_lock = SPINLOCK_INIT;
 static struct task_list msgwait_queue = {0};
 static spinlock_t msgwait_queue_lock = SPINLOCK_INIT;
 
+static struct task_list exited_queue = {0};
+static spinlock_t exited_queue_lock = SPINLOCK_INIT;
+
 static struct port_list port_list = {0};
 static spinlock_t port_list_lock = SPINLOCK_INIT;
 static uint32_t reserved_ports = 0;                 /* Reserved ports bitmask */
 
-static struct task* kernel_task = NULL;
 static struct task* current_task = NULL;
 static struct task* idle_task = NULL;
 
@@ -102,9 +106,8 @@ extern uint32_t syscall(uint32_t eax, uint32_t ebx,
 static void USERFUNC msgwait(int port);
 
 #define KernelPort              0
-#define KernelMessageExit       1
-#define KernelMessageSleep      2
-#define KernelMessageSleepAck   3
+#define KernelMessageSleep      1
+#define KernelMessageSleepAck   2
 
 #define LoggerPort              1
 #define LoggerMessageTrace      0
@@ -145,9 +148,7 @@ static struct task_info task_getinfo(int pid)
 
     enter_critical_section();
 
-    if(pid == 0)
-        result.task = kernel_task;
-    else if(pid == 1)
+    if(pid == 1)
         result.task = idle_task;
 
     if(!result.task) {
@@ -261,17 +262,33 @@ static void task_switch_next()
 {
     struct task* next_task = NULL;
 
-    cli();
+    /* Awake sleeping tasks whose deadline has arrived */
+    uint64_t now = timer_timestamp();
 
-    checked_lock(&ready_queue_lock);
-    next_task = list_head(&ready_queue);
-    if(next_task) {
-        list_remove(&ready_queue, next_task, node);
+    checked_lock(&sleeping_queue_lock);
+    list_foreach(task, task, &sleeping_queue, node) {
+        if(now >= task->sleep_deadline) {
+            next_task = task;
+            list_remove(&sleeping_queue, task, node);
+            break;
+        }
     }
-    checked_unlock(&ready_queue_lock);
+    checked_unlock(&sleeping_queue_lock);
 
-    if(!next_task)
+    if(!next_task) {
+        /* No awoken tasks, get task from ready queue */
+        checked_lock(&ready_queue_lock);
+        next_task = list_head(&ready_queue);
+        if(next_task) {
+            list_remove(&ready_queue, next_task, node);
+        }
+        checked_unlock(&ready_queue_lock);
+    }
+
+    if(!next_task) {
+        /* Else run idle task */
         next_task = idle_task;
+    }
 
     task_switch(next_task);
 }
@@ -308,6 +325,8 @@ int current_task_pid()
 #define SYSCALL_YIELD       5
 #define SYSCALL_FORK        6
 #define SYSCALL_SETNAME     7
+#define SYSCALL_EXIT        8
+#define SYSCALL_SLEEP       9
 
 typedef uint32_t (*syscall_handler_t)(struct isr_regs* regs);
 static syscall_handler_t syscall_handlers[80] = {0};
@@ -592,6 +611,32 @@ static uint32_t syscall_setname_handler(struct isr_regs* regs)
     return 0;
 }
 
+static uint32_t syscall_exit_handler(struct isr_regs* regs)
+{
+    /* Put into exited queue, will be collected next time scheduler runs */
+    checked_lock(&exited_queue_lock);
+    list_append(&exited_queue, current_task, node);
+    checked_unlock(&exited_queue_lock);
+
+    task_switch_next();
+    invalid_code_path();
+}
+
+static uint32_t syscall_sleep_handler(struct isr_regs* regs)
+{
+    unsigned millis = regs->ebx;
+
+    save_task_state(current_task, regs);
+    current_task->sleep_deadline = timer_timestamp() + millis;
+    
+    checked_lock(&sleeping_queue_lock);
+    list_append(&sleeping_queue, current_task, node);
+    checked_unlock(&sleeping_queue_lock);
+
+    task_switch_next();
+    invalid_code_path();
+}
+
 static void syscall_handler(struct isr_regs* regs)
 {
     syscall_handler_t handler = NULL;
@@ -642,6 +687,49 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
         checked_unlock(&ready_queue_lock);
     }
 
+    /* Collect exited tasks */
+    checked_lock(&exited_queue_lock);
+    list_foreach(task, task, &exited_queue, node) {
+        trace("Collecting task %s (%d)", task->name, task->pid);
+
+        list_remove(&exited_queue, task, node);
+        vmm_destroy_pagedir(task->pagedir);
+        kfree(task);
+    }
+    checked_unlock(&exited_queue_lock);
+
+    /* If no more tasks to run, reboot */
+    bool moretasks = true;
+
+    checked_lock(&ready_queue_lock);
+    checked_lock(&sleeping_queue_lock);
+    checked_lock(&msgwait_queue_lock);
+    if(list_empty(&ready_queue) &&
+       list_empty(&sleeping_queue) &&
+       list_empty(&msgwait_queue)) {
+        moretasks = false;
+    } else if(list_empty(&ready_queue) &&
+              list_empty(&sleeping_queue) &&
+              !list_empty(&msgwait_queue)) {
+        if(list_head(&msgwait_queue) == list_tail(&msgwait_queue)) {
+            /*
+             * This task is not magically gonna awake itself
+             * (normally, this is the case for the logger, which should
+             * be the last task alive in the system)
+             */
+            moretasks = false;
+        }
+    }
+    checked_unlock(&msgwait_queue_lock);
+    checked_unlock(&sleeping_queue_lock);
+    checked_unlock(&ready_queue_lock);
+
+    if(!moretasks) {
+        trace("No more tasks to run. Rebooting");
+        reboot();
+    }
+
+    /* Switch to next task */
     task_switch_next();
     invalid_code_path();
 }
@@ -649,15 +737,6 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
 /****************************************************************************
  * usermode syscall helpers
  ****************************************************************************/
-
-/*
- * Per-task infomation/control block
- */
-struct ucb {
-    int ack_port;          /* port for receiving acks from kernel */
-};
-static struct ucb* USERDATA task_ucb = (struct ucb*)0x400000;
-
 static int USERFUNC port_open(int port_number)
 {
     int result = syscall(SYSCALL_PORTOPEN,
@@ -724,21 +803,16 @@ static void USERFUNC yield()
 static int USERFUNC user_fork()
 {
     int pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
-
-    if(!pid && task_ucb) {
-        task_ucb->ack_port = port_open(-1);
-    }
-
     return pid;
 }
 
-#define user_trace(fmt, ...) \
+#define user_trace(ack_port, fmt, ...) \
     do {                                                \
         USERSTR(_fmt_, fmt);     \
-        __user_trace(_fmt_, ##__VA_ARGS__);             \
+        __user_trace(ack_port, _fmt_, ##__VA_ARGS__);             \
     } while(0)
 
-static void USERFUNC __user_trace(const char* format, ...)
+static void USERFUNC __user_trace(int ack_port, const char* format, ...)
 {
     va_list args;
 
@@ -750,7 +824,7 @@ static void USERFUNC __user_trace(const char* format, ...)
     va_end(args);
 
     msg->sender = 0;
-    msg->reply_port = task_ucb->ack_port;
+    msg->reply_port = ack_port;
     msg->code = LoggerMessageTrace;
     msg->len = strlen((const char*)msg->data) + 1;
     msg->checksum = message_checksum(msg);
@@ -760,7 +834,7 @@ static void USERFUNC __user_trace(const char* format, ...)
 
     /* Wait ack */
     size_t outsize;
-    unsigned recv_ret = msgrecv(task_ucb->ack_port, msg, sizeof(buffer), &outsize);
+    unsigned recv_ret = msgrecv(ack_port, msg, sizeof(buffer), &outsize);
     assert(recv_ret == 0);
 
     assert(msg->checksum == message_checksum(msg));
@@ -769,41 +843,22 @@ static void USERFUNC __user_trace(const char* format, ...)
 
 static void USERFUNC user_sleep(unsigned ms)
 {
-    unsigned char buffer[128];
-    struct message* msg = (struct message*)buffer;
-    msg->sender = 0;
-    msg->reply_port = task_ucb->ack_port;
-    msg->code = KernelMessageSleep;
-    msg->len = sizeof(uint32_t);
-    *((uint32_t*)msg->data) = ms;
-    msg->checksum = message_checksum(msg);
-
-    bool ret = msgsend(KernelPort, msg);
-    assert(ret);
-
-    size_t outsize;
-    unsigned recv_ret = msgrecv(task_ucb->ack_port, msg, sizeof(buffer), &outsize);
-    assert(recv_ret == 0);
-    assert(msg->checksum == message_checksum(msg));
-    assert(msg->sender == 0);
-    assert(msg->code == KernelMessageSleepAck);
+    syscall(SYSCALL_SLEEP,
+            ms,
+            0,
+            0,
+            0,
+            0);
 }
 
 static void USERFUNC user_exit()
 {
-    struct message msg;
-    msg.sender = 0;
-    msg.reply_port = task_ucb->ack_port;
-    msg.code = KernelMessageExit;
-    msg.len = 0;
-    msg.checksum = message_checksum(&msg);
-
-    bool ret = msgsend(KernelPort, &msg);
-    assert(ret);
-
-    size_t outsize;
-    unsigned recv_ret = msgrecv(task_ucb->ack_port, &msg, sizeof(msg), &outsize);
-    invalid_code_path();
+    syscall(SYSCALL_EXIT,
+            0,
+            0,
+            0,
+            0,
+            0);
 }
 
 static void USERFUNC send_ack(int port, unsigned code, uint32_t result)
@@ -859,12 +914,14 @@ static void USERFUNC fibonacci_entry()
     USERSTR(proc_name, "fibonacci");
     setname(proc_name);
 
+    int ack_port = port_open(-1);
+
     for(unsigned i = 0; i < 37; i++) {
         unsigned fib = fibonacci(i);
-        user_trace("fib(%d): %d", i, fib);
+        user_trace(ack_port, "fib(%d): %d", i, fib);
     }
 
-    user_trace("Done");
+    user_trace(ack_port, "fib: Done");
     user_exit();
     invalid_code_path();
 }
@@ -874,10 +931,14 @@ static void USERFUNC sleeper_entry()
     USERSTR(proc_name, "sleeper");
     setname(proc_name);
 
+    int ack_port = port_open(-1);
+
     for(unsigned i = 0; i < 20; i++) {
         user_sleep(1000);
-        user_trace("sleeper: %d", i);
+        user_trace(ack_port, "sleeper: %d", i);
     }
+
+    user_trace(ack_port, "sleeper: Done");
 
     user_exit();
     invalid_code_path();
@@ -913,15 +974,17 @@ static void USERFUNC user_entry()
         }
     }
 
+    int ack_port = port_open(-1);
+
     unsigned end_val = start_val + 500;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
-            user_trace("prime: %d", i);
+            user_trace(ack_port, "prime: %d", i);
         }
     }
 
 exit:
-    user_trace("Done");
+    user_trace(ack_port, "primes: Done");
     user_exit();
     invalid_code_path();
 }
@@ -936,6 +999,9 @@ static void USERFUNC debug_outstr(const char* str)
 
 static void USERFUNC logger_entry()
 {
+    USERSTR(proc_name, "logger");
+    setname(proc_name);
+
     int ret = port_open(LoggerPort);
     if(ret < 0) {
         USERSTR(errmsg, "Failed to open logger port\n");
@@ -974,34 +1040,48 @@ static void USERFUNC logger_entry()
     }
 }
 
+static void USERFUNC init_entry()
+{
+    int logger_pid = user_fork();
+    if(!logger_pid) {
+        logger_entry();
+        invalid_code_path();
+    }
+
+    int userprog_pid = user_fork();
+    if(!userprog_pid) {
+        user_entry();
+        invalid_code_path();
+    }
+
+    user_exit();
+    invalid_code_path();
+}
+
+
 /****************************************************************************
- * kernel_task and initialization
+ * Initialization
  ****************************************************************************/
 /*
  * transform current task into an user task
  */
-static void jump_to_usermode(const char* name, void (*entry_point)())
+static void jump_to_usermode()
 {
-    /* Create port for receiving acks from kernel_task */
-    assert(task_ucb);
-    task_ucb->ack_port = port_open(-1);
-
-    /* Jump to usermode */
     struct task* task = current_task;
 
-    strlcpy(task->name, name, sizeof(task->name));
     task->context.cs = USER_CODE_SEG | RPL3;
     task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
+
     vmm_map(USER_STACK, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
     memset(USER_STACK, 0xCC, PAGE_SIZE);
 
     task->context.esp = (uint32_t)(USER_STACK + PAGE_SIZE);
 
     task->context.eflags |= EFLAGS_IF;
-    task->context.eip = (uint32_t)entry_point;
+    task->context.eip = (uint32_t)init_entry;
 
     switch_context(&task->context);
-    panic("Invalid code path");
+    invalid_code_path();
 }
 
 static void idle_task_entry()
@@ -1011,143 +1091,6 @@ static void idle_task_entry()
     }
 }
 
-static void producer_entry()
-{
-    /* Create port for receiving acks from kernel_task */
-    task_ucb->ack_port = port_open(-1);
-
-    size_t bufsize = sizeof(struct message) + 64;
-    struct message* msg = kmalloc(bufsize);
-    bzero(msg, bufsize);
-
-    unsigned counter = 0;
-    while(counter++ < 10) {
-        user_trace("counter: %d", counter);
-        user_sleep(500);
-    }
-
-    user_exit();
-    invalid_code_path();
-    reboot();
-}
-
-static void kernel_task_entry()
-{
-    /* Create ucb */
-    vmm_map(task_ucb, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
-    bzero(task_ucb, sizeof(struct ucb));
-
-    /* Create port for receiving messages from usermode programs */
-    int kernel_port = port_open(KernelPort);
-    assert(kernel_port == KernelPort);
-
-    /* Create logger task */
-    unsigned logger_pid = user_fork();
-    if(!logger_pid) {
-        jump_to_usermode("logger", logger_entry);
-        panic("Invalid code path");
-    }
-
-    /* Create first user task, which will fork into 3 instances */
-    //unsigned pid = kfork();
-    int pid = user_fork();
-    if(!pid) {
-        jump_to_usermode("usertask", user_entry);
-        //jump_to_usermode(fibonacci_entry);
-        //producer_entry();
-        panic("Invalid code path");
-    }
-
-    /* List of sleeping processes and their wake deadlines */
-    struct sleeping_task {
-        uint64_t deadline;
-        int pid;
-        int reply_port;
-        list_declare_node(sleeping_task) node;
-    };
-    list_declare(sleeping_task_list, sleeping_task) sleeping_tasks = {0};
-
-    /* Read messages in a loop */
-    size_t bufsiz = sizeof(struct message) + 64;
-    struct message* msg = kmalloc(bufsiz);
-
-    while(1) {
-        size_t outsiz;
-        bzero(msg, bufsiz);
-
-        bool msg_avail = msgpeek(kernel_port);
-        if(msg_avail) {
-            unsigned recv_ret = msgrecv(kernel_port, msg, bufsiz, &outsiz);
-            assert(recv_ret == 0);
-
-            switch(msg->code) {
-                case KernelMessageExit:
-                {
-                    enter_critical_section();
-
-                    struct task_info task_info = task_getinfo(msg->sender);
-                    assert(task_info.task);
-                    assert(task_info.queue);
-
-                    trace("Killing task %d", task_info.task->pid);
-
-                    // By the time we get here, the task might have changed queue
-                    // Instead, make destroying the task from its current queue atomic
-                    // at the syscall level
-                    list_remove(task_info.queue, task_info.task, node);
-                    vmm_destroy_pagedir(task_info.task->pagedir);
-                    kfree(task_info.task);
-
-                    leave_critical_section();
-
-                    break;
-                }
-                case KernelMessageSleep:
-                {
-                    uint32_t* millis = (uint32_t*)msg->data;
-                    assert(msg->len >= sizeof(uint32_t));
-
-                    struct sleeping_task* st = kmalloc(sizeof(struct sleeping_task));
-                    st->deadline = timer_timestamp() + *millis;
-                    st->pid = msg->sender;
-                    st->reply_port = msg->reply_port;
-                    st->node.prev = st->node.next = NULL;
-                    list_append(&sleeping_tasks, st, node);
-    
-                    break;
-                }
-                default:
-                    panic("Invalid kernel message: %d", msg->code);
-                    break;
-            }
-        }
-
-        /* Wake sleeping processes */
-        uint64_t now = timer_timestamp();
-        list_foreach(sleeping_task, task, &sleeping_tasks, node) {
-            if(now >= task->deadline) {
-                send_ack(task->reply_port, KernelMessageSleepAck, 0);
-                list_remove(&sleeping_tasks, task, node);
-            }
-        }
-
-        /* If no more processes to run, reboot */
-        enter_critical_section();
-        if(list_empty(&ready_queue) &&
-           list_empty(&sleeping_queue) &&
-           list_empty(&msgwait_queue)) {
-            trace("No more processes to run. Rebooting");
-            reboot();
-        }
-        leave_critical_section();
-
-        /* Yield */
-        yield();
-    }
-    reboot();
-    panic("Invalid code path");
-}
-
 static void test_ipc()
 {
     /* Init global data */
@@ -1155,6 +1098,7 @@ static void test_ipc()
     list_init(&sleeping_queue);
     list_init(&msgwait_queue);
     list_init(&port_list);
+    list_init(&exited_queue);
 
     /* Install scheduler timer */
     timer_schedule(scheduler_timer, NULL, 50, true);
@@ -1171,6 +1115,8 @@ static void test_ipc()
     syscall_register(SYSCALL_YIELD, syscall_yield_handler);
     syscall_register(SYSCALL_FORK, syscall_fork_handler);
     syscall_register(SYSCALL_SETNAME, syscall_setname_handler);
+    syscall_register(SYSCALL_EXIT, syscall_exit_handler);
+    syscall_register(SYSCALL_SLEEP, syscall_sleep_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
@@ -1179,16 +1125,15 @@ static void test_ipc()
 
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
 
-    /* Create kernel_task */
-    struct task* task = task_create("kernel_task");
+    /* Create first task (init) */
+    struct task* task = task_create("init");
     task->context.cs = KERNEL_CODE_SEG;
     task->context.ds = KERNEL_DATA_SEG;
     task->context.ss = KERNEL_DATA_SEG;
     task->context.cr3 = vmm_get_physical(task->pagedir);
     task->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
     task->context.eflags = read_eflags() | EFLAGS_IF;
-    task->context.eip = (uint32_t)kernel_task_entry;
-    kernel_task = task;
+    task->context.eip = (uint32_t)jump_to_usermode;
 
     /* Create idle_task */
     struct task* task1 = task_create("idle_task");
@@ -1200,7 +1145,7 @@ static void test_ipc()
     task1->context.eip = (uint32_t)idle_task_entry;
     idle_task = task1;
 
-    /* Switch to kernel task */
+    /* Switch to first task */
     task_switch(task);
     invalid_code_path();
 }
