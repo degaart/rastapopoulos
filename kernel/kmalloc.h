@@ -17,6 +17,9 @@ void kfree(void* address);
  */
 void kernel_heap_info(struct kernel_heap_info* heap_info);
 
-void heap_record_start();
-void heap_record_stop();
+void heap_trace_start();
+void heap_trace_stop();
+
+void __kernel_heap_check(const char* file, int line);
+#define kernel_heap_check() __kernel_heap_check(__FILE__, __LINE__)
 

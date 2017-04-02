@@ -81,11 +81,17 @@ static struct heap_block_header* prev_block(struct heap* heap, struct heap_block
     return prevh;
 }
 
+void heap_record_dump();
+
 bool heap_is_free(struct heap* heap, struct heap_block_header* block)
 {
     //assert(is_valid_block(heap, block));
     if(!is_valid_block(heap, block)) {
-        panic("Invalid block detected at %p", block);
+        panic("Invalid block detected at %p (buffer: %p, checksum: %p, expected: %p)", 
+              block,
+              ((unsigned char*)block) + sizeof(struct heap_block_header),
+              block->checksum,
+              block_checksum(block));
     }
 
     bool result = (block->flags & BLOCK_ALLOCATED) == 0;
@@ -428,9 +434,14 @@ bool heap_unlock(struct heap* heap)
     return result;
 }
 
-
-
-
-
+void heap_check(struct heap* heap, const char* file, int line)
+{
+    for(struct heap_block_header* h = heap->head; h; h = h->next) {
+        if(!is_valid_block(heap, h)) {
+            panic("Invalid block detected at %s:%d",
+                  file, line);
+        }
+    }
+}
 
 

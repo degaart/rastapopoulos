@@ -171,7 +171,7 @@ int USERFUNC format(format_callback_t callback,
 
 void USERFUNC memset(void* buffer, int ch, uint32_t size)
 {
-    uint8_t* ptr = (uint8_t*)buffer;
+    unsigned char* ptr = (unsigned char*)buffer;
     for(unsigned i=0; i<size; i++)
         ptr[i] = ch;
 }

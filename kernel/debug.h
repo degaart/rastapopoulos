@@ -30,5 +30,10 @@ void load_symbols(const struct multiboot_info* multiboot_info);
 const char* lookup_function(uint32_t address);
 void __log(const char* func, const char* file, int line, const char* fmt, ...);
 void __assertion_failed(const char* function, const char* file, int line, const char* expression);
+void debug_printv(const char* fmt, va_list args);
+void debug_printf(const char* fmt, ...);
+
+
+
 
 

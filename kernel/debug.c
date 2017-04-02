@@ -27,6 +27,19 @@ static void __log_callback(int ch, void* unused)
     outb(DEBUG_PORT, ch);
 }
 
+void debug_printv(const char* fmt, va_list args)
+{
+    formatv(__log_callback, NULL, fmt, args);
+}
+
+void debug_printf(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    debug_printv(fmt, args);
+    va_end(args);
+}
+
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
 {
     // strip path from file
@@ -35,6 +48,9 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
         basename--;
     if(*basename == '/')
         basename++;
+    else if(!*basename)
+        basename = file;
+
 
     enter_critical_section();
 
