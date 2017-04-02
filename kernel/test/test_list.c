@@ -3,239 +3,159 @@
 #include "../kmalloc.h"
 #include "../list.h"
 
-#if 0
+struct element {
+    unsigned val;
+    list_declare_node(element) node;
+};
+list_declare(list, element);
+
 static void test_append()
 {
     trace("Testing list_append");
 
-    struct list l;
-    list_init(&l);
+    struct list l = {0};
 
-    struct list_node* nodes[3];
-    nodes[0] = list_append(&l, (void*)0x4C00);
-    assert(nodes[0]->prev == NULL);
-    assert(nodes[0]->next == NULL);
-    assert(l.head == nodes[0]);
-    assert(l.tail == nodes[0]);
+    struct element elements[3] = {0};
+    elements[0].val = 0xABCDEF00;
+    elements[1].val = 0xABCDEF01;
+    elements[2].val = 0xABCDEF02;
 
-    nodes[1] = list_append(&l, (void*)0x4C01);
-    assert(nodes[1]->prev == nodes[0]);
-    assert(nodes[1]->next == NULL);
-    assert(l.head == nodes[0]);
-    assert(l.tail == nodes[1]);
+    list_append(&l, &elements[0], node);
+    list_append(&l, &elements[1], node);
+    list_append(&l, &elements[2], node);
 
-    nodes[2] = list_append(&l, (void*)0x4C02);
-    assert(nodes[2]->prev == nodes[1]);
-    assert(nodes[2]->next == NULL);
-    assert(l.head == nodes[0]);
-    assert(l.tail == nodes[2]);
+    struct element* e = list_head(&l);
+    assert(e->val == 0xABCDEF00);
 
-    assert(nodes[0]->prev == NULL);
-    assert(nodes[0]->next == nodes[1]);
-    assert(nodes[1]->prev == nodes[0]);
-    assert(nodes[1]->next == nodes[2]);
-    assert(nodes[2]->prev == nodes[1]);
-    assert(nodes[2]->next == NULL);
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF01);
 
-    struct list_node* n = l.head;
-    assert(n == nodes[0]);
-    assert(n->data == (void*)0x4C00);
-
-    n = n->next;
-    assert(n == nodes[1]);
-    assert(n->data == (void*)0x4C01);
-
-    n = n->next;
-    assert(n == nodes[2]);
-    assert(n->data == (void*)0x4C02);
-
-    n = n->next;
-    assert(n == NULL);
-
-    list_destroy(&l, NULL);
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF02);
 }
 
-static void test_push()
+static void test_foreach()
 {
-    trace("Testing list_push");
+    trace("Testing list_foreach");
 
-    struct list l;
-    list_init(&l);
+    struct list l = {0};
 
-    struct list_node* nodes[3];
-    nodes[0] = list_push(&l, (void*)0x4C00);
-    assert(nodes[0]->prev == NULL);
-    assert(nodes[0]->next == NULL);
-    assert(l.head == nodes[0]);
-    assert(l.tail == nodes[0]);
+    struct element elements[3] = {0};
+    elements[0].val = 0xABCDEF00;
+    elements[1].val = 0xABCDEF01;
+    elements[2].val = 0xABCDEF02;
 
-    nodes[1] = list_push(&l, (void*)0x4C01);
-    assert(nodes[0]->prev == nodes[1]);
-    assert(nodes[0]->next == NULL);
-    assert(nodes[1]->prev == NULL);
-    assert(nodes[1]->next == nodes[0]);
-    assert(l.head == nodes[1]);
-    assert(l.tail == nodes[0]);
+    list_append(&l, &elements[0], node);
+    list_append(&l, &elements[1], node);
+    list_append(&l, &elements[2], node);
 
-    nodes[2] = list_push(&l, (void*)0x4C02);
-    assert(nodes[0]->prev == nodes[1]);
-    assert(nodes[0]->next == NULL);
-    assert(nodes[1]->prev == nodes[2]);
-    assert(nodes[1]->next == nodes[0]);
-    assert(nodes[2]->prev == NULL);
-    assert(nodes[2]->next == nodes[1]);
-    assert(l.head == nodes[2]);
-    assert(l.tail == nodes[0]);
-
-    struct list_node* n = l.head;
-    assert(n->data == (void*)0x4C02);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C01);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C00);
-
-    n = n->next;
-    assert(n == NULL);
-
-    list_destroy(&l, NULL);
+    int index = 0;
+    list_foreach(element, e, &l, node) {
+        switch(index) {
+            case 0:
+                assert(e->val == 0xABCDEF00);
+                break;
+            case 1:
+                assert(e->val == 0xABCDEF01);
+                break;
+            case 2:
+                assert(e->val == 0xABCDEF02);
+                break;
+        }
+        index++;
+    }
 }
 
 static void test_remove()
 {
     trace("Testing list_remove");
 
-    struct list l;
+    struct list l = {0};
+
+    struct element elements[5] = {0};
+    elements[0].val = 0xABCDEF00;
+    elements[1].val = 0xABCDEF01;
+    elements[2].val = 0xABCDEF02;
+    elements[3].val = 0xABCDEF03;
+    elements[4].val = 0xABCDEF04;
+
+    do {
+        if(list_empty(&l)) {
+            (&l)->tail = (&l)->head = &elements[0];
+        } else {
+            (&l)->tail->node.next = &elements[0];
+            (&elements[0])->node.prev = (&l)->tail;
+            (&elements[0])->node.next = NULL;
+            (&l)->tail = &elements[0];
+        }
+    } while(0);
+
+    //list_append(&l, &elements[0], node);
+    list_append(&l, &elements[1], node);
+    list_append(&l, &elements[2], node);
+    list_append(&l, &elements[3], node);
+    list_append(&l, &elements[4], node);
+
+    /* Test removing from middle of list */
+    list_remove(&l, &elements[2], node);
+    struct element* e = list_head(&l);
+    assert(e->val == 0xABCDEF00);
+
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF01);
+
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF03);
+
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF04);
+
+    e = list_next(e, node);
+    assert(e == NULL);
+
+    /* Test removing just after first element */
+    list_remove(&l, &elements[1], node);
+    e = list_head(&l);
+    assert(e->val == 0xABCDEF00);
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF03);
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF04);
+    e = list_next(e, node);
+    assert(e == NULL);
+
+    /* Test removing tail */
+    list_remove(&l, &elements[4], node);
+    e = list_head(&l);
+    assert(e->val == 0xABCDEF00);
+    e = list_next(e, node);
+    assert(e->val == 0xABCDEF03);
+    e = list_next(e, node);
+    assert(e == NULL);
+
+    /* Test removing head */
+    list_remove(&l, &elements[0], node);
+    e = list_head(&l);
+    assert(e->val == 0xABCDEF03);
+    e = list_next(e, node);
+    assert(e == NULL);
+
+    /* Test removing head when it's the only element in the list */
+    list_remove(&l, &elements[3], node);
+    e = list_head(&l);
+    assert(e == NULL);
+    e = list_tail(&l);
+    assert(e == NULL);
+
+    /* Test removing tail when it's the only element */
     list_init(&l);
+    list_append(&l, &elements[0], node);
 
-    struct list_node* nodes[5];
-
-    nodes[0] = list_append(&l, (void*)0x4C00);
-    nodes[1] = list_append(&l, (void*)0x4C01);
-    nodes[2] = list_append(&l, (void*)0x4C02);
-    nodes[3] = list_append(&l, (void*)0x4C03);
-    nodes[4] = list_append(&l, (void*)0x4C04);
-
-    /* Test delete from middle */
-    struct list_node* n;
-    list_remove(&l, nodes[2]);
-
-    assert(nodes[1]->next == nodes[3]);
-    assert(nodes[3]->prev == nodes[1]);
-
-    n = l.head;
-    assert(n->data == (void*)0x4C00);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C01);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C03);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C04);
-
-    n = n->next;
-    assert(n == NULL);
-
-    /* Test delete head */
-    list_remove(&l, l.head);
-
-    assert(nodes[1]->prev == NULL);
-    assert(l.head == nodes[1]);
-    assert(l.tail == nodes[4]);
-
-    n = l.head;
-    assert(n->data == (void*)0x4C01);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C03);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C04);
-
-    n = n->next;
-    assert(n == NULL);
-
-    /* Delete tail */
-    list_remove(&l, l.tail);
-
-    assert(nodes[3]->next == NULL);
-    assert(l.head == nodes[1]);
-    assert(l.tail == nodes[3]);
-
-    n = l.head;
-    assert(n->data == (void*)0x4C01);
-
-    n = n->next;
-    assert(n->data == (void*)0x4C03);
-
-    n = n->next;
-    assert(n == NULL);
-
-    /* Delete remaining items */
-    list_remove(&l, l.head);
-    
-    assert(nodes[3]->prev == NULL);
-    assert(nodes[3]->next == NULL);
-    assert(l.head == nodes[3]);
-    assert(l.tail == nodes[3]);
-
-    n = l.head;
-    assert(n->data == (void*)0x4C03);
-
-    n = n->next;
-    assert(n == NULL);
-
-    list_remove(&l, l.head);
-
-    n = l.head;
-    assert(n == NULL);
-
-    list_destroy(&l, NULL);
-}
-
-static void test_pop()
-{
-    trace("Testing list_pop");
-
-    struct list l;
-    list_init(&l);
-
-    struct list_node* nodes[4];
-    nodes[0] = list_append(&l, (void*)0x4C00);
-    nodes[1] = list_append(&l, (void*)0x4C01);
-    nodes[2] = list_append(&l, (void*)0x4C02);
-    nodes[3] = list_append(&l, (void*)0x4C03);
-
-    void* data = list_pop(&l);
-    assert(nodes[1]->prev == NULL);
-    assert(l.head == nodes[1]);
-    assert(l.tail == nodes[3]);
-    assert(data == (void*)0x4C00);
-
-    data = list_pop(&l);
-    assert(nodes[2]->prev == NULL);
-    assert(l.head == nodes[2]);
-    assert(data == (void*)0x4C01);
-
-    data = list_pop(&l);
-    assert(nodes[3]->prev == NULL);
-    assert(l.head == nodes[3]);
-    assert(data == (void*)0x4C02);
-
-    data = list_pop(&l);
-    assert(l.head == NULL);
-    assert(l.tail == NULL);
-    assert(data == (void*)0x4C03);
-
-    assert(l.head == NULL);
-    assert(l.tail == NULL);
-    data = list_pop(&l);
-    assert(data == NULL);
-
-    list_destroy(&l, NULL);
+    list_remove(&l, &elements[0], node);
+    e = list_head(&l);
+    assert(e == NULL);
+    e = list_tail(&l);
+    assert(e == NULL);
 }
 
 void test_list()
@@ -243,10 +163,8 @@ void test_list()
     trace("Testing lists");
 
     test_append();
-    test_push();
+    test_foreach();
     test_remove();
-    test_pop();
 }
-#endif
 
 
