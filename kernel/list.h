@@ -32,9 +32,12 @@
 
 #define list_foreach(elem, it, lst, node)                                       \
     for(struct elem *it = list_head(lst),                                       \
-        *next = it ? list_next(it, node) : NULL;                                \
+        *list_foreach_next = it ? list_next(it, node) : NULL;                   \
         it != NULL;                                                             \
-        it = next, next = next ? list_next(next, node) : NULL)
+        it = list_foreach_next,                                                 \
+        list_foreach_next = list_foreach_next ?                                 \
+            list_next(list_foreach_next, node) :                                \
+            NULL)
 
 #define list_remove(lst, elem, node)                                            \
     do {                                                                        \
@@ -55,10 +58,8 @@
 #define list_append(lst, elem, node)                                            \
     do {                                                                        \
         if(list_empty(lst)) {                                                   \
-            assert(!(lst)->head);                                               \
             (lst)->tail = (lst)->head = elem;                                   \
         } else {                                                                \
-            assert((lst)->head);                                                \
             (lst)->tail->node.next = elem;                                      \
             (elem)->node.prev = (lst)->tail;                                    \
             (elem)->node.next = NULL;                                           \
