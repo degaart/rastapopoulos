@@ -37,4 +37,7 @@
 *.swp
 *.img
 kernel/obj
+*.log
+*.log.*
+*.bak
 

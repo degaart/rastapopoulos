@@ -3,6 +3,7 @@
 #include "../kmalloc.h"
 #include "../list.h"
 
+#if 0
 static void test_append()
 {
     trace("Testing list_append");
@@ -246,6 +247,6 @@ void test_list()
     test_remove();
     test_pop();
 }
-
+#endif
 
 
