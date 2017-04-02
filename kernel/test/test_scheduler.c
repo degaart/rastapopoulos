@@ -49,7 +49,7 @@ list_declare(message_list, message);
 
 struct port {
     list_declare_node(port) node;
-    unsigned number;            /* Port number */
+    int number;            /* Port number */
     int receiver;
     struct message_list queue; /* message queue */
     spinlock_t lock;
@@ -59,8 +59,8 @@ list_declare(port_list, port);
 struct message {
     list_declare_node(message) node;
     uint32_t checksum;
-    unsigned sender;            /* Sending process pid */
-    unsigned reply_port;        /* Port number to send response to */
+    int sender;                 /* Sending process pid */
+    int reply_port;             /* Port number to send response to */
     unsigned code;              /* Message code, interpretation depends on receiver */
     size_t len;                 /* Length of data[] */
     unsigned char data[];
@@ -87,25 +87,28 @@ static spinlock_t msgwait_queue_lock = SPINLOCK_INIT;
 
 static struct port_list port_list = {0};
 static spinlock_t port_list_lock = SPINLOCK_INIT;
+static uint32_t reserved_ports = 0;                 /* Reserved ports bitmask */
 
 static struct task* kernel_task = NULL;
 static struct task* current_task = NULL;
 static struct task* idle_task = NULL;
 
 static int next_pid_value = 0;
-static unsigned next_port_value = 1; 
+static int next_port_value = 32; 
 
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
                         uint32_t esi, uint32_t edi);
-static void USERFUNC msgwait(unsigned port);
+static void USERFUNC msgwait(int port);
 
-#define KernelMessageTrace      0
-#define KernelMessageTraceAck   1
-#define KernelMessageExit       2
-#define KernelMessageSleep      3
-#define KernelMessageSleepAck   4
+#define KernelPort              0
+#define KernelMessageExit       1
+#define KernelMessageSleep      2
+#define KernelMessageSleepAck   3
 
+#define LoggerPort              1
+#define LoggerMessageTrace      0
+#define LoggerMessageTraceAck   1
 
 /****************************************************************************
  * task management
@@ -190,21 +193,23 @@ static struct task_info task_getinfo(int pid)
 }
 
 /* Get port from its number */
-static struct port* port_get(unsigned number)
+static struct port* port_get(int number)
 {
     struct port* port = NULL;
 
-    enter_critical_section();
-    checked_lock(&port_list_lock);
+    if(number >= 0) {
+        enter_critical_section();
+        checked_lock(&port_list_lock);
 
-    list_foreach(port, check, &port_list, node) {
-        if(check->number == number) {
-            port = check;
-            break;
+        list_foreach(port, check, &port_list, node) {
+            if(check->number == number) {
+                port = check;
+                break;
+            }
         }
+        checked_unlock(&port_list_lock);
+        leave_critical_section();
     }
-    checked_unlock(&port_list_lock);
-    leave_critical_section();
     return port;
 }
 
@@ -309,27 +314,50 @@ static syscall_handler_t syscall_handlers[80] = {0};
 
 /*
  * Open a new port and set receiver to current process
- * Params: None
- * Returns: Port number
+ * Params:
+ *  ebx             Requested port number. Must be < 32 or -1
+ *                  If != -1: Request to open specified port
+ *                  Else: Dynamically allocate new port number and return it
+ * Returns:
+ *  < 0             Error opening port
+ *  >= 0            Port number
  */
 static uint32_t syscall_portopen_handler(struct isr_regs* regs)
 {
-    struct port* result = kmalloc(sizeof(struct port));
-    bzero(result, sizeof(struct port));
+    int port_number = regs->ebx;
 
-    enter_critical_section();
-    result->number = next_port_value++;
-    result->receiver = current_task->pid;
-    result->lock = SPINLOCK_INIT;
-    list_init(&result->queue);
+    if(port_number == -1) {
+        checked_lock(&port_list_lock);
+        port_number = next_port_value++;
+        checked_unlock(&port_list_lock);
+    } else {
+        checked_lock(&port_list_lock);
+        if(reserved_ports & (1 << port_number)) {
+            port_number = -1;                           /* Already reserved */
+        } else {
+            reserved_ports |= (1 << port_number);       /* Reserve it */
+        }
+        checked_unlock(&port_list_lock);
+    }
 
-    checked_lock(&port_list_lock);
-    list_append(&port_list, result, node);
-    checked_unlock(&port_list_lock);
+    if(port_number >= 0) {
+        struct port* result = kmalloc(sizeof(struct port));
+        bzero(result, sizeof(struct port));
 
-    leave_critical_section();
+        enter_critical_section();
+        result->number = port_number;
+        result->receiver = current_task->pid;
+        result->lock = SPINLOCK_INIT;
+        list_init(&result->queue);
 
-    return result->number;
+        checked_lock(&port_list_lock);
+        list_append(&port_list, result, node);
+        checked_unlock(&port_list_lock);
+
+        leave_critical_section();
+    }
+
+    return port_number;
 }
 
 /*
@@ -343,7 +371,7 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
  */
 static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
 {
-    unsigned port_number = regs->ebx;
+    int port_number = regs->ebx;
     struct message* msg = (struct message*)regs->ecx;
 
     /* Validate message */
@@ -415,7 +443,7 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
 {
     assert(!interrupts_enabled());
 
-    unsigned port_number = regs->ebx;
+    int port_number = regs->ebx;
     struct message* buffer = (struct message*)regs->ecx;
     uint32_t buffer_size = regs->edx;
     uint32_t* outsize = (uint32_t*)regs->esi;
@@ -475,7 +503,7 @@ static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
 {
     assert(!interrupts_enabled());
     
-    unsigned port_number = regs->ebx;
+    int port_number = regs->ebx;
 
     save_task_state(current_task, regs);
     current_task->wait_port = port_number;
@@ -501,7 +529,7 @@ static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
 static uint32_t syscall_msgpeek_handler(struct isr_regs* regs)
 {
     uint32_t result = 0;
-    unsigned port_number = regs->ebx;
+    int port_number = regs->ebx;
 
     struct port* port = port_get(port_number);
     if(port) {
@@ -539,7 +567,7 @@ static uint32_t syscall_yield_handler(struct isr_regs* regs)
  */
 static uint32_t syscall_fork_handler(struct isr_regs* regs)
 {
-    volatile unsigned result = 0;
+    volatile int result = 0;
 
     struct task* new_task = task_create(current_task->name);
     save_task_state(new_task, regs);
@@ -626,22 +654,22 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
  * Per-task infomation/control block
  */
 struct ucb {
-    unsigned ack_port;          /* port for receiving acks from kernel */
+    int ack_port;          /* port for receiving acks from kernel */
 };
 static struct ucb* USERDATA task_ucb = (struct ucb*)0x400000;
 
-static unsigned USERFUNC port_open()
+static int USERFUNC port_open(int port_number)
 {
-    unsigned result = syscall(SYSCALL_PORTOPEN,
-                              0,
-                              0,
-                              0,
-                              0,
-                              0);
+    int result = syscall(SYSCALL_PORTOPEN,
+                         port_number,
+                         0,
+                         0,
+                         0,
+                         0);
     return result;
 }
 
-static bool USERFUNC msgsend(unsigned port, const struct message* msg)
+static bool USERFUNC msgsend(int port, const struct message* msg)
 {
     unsigned checksum = message_checksum(msg);
     assert(checksum == msg->checksum);
@@ -655,7 +683,7 @@ static bool USERFUNC msgsend(unsigned port, const struct message* msg)
     return result != 0;
 }
 
-static unsigned USERFUNC msgrecv(unsigned port, struct message* buffer, size_t buffer_size, size_t* outsize)
+static unsigned USERFUNC msgrecv(int port, struct message* buffer, size_t buffer_size, size_t* outsize)
 {
     /* Buffer validation */
     bzero(buffer, buffer_size);
@@ -672,12 +700,12 @@ static unsigned USERFUNC msgrecv(unsigned port, struct message* buffer, size_t b
     return result;
 }
 
-static void USERFUNC msgwait(unsigned port)
+static void USERFUNC msgwait(int port)
 {
     syscall(SYSCALL_MSGWAIT, port, 0, 0, 0, 0);
 }
 
-static bool USERFUNC msgpeek(unsigned port)
+static bool USERFUNC msgpeek(int port)
 {
     unsigned ret = syscall(SYSCALL_MSGPEEK,
                            port,
@@ -698,7 +726,7 @@ static int USERFUNC user_fork()
     int pid = syscall(SYSCALL_FORK, 0, 0, 0, 0, 0);
 
     if(!pid && task_ucb) {
-        task_ucb->ack_port = port_open();
+        task_ucb->ack_port = port_open(-1);
     }
 
     return pid;
@@ -706,7 +734,7 @@ static int USERFUNC user_fork()
 
 #define user_trace(fmt, ...) \
     do {                                                \
-        static const char USERRODATA _fmt_[] = fmt;     \
+        USERSTR(_fmt_, fmt);     \
         __user_trace(_fmt_, ##__VA_ARGS__);             \
     } while(0)
 
@@ -723,11 +751,11 @@ static void USERFUNC __user_trace(const char* format, ...)
 
     msg->sender = 0;
     msg->reply_port = task_ucb->ack_port;
-    msg->code = KernelMessageTrace;
+    msg->code = LoggerMessageTrace;
     msg->len = strlen((const char*)msg->data) + 1;
     msg->checksum = message_checksum(msg);
 
-    bool ret = msgsend(1, msg);
+    bool ret = msgsend(LoggerPort, msg);
     assert(ret);
 
     /* Wait ack */
@@ -736,8 +764,7 @@ static void USERFUNC __user_trace(const char* format, ...)
     assert(recv_ret == 0);
 
     assert(msg->checksum == message_checksum(msg));
-    assert(msg->sender == 0);
-    assert(msg->code == KernelMessageTraceAck);
+    assert(msg->code == LoggerMessageTraceAck);
 }
 
 static void USERFUNC user_sleep(unsigned ms)
@@ -751,7 +778,7 @@ static void USERFUNC user_sleep(unsigned ms)
     *((uint32_t*)msg->data) = ms;
     msg->checksum = message_checksum(msg);
 
-    bool ret = msgsend(1, msg);
+    bool ret = msgsend(KernelPort, msg);
     assert(ret);
 
     size_t outsize;
@@ -771,7 +798,7 @@ static void USERFUNC user_exit()
     msg.len = 0;
     msg.checksum = message_checksum(&msg);
 
-    bool ret = msgsend(1, &msg);
+    bool ret = msgsend(KernelPort, &msg);
     assert(ret);
 
     size_t outsize;
@@ -779,7 +806,7 @@ static void USERFUNC user_exit()
     invalid_code_path();
 }
 
-static void USERFUNC send_ack(unsigned port, unsigned code, uint32_t result)
+static void USERFUNC send_ack(int port, unsigned code, uint32_t result)
 {
     unsigned char buffer[sizeof(struct message) + sizeof(uint32_t)] = {0};
     struct message* msg = (struct message*)buffer;
@@ -829,7 +856,7 @@ static unsigned USERFUNC is_prime(unsigned num)
 
 static void USERFUNC fibonacci_entry()
 {
-    static const char USERRODATA proc_name[] = "fibonacci";
+    USERSTR(proc_name, "fibonacci");
     setname(proc_name);
 
     for(unsigned i = 0; i < 37; i++) {
@@ -844,7 +871,7 @@ static void USERFUNC fibonacci_entry()
 
 static void USERFUNC sleeper_entry()
 {
-    static const char USERRODATA proc_name[] = "sleeper";
+    USERSTR(proc_name, "sleeper");
     setname(proc_name);
 
     for(unsigned i = 0; i < 20; i++) {
@@ -858,13 +885,13 @@ static void USERFUNC sleeper_entry()
 
 static void USERFUNC user_entry()
 {
-    static const char USERRODATA proc_name[] = "primes";
+    USERSTR(proc_name, "primes");
     setname(proc_name);
 
     unsigned start_val = 5001000;
 
     /* Fork into other tasks */
-    unsigned pid = user_fork();
+    int pid = user_fork();
     if(!pid) {
         start_val = 5002000;
     } else {
@@ -899,19 +926,70 @@ exit:
     invalid_code_path();
 }
 
+static void USERFUNC debug_outstr(const char* str)
+{
+    while(*str) {
+        outb(DEBUG_PORT, *str);
+        str++;
+    }
+}
+
+static void USERFUNC logger_entry()
+{
+    int ret = port_open(LoggerPort);
+    if(ret < 0) {
+        USERSTR(errmsg, "Failed to open logger port\n");
+        debug_outstr(errmsg);
+        while(1);
+    }
+
+    unsigned char buffer[512];
+    struct message* msg = (struct message*)buffer;
+    while(1) {
+        size_t outsiz;
+        unsigned ret = msgrecv(LoggerPort, 
+                               msg, 
+                               sizeof(buffer), 
+                               &outsiz);
+        if(ret != 0) {
+            USERSTR(str, "msgrecv failed\n");
+            debug_outstr(str);
+            while(1);
+        }
+
+        if(msg->code == LoggerMessageTrace) {
+            USERSTR(prefix, "[test_scheduler.c][logger_entry] ");
+            debug_outstr(prefix);
+
+            debug_outstr((const char*)(msg->data));
+
+            USERSTR(suffix, "\n");
+            debug_outstr(suffix);
+
+            send_ack(msg->reply_port, LoggerMessageTraceAck, 0);
+        } else {
+            USERSTR(errstr, "Invalid message code");
+            debug_outstr(errstr);
+        }
+    }
+}
+
+/****************************************************************************
+ * kernel_task and initialization
+ ****************************************************************************/
 /*
  * transform current task into an user task
  */
-static void jump_to_usermode(void (*entry_point)())
+static void jump_to_usermode(const char* name, void (*entry_point)())
 {
     /* Create port for receiving acks from kernel_task */
     assert(task_ucb);
-    task_ucb->ack_port = port_open();
+    task_ucb->ack_port = port_open(-1);
 
     /* Jump to usermode */
     struct task* task = current_task;
 
-    strlcpy(task->name, "usertask", sizeof(task->name));
+    strlcpy(task->name, name, sizeof(task->name));
     task->context.cs = USER_CODE_SEG | RPL3;
     task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
     vmm_map(USER_STACK, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
@@ -926,9 +1004,6 @@ static void jump_to_usermode(void (*entry_point)())
     panic("Invalid code path");
 }
 
-/****************************************************************************
- * kernel_task and initialization
- ****************************************************************************/
 static void idle_task_entry()
 {
     while(true) {
@@ -939,7 +1014,7 @@ static void idle_task_entry()
 static void producer_entry()
 {
     /* Create port for receiving acks from kernel_task */
-    task_ucb->ack_port = port_open();
+    task_ucb->ack_port = port_open(-1);
 
     size_t bufsize = sizeof(struct message) + 64;
     struct message* msg = kmalloc(bufsize);
@@ -963,14 +1038,21 @@ static void kernel_task_entry()
     bzero(task_ucb, sizeof(struct ucb));
 
     /* Create port for receiving messages from usermode programs */
-    unsigned kernel_port = port_open();
-    assert(kernel_port == 1);
+    int kernel_port = port_open(KernelPort);
+    assert(kernel_port == KernelPort);
+
+    /* Create logger task */
+    unsigned logger_pid = user_fork();
+    if(!logger_pid) {
+        jump_to_usermode("logger", logger_entry);
+        panic("Invalid code path");
+    }
 
     /* Create first user task, which will fork into 3 instances */
     //unsigned pid = kfork();
-    unsigned pid = user_fork();
+    int pid = user_fork();
     if(!pid) {
-        jump_to_usermode(user_entry);
+        jump_to_usermode("usertask", user_entry);
         //jump_to_usermode(fibonacci_entry);
         //producer_entry();
         panic("Invalid code path");
@@ -980,7 +1062,7 @@ static void kernel_task_entry()
     struct sleeping_task {
         uint64_t deadline;
         int pid;
-        unsigned reply_port;
+        int reply_port;
         list_declare_node(sleeping_task) node;
     };
     list_declare(sleeping_task_list, sleeping_task) sleeping_tasks = {0};
@@ -999,12 +1081,6 @@ static void kernel_task_entry()
             assert(recv_ret == 0);
 
             switch(msg->code) {
-                case KernelMessageTrace:
-                {
-                    trace("(%d) %s", msg->sender, msg->data);
-                    send_ack(msg->reply_port, KernelMessageTraceAck, 0);
-                    break;
-                }
                 case KernelMessageExit:
                 {
                     enter_critical_section();
@@ -1129,96 +1205,10 @@ static void test_ipc()
     invalid_code_path();
 }
 
-static void child_entry()
-{
-    for(int i = 0; i < 30; i++) {
-        trace("In child: %d", i);
-        yield();
-    }
-    reboot();
-}
-
-static void parent_entry()
-{
-    task_ucb = NULL;
-
-    int pid = user_fork();
-    if(!pid) {
-        child_entry();
-    }
-
-    for(int i = 0; i < 30; i++) {
-        trace("In parent: %d", i);
-        yield();
-    }
-    reboot();
-}
-
-static void test_fork()
-{
-    trace("Testing fork()");
-
-    /* Init global data */
-    list_init(&ready_queue);
-    list_init(&sleeping_queue);
-    list_init(&msgwait_queue);
-    list_init(&port_list);
-
-    /* Install syscall handler */
-    idt_install(0x80, syscall_handler, true);
-
-    /* Install syscalls */
-    syscall_register(SYSCALL_PORTOPEN, syscall_portopen_handler);
-    syscall_register(SYSCALL_MSGSEND, syscall_msgsend_handler);
-    syscall_register(SYSCALL_MSGRECV, syscall_msgrecv_handler);
-    syscall_register(SYSCALL_MSGWAIT, syscall_msgwait_handler);
-    syscall_register(SYSCALL_MSGPEEK, syscall_msgpeek_handler);
-    syscall_register(SYSCALL_YIELD, syscall_yield_handler);
-    syscall_register(SYSCALL_FORK, syscall_fork_handler);
-    syscall_register(SYSCALL_SETNAME, syscall_setname_handler);
-
-    /* Map kernel stack */ 
-    uint32_t stack_frame = pmm_alloc();
-    vmm_map(KERNEL_STACK, stack_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-    memset(KERNEL_STACK, 0xCC, PAGE_SIZE);
-
-    tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
-
-    /* Create kernel_task */
-    struct task* task = task_create("parent");
-    task->context.cs = KERNEL_CODE_SEG;
-    task->context.ds = KERNEL_DATA_SEG;
-    task->context.ss = KERNEL_DATA_SEG;
-    task->context.cr3 = vmm_get_physical(task->pagedir);
-    task->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
-    task->context.eflags = read_eflags() | EFLAGS_IF;
-    task->context.eip = (uint32_t)parent_entry;
-    kernel_task = task;
-
-    /* Create idle_task */
-    struct task* task1 = task_create("idle_task");
-    task1->context.cs = KERNEL_CODE_SEG;
-    task1->context.ds = task1->context.ss = KERNEL_DATA_SEG;
-    task1->context.cr3 = vmm_get_physical(task1->pagedir);
-    task1->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
-    task1->context.eflags = read_eflags() | EFLAGS_IF;
-    task1->context.eip = (uint32_t)idle_task_entry;
-    idle_task = task1;
-
-    /* Switch to kernel task */
-    task_switch(task);
-    invalid_code_path();
-}
-
 void test_scheduler()
 {
-    //heap_trace_start();
-
     trace("Testing scheduler");
-
     test_ipc();
-    //test_fork();
-    heap_trace_stop();
 }
 
 
