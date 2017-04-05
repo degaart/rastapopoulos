@@ -6,19 +6,13 @@
 
 #define BIT_PER_ELEMENT 32
 
-struct bitset* bitset_new(uint32_t size)
+struct bitset* bitset_init(struct bitset* bitset, uint32_t size)
 {
     uint32_t element_count = ALIGN(size, BIT_PER_ELEMENT) / BIT_PER_ELEMENT;
-    uint32_t alloc_size = sizeof(struct bitset) + (sizeof(uint32_t) * element_count);
-
-    assert(element_count * BIT_PER_ELEMENT >= size);
-
-    struct bitset* result = kmalloc(alloc_size);
-    result->size = size;
-    result->element_count = element_count;
-    bitset_clear_all(result);
-
-    return result;
+    bitset->size = size;
+    bitset->element_count = element_count;
+    bitset_clear_all(bitset);
+    return bitset;
 }
 
 unsigned bitset_alloc_size(uint32_t size)
