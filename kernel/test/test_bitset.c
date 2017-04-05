@@ -1,5 +1,6 @@
 #include "../bitset.h"
 #include "../debug.h"
+#include "../kmalloc.h"
 
 void test_bitset()
 {
@@ -7,7 +8,8 @@ void test_bitset()
 
     // Create new bitset
     // should be 4 elements
-    struct bitset* bt = bitset_new(120);  
+    int alloc_size = bitset_alloc_size(120);
+    struct bitset* bt = bitset_init(kmalloc(alloc_size), 120);  
     assert(bt->element_count == 4);
 
     // On creation, all bits should be unset

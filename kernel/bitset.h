@@ -11,7 +11,7 @@ struct bitset {
 
 #define BITSET_INVALID_INDEX 0xFFFFFFFF
 
-struct bitset* bitset_new(uint32_t size);
+struct bitset* bitset_init(struct bitset* bitset, uint32_t size);
 unsigned bitset_alloc_size(uint32_t size);
 bool bitset_test(const struct bitset* bitset, uint32_t offset);
 void bitset_set(struct bitset* bitset, uint32_t offset);

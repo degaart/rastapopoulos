@@ -32,7 +32,11 @@ static void add_region(uint32_t addr, uint32_t len)
     region->addr = aligned_start;
     region->len = aligned_len;
     region->next = memregions;
-    region->bitmap = bitset_new(aligned_len / PAGE_SIZE);
+
+    unsigned bitset_size = aligned_len / PAGE_SIZE;
+    unsigned alloc_size = bitset_alloc_size(bitset_size);
+    region->bitmap = kmalloc(alloc_size);
+    bitset_init(region->bitmap, bitset_size);
 
     memregions = region;
 }
