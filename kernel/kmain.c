@@ -18,6 +18,7 @@
 #include "heap.h"
 #include "elf.h"
 #include "debug.h"
+#include "initrd.h"
 
 uint32_t KERNEL_START = (uint32_t) &_KERNEL_START_;
 uint32_t KERNEL_END = (uint32_t) &_KERNEL_END_;
@@ -162,11 +163,8 @@ void kmain(const struct multiboot_info* init_multiboot_info)
     // Physical memory manager
     pmm_init(multiboot_get_info());
 
-#if 0
     // initrd
-    struct initrd initrd;
-    initrd_init(&initrd, &multiboot_info);
-#endif
+    initrd_init(multiboot_get_info());
 
     /*
      * Reserve currently used memory
