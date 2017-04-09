@@ -1,5 +1,6 @@
-#include "../locks.h"
-#include "../debug.h"
+#include "locks.h"
+
+#include "../kdebug.h"
 
 static void test_cmpxchg()
 {

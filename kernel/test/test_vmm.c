@@ -1,9 +1,10 @@
-#include "../debug.h"
+#include "registers.h"
+#include "util.h"
+
+#include "../kdebug.h"
 #include "../pmm.h"
 #include "../vmm.h"
-#include "../registers.h"
 #include "../kernel.h"
-#include "../util.h"
 #include "../idt.h"
 #include "../kmalloc.h"
 

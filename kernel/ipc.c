@@ -1,5 +1,6 @@
 #include "ipc.h"
 #include "syscall.h"
+#include "syscalls.h"
 #include "kernel.h"
 #include "idt.h"
 #include "kmalloc.h"
@@ -32,17 +33,6 @@ static struct port* port_get(int number)
         leave_critical_section();
     }
     return port;
-}
-
-/* Calculate message checksum */
-uint32_t USERFUNC message_checksum(const struct message* msg)
-{
-    unsigned checksum = hash2(&msg->sender, sizeof(msg->sender), 0);
-    checksum = hash2(&msg->reply_port, sizeof(msg->reply_port), checksum);
-    checksum = hash2(&msg->code, sizeof(msg->code), checksum);
-    checksum = hash2(&msg->len, sizeof(msg->len), checksum);
-    checksum = hash2(msg->data, msg->len, checksum);
-    return checksum;
 }
 
 /*
@@ -250,11 +240,6 @@ static uint32_t syscall_msgpeek_handler(struct isr_regs* regs)
         checked_unlock(&port->lock);
     }
     return result;
-}
-
-void USERFUNC msgwait(int port)
-{
-    syscall(SYSCALL_MSGWAIT, port, 0, 0, 0, 0);
 }
 
 void ipc_init()

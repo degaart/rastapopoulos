@@ -32,30 +32,6 @@ SECTIONS
 		*(.data)
 		_DATA_END_ = .;
 	}
-
-    . = ALIGN(4096);
-    .user :
-    {
-        _USER_START_ = .;
-        *(.user)
-        _USER_END_ = .;
-    }
-
-    . = ALIGN(4096);
-    .userrodata :
-    {
-        _USER_RODATA_START_ = .;
-        *(.userrodata)
-        _USER_RODATA_END_ = .;
-    }
-    
-    . = ALIGN(4096);
-    .userdata :
-    {
-        _USER_DATA_START_ = .;
-        *(.userdata)
-        _USER_DATA_END_ = .;
-    }
     
 	. = ALIGN(4096);
 	.bss :

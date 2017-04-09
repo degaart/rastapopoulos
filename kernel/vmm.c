@@ -1,5 +1,5 @@
 #include "vmm.h"
-#include "debug.h"
+#include "kdebug.h"
 #include "pmm.h"
 #include "kmalloc.h"
 #include "registers.h"
@@ -169,24 +169,6 @@ void vmm_init()
     //trace(".data %p - %p", _DATA_START_, _DATA_END_);
     for(uint32_t page = (uint32_t)_DATA_START_; page < (uint32_t)_DATA_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-    }
-
-    /* Kernel .user (usermode code section) */
-    //trace(".user %p - %p", _USER_START_, _USER_END_);
-    for(uint32_t page = (uint32_t)_USER_START_; page < (uint32_t)_USER_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER);
-    }
-
-    /* Kernel .userrodata (usermode read-only data section) */
-    //trace(".userrodata %p - %p", _USER_RODATA_START_, _USER_RODATA_END_);
-    for(uint32_t page = (uint32_t)_USER_RODATA_START_; page < (uint32_t)_USER_RODATA_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER);
-    }
-
-    /* Kernel .userdata (usermode data section) */
-    //trace(".userdata %p - %p", _USER_DATA_START_, _USER_DATA_END_);
-    for(uint32_t page = (uint32_t)_USER_DATA_START_; page < (uint32_t)_USER_DATA_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
     }
 
     /* Kernel .bss (also stack, since initial stack is in bss) */

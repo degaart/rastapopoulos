@@ -3,7 +3,7 @@
 #include "pmm.h"
 #include "util.h"
 #include "heap.h"
-#include "debug.h"
+#include "kdebug.h"
 #include "registers.h"
 #include "locks.h"
 #include "string.h"

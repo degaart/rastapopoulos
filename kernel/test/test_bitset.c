@@ -1,5 +1,5 @@
+#include "debug.h"
 #include "../bitset.h"
-#include "../debug.h"
 #include "../kmalloc.h"
 
 void test_bitset()

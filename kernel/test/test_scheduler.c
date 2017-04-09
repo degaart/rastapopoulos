@@ -1,23 +1,27 @@
+#include "util.h"
+#include "string.h"
+#include "registers.h"
+#include "locks.h"
+#include "list.h"
+#include "syscalls.h"
+
 #include "../process.h"
-#include "../debug.h"
-#include "../util.h"
+#include "../kdebug.h"
 #include "../pmm.h"
 #include "../vmm.h"
 #include "../kernel.h"
-#include "../string.h"
 #include "../gdt.h"
 #include "../context.h"
 #include "../kmalloc.h"
-#include "../registers.h"
 #include "../timer.h"
-#include "../io.h"
-#include "../locks.h"
-#include "../list.h"
+#include "../common/io.h"
 #include "../syscall.h"
 #include "../ipc.h"
 #include "../scheduler.h"
 #include "../initrd.h"
 #include "../elf.h"
+
+#if 0
 
 #define LoggerPort              1
 #define LoggerMessageTrace      0
@@ -26,59 +30,6 @@
 /****************************************************************************
  * usermode syscall helpers
  ****************************************************************************/
-static int USERFUNC port_open(int port_number)
-{
-    int result = syscall(SYSCALL_PORTOPEN,
-                         port_number,
-                         0,
-                         0,
-                         0,
-                         0);
-    return result;
-}
-
-static bool USERFUNC msgsend(int port, const struct message* msg)
-{
-    unsigned checksum = message_checksum(msg);
-    assert(checksum == msg->checksum);
-
-    unsigned result = syscall(SYSCALL_MSGSEND, 
-                              port, 
-                              (uint32_t)msg, 
-                              0,
-                              0,
-                              0);
-    return result != 0;
-}
-
-static unsigned USERFUNC msgrecv(int port, struct message* buffer, size_t buffer_size, size_t* outsize)
-{
-    /* Buffer validation */
-    bzero(buffer, buffer_size);
-    unsigned result = syscall(SYSCALL_MSGRECV,
-                              port,
-                              (uint32_t)buffer,
-                              buffer_size,
-                              (uint32_t)outsize,
-                              0);
-
-    unsigned checksum = message_checksum(buffer);
-    assert(buffer->checksum == checksum);
-
-    return result;
-}
-
-static bool USERFUNC msgpeek(int port)
-{
-    unsigned ret = syscall(SYSCALL_MSGPEEK,
-                           port,
-                           0,
-                           0,
-                           0,
-                           0);
-    return ret != 0;
-}
-
 static void USERFUNC yield()
 {
     syscall(SYSCALL_YIELD, 0, 0, 0, 0, 0);
@@ -117,7 +68,7 @@ static void USERFUNC __user_trace(int ack_port, const char* format, ...)
     assert(ret);
 
     /* Wait ack */
-    size_t outsize;
+    unsigned outsize;
     unsigned recv_ret = msgrecv(ack_port, msg, sizeof(buffer), &outsize);
     assert(recv_ret == 0);
 
@@ -296,7 +247,7 @@ static void USERFUNC logger_entry()
     unsigned char buffer[512];
     struct message* msg = (struct message*)buffer;
     while(1) {
-        size_t outsiz;
+        unsigned outsiz;
         unsigned ret = msgrecv(LoggerPort, 
                                msg, 
                                sizeof(buffer), 
@@ -341,6 +292,7 @@ static void USERFUNC init_entry()
     user_exit();
     invalid_code_path();
 }
+#endif
 
 static void test_load_initrd()
 {

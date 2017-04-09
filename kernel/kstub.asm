@@ -102,18 +102,6 @@ hlt:
     hlt
     ret
 
-; void cli()
-global cli
-cli:
-    cli
-    ret
-
-; void sti()
-global sti
-sti:
-    sti
-    ret
-
 section .bss
 align 4096
 global initial_kernel_stack

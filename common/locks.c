@@ -1,6 +1,5 @@
 #include "locks.h"
 #include "registers.h"
-#include "kernel.h"
 
 if_state_t disable_if()
 {
