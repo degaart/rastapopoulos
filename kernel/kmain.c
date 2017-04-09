@@ -126,9 +126,9 @@ static void run_tests()
     //RUN_TEST(test_kmalloc);
     //RUN_TEST(test_bitset);
     //RUN_TEST(test_list);
-    //RUN_TEST(test_scheduler);
+    RUN_TEST(test_scheduler);
     //RUN_TEST(test_locks);
-    RUN_TEST(test_initrd);
+    //RUN_TEST(test_initrd);
 }
 
 void kmain(const struct multiboot_info* init_multiboot_info)
