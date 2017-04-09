@@ -16,6 +16,7 @@
 #include "../syscall.h"
 #include "../ipc.h"
 #include "../scheduler.h"
+#include "../initrd.h"
 
 #define LoggerPort              1
 #define LoggerMessageTrace      0
@@ -340,6 +341,23 @@ static void USERFUNC init_entry()
     invalid_code_path();
 }
 
+static void test_load_initrd()
+{
+    const struct initrd_file* init_file = initrd_get_file("init");
+    assert(init_file != NULL);
+
+    void* user_start = (void*)USER_START;
+    vmm_map(user_start,
+            pmm_alloc(),
+            VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    bzero(user_start, PAGE_SIZE);
+    memcpy(user_start, init_file->data, init_file->size);
+
+    vmm_remap(user_start,
+              VMM_PAGE_PRESENT | VMM_PAGE_USER);
+
+    scheduler_start((void(*)())user_start);
+}
 
 /****************************************************************************
  * Initialization
@@ -348,7 +366,11 @@ void test_scheduler()
 {
     trace("Testing scheduler");
 
+#if 1
+    test_load_initrd();
+#else
     scheduler_start(init_entry);
+#endif
 }
 
 

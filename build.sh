@@ -36,3 +36,8 @@ fi
     exit 1
 }
 
+./copyfile.sh disk.img userland/init L:/ || {
+    echo "copyfile failed"
+    exit 1
+}
+

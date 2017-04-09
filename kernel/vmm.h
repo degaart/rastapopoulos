@@ -16,6 +16,9 @@
 #define KERNEL_HI_START         0xC0000000
 #define KERNEL_HI_END           0xFFBFFFFF
 
+#define USER_START              0x400000
+#define USER_END                0xBFFFFFFF
+
 struct pagedir;
 
 void vmm_init();
