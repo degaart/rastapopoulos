@@ -6,19 +6,23 @@
 #include "kernel.h"
 #include "elf.h"
 #include "pmm.h"
+#include "string.h"
 
-void multiboot_init(struct multiboot_info* mi,
-                           const struct multiboot_info* init_mi)
+static struct multiboot_info multiboot_info;
+static struct heap* mi_heap;
+
+void multiboot_init(const struct multiboot_info* init_mi)
 {
     /* Prepare heap for multiboot data */
     unsigned char* heap_start = (unsigned char*)ALIGN(0x7C00, PAGE_SIZE);
     unsigned char* heap_end = (unsigned char*)0x9FBFF;
     unsigned heap_size = TRUNCATE(heap_end - heap_start, PAGE_SIZE);
-    struct heap* mi_heap = heap_init(heap_start,
-                                     heap_size,
-                                     heap_size);
+    mi_heap = heap_init(heap_start,
+                        heap_size,
+                        heap_size);
 
     /* Init data */
+    struct multiboot_info* mi = &multiboot_info;
     bzero(mi, sizeof(struct multiboot_info));
 
     if(init_mi->flags & MULTIBOOT_FLAG_CMDLINE) {
@@ -103,35 +107,46 @@ void multiboot_init(struct multiboot_info* mi,
     }
 }
 
-void multiboot_dump(const struct multiboot_info* multiboot_info)
+void multiboot_dump()
 {
-    trace("Multiboot info: %p", multiboot_info);
+    trace("Multiboot info: %p", &multiboot_info);
 
     char multiboot_flags[32] = {};
-    if(multiboot_info->flags & MULTIBOOT_FLAG_MEMINFO) {
+    if(multiboot_info.flags & MULTIBOOT_FLAG_MEMINFO) {
         strlcat(multiboot_flags, "MEM ", sizeof(multiboot_flags));
-        trace("Lower memory size: %dk", multiboot_info->mem_lower);
-        trace("High memory size: %dk", multiboot_info->mem_upper);
+        trace("Lower memory size: %dk", multiboot_info.mem_lower);
+        trace("High memory size: %dk", multiboot_info.mem_upper);
     }
-    if(multiboot_info->flags & MULTIBOOT_FLAG_MODINFO) {
+    if(multiboot_info.flags & MULTIBOOT_FLAG_MODINFO) {
         strlcat(multiboot_flags, "MOD ", sizeof(multiboot_flags));
-        trace("Modules count: %d", multiboot_info->mods_count);
-        trace("Modules load address: %p", multiboot_info->mods_addr);
+        trace("Modules count: %d", multiboot_info.mods_count);
+        trace("Modules load address: %p", multiboot_info.mods_addr);
     }
-    if(multiboot_info->flags & MULTIBOOT_FLAG_SYMBOLS1) {
+    if(multiboot_info.flags & MULTIBOOT_FLAG_SYMBOLS1) {
         strlcat(multiboot_flags, "SYM1 ", sizeof(multiboot_flags));
     }
-    if(multiboot_info->flags & MULTIBOOT_FLAG_SYMBOLS2) {
+    if(multiboot_info.flags & MULTIBOOT_FLAG_SYMBOLS2) {
         strlcat(multiboot_flags, "SYM2 ", sizeof(multiboot_flags));
-
-        //load_symbols(multiboot_info);
     }
-    if(multiboot_info->flags & MULTIBOOT_FLAG_MMAP) {
+    if(multiboot_info.flags & MULTIBOOT_FLAG_MMAP) {
         strlcat(multiboot_flags, "MMAP ", sizeof(multiboot_flags));
-        trace("Memory map len: %d", multiboot_info->mmap_len);
-        trace("Memory map load address: %p", multiboot_info->mmap_addr);
+        trace("Memory map len: %d", multiboot_info.mmap_len);
+        trace("Memory map load address: %p", multiboot_info.mmap_addr);
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
     trace("_KERNEL_END_: %p", &_KERNEL_END_);
 }
+
+const struct multiboot_info* multiboot_get_info()
+{
+    return &multiboot_info;
+}
+
+struct heap_info multiboot_heap_info()
+{
+    return heap_info(mi_heap);
+}
+
+
+
