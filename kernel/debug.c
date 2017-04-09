@@ -127,10 +127,14 @@ void load_symbols(const struct multiboot_info* multiboot_info)
 {
     // All headers
     elf32_shdr_t* hdrs = (elf32_shdr_t*)multiboot_info->sym2.addr;
+    trace("Debug headers: %p", hdrs);
    
     // Section name table header
     elf32_shdr_t* shstr_hdr = &hdrs[multiboot_info->sym2.shndx];
+    trace("Section header strings: %p", shstr_hdr);
+
     const char* section_names = (const char*)shstr_hdr->sh_addr;
+    trace("Section_names: %p", section_names);
 
     // Symbols table header
     elf32_shdr_t* sym_hdr = NULL;

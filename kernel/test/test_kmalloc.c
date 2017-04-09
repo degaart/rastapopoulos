@@ -5,19 +5,10 @@
 #include "../string.h"
 #include "../heap.h"
 #include "../kmalloc.h"
-#include "heap_records.h"
 
-#if 1
 
 bool heap_is_free(struct heap* heap, struct heap_block_header* block);
 bool heap_is_allocated(struct heap* heap, struct heap_block_header* block);
-
-static void test_complex()
-{
-    //trace("Testing complex kmalloc-kfree chain");
-    void* p = kmalloc_a(100, 8);
-    dump_var(p);
-}
 
 static void test_simple_alloc(struct heap* heap)
 {
@@ -154,7 +145,6 @@ static void test_heap_limits(struct heap* heap)
 
 void test_kmalloc()
 {
-#if 0
     trace("Testing kmalloc()");
     /* Create heap at 48Mb */
     unsigned char* heap_start = (unsigned char*)0x3000000;
@@ -197,11 +187,7 @@ void test_kmalloc()
     for(unsigned char* page = heap_start; page < heap_start + hi.size; page += PAGE_SIZE) {
         vmm_unmap(page);
     }
-#else
-    test_complex();
-#endif
 }
 
-#endif
 
 

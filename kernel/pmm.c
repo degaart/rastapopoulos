@@ -52,6 +52,17 @@ void pmm_init(const struct multiboot_info* multiboot_info)
         }
     }
     initialized = true;
+
+    trace("Physical memory regions:");
+    for(struct memregion* region = memregions;
+        region;
+        region = region->next) {
+
+        trace("\t%p-%p (%d Kb)",
+              region->addr,
+              region->addr + region->len,
+              region->len / 2014);
+    }
 }
 
 bool pmm_initialized()

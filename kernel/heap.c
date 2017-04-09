@@ -444,4 +444,23 @@ void heap_check(struct heap* heap, const char* file, int line)
     }
 }
 
+void* heap_alloc(struct heap* heap, unsigned size)
+{
+    void* result = NULL;
+    struct heap_block_header* hdr = heap_alloc_block(heap, size);
+    if(hdr) {
+        result = (unsigned char*)hdr + sizeof(struct heap_block_header);
+    }
+    return result;
+}
+
+void heap_free(struct heap* heap, void* ptr)
+{
+    struct heap_block_header* hdr = (struct heap_block_header*)
+        ((unsigned char*)ptr - sizeof(struct heap_block_header));
+    heap_free_block(heap, hdr);
+}
+
+
+
 
