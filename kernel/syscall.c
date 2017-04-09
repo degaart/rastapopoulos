@@ -4,7 +4,7 @@
 #include "string.h"
 #include "idt.h"
 #include "scheduler.h"
-#include "debug.h"
+#include "kdebug.h"
 
 static syscall_handler_t syscall_handlers[80] = {0};
 

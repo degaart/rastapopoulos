@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "timer.h"
 #include "syscall.h"
+#include "syscalls.h"
 #include "ipc.h"
 #include "idt.h"
 #include "gdt.h"
@@ -365,6 +366,13 @@ static uint32_t syscall_sleep_handler(struct isr_regs* regs)
     task_switch_next();
     invalid_code_path();
 }
+
+static uint32_t syscall_reboot_handler(struct isr_regs* regs)
+{
+    trace("Reboot requested");
+    reboot();
+}
+
 /*
  * transform current task into an user task
  */
@@ -414,6 +422,7 @@ void scheduler_start(void (*user_entry)())
     syscall_register(SYSCALL_SETNAME, syscall_setname_handler);
     syscall_register(SYSCALL_EXIT, syscall_exit_handler);
     syscall_register(SYSCALL_SLEEP, syscall_sleep_handler);
+    syscall_register(SYSCALL_REBOOT, syscall_reboot_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();

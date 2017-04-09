@@ -2,6 +2,10 @@
 
 dest_file=obj/Depends.mk
 
+if ! [ -d "$(dirname "$dest_file")" ]; then
+    mkdir -p "$(dirname "$dest_file")" || exit 1
+fi
+
 echo -n > "$dest_file"
 
 for file in $*

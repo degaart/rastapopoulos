@@ -1,7 +1,11 @@
 section .text
 
+extern main
+
 global _entry
 _entry:
+    call    main
+
     mov     esi, msg
 
 .loop:
@@ -17,5 +21,5 @@ _entry:
 
 section .rodata
 
-msg: db "Hello, from userland!", 10, 0
+msg: db "Program terminated", 10, 0
 

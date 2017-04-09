@@ -1,7 +1,7 @@
 #include "kernel.h"
 #include "io.h"
 #include "string.h"
-#include "debug.h"
+#include "kdebug.h"
 #include "registers.h"
 #include "multiboot.h"
 #include "gdt.h"

@@ -13,3 +13,15 @@ cmpxchg:
     lock cmpxchg    [edx], ecx
     ret
 
+; void cli()
+global cli
+cli:
+    cli
+    ret
+
+; void sti()
+global sti
+sti:
+    sti
+    ret
+

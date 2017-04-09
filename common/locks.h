@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "debug.h"
+#include "spinlock.h"
 
 typedef uint32_t if_state_t;
 
@@ -24,11 +25,6 @@ void restore_if(if_state_t state);
  */
 extern uint32_t cmpxchg(volatile uint32_t* dest, uint32_t exchange, uint32_t compare);
 
-struct spinlock {
-    volatile uint32_t l;
-};
-typedef struct spinlock spinlock_t;
-#define SPINLOCK_INIT (struct spinlock) { .l = 0 }
 
 bool spinlock_try_lock(spinlock_t* lock);
 bool spinlock_try_unlock(spinlock_t* lock);
@@ -48,5 +44,9 @@ bool spinlock_try_unlock(spinlock_t* lock);
             panic("Concurrent modification detected on " #lock); \
         } \
     } while(0)
+
+
+extern void cli();
+extern void sti();
 
 

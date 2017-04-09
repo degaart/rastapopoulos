@@ -2,6 +2,7 @@
 
 set -eou pipefail
 
+make --no-print-directory -C common || exit 1
 make --no-print-directory -C kernel || exit 1
 make --no-print-directory -C userland || exit 1
 

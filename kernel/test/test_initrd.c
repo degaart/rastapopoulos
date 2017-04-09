@@ -2,13 +2,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "util.h"
+#include "list.h"
+#include "string.h"
+
 #include "../kernel.h"
-#include "../util.h"
 #include "../kmalloc.h"
-#include "../list.h"
 #include "../multiboot.h"
-#include "../debug.h"
-#include "../string.h"
+#include "../kdebug.h"
 #include "../initrd.h"
 
 void test_initrd()

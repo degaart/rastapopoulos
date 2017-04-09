@@ -1,4 +1,4 @@
-section .user
+section .text
 
 global syscall
 syscall:
@@ -18,7 +18,6 @@ syscall:
 
     cmp     eax, 2
     jne     .call_int
-    
 
 .call_int:
     int     0x80

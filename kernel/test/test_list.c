@@ -1,7 +1,8 @@
-#include "../debug.h"
-#include "../string.h"
+#include "string.h"
+#include "list.h"
+
+#include "../kdebug.h"
 #include "../kmalloc.h"
-#include "../list.h"
 
 struct element {
     unsigned val;

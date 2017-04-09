@@ -11,6 +11,7 @@ DSTFILE="$3"
     exit 1
 }
 
+echo "[COPY] $SRCFILE"
 mtools_init "$IMGFILE"
 mcopy -D o "$SRCFILE" "$DSTFILE"
 

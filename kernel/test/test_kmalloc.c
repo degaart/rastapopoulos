@@ -1,11 +1,11 @@
-#include "../debug.h"
-#include "../util.h"
+#include "util.h"
+#include "string.h"
+
+#include "../kdebug.h"
 #include "../vmm.h"
 #include "../pmm.h"
-#include "../string.h"
 #include "../heap.h"
 #include "../kmalloc.h"
-
 
 bool heap_is_free(struct heap* heap, struct heap_block_header* block);
 bool heap_is_allocated(struct heap* heap, struct heap_block_header* block);
