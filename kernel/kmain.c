@@ -111,41 +111,6 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
 }
 
 
-struct initrd_file {
-    char name[16];
-    void* data;
-    unsigned size;
-    list_declare_node(initrd_file) node;
-};
-list_declare(initrd, initrd_file);
-
-static void load_initrd(struct initrd* initrd, const struct multiboot_info* mi)
-{
-    if(mi->flags & MULTIBOOT_FLAG_MODINFO) {
-        trace("Loading initrd");
-        const struct multiboot_mod_entry* modules =
-            (struct multiboot_mod_entry*)mi->mods_addr;
-        for(int i = 0; i < mi->mods_count; i++) {
-            const struct multiboot_mod_entry* mod = modules + i;
-
-            trace("\tmod[%d] %s: %p-%p (%d bytes)",
-                  i,
-                  mod->str ? mod->str : "",
-                  mod->start,
-                  mod->end,
-                  mod->end - mod->start);
-
-            struct initrd_file* file = kmalloc(sizeof(struct initrd_file));
-            bzero(file, sizeof(struct initrd_file));
-            strlcpy(file->name, mod->str ? mod->str : "", sizeof(file->name));
-            file->size = (unsigned)(mod->end - mod->start);
-            file->data = kmalloc(file->size);
-            memcpy(file->data, mod->start, file->size);
-            list_append(initrd, file, node);
-        }
-    }
-}
-
 #define RUN_TEST(fn) \
     do { \
         trace("Running test %s", #fn); \
@@ -162,6 +127,7 @@ static void run_tests()
     //RUN_TEST(test_list);
     //RUN_TEST(test_scheduler);
     //RUN_TEST(test_locks);
+    RUN_TEST(test_initrd);
 }
 
 void kmain(const struct multiboot_info* init_multiboot_info)
@@ -174,15 +140,14 @@ void kmain(const struct multiboot_info* init_multiboot_info)
      * lower conventional memory. This will limit our modules
      * and debug symbols to < 600Kb, but this will do for now
      */
-    struct multiboot_info multiboot_info = {0};
-    multiboot_init(&multiboot_info, init_multiboot_info);
-    multiboot_dump(&multiboot_info);
+    multiboot_init(init_multiboot_info);
+    multiboot_dump();
 
     // Init kernel heap
     kmalloc_init();
 
     // Load symbols
-    load_symbols(&multiboot_info);
+    load_symbols(multiboot_get_info());
     
     // GDT
     gdt_init();
@@ -195,11 +160,13 @@ void kmain(const struct multiboot_info* init_multiboot_info)
     idt_install(13, gpf_handler, true);
 
     // Physical memory manager
-    pmm_init(&multiboot_info);
+    pmm_init(multiboot_get_info());
 
+#if 0
     // initrd
     struct initrd initrd;
-    load_initrd(&initrd, &multiboot_info);
+    initrd_init(&initrd, &multiboot_info);
+#endif
 
     /*
      * Reserve currently used memory
