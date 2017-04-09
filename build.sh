@@ -22,10 +22,16 @@ if ! [ -f disk.img ]; then
         echo "copyfile failed"
         exit 1
     }
+
 fi
 
 # Copy relevant kernel files
 ./copyfile.sh disk.img kernel/obj/kernel.elf L:/ || {
+    echo "copyfile failed"
+    exit 1
+}
+
+./copyfile.sh disk.img bochsrc L:/ || {
     echo "copyfile failed"
     exit 1
 }
