@@ -2,13 +2,8 @@
 
 set -eou pipefail
 
-pushd . > /dev/null
-cd kernel
-make || {
-    echo "Build failed"
-    exit 1
-}
-popd > /dev/null
+make --no-print-directory -C kernel || exit 1
+make --no-print-directory -C userland || exit 1
 
 if ! [ -f disk.img ]; then
     # Create disk image
@@ -31,12 +26,7 @@ fi
     exit 1
 }
 
-./copyfile.sh disk.img bochsrc L:/ || {
-    echo "copyfile failed"
-    exit 1
-}
-
-./copyfile.sh disk.img userland/init L:/ || {
+./copyfile.sh disk.img userland/obj/init.elf L:/ || {
     echo "copyfile failed"
     exit 1
 }

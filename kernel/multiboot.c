@@ -14,11 +14,10 @@ static struct heap* mi_heap;
 void multiboot_init(const struct multiboot_info* init_mi)
 {
     /* Prepare heap for multiboot data */
-    unsigned char* heap_start = (unsigned char*)ALIGN(0x7C00, PAGE_SIZE);
-    unsigned char* heap_end = (unsigned char*)0x9FBFF;
-    unsigned heap_size = TRUNCATE(heap_end - heap_start, PAGE_SIZE);
+    unsigned char* heap_start = (unsigned char*)ALIGN(KERNEL_END, PAGE_SIZE);
+    unsigned heap_size = 1 * 1024 * 1024;
     mi_heap = heap_init(heap_start,
-                        heap_size,
+                        PAGE_SIZE,
                         heap_size);
 
     /* Init data */

@@ -40,4 +40,5 @@ kernel/obj
 *.log
 *.log.*
 *.bak
+userland/obj
 
