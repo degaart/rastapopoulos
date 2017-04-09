@@ -1,8 +1,7 @@
-bits        32
-org         0x400000
+section .text
 
-
-entry:
+global _entry
+_entry:
     mov     esi, msg
 
 .loop:
@@ -15,6 +14,8 @@ entry:
     jmp     .loop
 .break:
     jmp     $ 
+
+section .rodata
 
 msg: db "Hello, from userland!", 10, 0
 

@@ -170,6 +170,7 @@ void kmain(const struct multiboot_info* init_multiboot_info)
      * Reserve currently used memory
      * Low memory: 0x00000000 - 0x000FFFFF
      * kernel code and data section
+     * multiboot heap
      * initial kernel heap
      * TODO: Free conventional memory after we load multiboot modules
      */
@@ -184,6 +185,8 @@ void kmain(const struct multiboot_info* init_multiboot_info)
         if(pmm_exists(page))
             pmm_reserve(page);
     }
+
+    struct heap_info mi_heap_info = multiboot_heap_info();
 
     struct kernel_heap_info heap_info;
     kernel_heap_info(&heap_info);

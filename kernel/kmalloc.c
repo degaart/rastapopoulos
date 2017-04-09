@@ -7,6 +7,8 @@
 #include "registers.h"
 #include "locks.h"
 #include "string.h"
+#include "multiboot.h"
+#include "vmm.h"
 
 struct heap* kernel_heap = NULL;
 static bool trace_enabled = false;
@@ -14,11 +16,13 @@ static bool trace_enabled = false;
 void kmalloc_init()
 {
     /* 
-     * We place an initial kernel heap at KERNEL_END - (4Mb - 1)
+     * We place an initial kernel heap just after the multiboot heap
      */
-    unsigned char* heap_start = (unsigned char*)ALIGN(KERNEL_END, PAGE_SIZE);
-    unsigned heap_limit = (4 * 1024 * 1024) - (unsigned)heap_start - 1;
-    kernel_heap = heap_init(heap_start, PAGE_SIZE * 64, heap_limit);
+    struct heap_info mi_heap = multiboot_heap_info();
+    unsigned char* heap_start = (unsigned char*)ALIGN((uint32_t)mi_heap.address + mi_heap.size,
+                                                      PAGE_SIZE);
+    unsigned max_size = (unsigned char*)KERNEL_LO_END - heap_start;
+    kernel_heap = heap_init(heap_start, PAGE_SIZE * 64, max_size);
 }
 
 void* kmalloc(unsigned size)
