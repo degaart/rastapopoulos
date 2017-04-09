@@ -36,9 +36,12 @@
 *.DS_Store
 *.swp
 *.img
-kernel/obj
 *.log
 *.log.*
 *.bak
-userland/obj
+
+kernel/obj
+init/obj
+common/obj
+
 
