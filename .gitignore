@@ -41,7 +41,10 @@
 *.bak
 
 kernel/obj
-init/obj
 common/obj
+userland/init/obj/
+userland/runtime/obj
+
+
 
 
