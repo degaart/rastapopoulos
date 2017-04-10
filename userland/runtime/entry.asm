@@ -1,10 +1,10 @@
 section .text
 
-extern main
+extern runtime_entry
 
 global _entry
 _entry:
-    call    main
+    call    runtime_entry
     mov     eax, 0          ; SYSCALL_EXIT
     int     0x80
 

@@ -13,6 +13,7 @@
 #define SYSCALL_SETNAME     8
 #define SYSCALL_SLEEP       9
 #define SYSCALL_REBOOT      10
+#define SYSCALL_EXEC        11
 
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,

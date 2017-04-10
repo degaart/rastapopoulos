@@ -21,20 +21,16 @@
 #include "../initrd.h"
 #include "../elf.h"
 
+typedef void (*elf_entry_t)(void);
 
-static void test_load_initrd()
+static elf_entry_t load_elf(const void* data)
 {
-    /*
-     * Load ELF file
-     */
-    const struct initrd_file* init_file = initrd_get_file("init.elf");
-    assert(init_file != NULL);
-    const unsigned char* file_data = init_file->data;
+    const unsigned char* file_data = data;
 
     /*
      * Check ELF file headers
      */
-    Elf32_Ehdr* ehdr = init_file->data;
+    Elf32_Ehdr* ehdr = (Elf32_Ehdr*)file_data;
     assert(ehdr->e_ident[EI_MAG0] == 0x7F);
     assert(ehdr->e_ident[EI_MAG1] == 'E');
     assert(ehdr->e_ident[EI_MAG2] == 'L');
@@ -94,9 +90,65 @@ static void test_load_initrd()
             }
         }
     }
+    return ehdr->e_entry;
+}
 
-    trace("Starting execution at %p", ehdr->e_entry);
-    scheduler_start((void(*)())ehdr->e_entry);
+static uint32_t syscall_exec_handler(struct isr_regs* regs)
+{
+    const char* filename = (const char*)regs->ebx;
+    assert(filename);
+    assert(*filename);
+
+    trace("(%d %s) exec: %s", 
+          current_task_pid(), 
+          current_task_name(), 
+          filename);
+
+    /* Load file from initrd */
+    const struct initrd_file* file = initrd_get_file(filename);
+    if(!file)
+        return 0;
+
+    /* Unmap process memory */
+    for(unsigned char* va = (unsigned char*)USER_START;
+        va < USER_STACK; 
+        va += PAGE_SIZE) {
+
+        assert(va != USER_STACK);
+        uint32_t pa = vmm_get_physical(va);
+        if(pa) {
+            vmm_unmap(va);
+            pmm_free(pa);
+        }
+    }
+
+    /* Load elf file */
+    elf_entry_t entry = load_elf(file->data);
+
+    /* Reset process state */
+    current_task_set_name(filename);
+    regs->esp = (uint32_t)(USER_STACK + PAGE_SIZE);
+    regs->useresp = (uint32_t)(USER_STACK + PAGE_SIZE);
+    regs->eflags = read_eflags() | EFLAGS_IF;
+    regs->eip = (uint32_t)entry;
+
+    return 0;
+}
+
+static void test_load_initrd()
+{
+    syscall_register(SYSCALL_EXEC, syscall_exec_handler);
+
+    /*
+     * Load ELF file
+     */
+    const struct initrd_file* init_file = initrd_get_file("init.elf");
+    assert(init_file != NULL);
+
+    elf_entry_t entry = load_elf(init_file->data);
+
+    trace("Starting execution at %p", entry);
+    scheduler_start(entry);
 
     reboot();
 }
