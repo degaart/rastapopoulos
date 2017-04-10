@@ -287,6 +287,11 @@ const char* current_task_name()
     return current_task ? current_task->name : NULL;
 }
 
+void current_task_set_name(const char* name)
+{
+    strlcpy(current_task->name, name, sizeof(current_task->name));
+}
+
 int current_task_pid()
 {
     return current_task ? current_task->pid : -1;
@@ -337,7 +342,7 @@ static uint32_t syscall_fork_handler(struct isr_regs* regs)
 static uint32_t syscall_setname_handler(struct isr_regs* regs)
 {
     const char* new_name = (const char*)regs->ebx;
-    strlcpy(current_task->name, new_name, sizeof(current_task->name));
+    current_task_set_name(new_name);
     return 0;
 }
 
@@ -376,7 +381,7 @@ static uint32_t syscall_reboot_handler(struct isr_regs* regs)
 /*
  * transform current task into an user task
  */
-static void jump_to_usermode()
+void jump_to_usermode()
 {
     uint32_t user_entry = read_ebx();
 
@@ -456,5 +461,4 @@ void scheduler_start(void (*user_entry)())
     task_switch(task);
     invalid_code_path();
 }
-
 

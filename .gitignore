@@ -44,6 +44,10 @@ kernel/obj
 common/obj
 userland/init/obj/
 userland/runtime/obj
+userland/fib/obj
+userland/logger/obj
+userland/primes/obj
+userland/sleeper/obj
 
 
 

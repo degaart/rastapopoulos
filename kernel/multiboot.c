@@ -14,8 +14,8 @@ static struct heap* mi_heap;
 void multiboot_init(const struct multiboot_info* init_mi)
 {
     /* Prepare heap for multiboot data */
-    unsigned char* heap_start = (unsigned char*)ALIGN(KERNEL_END, PAGE_SIZE);
-    unsigned heap_size = 1 * 1024 * 1024;
+    unsigned char* heap_start = (unsigned char*)ALIGN(0x00020000, PAGE_SIZE);
+    unsigned heap_size = ALIGN(0x0009FBFF - 0x00020000, PAGE_SIZE);
     mi_heap = heap_init(heap_start,
                         PAGE_SIZE,
                         heap_size);
@@ -24,8 +24,12 @@ void multiboot_init(const struct multiboot_info* init_mi)
     struct multiboot_info* mi = &multiboot_info;
     bzero(mi, sizeof(struct multiboot_info));
 
+    trace("init_mi: %p", init_mi);
+
     if(init_mi->flags & MULTIBOOT_FLAG_CMDLINE) {
         mi->flags |= MULTIBOOT_FLAG_CMDLINE;
+
+        trace("init_mi->cmdline: %p", init_mi->cmdline);
 
         unsigned cmdline_size = strlen(init_mi->cmdline);
         char* cmdline = heap_alloc(mi_heap,
@@ -37,12 +41,19 @@ void multiboot_init(const struct multiboot_info* init_mi)
     if(init_mi->flags & MULTIBOOT_FLAG_MODINFO) {
         mi->flags |= MULTIBOOT_FLAG_MODINFO;
 
+        trace("init_mi->mods_addr: %p", init_mi->mods_addr);
+
         mi->mods_count = init_mi->mods_count;
         mi->mods_addr = heap_alloc(mi_heap,
                                    init_mi->mods_count * sizeof(struct multiboot_mod_entry));
 
         for(int i = 0; i < mi->mods_count; i++) {
             struct multiboot_mod_entry* init_entry = init_mi->mods_addr + i;
+            trace("init_mi->mods[%d]: %p - %p",
+                  i,
+                  init_entry->start,
+                  init_entry->end);
+
             unsigned entry_size = init_entry->end - init_entry->start;
             struct multiboot_mod_entry* entry = mi->mods_addr + i;
             
@@ -62,6 +73,11 @@ void multiboot_init(const struct multiboot_info* init_mi)
     if(init_mi->flags & MULTIBOOT_FLAG_SYMBOLS2) {
         mi->flags |= MULTIBOOT_FLAG_SYMBOLS2;
         mi->sym2 = init_mi->sym2;
+
+        trace("init_mi->sym2.addr: %p - %p",
+              init_mi->sym2.addr,
+              (uint32_t)init_mi->sym2.addr + (init_mi->sym2.size * mi->sym2.num));
+
 
         elf32_shdr_t* init_shdrs = init_mi->sym2.addr;
         elf32_shdr_t* shdrs = heap_alloc(mi_heap, init_mi->sym2.size * mi->sym2.num);
@@ -99,6 +115,10 @@ void multiboot_init(const struct multiboot_info* init_mi)
 
     if(init_mi->flags & MULTIBOOT_FLAG_MMAP) {
         mi->flags |= MULTIBOOT_FLAG_MMAP;
+
+        trace("init_mi->mmap_addr: %p - %p",
+              init_mi->mmap_addr,
+              (uint32_t)init_mi->mmap_addr + init_mi->mmap_len);
         mi->mmap_len = init_mi->mmap_len;
         mi->mmap_addr = heap_alloc(mi_heap, init_mi->mmap_len);
 

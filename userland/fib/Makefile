@@ -11,14 +11,14 @@ OBJS := $(patsubst %.c,obj/%.c.o,$(SRCS))
 ASM_SRCS := $(wildcard *.asm)
 ASM_OBJS := $(patsubst %.asm,obj/%.asm.o,$(ASM_SRCS))
 
-all: obj obj/init.elf
+all: obj obj/fib.elf
 
 obj:
 	@ mkdir -p obj
 
 -include obj/Depends.mk
 
-obj/init.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
+obj/fib.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
 	@ echo "[LD] $@"
 	@ $(LD) \
 		-T ../userland.ld \

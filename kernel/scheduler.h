@@ -48,9 +48,10 @@ list_declare(task_list, task);
 void scheduler_start(void (*user_entry)());
 int current_task_pid();
 const char* current_task_name();
+void current_task_set_name(const char* name);
 void task_wait_message(int port_number, const struct isr_regs* regs);
 void wake_tasks_for_port(int port_number);
 void save_current_task_state(const struct isr_regs* regs);
-
+void jump_to_usermode();
 
 

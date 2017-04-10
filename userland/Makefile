@@ -1,13 +1,13 @@
 .SUFFIXES:
 .PHONY: all clean
 
+PROJECTS := runtime init fib logger primes sleeper
+
 all:
-	@ make -C runtime
-	@ make -C init
+	@ for proj in $(PROJECTS); do make -C $$proj; done
 
 clean:
-	@ make -C init clean
-	@ make -C runtime clean
+	@ for proj in $(PROJECTS); do make -C $$proj clean; done
 
 
 
