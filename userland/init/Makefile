@@ -21,7 +21,7 @@ obj:
 obj/init.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
 	@ echo "[LD] $@"
 	@ $(LD) \
-		-T init.ld \
+		-T ../userland.ld \
 		-o $@ \
 		-Map obj/init.map \
 		$(LDFLAGS) \
