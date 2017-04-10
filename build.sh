@@ -4,7 +4,7 @@ set -eou pipefail
 
 make --no-print-directory -C common || exit 1
 make --no-print-directory -C kernel || exit 1
-make --no-print-directory -C init || exit 1
+make --no-print-directory -C userland || exit 1
 
 if ! [ -f disk.img ]; then
     # Create disk image
@@ -27,7 +27,7 @@ fi
     exit 1
 }
 
-./copyfile.sh disk.img init/obj/init.elf L:/ || {
+./copyfile.sh disk.img userland/init/obj/init.elf L:/ || {
     echo "copyfile failed"
     exit 1
 }
