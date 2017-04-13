@@ -5,6 +5,7 @@
 #include "port.h"
 #include "debug.h"
 #include "../logger/logger.h"
+#include "task_info.h"
 #include <stdarg.h>
 
 struct pcb pcb;
@@ -87,12 +88,23 @@ void send_ack(int port, unsigned code, uint32_t result)
     assert(ret);
 }
 
-static void debug_write(const char* str)
+void debug_write(const char* str)
 {
     while(*str) {
         outb(0xE9, *str);
         str++;
     }
+}
+
+bool get_task_info(int pid, struct task_info* buffer)
+{
+    uint32_t result = syscall(SYSCALL_TASK_INFO,
+                              pid,
+                              (uint32_t)buffer,
+                              0,
+                              0,
+                              0);
+    return result != 0;
 }
 
 void __log(const char* func, const char* file, int line, const char* fmt, ...)

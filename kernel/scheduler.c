@@ -13,6 +13,7 @@
 #include "registers.h"
 #include "initrd.h"
 #include "elf.h"
+#include "task_info.h"
 
 static struct task_list ready_queue = {0};
 static spinlock_t ready_queue_lock = SPINLOCK_INIT;
@@ -198,50 +199,48 @@ static struct task* task_create(const char* name)
 /*
  * Get a task by it's pid
  */
-struct task_info {
-    struct task* task;
-    struct task_list* queue;
-};
-static struct task_info task_getinfo(int pid)
+struct task* task_get(int pid)
 {
-    struct task_info result = {0};
+    struct task* result = {0};
 
     enter_critical_section();
 
-    if(pid == 1)
-        result.task = idle_task;
+    if(pid == idle_task->pid)
+        result = idle_task;
 
-    if(!result.task) {
+    if(!result) {
+        if(pid == current_task->pid)
+            result = current_task;
+    }
+
+    if(!result) {
         checked_lock(&ready_queue_lock);
 
         list_foreach(task, task, &ready_queue, node) {
             if(task->pid == pid) {
-                result.task = task;
-                result.queue = &ready_queue;
+                result = task;
                 break;
             }
         }
         checked_unlock(&ready_queue_lock);
     }
 
-    if(!result.task) {
+    if(!result) {
         checked_lock(&sleeping_queue_lock);
         list_foreach(task, task, &sleeping_queue, node) {
             if(task->pid == pid) {
-                result.task = task;
-                result.queue = &sleeping_queue;
+                result = task;
                 break;
             }
         }
         checked_unlock(&sleeping_queue_lock);
     }
 
-    if(!result.task) {
+    if(!result) {
         checked_lock(&msgwait_queue_lock);
         list_foreach(task, task, &msgwait_queue, node) {
             if(task->pid == pid) {
-                result.task = task;
-                result.queue = &msgwait_queue;
+                result = task;
                 break;
             }
         }
@@ -425,6 +424,32 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
 }
 
 /*
+ * Get information about a task, given its pid
+ * Params
+ *  ebx     pid
+ *  ecx     struct task_info*
+ * Returns
+ *  0       failure
+ * !=0      success
+ */
+static uint32_t syscall_task_info_handler(struct isr_regs* regs)
+{
+    uint32_t result = 0;
+
+    int pid = regs->ebx;
+    struct task_info* buffer = (struct task_info*)regs->ecx;
+
+    struct task* task = task_get(pid);
+    if(task) {
+        buffer->pid = pid;
+        strlcpy(buffer->name, task->name, sizeof(buffer->name));
+        result = 1;
+    }
+
+    return result;
+}
+
+/*
  * transform current task into an user task
  */
 void jump_to_usermode()
@@ -475,6 +500,7 @@ void scheduler_start(void (*user_entry)())
     syscall_register(SYSCALL_SLEEP, syscall_sleep_handler);
     syscall_register(SYSCALL_REBOOT, syscall_reboot_handler);
     syscall_register(SYSCALL_EXEC, syscall_exec_handler);
+    syscall_register(SYSCALL_TASK_INFO, syscall_task_info_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
