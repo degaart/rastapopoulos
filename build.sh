@@ -20,18 +20,23 @@ fi
     exit 1
 }
 
+# create initrd
+tar -cf initrd.tar -C userland/fib/obj fib.elf
+tar -uf initrd.tar -C userland/init/obj init.elf
+tar -uf initrd.tar -C userland/logger/obj logger.elf
+tar -uf initrd.tar -C userland/primes/obj primes.elf
+tar -uf initrd.tar -C userland/sleeper/obj sleeper.elf
+
 # Copy relevant kernel files
 for file in kernel/obj/kernel.elf \
-            userland/fib/obj/fib.elf \
-            userland/init/obj/init.elf \
-            userland/logger/obj/logger.elf \
-            userland/primes/obj/primes.elf \
-            userland/sleeper/obj/sleeper.elf
+            initrd.tar
 do
     ./copyfile.sh disk.img "$file" L:/ || {
         echo "copyfile failed"
         exit 1
     }
 done
+
+
 
 

@@ -163,3 +163,7 @@ typedef struct {
 #define PF_R                    0x4
 #define PF_MASKPROC             0xf0000000
 
+typedef void (*elf_entry_t)(void);
+elf_entry_t load_elf(const void* data, unsigned size);
+
+

@@ -4,7 +4,7 @@
 #include "multiboot.h"
 
 struct initrd_file {
-    char name[64];
+    char name[100];
     void* data;
     unsigned size;
     list_declare_node(initrd_file) node;
