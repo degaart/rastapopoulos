@@ -15,8 +15,6 @@ static void debug_out(const char* message)
 
 void main()
 {
-    setname("logger");
-
     int ret = port_open(LoggerPort);
     if(ret < 0) {
         panic("Failed to open logger port");
@@ -44,7 +42,7 @@ void main()
 
         if(msg->code == LoggerMessageTrace) {
             snprintf(msg_buf, sizeof(msg_buf),
-                     "[%s/%d] ",
+                     "▶ [%s/%d] ",
                      sender_info.name, sender_info.pid);
             debug_out(msg_buf);
             debug_out(msg->data);
@@ -53,7 +51,7 @@ void main()
             send_ack(msg->reply_port, LoggerMessageTraceAck, 1);
         } else {
             snprintf(msg_buf, sizeof(msg_buf), 
-                     "[%s/%d] Invalid message code %d\n",
+                     "▶ [%s/%d] Invalid message code %d\n",
                      sender_info.name, sender_info.pid,
                      msg->code);
             debug_out(msg_buf);

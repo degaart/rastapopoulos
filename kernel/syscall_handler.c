@@ -6,6 +6,8 @@
 #include "scheduler.h"
 #include "kdebug.h"
 
+extern void scheduler_perform_checks();
+
 static syscall_handler_t syscall_handlers[80] = {0};
 
 static void syscall_handler(struct isr_regs* regs)
@@ -23,6 +25,8 @@ static void syscall_handler(struct isr_regs* regs)
               current_task->pid, 
               current_task->name);
 #endif
+
+        scheduler_perform_checks();
 
         save_current_task_state(regs);
         kernel_heap_check();

@@ -1,6 +1,5 @@
 #include "scheduler.h"
 #include "locks.h"
-#include "debug.h"
 #include "timer.h"
 #include "syscall_handler.h"
 #include "syscall.h"
@@ -14,6 +13,10 @@
 #include "initrd.h"
 #include "elf.h"
 #include "task_info.h"
+#include "kdebug.h"
+#include "util.h"
+
+void scheduler_perform_checks();
 
 static struct task_list ready_queue = {0};
 static spinlock_t ready_queue_lock = SPINLOCK_INIT;
@@ -70,9 +73,12 @@ void save_current_task_state(const struct isr_regs* regs)
 static void task_switch(struct task* task)
 {
     assert(task);
+
     
     cli();
     current_task = task;
+
+    scheduler_perform_checks();
 
     vmm_copy_kernel_mappings(task->pagedir);
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
@@ -123,6 +129,8 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     /* Save current task state */
     assert(current_task);
     save_task_state(current_task, regs);
+
+    scheduler_perform_checks();
 
     /* Push current task into ready queue */
     if(current_task != idle_task) {
@@ -201,7 +209,7 @@ static struct task* task_create(const char* name)
  */
 struct task* task_get(int pid)
 {
-    struct task* result = {0};
+    struct task* result = 0;
 
     enter_critical_section();
 
@@ -381,9 +389,15 @@ static uint32_t syscall_reboot_handler(struct isr_regs* regs)
 
 static uint32_t syscall_exec_handler(struct isr_regs* regs)
 {
-    const char* filename = (const char*)regs->ebx;
+    char* filename = (char*)regs->ebx;
     assert(filename);
     assert(*filename);
+
+    /* 
+     * filename will be garbled when we unamp process memory below
+     * So we copy it to temp buffer beforehand
+     */
+    filename = strdup(filename);
 
     trace("(%d %s) exec: %s", 
           current_task_pid(), 
@@ -420,6 +434,12 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
     regs->eflags = read_eflags() | EFLAGS_IF;
     regs->eip = (uint32_t)entry;
 
+    struct task* t = task_get(current_task_pid());
+    assert(t == current_task);
+    assert(!strcmp(t->name, filename));
+
+    kfree(filename);
+
     return 0;
 }
 
@@ -447,6 +467,57 @@ static uint32_t syscall_task_info_handler(struct isr_regs* regs)
     }
 
     return result;
+}
+
+void scheduler_perform_checks()
+{
+    /* check1: current task and idle task should not be on any queue */
+    /* check2: no two processes share pids */
+    uint64_t encountered_pids = 0;
+    list_foreach(task, task, &ready_queue, node) {
+        assert(task != current_task && task != idle_task);
+        assert(!BITTEST(encountered_pids, task->pid));
+        BITSET(encountered_pids, task->pid);
+    }
+
+    list_foreach(task, task, &sleeping_queue, node) {
+        assert(task != current_task && task != idle_task);
+        assert(!BITTEST(encountered_pids, task->pid));
+        BITSET(encountered_pids, task->pid);
+    }
+
+    list_foreach(task, task, &msgwait_queue, node) {
+        assert(task != current_task && task != idle_task);
+        assert(!BITTEST(encountered_pids, task->pid));
+        BITSET(encountered_pids, task->pid);
+    }
+
+    list_foreach(task, task, &exited_queue, node) {
+        assert(task != current_task && task != idle_task);
+        assert(!BITTEST(encountered_pids, task->pid));
+        BITSET(encountered_pids, task->pid);
+    }
+
+    /* check3: tasks should only belong to one queue */
+    struct task_list* task_queues[64] = {0};
+    list_foreach(task, task, &ready_queue, node) {
+        task_queues[task->pid] = &ready_queue;
+    }
+
+    list_foreach(task, task, &sleeping_queue, node) {
+        assert(!task_queues[task->pid]);
+        task_queues[task->pid] = &sleeping_queue;
+    }
+
+    list_foreach(task, task, &msgwait_queue, node) {
+        assert(!task_queues[task->pid]);
+        task_queues[task->pid] = &msgwait_queue;
+    }
+
+    list_foreach(task, task, &exited_queue, node) {
+        assert(!task_queues[task->pid]);
+        task_queues[task->pid] = &exited_queue;
+    }
 }
 
 /*
@@ -490,7 +561,6 @@ void scheduler_start(void (*user_entry)())
 
     /* Install scheduler timer */
     timer_schedule(scheduler_timer, NULL, 50, true);
-
 
     /* Install syscalls */
     syscall_register(SYSCALL_YIELD, syscall_yield_handler);

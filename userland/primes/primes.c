@@ -16,8 +16,6 @@ static unsigned is_prime(unsigned num)
 
 void main()
 {
-    setname("primes");
-
     unsigned start_val = 5001000;
 
     /* Fork into other tasks */
@@ -34,10 +32,10 @@ void main()
     unsigned end_val = start_val + 500;
     for(unsigned i = start_val; i < end_val; i++) {
         if(is_prime(i)) {
-            trace("prime: %d", i);
+            trace("%d", i);
         }
     }
-    trace("primes: Done");
+    trace("Done");
 }
 
 

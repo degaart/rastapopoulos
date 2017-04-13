@@ -18,13 +18,11 @@ static unsigned fibonacci(unsigned n)
 
 void main()
 {
-    setname("fibonacci");
-
     for(unsigned i = 0; i < 37; i++) {
         unsigned fib = fibonacci(i);
         trace("fib(%d): %d", i, fib);
     }
 
-    trace("fib: Done");
+    trace("Done");
 }
 
