@@ -1,5 +1,5 @@
 #include "runtime.h"
-#include "syscalls.h"
+#include "syscall.h"
 #include "io.h"
 #include "string.h"
 #include "port.h"

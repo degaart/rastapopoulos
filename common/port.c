@@ -1,5 +1,5 @@
 #include "port.h"
-#include "syscalls.h"
+#include "syscall.h"
 #include "util.h"
 #include "debug.h"
 #include "string.h"

@@ -3,7 +3,7 @@
 #include "registers.h"
 #include "locks.h"
 #include "list.h"
-#include "syscalls.h"
+#include "syscall.h"
 
 #include "../process.h"
 #include "../kdebug.h"
@@ -15,7 +15,7 @@
 #include "../kmalloc.h"
 #include "../timer.h"
 #include "../common/io.h"
-#include "../syscall.h"
+#include "../syscall_handler.h"
 #include "../ipc.h"
 #include "../scheduler.h"
 #include "../initrd.h"

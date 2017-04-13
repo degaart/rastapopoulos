@@ -12,7 +12,7 @@
 #include "util.h"
 #include "kmalloc.h"
 #include "vmm.h"
-#include "syscall.h"
+#include "syscall_handler.h"
 #include "ipc.h"
 #include "list.h"
 #include "heap.h"

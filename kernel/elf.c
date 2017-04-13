@@ -29,17 +29,7 @@ elf_entry_t load_elf(const void* data, unsigned size)
     Elf32_Phdr* phdrs = (Elf32_Phdr*)(file_data + ehdr->e_phoff);
     assert(ehdr->e_phentsize == sizeof(Elf32_Phdr));
     for(int i = 0; i < ehdr->e_phnum; i++) {
-        trace("Loading segment %d", i);
-
         Elf32_Phdr* phdr = phdrs + i;
-        trace("\ttype: %p, offset: %p, vaddr: %p, filesz: %p, memsz: %p, flags: %p, align: %p",
-              phdr->p_type,
-              phdr->p_offset,
-              phdr->p_vaddr,
-              phdr->p_filesz,
-              phdr->p_memsz,
-              phdr->p_flags,
-              phdr->p_align);
 
         if(phdr->p_type == PT_LOAD) {
             assert(phdr->p_memsz != 0);

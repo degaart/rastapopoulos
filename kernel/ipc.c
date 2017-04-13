@@ -1,6 +1,6 @@
 #include "ipc.h"
+#include "syscall_handler.h"
 #include "syscall.h"
-#include "syscalls.h"
 #include "kernel.h"
 #include "idt.h"
 #include "kmalloc.h"
