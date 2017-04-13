@@ -14,6 +14,9 @@
 #define trace(...) \
     __log(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
+#define dump_var(var) \
+    trace("%s: %p", #var, var)
+
 #define assert(c)                                                       \
     do {                                                                \
         if(!(c)) {                                                      \

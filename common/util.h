@@ -12,6 +12,10 @@
 #define LODWORD(i)  ((uint32_t) ((i) & 0xFFFFFFFF))
 #define HIDWORD(i)  ((uint32_t) (((i) & 0xFFFFFFFF00000000) >> 32))
 
+#define BITTEST(var, idx)   ((var) & (1 << (idx)))
+#define BITSET(var, idx)    (var) |= (1 << (idx))
+#define BITCLEAR(var, idx)    (var) &= (1 << (~(idx)))
+
 #define MAKE_UINT64(lo, hi)  ( ((uint64_t)(lo)) | ((uint64_t)(hi) << 32) )
 
 #define countof(a) sizeof(a) / sizeof(a[0])

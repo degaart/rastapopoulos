@@ -3,14 +3,12 @@
 
 void main()
 {
-    setname("sleeper");
-
     for(unsigned i = 0; i < 20; i++) {
         sleep(1000);
-        trace("sleeper: %d", i);
+        trace("%d", i);
     }
 
-    trace("sleeper: done");
+    trace("Done");
 }
 
 

@@ -6,8 +6,6 @@
 
 void main()
 {
-    setname("init");
-
     /* Programs to run: primes, logger, fib, sleeper */
     int logger_pid = fork();
     if(!logger_pid) {
