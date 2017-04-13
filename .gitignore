@@ -39,6 +39,7 @@
 *.log
 *.log.*
 *.bak
+*.tar*
 
 kernel/obj
 common/obj

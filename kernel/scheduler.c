@@ -11,6 +11,8 @@
 #include "pmm.h"
 #include "string.h"
 #include "registers.h"
+#include "initrd.h"
+#include "elf.h"
 
 static struct task_list ready_queue = {0};
 static spinlock_t ready_queue_lock = SPINLOCK_INIT;
@@ -378,6 +380,50 @@ static uint32_t syscall_reboot_handler(struct isr_regs* regs)
     reboot();
 }
 
+static uint32_t syscall_exec_handler(struct isr_regs* regs)
+{
+    const char* filename = (const char*)regs->ebx;
+    assert(filename);
+    assert(*filename);
+
+    trace("(%d %s) exec: %s", 
+          current_task_pid(), 
+          current_task_name(), 
+          filename);
+
+    /* Load file from initrd */
+    const struct initrd_file* file = initrd_get_file(filename);
+    if(!file) {
+        trace("Failed to load %s", filename);
+        return 0;
+    }
+
+    /* Unmap process memory */
+    for(unsigned char* va = (unsigned char*)USER_START;
+        va < USER_STACK; 
+        va += PAGE_SIZE) {
+
+        assert(va != USER_STACK);
+        uint32_t pa = vmm_get_physical(va);
+        if(pa) {
+            vmm_unmap(va);
+            pmm_free(pa);
+        }
+    }
+
+    /* Load elf file */
+    elf_entry_t entry = load_elf(file->data, file->size);
+
+    /* Reset process state */
+    current_task_set_name(filename);
+    regs->esp = (uint32_t)(USER_STACK + PAGE_SIZE);
+    regs->useresp = (uint32_t)(USER_STACK + PAGE_SIZE);
+    regs->eflags = read_eflags() | EFLAGS_IF;
+    regs->eip = (uint32_t)entry;
+
+    return 0;
+}
+
 /*
  * transform current task into an user task
  */
@@ -428,6 +474,7 @@ void scheduler_start(void (*user_entry)())
     syscall_register(SYSCALL_EXIT, syscall_exit_handler);
     syscall_register(SYSCALL_SLEEP, syscall_sleep_handler);
     syscall_register(SYSCALL_REBOOT, syscall_reboot_handler);
+    syscall_register(SYSCALL_EXEC, syscall_exec_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();

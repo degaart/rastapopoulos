@@ -142,7 +142,6 @@ void kmain(const struct multiboot_info* init_multiboot_info)
      * and debug symbols to < 600Kb, but this will do for now
      */
     multiboot_init(init_multiboot_info);
-    //multiboot_dump();
 
     // Init kernel heap
     kmalloc_init();
