@@ -3,6 +3,7 @@
 #include "port.h"
 #include "debug.h"
 #include "logger.h"
+#include "string.h"
 
 static void debug_out(const char* message)
 {
@@ -21,6 +22,7 @@ void main()
         panic("Failed to open logger port");
     }
 
+    char msg_buf[512];
     unsigned char buffer[512];
     struct message* msg = (struct message*)buffer;
     while(1) {
@@ -33,13 +35,29 @@ void main()
             panic("msgrecv failed");
         }
 
+        struct task_info sender_info;
+        bool got_info = get_task_info(msg->sender, &sender_info);
+        if(!got_info) {
+            sender_info.pid = msg->sender;
+            strlcpy(sender_info.name, "", sizeof(sender_info.name));
+        }
+
         if(msg->code == LoggerMessageTrace) {
-            debug_out("▶ ");
+            snprintf(msg_buf, sizeof(msg_buf),
+                     "[%s/%d] ",
+                     sender_info.name, sender_info.pid);
+            debug_out(msg_buf);
             debug_out(msg->data);
             debug_out("\n");
-            send_ack(msg->reply_port, LoggerMessageTraceAck, 0);
+
+            send_ack(msg->reply_port, LoggerMessageTraceAck, 1);
         } else {
-            panic("Invalid message code");
+            snprintf(msg_buf, sizeof(msg_buf), 
+                     "[%s/%d] Invalid message code %d\n",
+                     sender_info.name, sender_info.pid,
+                     msg->code);
+            debug_out(msg_buf);
+            send_ack(msg->reply_port, LoggerMessageTraceAck, 0);
         }
     }
 }
