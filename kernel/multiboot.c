@@ -154,7 +154,7 @@ void multiboot_dump()
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
-    trace("_KERNEL_END_: %p", &_KERNEL_END_);
+    trace("_KERNEL_END_: %p", _KERNEL_END_);
 }
 
 const struct multiboot_info* multiboot_get_info()
