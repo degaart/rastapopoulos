@@ -6,6 +6,8 @@
 #include "scheduler.h"
 #include "kdebug.h"
 
+#undef SYSCALL_TRACE
+
 extern void scheduler_perform_checks();
 
 static syscall_handler_t syscall_handlers[80] = {0};
@@ -22,8 +24,8 @@ static void syscall_handler(struct isr_regs* regs)
 #ifdef SYSCALL_TRACE
         trace("syscall: %d, pid: %d, name: %s", 
               syscall_num, 
-              current_task->pid, 
-              current_task->name);
+              current_task_pid(), 
+              current_task_name());
 #endif
 
         scheduler_perform_checks();

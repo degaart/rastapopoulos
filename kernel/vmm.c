@@ -7,6 +7,7 @@
 #include "util.h"
 #include "kernel.h"
 #include "locks.h"
+#include "list.h"
 
 #define PTE_PRESENT             (1)
 #define PTE_WRITABLE            (1 << 1)
@@ -521,12 +522,13 @@ uint32_t vmm_get_flags(void* va)
 }
 
 struct transient_map {
-    struct transient_map* next;
     uint32_t frame;
     unsigned flags;
     void* address;
+    list_declare_node(transient_map) node;
 };
-static struct transient_map* transient_maps = NULL;
+list_declare(transient_map_list, transient_map);
+static struct transient_map_list transient_maps;
 
 void* vmm_transient_map(uint32_t frame, unsigned flags)
 {
@@ -535,17 +537,18 @@ void* vmm_transient_map(uint32_t frame, unsigned flags)
     enter_critical_section();
 
     struct transient_map* map = kmalloc(sizeof(struct transient_map));
-    map->next = transient_maps;
+    bzero(map, sizeof(struct transient_map));
     map->frame = vmm_get_physical(address);
     map->flags = vmm_get_flags(address);
     map->address = address;
 
-    transient_maps = map;
-
     vmm_unmap(address);
     vmm_map(address, frame, VMM_PAGE_PRESENT | flags);
 
+    list_append(&transient_maps, map, node);
+
     leave_critical_section();
+
     return address;
 }
 
@@ -554,21 +557,17 @@ void vmm_transient_unmap(void* address)
     enter_critical_section();
 
     bool found = false;
-    struct transient_map* map = transient_maps;
-    struct transient_map* prevm = NULL;
-    for(map = transient_maps; map; prevm = map, map = map->next) {
+    list_foreach(transient_map, map, &transient_maps, node) {
         if(map->address == address) {
-            if(prevm)
-                prevm->next = map->next;
-            else
-                transient_maps = map->next;
-
             vmm_unmap(address);
             vmm_map(address, map->frame, map->flags);
 
+            list_remove(&transient_maps, map, node);
+            
             kfree(map);
             kfree(address);
             found = true;
+
             break;
         }
     }

@@ -31,6 +31,10 @@ int snprintf(char* buffer, size_t size, const char* fmt, ...);
 int vsncatf(char* buffer, size_t size, const char* fmt, va_list args);
 int sncatf(char* buffer, size_t size, const char* fmt, ...);
 
+/*
+ * RASTAPOPOULOS_KERNEL isn't defined when compiling common.a
+ * So we must define this function as a static inline
+ */
 #ifdef RASTAPOPOULOS_KERNEL
 #include "../kernel/kmalloc.h"
 static char* strdup(const char* str)

@@ -55,10 +55,10 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
         checked_unlock(&port_list_lock);
     } else {
         checked_lock(&port_list_lock);
-        if(reserved_ports & (1 << port_number)) {
+        if(BITTEST(reserved_ports, port_number)) {
             port_number = -1;                           /* Already reserved */
         } else {
-            reserved_ports |= (1 << port_number);       /* Reserve it */
+            BITSET(reserved_ports, port_number);
         }
         checked_unlock(&port_list_lock);
     }
