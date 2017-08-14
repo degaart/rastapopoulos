@@ -61,8 +61,8 @@ static void test_identity_mapped()
     trace("Testing kernel is properly identity-mapped");
 
     /* Test kernel is properly identity-mapped */
-    for(unsigned char* page = (unsigned char*)KERNEL_START; 
-        page < (unsigned char*)KERNEL_END; 
+    for(unsigned char* page = _KERNEL_START_; 
+        page < _KERNEL_END_; 
         page += PAGE_SIZE) {
 
         assert(is_identity_mapped(page));

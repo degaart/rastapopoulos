@@ -20,9 +20,6 @@
 #include "debug.h"
 #include "initrd.h"
 
-uint32_t KERNEL_START = (uint32_t) &_KERNEL_START_;
-uint32_t KERNEL_END = (uint32_t) &_KERNEL_END_;
-
 const char* current_task_name();
 int current_task_pid();
 
@@ -178,11 +175,11 @@ void kmain(const struct multiboot_info* init_multiboot_info)
             pmm_reserve(page);
     }
 
-    for(uint32_t page = TRUNCATE(KERNEL_START, PAGE_SIZE); 
-        page < KERNEL_END; 
+    for(unsigned char* page = (unsigned char*)TRUNCATE((uint32_t)_KERNEL_START_, PAGE_SIZE); 
+        page < _KERNEL_END_; 
         page += PAGE_SIZE) {
-        if(pmm_exists(page))
-            pmm_reserve(page);
+        if(pmm_exists((uint32_t)page))
+            pmm_reserve((uint32_t)page);
     }
 
     struct heap_info mi_heap_info = multiboot_heap_info();
