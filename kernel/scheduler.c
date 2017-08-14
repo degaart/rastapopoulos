@@ -394,7 +394,7 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
     assert(*filename);
 
     /* 
-     * filename will be garbled when we unamp process memory below
+     * filename will be garbled when we unmap process memory below
      * So we copy it to temp buffer beforehand
      */
     filename = strdup(filename);

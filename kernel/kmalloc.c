@@ -27,9 +27,7 @@ void kmalloc_init()
 void* kmalloc(unsigned size)
 {
     assert(size);
-
-    void* result = kmalloc_a(size, sizeof(uint64_t));
-
+    unsigned char* result = kmalloc_a(size, sizeof(uint64_t));
     return result;
 }
 
@@ -72,7 +70,6 @@ void* kmalloc_a(unsigned size, unsigned alignment)
 
     if(block) {
         result = ((unsigned char*)block) + sizeof(struct heap_block_header);
-
         if(trace_enabled) {
             trace("kmalloc_a(%d, %d); /* block: %p, buffer: %p, flags: %p, size: %d, next: %p */",
                   size, alignment,
