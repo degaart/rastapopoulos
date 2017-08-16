@@ -15,12 +15,8 @@ static bool trace_enabled = false;
 
 void kmalloc_init()
 {
-    /* 
-     * We place an initial kernel heap just after the multiboot heap
-     */
-    struct heap_info mi_heap = multiboot_heap_info();
     unsigned char* heap_start = (unsigned char*)ALIGN((uint32_t)_KERNEL_END_, PAGE_SIZE);
-    unsigned max_size = (unsigned char*)KERNEL_LO_END - heap_start;
+    unsigned max_size = ((unsigned char*)(4096 * 1024)) - heap_start;
     kernel_heap = heap_init(heap_start, PAGE_SIZE * 64, max_size);
 }
 
@@ -36,21 +32,11 @@ void kfree(void* address)
     enter_critical_section();
 
     if(address) {
-        struct heap_block_header* block =
-            (struct heap_block_header*)((unsigned char*)address - sizeof(struct heap_block_header));
-
         if(trace_enabled) {
-            trace("kfree(%p); /* block: %p, flags: %p, size: %d, next: %p */", 
-                  address,
-                  block,
-                  block->flags,
-                  block->size,
-                  block->next);
+            trace("kfree(%p)", address);
         }
-
-        heap_free_block(kernel_heap, block);
+        heap_free(kernel_heap, address);
     }
-
 
     leave_critical_section();
 }
@@ -61,24 +47,16 @@ void* kmalloc_a(unsigned size, unsigned alignment)
 
     enter_critical_section();
 
-    unsigned char* result = NULL;
-    struct heap_block_header* block = heap_alloc_block_aligned(kernel_heap,
-                                                               size,
-                                                               alignment);
-    if(!block)
+    unsigned char* result = heap_alloc_aligned(kernel_heap,
+                                               size,
+                                               alignment);
+    if(!result) {
         panic("Kernel heap exhausted");
-
-    if(block) {
-        result = ((unsigned char*)block) + sizeof(struct heap_block_header);
-        if(trace_enabled) {
-            trace("kmalloc_a(%d, %d); /* block: %p, buffer: %p, flags: %p, size: %d, next: %p */",
-                  size, alignment,
-                  block,
-                  result,
-                  block->flags,
-                  block->size,
-                  block->next);
-        }
+    }
+    if(trace_enabled) {
+        trace("kmalloc_a(%d, %d); /* %p */",
+              size, alignment,
+              result);
     }
 
     leave_critical_section();

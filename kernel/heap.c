@@ -306,7 +306,7 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
 
 struct heap_block_header* heap_alloc_block(struct heap* heap, unsigned size)
 {
-    struct heap_block_header* result = heap_alloc_block_aligned(heap, size, 4);
+    struct heap_block_header* result = heap_alloc_block_aligned(heap, size, sizeof(uint64_t));
     return result;
 }
 
@@ -379,14 +379,20 @@ void heap_check(struct heap* heap, const char* file, int line)
     }
 }
 
-void* heap_alloc(struct heap* heap, unsigned size)
+void* heap_alloc_aligned(struct heap* heap, unsigned size, unsigned alignment)
 {
     void* result = NULL;
-    struct heap_block_header* hdr = heap_alloc_block(heap, size);
+    struct heap_block_header* hdr = heap_alloc_block_aligned(heap, size, alignment);
     if(hdr) {
         result = (unsigned char*)hdr + sizeof(struct heap_block_header);
     }
     assert(hdr->magic == MAGIC_ALLOCATED);
+    return result;
+}
+
+void* heap_alloc(struct heap* heap, unsigned size)
+{
+    void* result = heap_alloc_aligned(heap, size, sizeof(uint64_t));
     return result;
 }
 
