@@ -14,7 +14,7 @@ static struct heap* mi_heap;
 void multiboot_init(const struct multiboot_info* init_mi)
 {
     /* Prepare heap for multiboot data */
-    unsigned char* heap_start = (unsigned char*)ALIGN(0x00020000, PAGE_SIZE);
+    unsigned char* heap_start = (unsigned char*)ALIGN(KERNEL_BASE_ADDR + 0x00020000, PAGE_SIZE);
     unsigned heap_size = ALIGN(0x0009FBFF - 0x00020000, PAGE_SIZE);
     mi_heap = heap_init(heap_start,
                         PAGE_SIZE,
@@ -24,46 +24,56 @@ void multiboot_init(const struct multiboot_info* init_mi)
     struct multiboot_info* mi = &multiboot_info;
     bzero(mi, sizeof(struct multiboot_info));
 
+    /* Adjust init_mi address */
+    init_mi = (const struct multiboot_info*)
+        ((const unsigned char*)init_mi + KERNEL_BASE_ADDR);
     trace("init_mi: %p", init_mi);
 
     if(init_mi->flags & MULTIBOOT_FLAG_CMDLINE) {
         mi->flags |= MULTIBOOT_FLAG_CMDLINE;
 
-        trace("init_mi->cmdline: %p", init_mi->cmdline);
+        const char* mi_cmdline = (const char*)(init_mi->cmdline + KERNEL_BASE_ADDR);
+        trace("init_mi->cmdline: %p", mi_cmdline);
 
-        unsigned cmdline_size = strlen(init_mi->cmdline);
+        unsigned cmdline_size = strlen(mi_cmdline);
         char* cmdline = heap_alloc(mi_heap,
                                    cmdline_size + 1);
-        strlcpy(cmdline, init_mi->cmdline, cmdline_size + 1);
+        strlcpy(cmdline, mi_cmdline, cmdline_size + 1);
         mi->cmdline = cmdline;
     }
 
     if(init_mi->flags & MULTIBOOT_FLAG_MODINFO) {
         mi->flags |= MULTIBOOT_FLAG_MODINFO;
 
-        trace("init_mi->mods_addr: %p", init_mi->mods_addr);
+        const struct multiboot_mod_entry* mi_mods_addr = 
+            (const struct multiboot_mod_entry*)((unsigned char*)init_mi->mods_addr + KERNEL_BASE_ADDR);
+        trace("init_mi->mods_addr: %p (from %p)", mi_mods_addr, init_mi->mods_addr);
 
         mi->mods_count = init_mi->mods_count;
         mi->mods_addr = heap_alloc(mi_heap,
                                    init_mi->mods_count * sizeof(struct multiboot_mod_entry));
 
         for(int i = 0; i < mi->mods_count; i++) {
-            struct multiboot_mod_entry* init_entry = init_mi->mods_addr + i;
+            struct multiboot_mod_entry* entry = mi->mods_addr + i;
+            const struct multiboot_mod_entry* init_entry = mi_mods_addr + i;
+
+            unsigned char* start = init_entry->start + KERNEL_BASE_ADDR;
+            unsigned char* end = init_entry->end + KERNEL_BASE_ADDR;
             trace("init_mi->mods[%d]: %p - %p",
                   i,
-                  init_entry->start,
-                  init_entry->end);
+                  start,
+                  end);
 
-            unsigned entry_size = init_entry->end - init_entry->start;
-            struct multiboot_mod_entry* entry = mi->mods_addr + i;
+            unsigned entry_size = end - start;
             
             entry->start = heap_alloc(mi_heap, entry_size);
-            memcpy(entry->start, init_entry->start, entry_size);
+            memcpy(entry->start, start, entry_size);
             entry->end = entry->start + entry_size;
             if(init_entry->str) {
-                unsigned str_size = strlen(init_entry->str);
+                const char* str = init_entry->str + KERNEL_BASE_ADDR;
+                unsigned str_size = strlen(str);
                 entry->str = heap_alloc(mi_heap, str_size + 1);
-                strlcpy(entry->str, init_entry->str, str_size + 1);
+                strlcpy(entry->str, str, str_size + 1);
             } else {
                 entry->str = NULL;
             }
@@ -74,18 +84,19 @@ void multiboot_init(const struct multiboot_info* init_mi)
         mi->flags |= MULTIBOOT_FLAG_SYMBOLS2;
         mi->sym2 = init_mi->sym2;
 
+        void* sym2_addr = (unsigned char*)init_mi->sym2.addr + KERNEL_BASE_ADDR;
         trace("init_mi->sym2.addr: %p - %p",
-              init_mi->sym2.addr,
-              (uint32_t)init_mi->sym2.addr + (init_mi->sym2.size * mi->sym2.num));
+              sym2_addr,
+              (uint32_t)sym2_addr + (init_mi->sym2.size * mi->sym2.num));
 
 
-        elf32_shdr_t* init_shdrs = init_mi->sym2.addr;
+        elf32_shdr_t* init_shdrs = sym2_addr;
         elf32_shdr_t* shdrs = heap_alloc(mi_heap, init_mi->sym2.size * mi->sym2.num);
-        memcpy(shdrs, init_mi->sym2.addr, init_mi->sym2.size * mi->sym2.num);
+        memcpy(shdrs, sym2_addr, init_mi->sym2.size * mi->sym2.num);
         mi->sym2.addr = shdrs;
 
         elf32_shdr_t* shstr_hdr = init_shdrs + init_mi->sym2.shndx;
-        const char* section_names = (const char*)shstr_hdr->sh_addr;
+        const char* section_names = (const char*)shstr_hdr->sh_addr + KERNEL_BASE_ADDR;
 
         /*
          * Sections to copy:
@@ -107,7 +118,7 @@ void multiboot_init(const struct multiboot_info* init_mi)
                 elf32_shdr_t* shdr = shdrs + i;
                 shdr->sh_addr = (uint32_t)heap_alloc(mi_heap, init_shdr->sh_size);
                 memcpy((void*)shdr->sh_addr, 
-                       (void*)init_shdr->sh_addr, 
+                       (unsigned char*)init_shdr->sh_addr + KERNEL_BASE_ADDR, 
                        init_shdr->sh_size);
             }
         }
@@ -116,13 +127,17 @@ void multiboot_init(const struct multiboot_info* init_mi)
     if(init_mi->flags & MULTIBOOT_FLAG_MMAP) {
         mi->flags |= MULTIBOOT_FLAG_MMAP;
 
+        struct multiboot_mmap_entry* mmap_addr = (struct multiboot_mmap_entry*)
+            ((unsigned char*)init_mi->mmap_addr + KERNEL_BASE_ADDR);
         trace("init_mi->mmap_addr: %p - %p",
-              init_mi->mmap_addr,
-              (uint32_t)init_mi->mmap_addr + init_mi->mmap_len);
+              mmap_addr,
+              mmap_addr + init_mi->mmap_len);
         mi->mmap_len = init_mi->mmap_len;
         mi->mmap_addr = heap_alloc(mi_heap, init_mi->mmap_len);
 
-        memcpy(mi->mmap_addr, init_mi->mmap_addr, init_mi->mmap_len);
+        memcpy(mi->mmap_addr,
+               mmap_addr, 
+               init_mi->mmap_len);
     }
 }
 
