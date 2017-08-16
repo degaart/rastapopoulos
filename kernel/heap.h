@@ -42,6 +42,7 @@ bool heap_lock(struct heap* heap);
 bool heap_unlock(struct heap* heap);
 void heap_check(struct heap* heap, const char* file, int line);
 void* heap_alloc(struct heap*, unsigned);
+void* heap_alloc_aligned(struct heap*, unsigned, unsigned);
 void heap_free(struct heap*, void*);
 
 
