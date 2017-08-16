@@ -8,6 +8,7 @@
 
 #define MAGIC_ALLOCATED             0xABCDEF01
 #define MAGIC_FREE                  0x12345678
+#define CANARY                      0x7778798081828384
 
 #define BLOCK_ALLOCATED             0x1
 
@@ -78,6 +79,20 @@ static void set_free(struct heap* heap, struct heap_block_header* block)
 
     block->flags &= ~BLOCK_ALLOCATED;
     block->magic = MAGIC_FREE;
+}
+
+static void write_canary(struct heap_block_header* block)
+{
+    uint64_t* canary = (uint64_t*)(((unsigned char*)block) + block->size - sizeof(uint64_t));
+    *canary = CANARY;
+}
+
+static void check_canary(struct heap_block_header* block)
+{
+    uint64_t* canary = (uint64_t*)(((unsigned char*)block) + block->size - sizeof(uint64_t));
+    if(*canary != CANARY) {
+        panic("Buffer overrun detected for block %p", (unsigned char*)block + sizeof(struct heap_block_header));
+    }
 }
 
 static struct heap_block_header* create_block(struct heap* heap, void* addr, unsigned size)
@@ -186,6 +201,9 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
         panic("Concurrent heap modification detected");
     }
 
+    unsigned data_size = size;
+    size += sizeof(uint64_t);   /* for canary at end of allocated block */
+
     while(true) {
         /* Walk blocklist to find fitting block */
         struct heap_block_header* prevh = NULL;
@@ -227,6 +245,8 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                             h->next = new_block;
                             set_allocated(heap, h);
 
+                            write_canary(h);
+
                             assert(new_block->size + h->size == old_size);
 
                             bool unlocked = heap_unlock(heap);
@@ -235,6 +255,8 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                             return h;
                         } else {
                             set_allocated(heap, h);
+
+                            write_canary(h);
 
                             bool unlocked = heap_unlock(heap);
                             assert(unlocked);
@@ -283,6 +305,8 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                         set_allocated(heap, h2);
                         assert(is_valid_block(heap, h2));
 
+                        write_canary(h2);
+
                         bool unlocked = heap_unlock(heap);
                         assert(unlocked);
 
@@ -307,6 +331,7 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
 struct heap_block_header* heap_alloc_block(struct heap* heap, unsigned size)
 {
     struct heap_block_header* result = heap_alloc_block_aligned(heap, size, sizeof(uint64_t));
+    check_canary(result);
     return result;
 }
 
@@ -320,6 +345,8 @@ void heap_free_block(struct heap* heap, struct heap_block_header* block)
     } else if(block->magic != MAGIC_ALLOCATED) {
         panic("Trying to free invalid block at %p (magic: %p)", block, block->magic);
     }
+
+    check_canary(block);
 
     bool locked = heap_lock(heap);
     if(!locked) {
