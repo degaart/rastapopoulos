@@ -8,38 +8,39 @@ SECTIONS
 	/*
 		Put a space after the section name and before the colon
 	*/
-	.text 0x00100000 :
-	{
-        _KERNEL_START_ = .;
+    . = 0xC0100000;
 
-		_TEXT_START_ = .;
+    _KERNEL_START_ = .;
+    _TEXT_START_ = .;
+	.text : AT (ADDR (.text) - 0xC0000000)
+	{
 		*(.text)
-		_TEXT_END_ = .;
 	}
+    _TEXT_END_ = .;
 
 	. = ALIGN(4096);
-	.rodata : 
+    _RODATA_START_ = .;
+	.rodata : AT (ADDR (.rodata) - 0xC0000000)
 	{
-		_RODATA_START_ = .;
 		*(.rodata*)
-		_RODATA_END_ = .;
 	}
+    _RODATA_END_ = .;
 	
 	. = ALIGN(4096);
-	.data :
+    _DATA_START_ = .;	
+	.data : AT (ADDR (.data) - 0xC0000000)
 	{
-		_DATA_START_ = .;	
 		*(.data)
-		_DATA_END_ = .;
 	}
+    _DATA_END_ = .;
     
 	. = ALIGN(4096);
-	.bss :
+    _BSS_START_ = .;
+	.bss : AT (ADDR (.bss) - 0xC0000000)
 	{
-		_BSS_START_ = .;
 		*(.bss)
-		_BSS_END_ = .;
 	}
+    _BSS_END_ = .;
 
 	_KERNEL_END_ = .;
 }

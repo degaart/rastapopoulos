@@ -152,37 +152,33 @@ void vmm_init()
      * (see recursive mapping)
      */
     assert((uint32_t)pagedir == (((uint32_t)pagedir) & PDE_FRAME));
-    pagedir->entries[1023] = ((uint32_t)pagedir) | PDE_PRESENT | PDE_WRITABLE;
+    pagedir->entries[1023] = (((uint32_t)pagedir) - KERNEL_BASE_ADDR) | PDE_PRESENT | PDE_WRITABLE;
 
     /* Kernel .text */
-    //trace(".text %p - %p", _TEXT_START_, _TEXT_END_);
     for(uint32_t page = (uint32_t)_TEXT_START_; page < (uint32_t)_TEXT_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT);
+        vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT);
     }
 
     /* Kernel .rodata */
-    //trace(".rodata %p - %p", _RODATA_START_, _RODATA_END_);
     for(uint32_t page = (uint32_t)_RODATA_START_; page < (uint32_t)_RODATA_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_USER); // TODO: Remove user mapping
+        vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT | VMM_PAGE_USER); // TODO: Remove user mapping
     }
 
     /* Kernel .data */
-    //trace(".data %p - %p", _DATA_START_, _DATA_END_);
     for(uint32_t page = (uint32_t)_DATA_START_; page < (uint32_t)_DATA_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
     /* Kernel .bss (also stack, since initial stack is in bss) */
-    //trace(".bss %p - %p", _BSS_START_, _BSS_END_);
     for(uint32_t page = (uint32_t)_BSS_START_; page < (uint32_t)_BSS_END_; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
     /* Kernel heap */
     struct kernel_heap_info heap_info;
     kernel_heap_info(&heap_info);
     for(uint32_t page = heap_info.heap_start; page < heap_info.heap_start + heap_info.heap_size; page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+        vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
     /* Multiboot heap */
@@ -190,13 +186,14 @@ void vmm_init()
     for(uint32_t page = (uint32_t)multiboot_heap.address;
         page < (uint32_t)multiboot_heap.address + multiboot_heap.size; 
         page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page, VMM_PAGE_PRESENT);
+        vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT);
     }
 
     current_pagedir_va = pagedir;
 
     /* Enable paging */
-    write_cr3((uint32_t)pagedir);
+    uint32_t pagedir_pa = ((uint32_t)pagedir) - KERNEL_BASE_ADDR;
+    write_cr3(pagedir_pa);
 
     uint32_t cr0 = read_cr0();
     cr0 |= CR0_PG | CR0_WP; /* CR0_WP: ring0 cannot write to write-protected pages */
@@ -223,17 +220,17 @@ static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, ui
         assert(IS_ALIGNED((uint32_t)table, PAGE_SIZE));
         bzero(table, sizeof(struct pagetable));
 
-        pagedir->entries[info.dir_index] = ((uint32_t)table) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
+        pagedir->entries[info.dir_index] = (((uint32_t)table) - KERNEL_BASE_ADDR) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
     }
 
     /* Now check if present in pagetable */
-    struct pagetable* table = (struct pagetable*)(pagedir->entries[info.dir_index] & PDE_FRAME);
+    struct pagetable* table = (struct pagetable*)((pagedir->entries[info.dir_index] & PDE_FRAME) + KERNEL_BASE_ADDR);
     if(table->entries[info.table_index] & PTE_PRESENT) {
         trace("VA %p already mapped", va);
         abort();
     }
 
-    table->entries[info.table_index] = (va & PTE_FRAME) | flags;
+    table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
 }
 
 /*

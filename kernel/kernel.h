@@ -21,6 +21,8 @@ extern unsigned char _DATA_END_[];
 extern unsigned char _BSS_START_[];
 extern unsigned char _BSS_END_[];
 
+#define KERNEL_BASE_ADDR    0xC0000000
+
 extern unsigned char initial_kernel_stack[4096];
 
 

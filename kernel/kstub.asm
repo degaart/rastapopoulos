@@ -5,6 +5,8 @@
 
 section .text
 
+kernel_base equ 0xC0000000
+
 
 ; multiboot header
 align 4
@@ -40,13 +42,35 @@ extern __log
 
 global _kernel_entry
 _kernel_entry:
+    ; Map first 4MB into kernel_base
+    mov     ecx, initial_pagedir - kernel_base
+    mov     cr3, ecx                            ; PDBR
+
+    mov     ecx, cr4
+    or      ecx, 0x10                           ; PSE
+    mov     cr4, ecx
+
+    mov     ecx, cr0
+    or      ecx, 0x80000000                     ; PG
+    mov     cr0, ecx
+
+    lea     ecx, [.unmap_low]
+    jmp     ecx
+
+.unmap_low:
+    ; Unmap low 4MB
+    mov     DWORD [initial_pagedir], 0
+    mov     ecx, cr3
+    mov     cr3, ecx
+
+.setup_stack:
     ; Setup kernel stack
     ; NOTE: The bootloader has already disabled interrupts
-    mov esp, initial_kernel_stack + 4096
+    mov     esp, initial_kernel_stack + 4096
 
     ; Check multiboot bootloader
-    cmp eax, 0x2BADB002
-    jne .not_multiboot
+    cmp     eax, 0x2BADB002
+    jne     .not_multiboot
 
 .start_kernel:
     ; Machine state
@@ -78,20 +102,20 @@ _kernel_entry:
     ; ‘IDTR’
     ;     The OS image must leave interrupts disabled until it sets up its own IDT. 
 
-    push ebx
-    call kmain
-    jmp .halt
+    push    ebx
+    call    kmain
+    jmp     .halt
 
 .not_multiboot:
-    mov esi, str.not_multiboot
-    mov dx, 0xE9
+    mov     esi, str.not_multiboot
+    mov     dx, 0xE9
 .print_loop:
-    mov al, [esi]
-    test al, al
-    jz .halt
-    out dx, al
-    inc esi
-    jmp .print_loop
+    mov     al, [esi]
+    test    al, al
+    jz      .halt
+    out     dx, al
+    inc     esi
+    jmp     .print_loop
 
 .halt:
     cli
@@ -108,11 +132,20 @@ section .bss
 align 4096
 global initial_kernel_stack
 initial_kernel_stack:
-    resb 4096
+    resb    4096
 
 section .rodata
 str:
     .not_multiboot: db `Bootloader not multiboot-compliant\r\n\0`
     .hello: db `Hello, world!\r\n\0`
+
+section .data
+align 4096
+initial_pagedir:
+    dd 0x83                                     ; PS|RW|P for first 4MB
+    times ((kernel_base >> 22) - 1) dd 0        ; Unmapped pages
+    dd 0x83                                     ; 3GB
+    times (1024 - (kernel_base >> 22)) - 1 dd 0 ; rest of address space
+
 
 

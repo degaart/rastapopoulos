@@ -131,7 +131,7 @@ static void run_tests()
 void kmain(const struct multiboot_info* init_multiboot_info)
 {
     trace("*** Booted ***");
-
+ 
     /*
      * Multiboot data can be loaded in kernel heap area
      * We solve this problem by relocating multiboot data in
@@ -175,8 +175,8 @@ void kmain(const struct multiboot_info* init_multiboot_info)
             pmm_reserve(page);
     }
 
-    for(unsigned char* page = (unsigned char*)TRUNCATE((uint32_t)_KERNEL_START_, PAGE_SIZE); 
-        page < _KERNEL_END_; 
+    for(unsigned char* page = (unsigned char*)TRUNCATE((uint32_t)_KERNEL_START_ - KERNEL_BASE_ADDR, PAGE_SIZE); 
+        page < _KERNEL_END_ - KERNEL_BASE_ADDR; 
         page += PAGE_SIZE) {
         if(pmm_exists((uint32_t)page))
             pmm_reserve((uint32_t)page);
@@ -186,8 +186,8 @@ void kmain(const struct multiboot_info* init_multiboot_info)
 
     struct kernel_heap_info heap_info;
     kernel_heap_info(&heap_info);
-    for(uint32_t page = TRUNCATE(heap_info.heap_start, PAGE_SIZE); 
-        page < heap_info.heap_start + heap_info.heap_size; 
+    for(uint32_t page = TRUNCATE(heap_info.heap_start, PAGE_SIZE) - KERNEL_BASE_ADDR; 
+        page < heap_info.heap_start + heap_info.heap_size - KERNEL_BASE_ADDR; 
         page += PAGE_SIZE) {
 
         if(pmm_exists(page) && !pmm_reserved(page))
