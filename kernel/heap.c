@@ -6,38 +6,9 @@
 #include "vmm.h"
 #include "locks.h"
 
-#ifdef ENABLE_COVERAGE
-#define add_coverage(desc) add_coverage_point(__LINE__, desc)
-#else
-#define add_coverage(desc)
-#endif
-
 #define BLOCK_ALLOCATED             0x1
 
-/*
- * Test coverage points
- */
-struct coverage_point {
-    int line;
-    const char* desc;
-};
-static struct coverage_point coverage_points[32] = {0};
-
 static void dump_heap(struct heap* heap);
-
-static void add_coverage_point(int line, const char* desc)
-{
-    int i;
-    for(i = 0; 
-        i < countof(coverage_points) && coverage_points[i].line && coverage_points[i].line != line; 
-        i++) {
-    }
-
-    if(i < countof(coverage_points) && !coverage_points[i].line) {
-        coverage_points[i].line = line;
-        coverage_points[i].desc = desc;
-    }
-}
 
 static unsigned block_checksum(const struct heap_block_header* block)
 {
@@ -258,15 +229,9 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                 unsigned char* header0 = (unsigned char*)h;
                 unsigned char* data1 = (unsigned char*)ALIGN((uint32_t)header0 + sizeof(struct heap_block_header), alignment);
                 if(data1 == header0 + sizeof(struct heap_block_header)) {                              /* Aligned size corresponds to data start */
-                    add_coverage("aligned size == data start");
-
                     if(h->size >= sizeof(struct heap_block_header) + size) {                           /* Size of block is enough for header and data */
-                        add_coverage("block size > header + size");
-
                         unsigned remaining = h->size - sizeof(struct heap_block_header) - size;
                         if(remaining > sizeof(struct heap_block_header)) {                             /* The remaining bytes can be used as a new block */
-                            add_coverage("new block can be split");
-
                             unsigned old_size = h->size;
 
                             unsigned char* new_block_address = header0 + size + sizeof(struct heap_block_header);
@@ -287,8 +252,6 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
 
                             return h;
                         } else {
-                            add_coverage("new block cannot be split");
-
                             set_allocated(heap, h);
 
                             bool unlocked = heap_unlock(heap);
@@ -298,18 +261,13 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                         }
                     }
                 } else {
-                    add_coverage("3-way split");
-
                     while(data1 - header0 < sizeof(struct heap_block_header) * 2) {
-                        add_coverage("realign");
                         data1 += alignment;
                     }
                     assert(data1 - header0 >= sizeof(struct heap_block_header) * 2);
 
                     unsigned total_size = h->size;
                     if(total_size > (sizeof(struct heap_block_header) * 2) + size) {
-                        add_coverage("fit aligned block");
-
                         unsigned char* header1 = data1 - sizeof(struct heap_block_header);
 
                         h->size = header1 - header0;
@@ -332,8 +290,6 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                         assert(h->size + h2->size == total_size);
 
                         if(h2->size > size + (sizeof(struct heap_block_header) * 2)) {
-                            add_coverage("aligned block can be split");
-
                             unsigned char* header3 = header1 + size + sizeof(struct heap_block_header);
                             unsigned size3 = h2->size - size - sizeof(struct heap_block_header);
                             struct heap_block_header* h3 = create_block(heap, header3, size3);
@@ -349,8 +305,6 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
                             assert(is_valid_block(heap, h3));
 
                             assert(h->size + h2->size + h3->size == total_size);
-                        } else {
-                            add_coverage("aligned block cannot be split");
                         }
 
                         bool unlocked = heap_unlock(heap);
@@ -363,7 +317,6 @@ struct heap_block_header* heap_alloc_block_aligned(struct heap* heap, unsigned s
         }
 
         /* No fitting block found, add more memory to heap */
-        add_coverage("grow heap");
         struct heap_block_header* new_header = heap_grow(heap, size);
         if(!new_header)
             break;
