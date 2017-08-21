@@ -22,13 +22,15 @@
 
 /* WARNING: This macro only works with powers of two */
 #define ALIGN(val, align) \
-    (((val) + ((align) - 1)) & ~((align) - 1))
+    ((typeof(val)) \
+    (( (uint32_t)(val) + ((uint32_t)(align) - 1) ) & ~( (uint32_t)(align) - 1) ))
 
 #define TRUNCATE(val, align) \
     (((val) / (align)) * (align))
 
 #define IS_ALIGNED(val, align) \
-    (( ((uint32_t)(val)) % ((uint32_t)(align)) ) == 0)
+    ((typeof(val)) \
+    (( ((uint32_t)(val)) % ((uint32_t)(align)) ) == 0))
 
 uint64_t rdtsc();
 unsigned hash2(const void* data, unsigned size, unsigned start_hash);

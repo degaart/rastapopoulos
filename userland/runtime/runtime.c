@@ -6,6 +6,7 @@
 #include "debug.h"
 #include "../logger/logger.h"
 #include "task_info.h"
+#include "../vfs/vfs.h"
 #include <stdarg.h>
 
 struct pcb pcb;
@@ -147,6 +148,83 @@ void __assertion_failed(const char* function, const char* file, int line, const 
 {
     __log(function, file, line, "Assertion failed: %s", expression);
     abort();
+}
+
+size_t initrd_get_size()
+{
+    uint32_t result = syscall(SYSCALL_INITRD_GET_SIZE,
+                              0,
+                              0,
+                              0,
+                              0,
+                              0);
+    return (size_t)result;
+}
+
+int initrd_copy(void* dest, size_t size)
+{
+    uint32_t result = syscall(SYSCALL_INITRD_COPY,
+                              (uint32_t)dest,
+                              (uint32_t)size,
+                              0,
+                              0,
+                              0);
+    return (int)result;
+}
+
+void* mmap(void* addr, size_t size, uint32_t flags)
+{
+    uint32_t result = syscall(SYSCALL_MMAP,
+                              (uint32_t)addr,
+                              (uint32_t)size,
+                              flags,
+                              0,
+                              0);
+    return (void*)result;
+}
+
+int munmap(void* addr)
+{
+    uint32_t result = syscall(SYSCALL_MUNMAP,
+                              (uint32_t)addr,
+                              0,
+                              0,
+                              0,
+                              0);
+    return (int)result;
+}
+
+int open(const char* filename, unsigned flags, int mode)
+{
+    /* Send a VFSMessageOpen to VSFPort and wait for reply */
+    unsigned char* buffer[MAX_PATH + sizeof(struct vfs_open_data) + sizeof(struct message)];
+
+    struct message* msg = (struct message*)buffer;
+    msg->sender = 0;
+    msg->reply_port = pcb.ack_port;
+    msg->code = VFSMessageOpen;
+    msg->len = sizeof(struct vfs_open_data) + strlen(filename) + 1;
+    msg->checksum = message_checksum(msg);
+
+    struct vfs_open_data* open_data = (struct vfs_open_data*)(buffer + sizeof(struct message));
+    open_data->mode = flags;
+    open_data->perm = mode;
+    strlcpy(open_data->filename, filename, MAX_PATH);
+
+    bool ret = msgsend(VFSPort, msg);
+    if(!ret)
+        return -1;
+
+    unsigned outsize;
+    unsigned recv_ret = msgrecv(pcb.ack_port, msg, sizeof(buffer), &outsize);
+    if(recv_ret != 0)
+        return -1;
+
+    assert(msg->checksum == message_checksum(msg));
+    assert(msg->code == VFSMessageResult);
+
+    struct vfs_result_data* result_data = (struct vfs_result_data*)msg->data;
+    return result_data->result;
 }
 
 void main();

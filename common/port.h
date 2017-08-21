@@ -7,8 +7,9 @@
 #include <stdbool.h>
 
 /*
- * Port: one-way communication channel between processes
- * Blocking receive and sends
+ * Port: one-way reliable synchronous communication channel between processes
+ * Blocking receive and sends. That means sender is blocked until
+ * receiver successfully received message.
  * Identified by a single, unique number
  * Single receiver, multiple senders
  */
@@ -29,7 +30,7 @@ struct message {
     int sender;                 /* Sending process pid */
     int reply_port;             /* Port number to send response to */
     unsigned code;              /* Message code, interpretation depends on receiver */
-    unsigned len;                 /* Length of data[] */
+    unsigned len;               /* Length of data[] (i.e. the header is not included) */
     unsigned char data[];
 };
 

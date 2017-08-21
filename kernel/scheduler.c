@@ -397,7 +397,8 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
      * filename will be garbled when we unmap process memory below
      * So we copy it to temp buffer beforehand
      */
-    filename = strdup(filename);
+    char filename_buf[64];
+    strlcpy(filename_buf, filename, sizeof(filename_buf));
 
     trace("(%d %s) exec: %s", 
           current_task_pid(), 
@@ -428,7 +429,7 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
     elf_entry_t entry = load_elf(file->data, file->size);
 
     /* Reset process state */
-    current_task_set_name(filename);
+    current_task_set_name(filename_buf);
     regs->esp = (uint32_t)(USER_STACK + PAGE_SIZE);
     regs->useresp = (uint32_t)(USER_STACK + PAGE_SIZE);
     regs->eflags = read_eflags() | EFLAGS_IF;
@@ -436,9 +437,7 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
 
     struct task* t = task_get(current_task_pid());
     assert(t == current_task);
-    assert(!strcmp(t->name, filename));
-
-    kfree(filename);
+    assert(!strcmp(t->name, filename_buf));
 
     return 0;
 }
@@ -467,6 +466,76 @@ static uint32_t syscall_task_info_handler(struct isr_regs* regs)
     }
 
     return result;
+}
+
+/*
+ * mmap
+ * Params:
+ *  ebx         addr
+ *  ecx         size
+ *  edx         flags
+ * Returns:
+ *  NULL        failure
+ *  else        address
+ */
+static uint32_t syscall_mmap_handler(struct isr_regs* regs)
+{
+    uint32_t result = 0;
+
+    void* addr = (void*)regs->ebx;
+    size_t size = (size_t)regs->ecx;
+    uint32_t flags = (uint32_t)regs->edx;
+
+    /* Must be aligned */
+    if(!IS_ALIGNED(addr, PAGE_SIZE) ||
+       !IS_ALIGNED(size, PAGE_SIZE)) {
+        return 0;
+    } else if(flags == 0) {
+        return 0;
+    }
+
+    /* Calculate flags */
+    uint32_t vmm_flags = VMM_PAGE_PRESENT | VMM_PAGE_USER;
+    if(flags & 0x2)
+        vmm_flags |= VMM_PAGE_WRITABLE;
+
+    /* Check validity beforehand */
+    for(unsigned char* page = addr;
+        page < (unsigned char*)addr + size;
+        page += PAGE_SIZE) {
+
+        /* Check if already mapped */
+        uint32_t va_flags = vmm_get_flags(page);
+        if(va_flags & VMM_PAGE_PRESENT) {
+            return 0;
+        }
+
+        /* Check if in valid memory area */
+        if((uint32_t)page < USER_START || (uint32_t)page > USER_END)
+            return 0;
+    }
+
+
+    /* 
+     * Then we can map. Note that there can still be errors,
+     * but we can ignore cleaning up for now
+     */
+    for(unsigned char* page = addr;
+        page < (unsigned char*)addr + size;
+        page += PAGE_SIZE) {
+
+        /* Then, allocate page and map */
+        uint32_t frame = pmm_alloc();
+        if(frame == PMM_INVALID_PAGE) {
+            return 0;
+        }
+
+        vmm_map(page, frame, vmm_flags);
+    }
+
+    trace("mmap(%p, %d, %d)", addr, size, flags);
+
+    return (uint32_t)addr;
 }
 
 void scheduler_perform_checks()
@@ -571,6 +640,7 @@ void scheduler_start(void (*user_entry)())
     syscall_register(SYSCALL_REBOOT, syscall_reboot_handler);
     syscall_register(SYSCALL_EXEC, syscall_exec_handler);
     syscall_register(SYSCALL_TASK_INFO, syscall_task_info_handler);
+    syscall_register(SYSCALL_MMAP, syscall_mmap_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();

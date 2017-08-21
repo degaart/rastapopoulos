@@ -1,0 +1,214 @@
+Archive member included to satisfy reference by file (symbol)
+
+../../common/obj/common.a(string.c.o)
+                              obj/vfs.c.o (memset)
+../../common/obj/common.a(port.c.o)
+                              obj/vfs.c.o (port_open)
+../../common/obj/common.a(util.c.o)
+                              ../../common/obj/common.a(port.c.o) (hash2)
+../../common/obj/common.a(util.asm.o)
+                              ../../common/obj/common.a(util.c.o) (real_rdtsc)
+../../common/obj/common.a(syscall.asm.o)
+                              ../../common/obj/common.a(port.c.o) (syscall)
+../runtime/obj/runtime.a(runtime.c.o)
+                              obj/vfs.c.o (abort)
+../runtime/obj/runtime.a(entry.asm.o)
+                              (_entry)
+../../common/obj/common.a(io.asm.o)
+                              ../runtime/obj/runtime.a(runtime.c.o) (outb)
+
+Allocating common symbols
+Common symbol       size              file
+
+pcb                 0x4               ../runtime/obj/runtime.a(runtime.c.o)
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+*default*        0x0000000000000000 0xffffffffffffffff
+
+Linker script and memory map
+
+                0x0000000000000000                __START__ = .
+
+.text           0x0000000000400000     0x17f5
+                0x0000000000400000                __TEXT_START__ = .
+ *(.text)
+ .text          0x0000000000400000      0x5fc obj/vfs.c.o
+                0x000000000040034a                main
+ .text          0x00000000004005fc      0x73c ../../common/obj/common.a(string.c.o)
+                0x00000000004005fc                itoa
+                0x00000000004006c0                itox
+                0x0000000000400731                xtoa
+                0x00000000004007eb                formatv
+                0x00000000004009db                format
+                0x0000000000400a04                memset
+                0x0000000000400a34                bzero
+                0x0000000000400a4a                memcpy
+                0x0000000000400aca                memcmp
+                0x0000000000400b29                strlen
+                0x0000000000400b4f                strlcpy
+                0x0000000000400b7f                strlcat
+                0x0000000000400bcc                strcmp
+                0x0000000000400c64                vsnprintf
+                0x0000000000400ca2                snprintf
+                0x0000000000400ccb                vsncatf
+                0x0000000000400d15                sncatf
+ .text          0x0000000000400d38      0x2c2 ../../common/obj/common.a(port.c.o)
+                0x0000000000400e21                message_checksum
+                0x0000000000400eb2                msgwait
+                0x0000000000400ed4                port_open
+                0x0000000000400efb                msgsend
+                0x0000000000400f5d                msgrecv
+                0x0000000000400fcf                msgpeek
+ .text          0x0000000000400ffa      0x190 ../../common/obj/common.a(util.c.o)
+                0x00000000004010e3                rdtsc
+                0x0000000000401132                hash2
+                0x0000000000401175                hash
+ *fill*         0x000000000040118a        0x6 
+ .text          0x0000000000401190        0xb ../../common/obj/common.a(util.asm.o)
+                0x0000000000401190                real_rdtsc
+ *fill*         0x000000000040119b        0x5 
+ .text          0x00000000004011a0       0x24 ../../common/obj/common.a(syscall.asm.o)
+                0x00000000004011a0                syscall
+ .text          0x00000000004011c4      0x5e9 ../runtime/obj/runtime.a(runtime.c.o)
+                0x00000000004011c4                yield
+                0x00000000004011e4                fork
+                0x0000000000401221                sleep
+                0x0000000000401242                exit
+                0x0000000000401262                setname
+                0x0000000000401284                abort
+                0x0000000000401292                reboot
+                0x00000000004012b2                exec
+                0x00000000004012f2                send_ack
+                0x0000000000401381                debug_write
+                0x00000000004013b1                get_task_info
+                0x00000000004013de                __log
+                0x0000000000401568                __assertion_failed
+                0x0000000000401592                initrd_get_size
+                0x00000000004015b7                initrd_copy
+                0x00000000004015df                mmap
+                0x0000000000401608                munmap
+                0x000000000040162f                open
+                0x0000000000401788                runtime_entry
+ *fill*         0x00000000004017ad        0x3 
+ .text          0x00000000004017b0        0xc ../runtime/obj/runtime.a(entry.asm.o)
+                0x00000000004017b0                _entry
+ *fill*         0x00000000004017bc        0x4 
+ .text          0x00000000004017c0       0x35 ../../common/obj/common.a(io.asm.o)
+                0x00000000004017c0                outb
+                0x00000000004017cd                inb
+                0x00000000004017d9                outw
+                0x00000000004017e8                inw
+                0x00000000004017f5                __TEXT_END__ = .
+                0x0000000000402000                . = ALIGN (0x1000)
+
+.rodata         0x0000000000402000      0x4b9
+                0x0000000000402000                __RODATA_START__ = .
+ *(.rodata*)
+ .rodata        0x0000000000402000      0x1b1 obj/vfs.c.o
+ *fill*         0x00000000004021b1        0x3 
+ .rodata        0x00000000004021b4       0xa4 ../../common/obj/common.a(string.c.o)
+ *fill*         0x0000000000402258        0x8 
+ .rodata        0x0000000000402260       0xd0 ../../common/obj/common.a(port.c.o)
+ *fill*         0x0000000000402330       0x10 
+ .rodata        0x0000000000402340       0x80 ../../common/obj/common.a(util.c.o)
+ .rodata        0x00000000004023c0       0xf9 ../runtime/obj/runtime.a(runtime.c.o)
+                0x00000000004024b9                __RODATA_END__ = .
+
+.rel.dyn        0x00000000004024bc        0x0
+ .rel.text      0x00000000004024bc        0x0 obj/vfs.c.o
+                0x0000000000403000                . = ALIGN (0x1000)
+
+.data           0x0000000000403000        0x0
+                0x0000000000403000                __DATA_START__ = .
+ *(.data)
+ .data          0x0000000000403000        0x0 obj/vfs.c.o
+ .data          0x0000000000403000        0x0 ../../common/obj/common.a(string.c.o)
+ .data          0x0000000000403000        0x0 ../../common/obj/common.a(port.c.o)
+ .data          0x0000000000403000        0x0 ../../common/obj/common.a(util.c.o)
+ .data          0x0000000000403000        0x0 ../runtime/obj/runtime.a(runtime.c.o)
+                0x0000000000403000                __DATA_END__ = .
+                0x0000000000403000                . = ALIGN (0x1000)
+
+.bss            0x0000000000403000      0x2a8
+                0x0000000000403000                __BSS_START__ = .
+ *(.bss)
+ .bss           0x0000000000403000      0x2a4 obj/vfs.c.o
+ .bss           0x00000000004032a4        0x0 ../../common/obj/common.a(string.c.o)
+ .bss           0x00000000004032a4        0x0 ../../common/obj/common.a(port.c.o)
+ .bss           0x00000000004032a4        0x0 ../../common/obj/common.a(util.c.o)
+ .bss           0x00000000004032a4        0x0 ../runtime/obj/runtime.a(runtime.c.o)
+                0x00000000004032a4                __BSS_END__ = .
+ COMMON         0x00000000004032a4        0x4 ../runtime/obj/runtime.a(runtime.c.o)
+                0x00000000004032a4                pcb
+                0x00000000004032a8                __END__ = .
+LOAD obj/vfs.c.o
+LOAD ../../common/obj/common.a
+LOAD ../runtime/obj/runtime.a
+LOAD ../runtime/obj/runtime.a
+LOAD ../../common/obj/common.a
+OUTPUT(obj/vfs.elf elf32-i386)
+
+.debug_info     0x0000000000000000     0x1bd3
+ .debug_info    0x0000000000000000      0x6f1 obj/vfs.c.o
+ .debug_info    0x00000000000006f1      0x7a2 ../../common/obj/common.a(string.c.o)
+ .debug_info    0x0000000000000e93      0x397 ../../common/obj/common.a(port.c.o)
+ .debug_info    0x000000000000122a      0x22c ../../common/obj/common.a(util.c.o)
+ .debug_info    0x0000000000001456      0x77d ../runtime/obj/runtime.a(runtime.c.o)
+
+.debug_abbrev   0x0000000000000000      0x774
+ .debug_abbrev  0x0000000000000000      0x174 obj/vfs.c.o
+ .debug_abbrev  0x0000000000000174      0x1eb ../../common/obj/common.a(string.c.o)
+ .debug_abbrev  0x000000000000035f      0x14b ../../common/obj/common.a(port.c.o)
+ .debug_abbrev  0x00000000000004aa      0x113 ../../common/obj/common.a(util.c.o)
+ .debug_abbrev  0x00000000000005bd      0x1b7 ../runtime/obj/runtime.a(runtime.c.o)
+
+.debug_aranges  0x0000000000000000       0xa0
+ .debug_aranges
+                0x0000000000000000       0x20 obj/vfs.c.o
+ .debug_aranges
+                0x0000000000000020       0x20 ../../common/obj/common.a(string.c.o)
+ .debug_aranges
+                0x0000000000000040       0x20 ../../common/obj/common.a(port.c.o)
+ .debug_aranges
+                0x0000000000000060       0x20 ../../common/obj/common.a(util.c.o)
+ .debug_aranges
+                0x0000000000000080       0x20 ../runtime/obj/runtime.a(runtime.c.o)
+
+.debug_ranges   0x0000000000000000       0x18
+ .debug_ranges  0x0000000000000000       0x18 obj/vfs.c.o
+
+.debug_line     0x0000000000000000      0x787
+ .debug_line    0x0000000000000000      0x1c6 obj/vfs.c.o
+ .debug_line    0x00000000000001c6      0x209 ../../common/obj/common.a(string.c.o)
+ .debug_line    0x00000000000003cf      0x118 ../../common/obj/common.a(port.c.o)
+ .debug_line    0x00000000000004e7       0xe7 ../../common/obj/common.a(util.c.o)
+ .debug_line    0x00000000000005ce      0x1b9 ../runtime/obj/runtime.a(runtime.c.o)
+
+.debug_str      0x0000000000000000      0x62d
+ .debug_str     0x0000000000000000      0x2fe obj/vfs.c.o
+                                        0x354 (size before relaxing)
+ .debug_str     0x00000000000002fe      0x167 ../../common/obj/common.a(string.c.o)
+                                        0x2d1 (size before relaxing)
+ .debug_str     0x0000000000000465       0x62 ../../common/obj/common.a(port.c.o)
+                                        0x25e (size before relaxing)
+ .debug_str     0x00000000000004c7       0x27 ../../common/obj/common.a(util.c.o)
+                                        0x1d8 (size before relaxing)
+ .debug_str     0x00000000000004ee      0x13f ../runtime/obj/runtime.a(runtime.c.o)
+                                        0x385 (size before relaxing)
+
+.comment        0x0000000000000000       0x11
+ .comment       0x0000000000000000       0x11 obj/vfs.c.o
+                                         0x12 (size before relaxing)
+ .comment       0x0000000000000011       0x12 ../../common/obj/common.a(string.c.o)
+ .comment       0x0000000000000011       0x12 ../../common/obj/common.a(port.c.o)
+ .comment       0x0000000000000011       0x12 ../../common/obj/common.a(util.c.o)
+ .comment       0x0000000000000011       0x12 ../runtime/obj/runtime.a(runtime.c.o)
+
+.debug_frame    0x0000000000000000      0x818
+ .debug_frame   0x0000000000000000      0x134 obj/vfs.c.o
+ .debug_frame   0x0000000000000134      0x254 ../../common/obj/common.a(string.c.o)
+ .debug_frame   0x0000000000000388      0x134 ../../common/obj/common.a(port.c.o)
+ .debug_frame   0x00000000000004bc       0xdc ../../common/obj/common.a(util.c.o)
+ .debug_frame   0x0000000000000598      0x280 ../runtime/obj/runtime.a(runtime.c.o)
