@@ -6,7 +6,7 @@
 
 void main()
 {
-    /* Programs to run: primes, logger, fib, sleeper */
+    /* Start logger */
     int logger_pid = fork();
     if(!logger_pid) {
         exec("logger.elf");
@@ -14,29 +14,17 @@ void main()
         invalid_code_path();
     }
 
-    int primes_pid = fork();
-    if(!primes_pid) {
-        exec("primes.elf");
-        while(1);
+    /* Start vfs */
+    int vfs_pid = fork();
+    if(!vfs_pid) {
+        exec("vfs.elf");
         invalid_code_path();
     }
 
-    int fib_pid = fork();
-    if(!fib_pid) {
-        exec("fib.elf");
-        while(1);
-        invalid_code_path();
-    }
+    /* Try to read from initrd */
+    int fd = open("init.c", O_RDONLY, 0);
+    trace("Open: %d", fd);
 
-    int sleeper_pid = fork();
-    if(!sleeper_pid) {
-        exec("sleeper.elf");
-        while(1);
-        invalid_code_path();
-    }
 }
-
-
-
 
 

@@ -622,5 +622,3 @@ void vmm_copy_kernel_mappings(struct pagedir* pagedir)
     leave_critical_section();
 }
 
-
-

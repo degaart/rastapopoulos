@@ -21,11 +21,10 @@ fi
 }
 
 # create initrd
-tar -cf initrd.tar -C userland/fib/obj fib.elf
 tar -uf initrd.tar -C userland/init/obj init.elf
 tar -uf initrd.tar -C userland/logger/obj logger.elf
-tar -uf initrd.tar -C userland/primes/obj primes.elf
-tar -uf initrd.tar -C userland/sleeper/obj sleeper.elf
+tar -uf initrd.tar -C userland/vfs/obj vfs.elf
+tar -uf initrd.tar -C userland/init init.c
 
 # Copy relevant kernel files
 for file in kernel/obj/kernel.elf \

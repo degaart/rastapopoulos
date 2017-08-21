@@ -13,4 +13,5 @@ list_declare(initrd, initrd_file);
 
 void initrd_init(const struct multiboot_info* mi);
 const struct initrd_file* initrd_get_file(const char* name);
+void initrd_init_syscalls();
 

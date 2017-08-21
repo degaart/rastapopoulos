@@ -5,6 +5,7 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "locks.h"
+#include "kernel.h"
 
 #define MAGIC_ALLOCATED             0xABCDEF01
 #define MAGIC_FREE                  0x12345678
@@ -171,7 +172,7 @@ static struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
 
             vmm_map(page, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
         } else if(pmm_initialized()) {
-            pmm_reserve((uint32_t)page);
+            pmm_reserve((uint32_t)page - KERNEL_BASE_ADDR);
         }
 
         heap->size += PAGE_SIZE;

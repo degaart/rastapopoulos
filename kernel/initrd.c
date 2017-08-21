@@ -4,6 +4,9 @@
 #include "kmalloc.h"
 #include "debug.h"
 #include "util.h"
+#include "idt.h"
+#include "syscall_handler.h"
+#include "syscall.h"
 
 struct tar_header {
     char filename[100];
@@ -17,6 +20,27 @@ struct tar_header {
 };
 
 static struct initrd initrd = {0};
+static unsigned initrd_size;
+static void* initrd_data;
+
+uint32_t syscall_initrd_get_size_handler(struct isr_regs* regs)
+{
+    return initrd_size;
+}
+
+uint32_t syscall_initrd_copy_handler(struct isr_regs* regs)
+{
+    unsigned char* dest = (unsigned char*)regs->ebx;
+    uint32_t size = (uint32_t)regs->ecx;
+
+    if(size < initrd_size)
+        return -1;
+
+    memcpy(dest, initrd_data, initrd_size);
+    return initrd_size;
+}
+
+
 
 static unsigned getsize(const char *in)
 {
@@ -39,6 +63,12 @@ void initrd_init(const struct multiboot_info* mi)
             const struct multiboot_mod_entry* mod =
                 (struct multiboot_mod_entry*)mi->mods_addr;
 
+            initrd_size = mod->end - mod->start;
+            initrd_data = kmalloc(initrd_size);
+
+            trace("Allocating %d bytes for initrd", initrd_size);
+            memcpy(initrd_data, mod->start, initrd_size);
+
             struct tar_header* hdr = (struct tar_header*)mod->start;
             while(true) {
                 if(hdr->filename[0] == 0)
@@ -57,7 +87,6 @@ void initrd_init(const struct multiboot_info* mi)
                 hdr = (struct tar_header*)((unsigned char*)hdr + 512 + ALIGN(size, 512));
             }
         }
-
     }
 }
 
@@ -73,4 +102,9 @@ const struct initrd_file* initrd_get_file(const char* name)
     return result;
 }
 
+void initrd_init_syscalls()
+{
+    syscall_register(SYSCALL_INITRD_GET_SIZE, syscall_initrd_get_size_handler);
+    syscall_register(SYSCALL_INITRD_COPY, syscall_initrd_copy_handler);
+}
 

@@ -6,36 +6,40 @@ SECTIONS
 	/*
 		Put a space after the section name and before the colon
 	*/
+    __START__ = .;
+    
 	.text 0x00400000 :
 	{
-		_TEXT_START_ = .;
+		__TEXT_START__ = .;
 		*(.text)
-		_TEXT_END_ = .;
+		__TEXT_END__ = .;
 	}
 
 	. = ALIGN(4096);
 	.rodata : 
 	{
-		_RODATA_START_ = .;
+		__RODATA_START__ = .;
 		*(.rodata*)
-		_RODATA_END_ = .;
+		__RODATA_END__ = .;
 	}
 	
 	. = ALIGN(4096);
 	.data :
 	{
-		_DATA_START_ = .;	
+		__DATA_START__ = .;	
 		*(.data)
-		_DATA_END_ = .;
+		__DATA_END__ = .;
 	}
 
 	. = ALIGN(4096);
 	.bss :
 	{
-		_BSS_START_ = .;
+		__BSS_START__ = .;
 		*(.bss)
-		_BSS_END_ = .;
+		__BSS_END__ = .;
 	}
+
+    __END__ = .;
 }
 
 
