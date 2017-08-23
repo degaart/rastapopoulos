@@ -1,9 +1,6 @@
 #include "runtime.h"
 #include "debug.h"
 
-#define invalid_code_path() \
-    panic("Invalid code path")
-
 void main()
 {
     /* Start logger */
@@ -22,8 +19,17 @@ void main()
 
     /* Try to read from initrd */
     int fd = open("init.c", O_RDONLY, 0);
-    trace("Open: %d", fd);
+    assert(fd != -1);
 
+    char buffer[512];
+    int ret;
+    while(1) {
+        ret = read(fd, buffer, sizeof(buffer));
+        assert(ret != -1);
+        if(ret == 0)
+            break;
+
+        debug_writen(buffer, ret);
+    }
 }
-
 

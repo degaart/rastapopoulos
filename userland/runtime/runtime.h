@@ -17,6 +17,7 @@ struct pcb {
 };
 
 void debug_write(const char* str);
+void debug_writen(const char* str, size_t count);
 void yield();
 int fork();
 void sleep(unsigned ms);
@@ -59,6 +60,7 @@ void* mmap(void* addr, size_t size, uint32_t flags);
 
 #define     MAX_PATH        260
 int open(const char* filename, unsigned flags, int mode);
+int read(int fd, void* buffer, size_t size);
 
 
 

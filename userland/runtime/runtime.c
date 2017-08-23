@@ -76,6 +76,15 @@ void exec(const char* filename)
     panic("Exec failed");
 }
 
+void debug_writen(const char* str, size_t count)
+{
+    while(count) {
+        outb(0xE9, *str);
+        str++;
+        count--;
+    }
+}
+
 void debug_write(const char* str)
 {
     while(*str) {
@@ -174,7 +183,7 @@ int munmap(void* addr)
 int open(const char* filename, unsigned flags, int mode)
 {
     /* Send a VFSMessageOpen to VSFPort and wait for reply */
-    unsigned char* buffer[MAX_PATH + sizeof(struct vfs_open_data) + sizeof(struct message)];
+    unsigned char buffer[MAX_PATH + sizeof(struct vfs_open_data) + sizeof(struct message)];
 
     struct message* msg = (struct message*)buffer;
     msg->reply_port = pcb.ack_port;
@@ -198,6 +207,40 @@ int open(const char* filename, unsigned flags, int mode)
     assert(msg->code == VFSMessageResult);
 
     struct vfs_result_data* result_data = (struct vfs_result_data*)msg->data;
+    return result_data->result;
+}
+
+int read(int fd, void* buffer, size_t size)
+{
+    unsigned char msg_buffer[sizeof(struct vfs_result_data) + sizeof(struct message) + 512];
+
+    struct message* msg = (struct message*)msg_buffer;
+    msg->reply_port = pcb.ack_port;
+    msg->code = VFSMessageRead;
+    msg->len = sizeof(struct vfs_read_data) + sizeof(struct vfs_read_data);
+
+    struct vfs_read_data* read_data = (struct vfs_read_data*)&msg->data;
+    read_data->fd = fd;
+    read_data->size = size;
+
+    int ret = msgsend(VFSPort, msg);
+    if(ret) {
+        trace("msgsend() failed");
+        return -1;
+    }
+
+    unsigned outsize;
+    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), &outsize);
+    if(ret) {
+        trace("msgrecv() failed");
+        return -1;
+    }
+
+    assert(msg->code == VFSMessageResult);
+
+    struct vfs_result_data* result_data = (struct vfs_result_data*)msg->data;
+    assert(result_data->result <= size);
+    memcpy(buffer, result_data->data, result_data->result);
     return result_data->result;
 }
 

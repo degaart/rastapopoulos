@@ -21,7 +21,7 @@ struct vfs_read_data {
 
 struct vfs_result_data {
     int result;
-    char data[512];
+    char data[];
 };
 
 #define     O_RDONLY        0x1

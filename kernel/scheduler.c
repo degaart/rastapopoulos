@@ -169,7 +169,7 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
 
     /* Push current task into ready queue */
     if(current_task != idle_task) {
-        trace("Pushing %s into ready queue", current_task->name);
+        //trace("Pushing %s into ready queue", current_task->name);
         list_append(&ready_queue, current_task, node);
     }
 
@@ -189,14 +189,15 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
        list_empty(&sleeping_queue)) {
         moretasks = false;
     } else if(list_empty(&ready_queue)) {
-        if(list_head(&sleeping_queue) == list_tail(&sleeping_queue)) {
-            /*
-             * This task is not magically gonna awake itself
-             * (normally, this is the case for the logger, which should
-             * be the last task alive in the system)
-             */
-            moretasks = false;
+        bool may_wakeup = false;
+        list_foreach(task, task, &sleeping_queue, node) {
+            if(task->sleep_deadline != 0) {
+                may_wakeup = false;
+                break;
+            }
         }
+        if(!may_wakeup)
+            moretasks = false;
     }
 
     if(!moretasks) {

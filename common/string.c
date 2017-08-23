@@ -71,9 +71,9 @@ uint32_t xtoa(const char* str)
 }
 
 int formatv(format_callback_t callback, 
-                     void* callback_params,
-                     const char* fmt,
-                     va_list args) 
+            void* callback_params,
+            const char* fmt,
+            va_list args) 
 {
     int ret = 0;
     while(*fmt) {
@@ -288,7 +288,7 @@ static void snprintf_callback(int ch, void* param)
     if(buf->siz) {
         *(buf->buf) = ch;
         buf->buf++;
-        buf->siz++;
+        buf->siz--;
     }
 }
 
