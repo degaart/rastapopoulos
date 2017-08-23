@@ -39,15 +39,12 @@ void main()
             debug_write(msg_buf);
             debug_write(msg->data);
             debug_write("\n");
-
-            send_ack(msg->reply_port, LoggerMessageTraceAck, 1);
         } else {
             snprintf(msg_buf, sizeof(msg_buf), 
                      "▶ [%s/%d] Invalid message code %d\n",
                      sender_info.name, sender_info.pid,
                      msg->code);
             debug_write(msg_buf);
-            send_ack(msg->reply_port, LoggerMessageTraceAck, 0);
         }
     }
 }

@@ -133,14 +133,6 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
         debug_write("Message: ");
         debug_write(msg_text);
         debug_write("\n");
-    } else {
-        /* Wait ack */
-        unsigned outsize;
-        unsigned recv_ret = msgrecv(pcb.ack_port, msg, sizeof(buffer), &outsize);
-        assert(recv_ret == 0);
-
-        assert(msg->checksum == message_checksum(msg));
-        assert(msg->code == LoggerMessageTraceAck);
     }
 }
 
