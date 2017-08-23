@@ -65,7 +65,7 @@ static int handle_open(const struct message* msg, struct vfs_result_data* result
     const struct vfs_open_data* data = (const struct vfs_open_data*)msg->data;
     assert(data->mode == O_RDONLY); /* no write support for now */
     
-    trace("open(%s, 0x%X, 0x%X)", data->filename, data->mode, data->perm);
+    //trace("open(%s, 0x%X, 0x%X)", data->filename, data->mode, data->perm);
     const struct tar_header* hdr = initrd;
     while(true) {
         if(hdr->filename[0] == 0)
@@ -104,12 +104,12 @@ static int handle_close(const struct message* msg, struct vfs_result_data* resul
 static int handle_read(const struct message* msg, struct vfs_result_data* result_buffer)
 {
     const struct vfs_read_data* read_data = (const struct vfs_read_data*)msg->data;
-    trace("VFSMessageRead(%d, %d)", read_data->fd, (int)read_data->size);
+    //trace("VFSMessageRead(%d, %d)", read_data->fd, (int)read_data->size);
     struct filedesc* fd = &file_descriptors[read_data->fd];
 
     size_t remaining = fd->size - fd->pos;
     if(remaining == 0) {
-        result_buffer->result = -1;
+        result_buffer->result = 0;
         return sizeof(uint32_t);
     }
 
@@ -117,10 +117,11 @@ static int handle_read(const struct message* msg, struct vfs_result_data* result
     if(size > remaining)
         size = remaining;
 
-    memcpy(result_buffer, 
+    memcpy(result_buffer->data, 
            fd->data + fd->pos,
            size);
 
+    fd->pos += size;
     result_buffer->result = size;
     return sizeof(uint32_t) + size;
 }
