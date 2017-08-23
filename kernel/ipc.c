@@ -89,8 +89,8 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
  *  ebx port
  *  ecx message
  * Returns
- *  0   Error
- *  <>0 Success
+ *  !=0   Error
+ *  0     Success
  */
 static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
 {
@@ -137,7 +137,7 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     /* Block ourselves, receiver will wake us when it has successfully called msgrecv() on our message */
     task_block(INVALID_PORT, INVALID_PORT, SLEEP_INFINITE);
 
-    return 1;
+    return 0;
 }
 
 /*

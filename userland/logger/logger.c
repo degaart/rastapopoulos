@@ -17,10 +17,10 @@ void main()
     struct message* msg = (struct message*)buffer;
     while(1) {
         unsigned outsiz;
-        unsigned ret = msgrecv(LoggerPort, 
-                               msg, 
-                               sizeof(buffer), 
-                               &outsiz);
+        int ret = msgrecv(LoggerPort, 
+                          msg, 
+                          sizeof(buffer), 
+                          &outsiz);
         if(ret != 0) {
             panic("msgrecv failed");
         }

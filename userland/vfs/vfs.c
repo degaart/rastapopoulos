@@ -64,7 +64,6 @@ static int handle_open(const struct message* msg, struct vfs_result_data* result
 {
     const struct vfs_open_data* data = (const struct vfs_open_data*)msg->data;
     assert(data->mode == O_RDONLY); /* no write support for now */
-
     
     trace("open(%s, 0x%X, 0x%X)", data->filename, data->mode, data->perm);
     const struct tar_header* hdr = initrd;
@@ -105,6 +104,7 @@ static int handle_close(const struct message* msg, struct vfs_result_data* resul
 static int handle_read(const struct message* msg, struct vfs_result_data* result_buffer)
 {
     const struct vfs_read_data* read_data = (const struct vfs_read_data*)msg->data;
+    trace("VFSMessageRead(%d, %d)", read_data->fd, (int)read_data->size);
     struct filedesc* fd = &file_descriptors[read_data->fd];
 
     size_t remaining = fd->size - fd->pos;
@@ -141,32 +141,37 @@ void main()
     }
 
     /* Load initrd by asking kernel to copy it into our address space */
+    trace("Loading initrd");
     size_t initrd_size = initrd_get_size();
     unsigned char* heap_start = (unsigned char*)ALIGN(_END_,4096);
     void* mmap_ret = mmap(heap_start, ALIGN(initrd_size, 4096), PROT_READ|PROT_WRITE); 
     assert(mmap_ret != NULL);
 
+    trace("Copying initrd into our address-space");
     ret = initrd_copy(mmap_ret, initrd_size);
     assert(ret != -1);
 
     initrd = (struct tar_header*)heap_start;
 
     /* Alloc memory for receiving and sending messages */
+    trace("Prepare buffers");
     heap_start = ALIGN((unsigned char*)mmap_ret + ALIGN(initrd_size, 4096), 4096);
     struct message* recv_buf = (struct message*)mmap(heap_start, 4096, PROT_READ|PROT_WRITE);
+    assert(recv_buf != NULL);
 
-    heap_start = ALIGN((unsigned char*)recv_buf, 4096);
+    heap_start = (unsigned char*)recv_buf + 4096;
     struct message* snd_buf = (struct message*)mmap(heap_start, 4096, PROT_READ|PROT_WRITE);
+    assert(snd_buf != NULL);
 
     /* Begin processing messages */
     trace("VFS started");
 
     while(1) {
         unsigned outsiz;
-        unsigned ret = msgrecv(VFSPort, 
-                               recv_buf, 
-                               4096, 
-                               &outsiz);
+        int ret = msgrecv(VFSPort, 
+                          recv_buf, 
+                          4096, 
+                          &outsiz);
         if(ret != 0) {
             panic("msgrecv failed");
         }
