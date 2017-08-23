@@ -40,6 +40,7 @@ elf_entry_t load_elf(const void* data, unsigned size)
 
             unsigned char* segment_start = phdr->p_vaddr;
             unsigned char* segment_end = segment_start + phdr->p_memsz;
+
             assert(segment_start >= (unsigned char*)USER_START);
             assert(segment_end <= (unsigned char*)USER_END);
 

@@ -15,6 +15,7 @@
 #include "task_info.h"
 #include "kdebug.h"
 #include "util.h"
+#include "kernel_task.h"
 
 /************************************************************************************
  * Task state structure
@@ -620,10 +621,8 @@ static void scheduler_perform_checks()
 /*
  * transform current task into an user task
  */
-static void jump_to_usermode()
+void jump_to_usermode(void (*user_entry)())
 {
-    uint32_t user_entry = read_ebx();
-
     struct task* task = current_task;
 
     task->context.cs = USER_CODE_SEG | RPL3;
@@ -648,7 +647,7 @@ static void idle_task_entry()
     }
 }
 
-void scheduler_start(void (*user_entry)())
+void scheduler_start()
 {
     /* Init global data */
     list_init(&ready_queue);
@@ -678,15 +677,14 @@ void scheduler_start(void (*user_entry)())
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
 
     /* Create first task (init) */
-    struct task* task = task_create("init");
+    struct task* task = task_create("kernel_task");
     task->context.cs = KERNEL_CODE_SEG;
     task->context.ds = KERNEL_DATA_SEG;
     task->context.ss = KERNEL_DATA_SEG;
     task->context.cr3 = vmm_get_physical(task->pagedir);
     task->context.esp = (uint32_t)(KERNEL_STACK + PAGE_SIZE);
     task->context.eflags = read_eflags() | EFLAGS_IF;
-    task->context.eip = (uint32_t)jump_to_usermode;
-    task->context.ebx = (uint32_t)user_entry;
+    task->context.eip = (uint32_t)kernel_task_entry;
 
     /* Create idle_task */
     struct task* task1 = task_create("idle_task");

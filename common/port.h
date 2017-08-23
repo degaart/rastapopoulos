@@ -43,6 +43,7 @@ bool msgpeek(int port);
 
 #define INVALID_PORT            (-1)
 
+#define KernelPort              0
 #define LoggerPort              1
 #define VFSPort                 2
 
