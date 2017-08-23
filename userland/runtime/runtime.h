@@ -16,6 +16,7 @@ struct pcb {
     int ack_port;
 };
 
+void debug_write(const char* str);
 void yield();
 int fork();
 void sleep(unsigned ms);

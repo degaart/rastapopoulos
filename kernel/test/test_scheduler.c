@@ -21,7 +21,6 @@
 #include "../initrd.h"
 #include "../elf.h"
 
-
 static void test_load_initrd()
 {
     /*

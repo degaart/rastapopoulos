@@ -65,6 +65,8 @@ static int handle_open(const struct message* msg, struct vfs_result_data* result
     const struct vfs_open_data* data = (const struct vfs_open_data*)msg->data;
     assert(data->mode == O_RDONLY); /* no write support for now */
 
+    
+    trace("open(%s, 0x%X, 0x%X)", data->filename, data->mode, data->perm);
     const struct tar_header* hdr = initrd;
     while(true) {
         if(hdr->filename[0] == 0)

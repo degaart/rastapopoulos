@@ -41,4 +41,5 @@ bool msgsend(int port, const struct message* msg);
 unsigned msgrecv(int port, struct message* buffer, unsigned buffer_size, unsigned* outsize);
 bool msgpeek(int port);
 
+#define INVALID_PORT            (-1)
 
