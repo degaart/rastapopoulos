@@ -31,10 +31,13 @@ int port_open(int port_number)
     return result;
 }
 
-bool msgsend(int port, const struct message* msg)
+int msgsend(int port, struct message* msg)
 {
+    memset(&msg->node, 0, sizeof(msg->node));
+    msg->sender = 0;
+
     unsigned checksum = message_checksum(msg);
-    assert(checksum == msg->checksum);
+    msg->checksum = checksum;
 
     unsigned result = syscall(SYSCALL_MSGSEND, 
                               port, 
@@ -42,10 +45,10 @@ bool msgsend(int port, const struct message* msg)
                               0,
                               0,
                               0);
-    return result != 0;
+    return (int)result;
 }
 
-unsigned msgrecv(int port, struct message* buffer, unsigned buffer_size, unsigned* outsize)
+int msgrecv(int port, struct message* buffer, unsigned buffer_size, unsigned* outsize)
 {
     /* Buffer validation */
     bzero(buffer, buffer_size);
@@ -59,7 +62,7 @@ unsigned msgrecv(int port, struct message* buffer, unsigned buffer_size, unsigne
     unsigned checksum = message_checksum(buffer);
     assert(buffer->checksum == checksum);
 
-    return result;
+    return (int)result;
 }
 
 bool msgpeek(int port)

@@ -76,19 +76,6 @@ void exec(const char* filename)
     panic("Exec failed");
 }
 
-void send_ack(int port, unsigned code, uint32_t result)
-{
-    unsigned char buffer[sizeof(struct message) + sizeof(uint32_t)] = {0};
-    struct message* msg = (struct message*)buffer;
-    msg->code = code;
-    msg->len = sizeof(uint32_t);
-    *((uint32_t*)msg->data) = result;
-    msg->checksum = message_checksum(msg);
-
-    bool ret = msgsend(port, msg);
-    assert(ret);
-}
-
 void debug_write(const char* str)
 {
     while(*str) {
@@ -120,14 +107,12 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     vsnprintf(msg_text, sizeof(buffer) - sizeof(struct message), fmt, args);
     va_end(args);
 
-    msg->sender = 0;
     msg->reply_port = pcb.ack_port;
     msg->code = LoggerMessageTrace;
     msg->len = strlen((const char*)msg->data) + 1;
-    msg->checksum = message_checksum(msg);
 
-    bool ret = msgsend(LoggerPort, msg);
-    if(!ret) {
+    int ret = msgsend(LoggerPort, msg);
+    if(ret) {
         /* Logger must not be up, manually write to log */
         debug_write("Failed to send message to logger\n");
         debug_write("Message: ");
@@ -192,27 +177,24 @@ int open(const char* filename, unsigned flags, int mode)
     unsigned char* buffer[MAX_PATH + sizeof(struct vfs_open_data) + sizeof(struct message)];
 
     struct message* msg = (struct message*)buffer;
-    msg->sender = 0;
     msg->reply_port = pcb.ack_port;
     msg->code = VFSMessageOpen;
     msg->len = sizeof(struct vfs_open_data) + strlen(filename) + 1;
-    msg->checksum = message_checksum(msg);
 
-    struct vfs_open_data* open_data = (struct vfs_open_data*)(buffer + sizeof(struct message));
+    struct vfs_open_data* open_data = (struct vfs_open_data*)&msg->data;
     open_data->mode = flags;
     open_data->perm = mode;
     strlcpy(open_data->filename, filename, MAX_PATH);
 
-    bool ret = msgsend(VFSPort, msg);
-    if(!ret)
+    int ret = msgsend(VFSPort, msg);
+    if(ret)
         return -1;
 
     unsigned outsize;
-    unsigned recv_ret = msgrecv(pcb.ack_port, msg, sizeof(buffer), &outsize);
-    if(recv_ret != 0)
+    ret = msgrecv(pcb.ack_port, msg, sizeof(buffer), &outsize);
+    if(ret != 0)
         return -1;
 
-    assert(msg->checksum == message_checksum(msg));
     assert(msg->code == VFSMessageResult);
 
     struct vfs_result_data* result_data = (struct vfs_result_data*)msg->data;

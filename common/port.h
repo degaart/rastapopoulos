@@ -26,8 +26,8 @@ list_declare(port_list, port);
 
 struct message {
     list_declare_node(message) node;
-    uint32_t checksum;
-    int sender;                 /* Sending process pid */
+    uint32_t checksum;          /* Checksum (calculated by runtime library on send, verified by runtime library on receive) */
+    int sender;                 /* Sending process pid, calculated by kernel */
     int reply_port;             /* Port number to send response to */
     unsigned code;              /* Message code, interpretation depends on receiver */
     unsigned len;               /* Length of data[] (i.e. the header is not included) */
@@ -37,8 +37,8 @@ struct message {
 void msgwait(int port);
 uint32_t message_checksum(const struct message* msg);
 int port_open(int port_number);
-bool msgsend(int port, const struct message* msg);
-unsigned msgrecv(int port, struct message* buffer, unsigned buffer_size, unsigned* outsize);
+int msgsend(int port, struct message* msg); /* not const because we're modifying checksum */
+int msgrecv(int port, struct message* buffer, unsigned buffer_size, unsigned* outsize);
 bool msgpeek(int port);
 
 #define INVALID_PORT            (-1)

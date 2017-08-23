@@ -13,11 +13,6 @@ void main()
         invalid_code_path();
     }
 
-    for(int i= 0; i < 10; i++) {
-        trace("Testing message-passing");
-    }
-
-#if 0
     /* Start vfs */
     int vfs_pid = fork();
     if(!vfs_pid) {
@@ -28,7 +23,6 @@ void main()
     /* Try to read from initrd */
     int fd = open("init.c", O_RDONLY, 0);
     trace("Open: %d", fd);
-#endif
 
 }
 
