@@ -1,6 +1,5 @@
 #pragma once
 
-#define VFSPort         2
 
 #define     VFSMessageOpen          0x001
 #define     VFSMessageClose         0x002
