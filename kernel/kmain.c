@@ -19,6 +19,7 @@
 #include "elf.h"
 #include "debug.h"
 #include "initrd.h"
+#include "scheduler.h"
 
 const char* current_task_name();
 int current_task_pid();
@@ -212,8 +213,9 @@ void kmain(const struct multiboot_info* init_multiboot_info)
     // IPC System
     ipc_init();
 
-    // Run tests
-    run_tests();
+    // Start system
+    scheduler_start();
+
     reboot();
 }
 

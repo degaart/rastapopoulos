@@ -42,7 +42,7 @@ static struct port* port_get(int number)
  *                  If != -1: Request to open specified port
  *                  Else: Dynamically allocate new port number and return it
  * Returns:
- *  < 0             Error opening port
+ *  INVALID_PORT    Error opening port
  *  >= 0            Port number
  */
 static uint32_t syscall_portopen_handler(struct isr_regs* regs)
@@ -63,7 +63,7 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
         checked_unlock(&port_list_lock);
     }
 
-    if(port_number >= 0) {
+    if(port_number != INVALID_PORT) {
         struct port* result = kmalloc(sizeof(struct port));
         bzero(result, sizeof(struct port));
 
