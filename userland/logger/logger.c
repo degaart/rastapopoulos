@@ -5,14 +5,6 @@
 #include "logger.h"
 #include "string.h"
 
-static void debug_out(const char* message)
-{
-    while(*message) {
-        outb(0xE9, *message);
-        message++;
-    }
-}
-
 void main()
 {
     int ret = port_open(LoggerPort);
@@ -44,9 +36,9 @@ void main()
             snprintf(msg_buf, sizeof(msg_buf),
                      "▶ [%s/%d] ",
                      sender_info.name, sender_info.pid);
-            debug_out(msg_buf);
-            debug_out(msg->data);
-            debug_out("\n");
+            debug_write(msg_buf);
+            debug_write(msg->data);
+            debug_write("\n");
 
             send_ack(msg->reply_port, LoggerMessageTraceAck, 1);
         } else {
@@ -54,7 +46,7 @@ void main()
                      "▶ [%s/%d] Invalid message code %d\n",
                      sender_info.name, sender_info.pid,
                      msg->code);
-            debug_out(msg_buf);
+            debug_write(msg_buf);
             send_ack(msg->reply_port, LoggerMessageTraceAck, 0);
         }
     }

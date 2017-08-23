@@ -20,6 +20,9 @@
 #define SYSCALL_INITRD_GET_SIZE 15
 #define SYSCALL_INITRD_COPY     16
 
+/* put current task into sleeping queue */
+#define SYSCALL_BLOCK           17
+
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
                         uint32_t esi, uint32_t edi);

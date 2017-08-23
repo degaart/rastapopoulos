@@ -5,6 +5,7 @@
 #include "idt.h"
 #include "scheduler.h"
 #include "kdebug.h"
+#include "registers.h"
 
 #undef SYSCALL_TRACE
 
@@ -14,6 +15,8 @@ static syscall_handler_t syscall_handlers[80] = {0};
 
 static void syscall_handler(struct isr_regs* regs)
 {
+    assert(!interrupts_enabled());
+
     syscall_handler_t handler = NULL;
     unsigned syscall_num = regs->eax;
 
@@ -27,8 +30,6 @@ static void syscall_handler(struct isr_regs* regs)
               current_task_pid(), 
               current_task_name());
 #endif
-
-        scheduler_perform_checks();
 
         save_current_task_state(regs);
         kernel_heap_check();

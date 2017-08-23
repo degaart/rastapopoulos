@@ -16,29 +16,57 @@
 #include "kdebug.h"
 #include "util.h"
 
-void scheduler_perform_checks();
+/************************************************************************************
+ * Task state structure
+ ************************************************************************************/
+struct task {
+    list_declare_node(task) node;
+    int pid;
+    char name[TASK_NAME_MAX];
+    struct pagedir* pagedir;
+    struct context context;
 
+    /* Waking condition */
+    int wait_canrecv_port;          /* Wait until port has a message to receive */
+    int wait_cansend_port;          /* Wait until port is open and can receive messages */
+    uint64_t sleep_deadline;
+};
+list_declare(task_list, task);
+
+/************************************************************************************
+ * queues
+ ************************************************************************************/
+/* Tasks ready to be run */
 static struct task_list ready_queue = {0};
-static spinlock_t ready_queue_lock = SPINLOCK_INIT;
 
+/* Tasks sleeping until a condition is met */
 static struct task_list sleeping_queue = {0};
-static spinlock_t sleeping_queue_lock = SPINLOCK_INIT;
 
-static struct task_list msgwait_queue = {0};
-static spinlock_t msgwait_queue_lock = SPINLOCK_INIT;
-
+/* Exited tasks waiting to be collected */
 static struct task_list exited_queue = {0};
-static spinlock_t exited_queue_lock = SPINLOCK_INIT;
 
+/************************************************************************************
+ * declarations
+ ************************************************************************************/
+static int next_pid_value = 0;
 static struct task* current_task = NULL;
 static struct task* idle_task = NULL;
 
-static int next_pid_value = 0;
+static void scheduler_perform_checks();
 
+/************************************************************************************
+ * Implementation
+ ************************************************************************************/
+
+/*
+ * Save task state (regs) into task structure
+ */
 static void save_task_state(struct task* task, const struct isr_regs* regs)
 {
     /*
      * Save current process context
+     * When task is resumed from save state, control resumes
+     * after the interrupt call
      * From ring0: useresp is invalid
      */
     unsigned descriptor_mask = ~0x3;
@@ -63,9 +91,15 @@ static void save_task_state(struct task* task, const struct isr_regs* regs)
     task->context.ebp = regs->ebp;
 }
 
+/*
+ * Save current task state
+ * Should only be called from syscall_handler()
+ */
 void save_current_task_state(const struct isr_regs* regs)
 {
     assert(current_task);
+    assert(!interrupts_enabled());
+
     save_task_state(current_task, regs);
 }
 
@@ -73,9 +107,10 @@ void save_current_task_state(const struct isr_regs* regs)
 static void task_switch(struct task* task)
 {
     assert(task);
+    assert(!interrupts_enabled());
 
+    //trace("Switching to task %s", task->name);
     
-    cli();
     current_task = task;
 
     scheduler_perform_checks();
@@ -87,7 +122,12 @@ static void task_switch(struct task* task)
     panic("Invalid code path");
 }
 
-/* Switch to next ready task, or idle task */
+/* 
+ * Switch to next ready task, or idle task
+ * Careful when calling this function. Take into account the fact
+ * that the caller's state must be saved so we can return to it
+ * after our process is resumed
+ */
 static void task_switch_next()
 {
     struct task* next_task = NULL;
@@ -95,24 +135,20 @@ static void task_switch_next()
     /* Awake sleeping tasks whose deadline has arrived */
     uint64_t now = timer_timestamp();
 
-    checked_lock(&sleeping_queue_lock);
     list_foreach(task, task, &sleeping_queue, node) {
-        if(now >= task->sleep_deadline) {
+        if(task->sleep_deadline && now >= task->sleep_deadline) {
             next_task = task;
             list_remove(&sleeping_queue, task, node);
             break;
         }
     }
-    checked_unlock(&sleeping_queue_lock);
 
     if(!next_task) {
         /* No awoken tasks, get task from ready queue */
-        checked_lock(&ready_queue_lock);
         next_task = list_head(&ready_queue);
         if(next_task) {
             list_remove(&ready_queue, next_task, node);
         }
-        checked_unlock(&ready_queue_lock);
     }
 
     if(!next_task) {
@@ -122,7 +158,6 @@ static void task_switch_next()
 
     task_switch(next_task);
 }
-
 
 static void scheduler_timer(void* data, const struct isr_regs* regs)
 {
@@ -134,13 +169,11 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
 
     /* Push current task into ready queue */
     if(current_task != idle_task) {
-        checked_lock(&ready_queue_lock);
+        trace("Pushing %s into ready queue", current_task->name);
         list_append(&ready_queue, current_task, node);
-        checked_unlock(&ready_queue_lock);
     }
 
     /* Collect exited tasks */
-    checked_lock(&exited_queue_lock);
     list_foreach(task, task, &exited_queue, node) {
         trace("Collecting task %s (%d)", task->name, task->pid);
 
@@ -148,22 +181,15 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
         vmm_destroy_pagedir(task->pagedir);
         kfree(task);
     }
-    checked_unlock(&exited_queue_lock);
 
     /* If no more tasks to run, reboot */
     bool moretasks = true;
 
-    checked_lock(&ready_queue_lock);
-    checked_lock(&sleeping_queue_lock);
-    checked_lock(&msgwait_queue_lock);
     if(list_empty(&ready_queue) &&
-       list_empty(&sleeping_queue) &&
-       list_empty(&msgwait_queue)) {
+       list_empty(&sleeping_queue)) {
         moretasks = false;
-    } else if(list_empty(&ready_queue) &&
-              list_empty(&sleeping_queue) &&
-              !list_empty(&msgwait_queue)) {
-        if(list_head(&msgwait_queue) == list_tail(&msgwait_queue)) {
+    } else if(list_empty(&ready_queue)) {
+        if(list_head(&sleeping_queue) == list_tail(&sleeping_queue)) {
             /*
              * This task is not magically gonna awake itself
              * (normally, this is the case for the logger, which should
@@ -172,9 +198,6 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
             moretasks = false;
         }
     }
-    checked_unlock(&msgwait_queue_lock);
-    checked_unlock(&sleeping_queue_lock);
-    checked_unlock(&ready_queue_lock);
 
     if(!moretasks) {
         trace("No more tasks to run. Rebooting");
@@ -194,9 +217,8 @@ static struct task* task_create(const char* name)
     struct task* result = kmalloc(sizeof(struct task));
     bzero(result, sizeof(struct task));
 
-    enter_critical_section();
     result->pid = next_pid_value++;
-    leave_critical_section();
+    assert(result->pid < 64);
 
     strlcpy(result->name, name, sizeof(result->name));
     result->pagedir = vmm_clone_pagedir();
@@ -207,11 +229,9 @@ static struct task* task_create(const char* name)
 /*
  * Get a task by it's pid
  */
-struct task* task_get(int pid)
+static struct task* task_get(int pid)
 {
     struct task* result = 0;
-
-    enter_critical_section();
 
     if(pid == idle_task->pid)
         result = idle_task;
@@ -222,100 +242,131 @@ struct task* task_get(int pid)
     }
 
     if(!result) {
-        checked_lock(&ready_queue_lock);
-
         list_foreach(task, task, &ready_queue, node) {
             if(task->pid == pid) {
                 result = task;
                 break;
             }
         }
-        checked_unlock(&ready_queue_lock);
     }
 
     if(!result) {
-        checked_lock(&sleeping_queue_lock);
         list_foreach(task, task, &sleeping_queue, node) {
             if(task->pid == pid) {
                 result = task;
                 break;
             }
         }
-        checked_unlock(&sleeping_queue_lock);
     }
-
-    if(!result) {
-        checked_lock(&msgwait_queue_lock);
-        list_foreach(task, task, &msgwait_queue, node) {
-            if(task->pid == pid) {
-                result = task;
-                break;
-            }
-        }
-        checked_unlock(&msgwait_queue_lock);
-    }
-
-    leave_critical_section();
 
     return result;
 }
 
-void task_wait_message(int port_number, const struct isr_regs* regs)
+/*
+ * Put current task into sleeping queue
+ */
+void task_block(int canrecv_port, int cansend_port, unsigned timeout)
 {
-    save_task_state(current_task, regs);
-    current_task->wait_port = port_number;
+    assert(!interrupts_enabled());
 
-    checked_lock(&msgwait_queue_lock);
-    list_append(&msgwait_queue, current_task, node);
-    checked_unlock(&msgwait_queue_lock);
-
-    /* Switch to next task */
-    task_switch_next();
-    invalid_code_path();
+    current_task->wait_canrecv_port = canrecv_port;
+    current_task->wait_cansend_port = cansend_port;
+    if(timeout != SLEEP_INFINITE) {
+        current_task->sleep_deadline = 0;
+    } else {
+        current_task->sleep_deadline = timer_timestamp() + timeout;
+    }
+    syscall(SYSCALL_BLOCK, 0, 0, 0, 0, 0);
+    //trace("After sleep");
 }
 
-void wake_tasks_for_port(int port_number)
+/*
+ * Remove task from sleeping queue and put into ready queue
+ */
+void task_wake(int pid)
 {
-    /* Wake any process waiting on this port */
-    checked_lock(&msgwait_queue_lock);
-    list_foreach(task, task, &msgwait_queue, node) {
-        if(task->wait_port == port_number) {
-            list_remove(&msgwait_queue, task, node);
+    assert(!interrupts_enabled());
 
-            checked_lock(&ready_queue_lock);
-            list_append(&ready_queue, task, node);
-            checked_unlock(&ready_queue_lock);
-            kernel_heap_check();
+    struct task* t = task_get(pid);
+    assert(t);
+
+    bool found = false;
+
+    list_foreach(task, task, &sleeping_queue, node) {
+        if(task == t) {
+            list_remove(&sleeping_queue, task, node);
+            list_append(&ready_queue, t, node);
+            found = true;
+            break;
         }
     }
-    checked_unlock(&msgwait_queue_lock);
+
+    if(!found) {
+        list_foreach(task, task, &ready_queue, node) {
+            if(task == t) {
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if(!found) {
+        if(pid == current_task->pid)
+            found = true;
+    }
+
+    if(!found) {
+        if(pid == idle_task->pid) {
+            found = true;
+        }
+    }
+
+    if(!found) {
+        panic("Failed to wake task with PID %d", pid);
+    }
+}
+
+/*
+ * Wake tasks waiting for port to be able to receive message
+ */
+void wake_tasks_waiting_for_port(int port_number)
+{
+    assert(!interrupts_enabled());
+    
+    list_foreach(task, task, &sleeping_queue, node) {
+        if(task->wait_cansend_port == port_number) {
+            task_wake(task->pid);
+        }
+    }
 }
 
 const char* current_task_name()
 {
+    assert(!interrupts_enabled());
+
     return current_task ? current_task->name : NULL;
 }
 
 void current_task_set_name(const char* name)
 {
+    assert(!interrupts_enabled());
     strlcpy(current_task->name, name, sizeof(current_task->name));
 }
 
 int current_task_pid()
 {
-    return current_task ? current_task->pid : -1;
+    assert(!interrupts_enabled());
+    return current_task ? current_task->pid : INVALID_PID;
 }
 
 /*
- * Put current task into tail of ready queue and switch to next ready task
+ * Put current task into ready queue and switch to next task
+ * Params
+ *  ebx                     dest queue
  */
 static uint32_t syscall_yield_handler(struct isr_regs* regs)
 {
-    save_task_state(current_task, regs);
-
-    checked_lock(&ready_queue_lock);
     list_append(&ready_queue, current_task, node);
-    checked_unlock(&ready_queue_lock);
 
     task_switch_next();
     invalid_code_path();
@@ -337,11 +388,7 @@ static uint32_t syscall_fork_handler(struct isr_regs* regs)
     new_task->context.cr3 = vmm_get_physical(new_task->pagedir);
     new_task->context.eax = 0;
 
-    enter_critical_section();
-    checked_lock(&ready_queue_lock);
     list_append(&ready_queue, new_task, node);
-    checked_unlock(&ready_queue_lock);
-    leave_critical_section();
 
     result = new_task->pid;
 
@@ -358,33 +405,39 @@ static uint32_t syscall_setname_handler(struct isr_regs* regs)
 static uint32_t syscall_exit_handler(struct isr_regs* regs)
 {
     /* Put into exited queue, will be collected next time scheduler runs */
-    checked_lock(&exited_queue_lock);
     list_append(&exited_queue, current_task, node);
-    checked_unlock(&exited_queue_lock);
 
     task_switch_next();
     invalid_code_path();
+    return 0;
 }
 
+/*
+ * Sleep current task for specified number of milliseconds
+ */
 static uint32_t syscall_sleep_handler(struct isr_regs* regs)
 {
     unsigned millis = regs->ebx;
+    task_block(INVALID_PORT, INVALID_PORT, millis);
+    return 0;
+}
 
-    save_task_state(current_task, regs);
-    current_task->sleep_deadline = timer_timestamp() + millis;
-    
-    checked_lock(&sleeping_queue_lock);
+/*
+ * Put current task into sleeping queue and resume next task
+ */
+static uint32_t syscall_block_handler(struct isr_regs* regs)
+{
     list_append(&sleeping_queue, current_task, node);
-    checked_unlock(&sleeping_queue_lock);
-
     task_switch_next();
     invalid_code_path();
+    return 0;
 }
 
 static uint32_t syscall_reboot_handler(struct isr_regs* regs)
 {
     trace("Reboot requested");
     reboot();
+    return 0;
 }
 
 static uint32_t syscall_exec_handler(struct isr_regs* regs)
@@ -538,10 +591,11 @@ static uint32_t syscall_mmap_handler(struct isr_regs* regs)
     return (uint32_t)addr;
 }
 
-void scheduler_perform_checks()
+static void scheduler_perform_checks()
 {
     /* check1: current task and idle task should not be on any queue */
     /* check2: no two processes share pids */
+    /* check3: tasks should only belong to one queue */
     uint64_t encountered_pids = 0;
     list_foreach(task, task, &ready_queue, node) {
         assert(task != current_task && task != idle_task);
@@ -555,44 +609,17 @@ void scheduler_perform_checks()
         BITSET(encountered_pids, task->pid);
     }
 
-    list_foreach(task, task, &msgwait_queue, node) {
-        assert(task != current_task && task != idle_task);
-        assert(!BITTEST(encountered_pids, task->pid));
-        BITSET(encountered_pids, task->pid);
-    }
-
     list_foreach(task, task, &exited_queue, node) {
         assert(task != current_task && task != idle_task);
         assert(!BITTEST(encountered_pids, task->pid));
         BITSET(encountered_pids, task->pid);
-    }
-
-    /* check3: tasks should only belong to one queue */
-    struct task_list* task_queues[64] = {0};
-    list_foreach(task, task, &ready_queue, node) {
-        task_queues[task->pid] = &ready_queue;
-    }
-
-    list_foreach(task, task, &sleeping_queue, node) {
-        assert(!task_queues[task->pid]);
-        task_queues[task->pid] = &sleeping_queue;
-    }
-
-    list_foreach(task, task, &msgwait_queue, node) {
-        assert(!task_queues[task->pid]);
-        task_queues[task->pid] = &msgwait_queue;
-    }
-
-    list_foreach(task, task, &exited_queue, node) {
-        assert(!task_queues[task->pid]);
-        task_queues[task->pid] = &exited_queue;
     }
 }
 
 /*
  * transform current task into an user task
  */
-void jump_to_usermode()
+static void jump_to_usermode()
 {
     uint32_t user_entry = read_ebx();
 
@@ -625,7 +652,6 @@ void scheduler_start(void (*user_entry)())
     /* Init global data */
     list_init(&ready_queue);
     list_init(&sleeping_queue);
-    list_init(&msgwait_queue);
     list_init(&exited_queue);
 
     /* Install scheduler timer */
@@ -641,6 +667,7 @@ void scheduler_start(void (*user_entry)())
     syscall_register(SYSCALL_EXEC, syscall_exec_handler);
     syscall_register(SYSCALL_TASK_INFO, syscall_task_info_handler);
     syscall_register(SYSCALL_MMAP, syscall_mmap_handler);
+    syscall_register(SYSCALL_BLOCK, syscall_block_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();

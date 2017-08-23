@@ -49,14 +49,14 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
 {
     int port_number = regs->ebx;
 
-    if(port_number == -1) {
+    if(port_number == INVALID_PORT) {
         checked_lock(&port_list_lock);
         port_number = next_port_value++;
         checked_unlock(&port_list_lock);
     } else {
         checked_lock(&port_list_lock);
         if(BITTEST(reserved_ports, port_number)) {
-            port_number = -1;                           /* Already reserved */
+            port_number = INVALID_PORT;                           /* Already reserved */
         } else {
             BITSET(reserved_ports, port_number);
         }
@@ -101,9 +101,11 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     unsigned checksum = message_checksum(msg);
     assert(checksum == msg->checksum);
 
-    struct port* port = port_get(port_number);
-    if(!port)
-        return 0;
+    /* Wait for port to be open */
+    struct port* port = NULL;
+    while(!(port = port_get(port_number))) {
+        task_block(INVALID_PORT, port_number, SLEEP_INFINITE);
+    }
     
     /* Copy message into kernel space */
     size_t bufsize = sizeof(struct message) + msg->len;
@@ -129,9 +131,12 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     checked_unlock(&port->lock);
     kernel_heap_check();
 
-    /* Wake any tasks waiting on this port */
-    wake_tasks_for_port(port_number);
-    kernel_heap_check();
+    /* Wake receiver */
+    task_wake(port->receiver);
+
+    /* Block ourselves, receiver will wake us when it has successfully called msgrecv() on our message */
+    task_block(INVALID_PORT, INVALID_PORT, SLEEP_INFINITE);
+
     return 1;
 }
 
@@ -158,15 +163,14 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
     uint32_t buffer_size = regs->edx;
     uint32_t* outsize = (uint32_t*)regs->esi;
 
-    struct port* port = NULL;
+    struct port* port = port_get(port_number);
+    if(!port)
+        return 1;
+
+    if(current_task_pid() != port->receiver)
+        return 2;
+
     while(true) {
-        port = port_get(port_number);
-        if(!port)
-            return 1;
-
-        if(current_task_pid() != port->receiver)
-            return 2;
-
         checked_lock(&port->lock);
         bool empty = list_empty(&port->queue);
         checked_unlock(&port->lock);
@@ -174,7 +178,8 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
         if(!empty)
             break;
 
-        msgwait(port->number);
+        wake_tasks_waiting_for_port(port_number);
+        task_block(port_number, INVALID_PORT, SLEEP_INFINITE);
         assert(!interrupts_enabled());
         kernel_heap_check();
     }
@@ -195,6 +200,12 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
     if(buffer_size >= sizeof(struct message) + message->len) {
         memcpy(buffer, message, sizeof(struct message) + message->len);
         list_remove(&port->queue, message, node);
+
+        /* Wake sender */
+        task_wake(message->sender);
+
+        /* Free message */
+        kfree(message);
         result = 0;
     } else {
         result = 3;
@@ -208,13 +219,34 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
  * Sleep current process until the specified port has a non-empty queue
  * Params:
  *  ebx:    Port number
+ * Returns:
+ *  0       Success
+ *  -1      Error
  */
 static uint32_t syscall_msgwait_handler(struct isr_regs* regs)
 {
     assert(!interrupts_enabled());
     int port_number = regs->ebx;
-    task_wait_message(port_number, regs);
-    invalid_code_path();
+
+    struct port* port = port_get(port_number);
+    if(!port) {
+        return (uint32_t)-1;
+    }
+
+    if(current_task_pid() != port->receiver)
+        return (uint32_t)-1;
+
+    while(true) {
+        checked_lock(&port->lock);
+        bool empty = list_empty(&port->queue);
+        checked_unlock(&port->lock);
+
+        if(!empty)
+            break;
+
+        task_block(port_number, INVALID_PORT, SLEEP_INFINITE);
+    }
+    return 0;
 }
 
 /*

@@ -28,32 +28,58 @@
  *  ---------------------------------------------   0xC0000000
  *   shared high kernel space
  *  ---------------------------------------------   0xFFFFFFFF
+ *
+ *
+ * Task states
+ *  - Ready to be run
+ *  - Sleeping until condition is met:
+ *      - Deadline
+ *      - Wait for port to accept messages
+ *      - Wait for message to be available on port
+ *  - Exited
+ *
+ * We only keep these 3 queues to facilitate implementing things
+ * like waiting for a message with a timeout
+ *
+ * PIDs are signed ints >= 0
+ * 
  */
 
 #define USER_STACK          ((unsigned char*)0xBFFFC000)
 #define KERNEL_STACK        ((unsigned char*)0xBFFFE000)
 
-struct task {
-    list_declare_node(task) node;
-    int pid;
-    char name[32];
-    struct pagedir* pagedir;
-    struct context context;
+#define TASK_NAME_MAX       32
+#define INVALID_PID         (-1)
+#define SLEEP_INFINITE      0xFFFFFFFF
 
-    unsigned wait_port;
-    uint64_t sleep_deadline;
-};
-list_declare(task_list, task);
+/*
+ * Save current task state
+ * Should only be called from syscall_handler()
+ */
+void save_current_task_state(const struct isr_regs* regs);
+
+/*
+ * Put current task into sleeping queue
+ */
+void task_block(int canrecv_port, int cansend_port, unsigned timeout);
+
+/*
+ * Remove task from sleeping queue and put into ready queue
+ */
+void task_wake(int pid);
+
+/*
+ * Wake tasks waiting for port to be able to receive message
+ */
+void wake_tasks_waiting_for_port(int port_number);
+
+const char* current_task_name();
+
+void current_task_set_name(const char* name);
+
+int current_task_pid();
 
 void scheduler_start(void (*user_entry)());
-int current_task_pid();
-const char* current_task_name();
-void current_task_set_name(const char* name);
-void task_wait_message(int port_number, const struct isr_regs* regs);
-void wake_tasks_for_port(int port_number);
-void save_current_task_state(const struct isr_regs* regs);
-void jump_to_usermode();
-struct task* task_get(int pid);
 
 
 
