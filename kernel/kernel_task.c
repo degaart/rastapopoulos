@@ -11,6 +11,7 @@
 #include "pmm.h"
 #include "task_info.h"
 #include "kernel.h"
+#include "kmalloc.h"
 
 #define MessageHandler(msg) \
     static void handle_ ## msg (struct deserializer* args, struct serializer* result)
@@ -108,17 +109,8 @@ void kernel_task_entry()
     }
 
     // alloc memory for messages
-    uint32_t frame = pmm_alloc();
-    assert(frame != INVALID_FRAME);
-
-    struct message* recv_buf = (struct message*)0x400000;
-    vmm_map(recv_buf, frame, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
-    
-    frame = pmm_alloc();
-    assert(frame != INVALID_FRAME);
-
-    struct message* snd_buf = (struct message*)(0x400000 + PAGE_SIZE);
-    vmm_map(snd_buf, frame, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
+    struct message* recv_buf = kmalloc(4096);
+    struct message* snd_buf = kmalloc(4096);
 
     // Wait for messages
     while(true) {
