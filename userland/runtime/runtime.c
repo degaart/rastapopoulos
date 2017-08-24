@@ -10,8 +10,10 @@
 #include "../../kernel/kernel_task.h"
 #include "serializer.h"
 #include <stdarg.h>
+#include "util.h"
 
 struct pcb pcb;
+int errno = 0;
 
 void yield()
 {
@@ -307,6 +309,24 @@ int read(int fd, void* buffer, size_t size)
     assert(result_data->result <= size);
     memcpy(buffer, result_data->data, result_data->result);
     return result_data->result;
+}
+
+static unsigned char* program_break = 0;
+void* sbrk(int incr)
+{
+    if(!program_break)
+        program_break = ALIGN(_END_, 4096);
+
+    if(!incr) {
+        return program_break;
+    } else if(incr < 0) {
+        panic("Not implemented yet");
+    } else {
+        incr = ALIGN(incr, 4096);
+        void* result = mmap(program_break, incr, PROT_READ|PROT_WRITE);
+        program_break += incr;
+        return result;
+    }
 }
 
 void main();
