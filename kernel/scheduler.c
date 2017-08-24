@@ -441,13 +441,6 @@ static uint32_t syscall_block_handler(struct isr_regs* regs)
     return 0;
 }
 
-static uint32_t syscall_reboot_handler(struct isr_regs* regs)
-{
-    trace("Reboot requested");
-    reboot();
-    return 0;
-}
-
 static uint32_t syscall_exec_handler(struct isr_regs* regs)
 {
     char* filename = (char*)regs->ebx;
@@ -642,7 +635,6 @@ void scheduler_start()
     syscall_register(SYSCALL_FORK, syscall_fork_handler);
     syscall_register(SYSCALL_EXIT, syscall_exit_handler);
     syscall_register(SYSCALL_SLEEP, syscall_sleep_handler);
-    syscall_register(SYSCALL_REBOOT, syscall_reboot_handler);
     syscall_register(SYSCALL_EXEC, syscall_exec_handler);
     syscall_register(SYSCALL_MMAP, syscall_mmap_handler);
     syscall_register(SYSCALL_BLOCK, syscall_block_handler);

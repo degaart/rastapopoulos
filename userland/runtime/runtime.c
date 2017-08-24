@@ -54,12 +54,15 @@ void abort()
 
 void reboot()
 {
-    syscall(SYSCALL_REBOOT,
-            0,
-            0,
-            0,
-            0,
-            0);
+    struct message msg;
+    msg.reply_port = INVALID_PORT;
+    msg.len = 0;
+    msg.code = KernelMessageReboot;
+
+    int ret = msgsend(KernelPort, &msg);
+    if(ret) {
+        panic("Reboot failed");
+    }
 }
 
 void exec(const char* filename)
