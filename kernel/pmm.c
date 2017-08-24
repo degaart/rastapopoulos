@@ -161,7 +161,7 @@ bool pmm_reserved(uint32_t page)
 
 uint32_t pmm_alloc()
 {
-    uint32_t result = PMM_INVALID_PAGE;
+    uint32_t result = INVALID_FRAME;
 
     enter_critical_section();
     for(struct memregion* region = memregions; region; region = region->next) {

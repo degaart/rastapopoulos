@@ -45,8 +45,11 @@ elf_entry_t load_elf(const void* data, unsigned size)
             assert(segment_end <= (unsigned char*)USER_END);
 
             for(unsigned char* page = segment_start; page < segment_end; page += PAGE_SIZE) {
+                uint32_t frame = pmm_alloc();
+                assert(frame != INVALID_FRAME);
+
                 vmm_map(page,
-                        pmm_alloc(),
+                        frame,
                         VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
             }
 

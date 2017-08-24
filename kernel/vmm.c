@@ -257,6 +257,7 @@ void vmm_pagedir_map(struct pagedir* pagedir, void* va, uint32_t pa, uint32_t fl
          * Alloc 4k frame for page table
          */
         uint32_t table_pa = pmm_alloc();
+        assert(table_pa != INVALID_FRAME);
 
         /* And stash into pagedir */
         pagedir->entries[info.dir_index] = ((uint32_t)table_pa) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
@@ -306,6 +307,7 @@ void vmm_map(void* va, uint32_t pa, uint32_t flags)
          * Alloc 4k frame for page table
          */
         uint32_t table_pa = pmm_alloc();
+        assert(table_pa != INVALID_FRAME);
 
         /* And stash into pagedir */
         current_pagedir->entries[info.dir_index] = ((uint32_t)table_pa) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
@@ -409,6 +411,7 @@ static void clone_pagetable(struct pagetable* dst, struct pagetable* src)
             uint32_t flags = src->entries[i] & PTE_FLAGS;
 
             uint32_t new_frame = pmm_alloc();
+            assert(new_frame != INVALID_FRAME);
 
             /* TODO: No need map for source buf */
             void* src_buf = vmm_transient_map(frame, VMM_PAGE_PRESENT);
@@ -444,6 +447,8 @@ struct pagedir* vmm_clone_pagedir()
             struct pagetable* src = get_pagetable(info);
 
             uint32_t dst_frame = pmm_alloc();
+            assert(dst_frame != INVALID_FRAME);
+
             struct pagetable* dst = vmm_transient_map(dst_frame, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
 
             clone_pagetable(dst, src);
