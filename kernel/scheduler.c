@@ -545,8 +545,7 @@ static uint32_t syscall_mmap_handler(struct isr_regs* regs)
 
 
     /* 
-     * Then we can map. Note that there can still be errors,
-     * but we can ignore cleaning up for now
+     * Then we can map
      */
     for(unsigned char* page = addr;
         page < (unsigned char*)addr + size;
@@ -554,7 +553,10 @@ static uint32_t syscall_mmap_handler(struct isr_regs* regs)
 
         /* Then, allocate page and map */
         uint32_t frame = pmm_alloc();
-        if(frame == PMM_INVALID_PAGE) {
+        if(frame == INVALID_FRAME) {
+            for(unsigned char* page2 = addr; page2 < page; page2 += PAGE_SIZE) {
+                vmm_unmap(page2);
+            }
             return 0;
         }
 
@@ -601,7 +603,10 @@ void jump_to_usermode(void (*user_entry)())
     task->context.cs = USER_CODE_SEG | RPL3;
     task->context.ds = task->context.ss = USER_DATA_SEG | RPL3;
 
-    vmm_map(USER_STACK, pmm_alloc(), VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
+    uint32_t frame = pmm_alloc();
+    assert(frame != INVALID_FRAME);
+
+    vmm_map(USER_STACK, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE | VMM_PAGE_USER);
     memset(USER_STACK, 0xCC, PAGE_SIZE);
 
     task->context.esp = (uint32_t)(USER_STACK + PAGE_SIZE);
@@ -641,6 +646,8 @@ void scheduler_start()
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();
+    assert(stack_frame != INVALID_FRAME);
+
     vmm_map(KERNEL_STACK, stack_frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     memset(KERNEL_STACK, 0xCC, PAGE_SIZE);
 

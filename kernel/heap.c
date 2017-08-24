@@ -167,7 +167,7 @@ static struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
 
         if(vmm_paging_enabled()) {
             uint32_t frame = pmm_alloc();
-            if(frame == PMM_INVALID_PAGE)
+            if(frame == INVALID_FRAME)
                 break;
 
             vmm_map(page, frame, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);

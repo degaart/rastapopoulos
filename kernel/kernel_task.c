@@ -109,10 +109,14 @@ void kernel_task_entry()
 
     // alloc memory for messages
     uint32_t frame = pmm_alloc();
+    assert(frame != INVALID_FRAME);
+
     struct message* recv_buf = (struct message*)0x400000;
     vmm_map(recv_buf, frame, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
     
     frame = pmm_alloc();
+    assert(frame != INVALID_FRAME);
+
     struct message* snd_buf = (struct message*)(0x400000 + PAGE_SIZE);
     vmm_map(snd_buf, frame, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
 
