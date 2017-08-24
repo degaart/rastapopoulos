@@ -10,6 +10,7 @@
 #include "../../kernel/kernel_task.h"
 #include "serializer.h"
 #include <stdarg.h>
+#include "malloc.h"
 #include "util.h"
 
 struct pcb pcb;
@@ -129,7 +130,7 @@ void __assertion_failed(const char* function, const char* file, int line, const 
 
 size_t initrd_get_size()
 {
-    char msg_buffer[128];
+    char msg_buffer[sizeof(struct message) + sizeof(size_t)];
     struct message* msg = (struct message*)msg_buffer;
     msg->reply_port = pcb.ack_port;
     msg->code = KernelMessageInitrdGetSize;
@@ -153,43 +154,51 @@ size_t initrd_get_size()
 
 int initrd_read(void* dest, size_t size, size_t offset)
 {
-    char msg_buffer[512 + sizeof(struct message)];
-    struct message* msg = (struct message*)msg_buffer;
+    size_t buffer_size = 512 + sizeof(struct message);
+    struct message* msg = malloc(buffer_size);
     msg->reply_port = pcb.ack_port;
     msg->code = KernelMessageInitrdRead;
     
     struct serializer serializer;
-    serializer_init(&serializer, msg->data, sizeof(msg_buffer) - sizeof(struct message));
+    serializer_init(&serializer, msg->data, buffer_size - sizeof(struct message));
 
     /* Substract a size_t because data also includes the serialized size_t */
-    if(size > sizeof(msg_buffer) - sizeof(struct message) - sizeof(size_t))
-        size = sizeof(msg_buffer) - sizeof(struct message) - sizeof(size_t);
+    if(size > buffer_size - sizeof(struct message) - sizeof(size_t))
+        size = buffer_size - sizeof(struct message) - sizeof(size_t);
 
     serialize_size_t(&serializer, size);
     serialize_size_t(&serializer, offset);
     msg->len = serializer_finish(&serializer);
 
     int ret = msgsend(KernelPort, msg);
-    if(ret == -1)
+    if(ret == -1) {
+        free(msg);
         return -1;
+    }
 
     unsigned required_size;
-    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), &required_size);
+    ret = msgrecv(pcb.ack_port, msg, buffer_size, &required_size);
     if(ret != 0) {
         trace("initrd_read() failed. Need %d bytes, have %d",
-              required_size, sizeof(msg_buffer));
+              required_size, buffer_size);
+        free(msg);
         return -1;
-    } else if(msg->code != KernelMessageResult)
+    } else if(msg->code != KernelMessageResult) {
+        free(msg);
         return -1;
+    }
 
     struct deserializer deserializer;
     deserializer_init(&deserializer, msg->data, msg->len);
     ret = deserialize_int(&deserializer);
-    if(ret == -1)
+    if(ret == -1) {
+        free(msg);
         return -1;
+    }
 
     const void* src_buf = deserialize_buffer(&deserializer, (size_t)ret);
     memcpy(dest, src_buf, ret);
+    free(msg);
     return ret;
 }
 
@@ -312,7 +321,7 @@ int read(int fd, void* buffer, size_t size)
 }
 
 static unsigned char* program_break = 0;
-void* sbrk(int incr)
+void* sbrk(ptrdiff_t incr)
 {
     if(!program_break)
         program_break = ALIGN(_END_, 4096);
@@ -324,6 +333,8 @@ void* sbrk(int incr)
     } else {
         incr = ALIGN(incr, 4096);
         void* result = mmap(program_break, incr, PROT_READ|PROT_WRITE);
+        assert(result != NULL);
+
         program_break += incr;
         return result;
     }

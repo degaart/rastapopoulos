@@ -63,5 +63,5 @@ int read(int fd, void* buffer, size_t size);
 
 extern int errno;
 
-void* sbrk(int incr);
+void* sbrk(ptrdiff_t incr);
 
