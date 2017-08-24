@@ -11,7 +11,6 @@
 #define SYSCALL_YIELD           6
 #define SYSCALL_FORK            7
 #define SYSCALL_SLEEP           9
-#define SYSCALL_REBOOT          10
 #define SYSCALL_EXEC            11
 #define SYSCALL_MMAP            13
 #define SYSCALL_MUNMAP          14

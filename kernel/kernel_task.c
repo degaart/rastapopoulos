@@ -10,17 +10,21 @@
 #include "serializer.h"
 #include "pmm.h"
 #include "task_info.h"
+#include "kernel.h"
 
-static void handle_initrd_get_size(struct deserializer* args,
-                                   struct serializer* result)
+#define MessageHandler(msg) \
+    static void handle_ ## msg (struct deserializer* args, struct serializer* result)
+#define MessageCase(msg) \
+    case msg: handle_ ## msg (&deserializer, &serializer); break
+
+MessageHandler(KernelMessageInitrdGetSize)
 {
     int size = initrd_get_size();
     int* ptr = serialize_int(result, size);
     assert(*ptr == size);                   /* just debugging. Can be removed */
 }
 
-static void handle_initrd_read(struct deserializer* args,
-                               struct serializer* result)
+MessageHandler(KernelMessageInitrdRead)
 {
     size_t size = deserialize_size_t(args);
     size_t offset = deserialize_size_t(args);
@@ -48,8 +52,7 @@ static void handle_initrd_read(struct deserializer* args,
     *intret = ret;
 }
 
-static void handle_get_task_info(struct deserializer* args,
-                                 struct serializer* result)
+MessageHandler(KernelMessageGetTaskInfo)
 {
     int pid = deserialize_int(args);
 
@@ -72,6 +75,12 @@ static void handle_get_task_info(struct deserializer* args,
 
     *ret = 0;
     serialize_buffer_finish(result, sizeof(struct task_info));
+}
+
+MessageHandler(KernelMessageReboot)
+{
+    trace("Reboot requested");
+    reboot();
 }
 
 void kernel_task_entry()
@@ -122,17 +131,12 @@ void kernel_task_entry()
         serializer_init(&serializer, snd_buf->data, PAGE_SIZE - sizeof(struct message));
 
         switch((enum KernelMessages)recv_buf->code) {
-            case KernelMessageInitrdGetSize:
-                handle_initrd_get_size(&deserializer, &serializer);
-                break;
-            case KernelMessageInitrdRead:
-                handle_initrd_read(&deserializer, &serializer);
-                break;
-            case KernelMessageGetTaskInfo:
-                handle_get_task_info(&deserializer, &serializer);
-                break;
+            MessageCase(KernelMessageInitrdGetSize);
+            MessageCase(KernelMessageInitrdRead);
+            MessageCase(KernelMessageGetTaskInfo);
+            MessageCase(KernelMessageReboot);
             default:
-                panic("Invalid message code");
+                panic("Invalid message code: %d", recv_buf->code);
         }
 
         size_t datalen = serializer_finish(&serializer);
