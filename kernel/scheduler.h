@@ -12,8 +12,6 @@
  * Address-space layout for each task
  *
  *  ---------------------------------------------   0x00000000
- *   shared low kernel space
- *  ---------------------------------------------   0x00400000
  *   process-specific user space
  *  ---------------------------------------------
  *   free address space
