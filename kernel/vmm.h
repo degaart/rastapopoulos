@@ -11,12 +11,10 @@
 #define VMM_PAGE_WRITABLE       0x2
 #define VMM_PAGE_USER           0x4
 
-#define KERNEL_LO_START         0x00000000
-#define KERNEL_LO_END           0x3FFFFF
-#define KERNEL_HI_START         0xC0000000
-#define KERNEL_HI_END           0xFFBFFFFF
+#define KERNEL_START            0xC0000000
+#define KERNEL_END              0xFFBFFFFF
 
-#define USER_START              0x400000
+#define USER_START              0x1000
 #define USER_END                0xBFFFFFFF
 
 struct pagedir;

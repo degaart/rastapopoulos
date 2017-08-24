@@ -44,11 +44,10 @@
 #define PAGE_TABLE_INDEX(x) (((x) >> 12) & 0x3ff)
 #define PAGE_GET_PHYSICAL_ADDRESS(x) (*x & ~0xfff)
 
-#define KERNEL_LO_PDE                   0
-#define USER_PDE_START                  1
-#define USER_PDE_END                    (PAGE_DIRECTORY_INDEX(KERNEL_HI_START) - 1)
-#define KERNEL_HI_PDE_START             PAGE_DIRECTORY_INDEX(KERNEL_HI_START)
-#define KERNEL_HI_PDE_END               1022
+#define USER_PDE_START                  0
+#define USER_PDE_END                    (PAGE_DIRECTORY_INDEX(KERNEL_START) - 1)
+#define KERNEL_PDE_START                PAGE_DIRECTORY_INDEX(KERNEL_START)
+#define KERNEL_PDE_END                  1022
 #define RECURSIVE_MAPPING_PDE           1023
 
 struct pagedir {
@@ -431,12 +430,10 @@ struct pagedir* vmm_clone_pagedir()
     enter_critical_section();
 
     /*
-     * 0x000 - 4Mb:         copy pagedir entry
-     * 4Mb   - 3Gb:         copy pagetable entries
+     * 0     - 3Gb:         copy pagetable entries
      * 3Gb   - end-4Mb:     copy pagedir entry
      * end-4Mb - end:       pagedir address
      */
-    result->entries[KERNEL_LO_PDE] = current_pagedir->entries[KERNEL_LO_PDE];
     for(unsigned i = USER_PDE_START; i <= USER_PDE_END; i++) {
         if(current_pagedir->entries[i] & PDE_PRESENT) {
             struct va_info info = {
@@ -457,7 +454,7 @@ struct pagedir* vmm_clone_pagedir()
             result->entries[i] = dst_frame | flags;
         }
     }
-    for(int i = KERNEL_HI_PDE_START; i <= KERNEL_HI_PDE_END; i++) {
+    for(int i = KERNEL_PDE_START; i <= KERNEL_PDE_END; i++) {
         result->entries[i] = current_pagedir->entries[i];
     }
     result->entries[RECURSIVE_MAPPING_PDE] = ((uint32_t)vmm_get_physical(result)) | PDE_PRESENT | PDE_WRITABLE;
@@ -609,8 +606,7 @@ void vmm_copy_kernel_mappings(struct pagedir* pagedir)
     /*
      * Copy kernel mappings into new pagedir
      */
-    pagedir->entries[KERNEL_LO_PDE] = current_pagedir->entries[KERNEL_LO_PDE];
-    for(int i = KERNEL_HI_PDE_START; i <= KERNEL_HI_PDE_END; i++) {
+    for(int i = KERNEL_PDE_START; i <= KERNEL_PDE_END; i++) {
         pagedir->entries[i] = current_pagedir->entries[i];
     }
 
