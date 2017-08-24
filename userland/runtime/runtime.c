@@ -7,6 +7,8 @@
 #include "../logger/logger.h"
 #include "task_info.h"
 #include "../vfs/vfs.h"
+#include "../../kernel/kernel_task.h"
+#include "serializer.h"
 #include <stdarg.h>
 
 struct pcb pcb;
@@ -43,11 +45,6 @@ void exit()
             0,
             0,
             0);
-}
-
-void setname(const char* new_name)
-{
-    syscall(SYSCALL_SETNAME, (uint32_t)new_name, 0, 0, 0, 0);
 }
 
 void abort()
@@ -93,17 +90,6 @@ void debug_write(const char* str)
     }
 }
 
-bool get_task_info(int pid, struct task_info* buffer)
-{
-    uint32_t result = syscall(SYSCALL_TASK_INFO,
-                              pid,
-                              (uint32_t)buffer,
-                              0,
-                              0,
-                              0);
-    return result != 0;
-}
-
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
 {
     va_list args;
@@ -138,24 +124,102 @@ void __assertion_failed(const char* function, const char* file, int line, const 
 
 size_t initrd_get_size()
 {
-    uint32_t result = syscall(SYSCALL_INITRD_GET_SIZE,
-                              0,
-                              0,
-                              0,
-                              0,
-                              0);
-    return (size_t)result;
+    char msg_buffer[128];
+    struct message* msg = (struct message*)msg_buffer;
+    msg->reply_port = pcb.ack_port;
+    msg->code = KernelMessageInitrdGetSize;
+    msg->len = 0;
+
+    int ret = msgsend(KernelPort, msg);
+    if(ret == -1)
+        return -1;
+
+    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), NULL);
+    if(ret != 0)
+        return -1;
+    else if(msg->code != KernelMessageResult)
+        return -1;
+
+    struct deserializer deserializer;
+    deserializer_init(&deserializer, msg->data, msg->len);
+    size_t result = deserialize_size_t(&deserializer);
+    return result;
 }
 
-int initrd_copy(void* dest, size_t size)
+int initrd_read(void* dest, size_t size, size_t offset)
 {
-    uint32_t result = syscall(SYSCALL_INITRD_COPY,
-                              (uint32_t)dest,
-                              (uint32_t)size,
-                              0,
-                              0,
-                              0);
-    return (int)result;
+    char msg_buffer[512 + sizeof(struct message)];
+    struct message* msg = (struct message*)msg_buffer;
+    msg->reply_port = pcb.ack_port;
+    msg->code = KernelMessageInitrdRead;
+    
+    struct serializer serializer;
+    serializer_init(&serializer, msg->data, sizeof(msg_buffer) - sizeof(struct message));
+
+    /* Substract a size_t because data also includes the serialized size_t */
+    if(size > sizeof(msg_buffer) - sizeof(struct message) - sizeof(size_t))
+        size = sizeof(msg_buffer) - sizeof(struct message) - sizeof(size_t);
+
+    serialize_size_t(&serializer, size);
+    serialize_size_t(&serializer, offset);
+    msg->len = serializer_finish(&serializer);
+
+    int ret = msgsend(KernelPort, msg);
+    if(ret == -1)
+        return -1;
+
+    unsigned required_size;
+    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), &required_size);
+    if(ret != 0) {
+        trace("initrd_read() failed. Need %d bytes, have %d",
+              required_size, sizeof(msg_buffer));
+        return -1;
+    } else if(msg->code != KernelMessageResult)
+        return -1;
+
+    struct deserializer deserializer;
+    deserializer_init(&deserializer, msg->data, msg->len);
+    ret = deserialize_int(&deserializer);
+    if(ret == -1)
+        return -1;
+
+    const void* src_buf = deserialize_buffer(&deserializer, (size_t)ret);
+    memcpy(dest, src_buf, ret);
+    return ret;
+}
+
+bool get_task_info(int pid, struct task_info* buffer)
+{
+    unsigned char msg_buffer[sizeof(struct message) + sizeof(struct task_info) + sizeof(size_t)];
+    struct message* msg = (struct message*)msg_buffer;
+    msg->reply_port = pcb.ack_port;
+    msg->code = KernelMessageGetTaskInfo;
+    
+    struct serializer serializer;
+    serializer_init(&serializer, msg->data, sizeof(msg_buffer) - sizeof(struct message));
+    serialize_int(&serializer, pid);
+    msg->len = serializer_finish(&serializer);
+
+    int ret = msgsend(KernelPort, msg);
+    if(ret)
+        return -1;
+
+    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), NULL);
+    if(ret)
+        return false;
+    else if(msg->code != KernelMessageResult)
+        return -1;
+
+    struct deserializer deserializer;
+    deserializer_init(&deserializer, msg->data, msg->len);
+
+    ret = deserialize_int(&deserializer);
+    if(ret)
+        return -1;
+
+    const struct task_info* info = deserialize_buffer(&deserializer, sizeof(struct task_info));
+    memcpy(buffer, info, sizeof(struct task_info));
+    return true;
 }
 
 void* mmap(void* addr, size_t size, uint32_t flags)
@@ -199,8 +263,7 @@ int open(const char* filename, unsigned flags, int mode)
     if(ret)
         return -1;
 
-    unsigned outsize;
-    ret = msgrecv(pcb.ack_port, msg, sizeof(buffer), &outsize);
+    ret = msgrecv(pcb.ack_port, msg, sizeof(buffer), NULL);
     if(ret != 0)
         return -1;
 
@@ -229,9 +292,8 @@ int read(int fd, void* buffer, size_t size)
         return -1;
     }
 
-    unsigned outsize;
-    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), &outsize);
-    if(ret) {
+    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), NULL);
+    if(ret != 0) {
         trace("msgrecv() failed");
         return -1;
     }

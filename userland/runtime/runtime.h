@@ -22,7 +22,6 @@ void yield();
 int fork();
 void sleep(unsigned ms);
 void exit();
-void setname(const char* new_name);
 void reboot();
 void send_ack(int port, unsigned code, uint32_t result);
 void exec(const char* filename);
@@ -31,7 +30,7 @@ struct task_info;
 bool get_task_info(int pid, struct task_info* buffer);
 
 size_t initrd_get_size();
-int initrd_copy(void* dest, size_t size);
+int initrd_read(void* dest, size_t size, size_t offset);
 
 #define     PROT_NONE           0x0
 #define     PROT_READ           0x1

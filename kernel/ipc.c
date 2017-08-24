@@ -94,6 +94,8 @@ static uint32_t syscall_portopen_handler(struct isr_regs* regs)
  */
 static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
 {
+    assert(!interrupts_enabled());
+
     int port_number = regs->ebx;
     struct message* msg = (struct message*)regs->ecx;
 
@@ -111,7 +113,7 @@ static uint32_t syscall_msgsend_handler(struct isr_regs* regs)
     size_t bufsize = sizeof(struct message) + msg->len;
     kernel_heap_check();
 
-    struct message* msg_copy = kmalloc(bufsize);
+    struct message* msg_copy = kmalloc(bufsize + 64); /* There is a buffer overflow somewhere. This is a workaround */
     kernel_heap_check();
 
     memcpy(msg_copy, msg, bufsize);
@@ -196,7 +198,8 @@ static uint32_t syscall_msgrecv_handler(struct isr_regs* regs)
     }
     assert(checksum == message->checksum);
 
-    *outsize = sizeof(struct message) + message->len;
+    if(outsize)
+        *outsize = sizeof(struct message) + message->len;
     if(buffer_size >= sizeof(struct message) + message->len) {
         memcpy(buffer, message, sizeof(struct message) + message->len);
         list_remove(&port->queue, message, node);

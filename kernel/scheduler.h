@@ -79,6 +79,9 @@ void current_task_set_name(const char* name);
 
 int current_task_pid();
 
+struct task_info;
+bool get_task_info(struct task_info* buffer, int pid);
+
 void jump_to_usermode(void (*user_entry)());
 
 void scheduler_start();

@@ -148,9 +148,18 @@ void main()
     void* mmap_ret = mmap(heap_start, ALIGN(initrd_size, 4096), PROT_READ|PROT_WRITE); 
     assert(mmap_ret != NULL);
 
-    trace("Copying initrd into our address-space");
-    ret = initrd_copy(mmap_ret, initrd_size);
-    assert(ret != -1);
+    size_t offset = 0;
+    unsigned char* initrd_buffer = mmap_ret;
+    while(offset < initrd_size) {
+        ret = initrd_read(initrd_buffer, initrd_size - offset, offset);
+        if(ret == -1)
+            panic("Failed to read initrd");
+        else if(!ret)
+            break;
+
+        offset += ret;
+        initrd_buffer += ret;
+    }
 
     initrd = (struct tar_header*)heap_start;
 

@@ -2,6 +2,7 @@
 
 #include "list.h"
 #include "multiboot.h"
+#include <stddef.h>
 
 struct initrd_file {
     char name[100];
@@ -13,5 +14,7 @@ list_declare(initrd, initrd_file);
 
 void initrd_init(const struct multiboot_info* mi);
 const struct initrd_file* initrd_get_file(const char* name);
-void initrd_init_syscalls();
+size_t initrd_get_size();
+int initrd_read(void* buffer, size_t size, size_t offset);
+
 
