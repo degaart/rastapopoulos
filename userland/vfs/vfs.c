@@ -4,6 +4,7 @@
 #include "vfs.h"
 #include <string.h>
 #include <util.h>
+#include <malloc.h>
 
 /*
  * Primitive VFS
@@ -144,12 +145,10 @@ void main()
     /* Load initrd by asking kernel to copy it into our address space */
     trace("Loading initrd");
     size_t initrd_size = initrd_get_size();
-    unsigned char* heap_start = (unsigned char*)ALIGN(_END_,4096);
-    void* mmap_ret = mmap(heap_start, ALIGN(initrd_size, 4096), PROT_READ|PROT_WRITE); 
-    assert(mmap_ret != NULL);
-
     size_t offset = 0;
-    unsigned char* initrd_buffer = mmap_ret;
+    unsigned char* initrd_buffer = malloc(initrd_size);
+    initrd = (struct tar_header*)initrd_buffer;
+
     while(offset < initrd_size) {
         ret = initrd_read(initrd_buffer, initrd_size - offset, offset);
         if(ret == -1)
@@ -161,17 +160,10 @@ void main()
         initrd_buffer += ret;
     }
 
-    initrd = (struct tar_header*)heap_start;
-
     /* Alloc memory for receiving and sending messages */
     trace("Prepare buffers");
-    heap_start = ALIGN((unsigned char*)mmap_ret + ALIGN(initrd_size, 4096), 4096);
-    struct message* recv_buf = (struct message*)mmap(heap_start, 4096, PROT_READ|PROT_WRITE);
-    assert(recv_buf != NULL);
-
-    heap_start = (unsigned char*)recv_buf + 4096;
-    struct message* snd_buf = (struct message*)mmap(heap_start, 4096, PROT_READ|PROT_WRITE);
-    assert(snd_buf != NULL);
+    struct message* recv_buf = malloc(4096);
+    struct message* snd_buf = malloc(4096);
 
     /* Begin processing messages */
     trace("VFS started");

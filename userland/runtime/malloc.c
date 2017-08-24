@@ -533,6 +533,8 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 #define FOOTERS             1
 #define HAVE_MMAP           0
 #define HAVE_MREMAP         0
+#define USE_LOCKS           1
+#define USE_SPIN_LOCKS      1
 #define NO_MALLOC_STATS     1
 #define LACKS_UNISTD_H      1
 #define LACKS_FCNTL_H       1
