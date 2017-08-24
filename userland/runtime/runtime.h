@@ -61,7 +61,7 @@ void* mmap(void* addr, size_t size, uint32_t flags);
 int open(const char* filename, unsigned flags, int mode);
 int read(int fd, void* buffer, size_t size);
 
+extern int errno;
 
-
-
+void* sbrk(int incr);
 

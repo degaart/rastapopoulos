@@ -1,5 +1,7 @@
 #include "runtime.h"
 #include "debug.h"
+#include <malloc.h>
+#include <string.h>
 
 void main()
 {

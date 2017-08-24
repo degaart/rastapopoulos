@@ -21,9 +21,13 @@
 #define countof(a) sizeof(a) / sizeof(a[0])
 
 /* WARNING: This macro only works with powers of two */
+#define ALIGNX(val, align) \
+    (( (val) + ((align) - 1)) & ~((align) - 1) )
+
 #define ALIGN(val, align) \
     ((typeof(val)) \
     (( (uint32_t)(val) + ((uint32_t)(align) - 1) ) & ~( (uint32_t)(align) - 1) ))
+
 
 #define TRUNCATE(val, align) \
     (((val) / (align)) * (align))
