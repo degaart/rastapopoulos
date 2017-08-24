@@ -10,15 +10,11 @@
 #define SYSCALL_MSGPEEK         5
 #define SYSCALL_YIELD           6
 #define SYSCALL_FORK            7
-#define SYSCALL_SETNAME         8
 #define SYSCALL_SLEEP           9
 #define SYSCALL_REBOOT          10
 #define SYSCALL_EXEC            11
-#define SYSCALL_TASK_INFO       12
 #define SYSCALL_MMAP            13
 #define SYSCALL_MUNMAP          14
-#define SYSCALL_INITRD_GET_SIZE 15
-#define SYSCALL_INITRD_COPY     16
 
 /* put current task into sleeping queue */
 #define SYSCALL_BLOCK           17

@@ -207,9 +207,6 @@ void kmain(const struct multiboot_info* init_multiboot_info)
     // Syscall handlers
     syscall_init();
 
-    // Initrd initization is two-step
-    initrd_init_syscalls();
-
     // IPC System
     ipc_init();
 

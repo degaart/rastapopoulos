@@ -102,9 +102,27 @@ const struct initrd_file* initrd_get_file(const char* name)
     return result;
 }
 
-void initrd_init_syscalls()
+size_t initrd_get_size()
 {
-    syscall_register(SYSCALL_INITRD_GET_SIZE, syscall_initrd_get_size_handler);
-    syscall_register(SYSCALL_INITRD_COPY, syscall_initrd_copy_handler);
+    return initrd_size;
 }
+
+int initrd_read(void* buffer, size_t size, size_t offset)
+{
+    if(offset > initrd_size)
+        return -1;
+
+    size_t rem = initrd_size - offset;
+    if(!rem)
+        return 0;
+
+    if(rem < size)
+        size = rem;
+
+    memcpy(buffer, (unsigned char*)initrd_data + offset, size);
+    return size;
+}
+
+
+
 

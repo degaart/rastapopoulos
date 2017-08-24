@@ -361,6 +361,19 @@ int current_task_pid()
     return current_task ? current_task->pid : INVALID_PID;
 }
 
+bool get_task_info(struct task_info* buffer, int pid)
+{
+    assert(!interrupts_enabled());
+
+    struct task* task = task_get(pid);
+    if(!task)
+        return false;
+
+    buffer->pid = pid;
+    strlcpy(buffer->name, task->name, sizeof(buffer->name));
+    return true;
+}
+
 /*
  * Put current task into ready queue and switch to next task
  * Params
@@ -395,13 +408,6 @@ static uint32_t syscall_fork_handler(struct isr_regs* regs)
     result = new_task->pid;
 
     return result;
-}
-
-static uint32_t syscall_setname_handler(struct isr_regs* regs)
-{
-    const char* new_name = (const char*)regs->ebx;
-    current_task_set_name(new_name);
-    return 0;
 }
 
 static uint32_t syscall_exit_handler(struct isr_regs* regs)
@@ -495,32 +501,6 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
     assert(!strcmp(t->name, filename_buf));
 
     return 0;
-}
-
-/*
- * Get information about a task, given its pid
- * Params
- *  ebx     pid
- *  ecx     struct task_info*
- * Returns
- *  0       failure
- * !=0      success
- */
-static uint32_t syscall_task_info_handler(struct isr_regs* regs)
-{
-    uint32_t result = 0;
-
-    int pid = regs->ebx;
-    struct task_info* buffer = (struct task_info*)regs->ecx;
-
-    struct task* task = task_get(pid);
-    if(task) {
-        buffer->pid = pid;
-        strlcpy(buffer->name, task->name, sizeof(buffer->name));
-        result = 1;
-    }
-
-    return result;
 }
 
 /*
@@ -660,12 +640,10 @@ void scheduler_start()
     /* Install syscalls */
     syscall_register(SYSCALL_YIELD, syscall_yield_handler);
     syscall_register(SYSCALL_FORK, syscall_fork_handler);
-    syscall_register(SYSCALL_SETNAME, syscall_setname_handler);
     syscall_register(SYSCALL_EXIT, syscall_exit_handler);
     syscall_register(SYSCALL_SLEEP, syscall_sleep_handler);
     syscall_register(SYSCALL_REBOOT, syscall_reboot_handler);
     syscall_register(SYSCALL_EXEC, syscall_exec_handler);
-    syscall_register(SYSCALL_TASK_INFO, syscall_task_info_handler);
     syscall_register(SYSCALL_MMAP, syscall_mmap_handler);
     syscall_register(SYSCALL_BLOCK, syscall_block_handler);
 
