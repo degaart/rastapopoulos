@@ -104,8 +104,15 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     struct message* msg = (struct message*)buffer;
     char* msg_text = (char*)msg->data;
 
+    size_t buffer_size = sizeof(buffer) - sizeof(struct message);
+    int written = snprintf(msg_text, buffer_size, "[%s:%d] ", basename(file), line);
+    assert(written <= buffer_size);
+
+    buffer_size -= written - 1;
+    msg_text += written - 1;
+
     va_start(args, fmt);
-    vsnprintf(msg_text, sizeof(buffer) - sizeof(struct message), fmt, args);
+    vsnprintf(msg_text, buffer_size, fmt, args);
     va_end(args);
 
     msg->reply_port = pcb.ack_port;
@@ -258,66 +265,107 @@ int munmap(void* addr)
     return (int)result;
 }
 
-int open(const char* filename, unsigned flags, int mode)
+int open(const char* filename, unsigned mode, int perm)
 {
-    /* Send a VFSMessageOpen to VSFPort and wait for reply */
-    unsigned char buffer[MAX_PATH + sizeof(struct vfs_open_data) + sizeof(struct message)];
+    if(!filename || !mode)
+        return -1;
 
-    struct message* msg = (struct message*)buffer;
+    /* Send a VFSMessageOpen to VSFPort and wait for reply */
+    size_t buffer_size = sizeof(struct message) +
+        sizeof(uint32_t) + sizeof(uint32_t) + sizeof(int) + strlen(filename) + 1;
+
+    struct message* msg = malloc(buffer_size);
     msg->reply_port = pcb.ack_port;
     msg->code = VFSMessageOpen;
-    msg->len = sizeof(struct vfs_open_data) + strlen(filename) + 1;
 
-    struct vfs_open_data* open_data = (struct vfs_open_data*)&msg->data;
-    open_data->mode = flags;
-    open_data->perm = mode;
-    strlcpy(open_data->filename, filename, MAX_PATH);
+    struct serializer request;
+    serializer_init(&request, msg->data, buffer_size - sizeof(struct message));
+    serialize_int(&request, mode);
+    serialize_int(&request, perm);
+    serialize_int(&request, strlen(filename) + 1);
+
+    size_t filename_buffer_size;
+    char* filename_buffer = serialize_buffer(&request, &filename_buffer_size);
+    strlcpy(filename_buffer, filename, filename_buffer_size);
+    serialize_buffer_finish(&request, strlen(filename) + 1);
+
+    size_t msg_len = serializer_finish(&request);
+    assert(msg_len <= buffer_size);
+
+    msg->len = msg_len;
 
     int ret = msgsend(VFSPort, msg);
-    if(ret)
+    if(ret) {
+        free(msg);
         return -1;
+    }
 
-    ret = msgrecv(pcb.ack_port, msg, sizeof(buffer), NULL);
-    if(ret != 0)
+    ret = msgrecv(pcb.ack_port, msg, buffer_size, NULL);
+    if(ret != 0) {
+        free(msg);
         return -1;
+    }
 
     assert(msg->code == VFSMessageResult);
 
-    struct vfs_result_data* result_data = (struct vfs_result_data*)msg->data;
-    return result_data->result;
+    struct deserializer result;
+    deserializer_init(&result, msg->data, msg->len);
+
+    int retcode = deserialize_int(&result);
+    free(msg);
+    return retcode;
 }
 
 int read(int fd, void* buffer, size_t size)
 {
-    unsigned char msg_buffer[sizeof(struct vfs_result_data) + sizeof(struct message) + 512];
+    if(size == 0)
+        return 0;
+    else if(fd == -1)
+        return -1;
+    else if(buffer == NULL)
+        return -1;
 
-    struct message* msg = (struct message*)msg_buffer;
+    size_t buffer_size = sizeof(struct message) + sizeof(int) + size;
+    if(buffer_size < sizeof(struct message) + sizeof(int) + sizeof(size_t))
+        buffer_size = sizeof(struct message) + sizeof(int) + sizeof(size_t);
+
+    struct message* msg = malloc(buffer_size);
     msg->reply_port = pcb.ack_port;
     msg->code = VFSMessageRead;
-    msg->len = sizeof(struct vfs_read_data) + sizeof(struct vfs_read_data);
 
-    struct vfs_read_data* read_data = (struct vfs_read_data*)&msg->data;
-    read_data->fd = fd;
-    read_data->size = size;
+    struct serializer request;
+    serializer_init(&request, msg->data, buffer_size - sizeof(struct message));
+    serialize_int(&request, fd);
+    serialize_size_t(&request, size);
+    msg->len = serializer_finish(&request);
+    assert(msg->len <= buffer_size);
 
     int ret = msgsend(VFSPort, msg);
     if(ret) {
-        trace("msgsend() failed");
+        free(msg);
         return -1;
     }
 
-    ret = msgrecv(pcb.ack_port, msg, sizeof(msg_buffer), NULL);
+    ret = msgrecv(pcb.ack_port, msg, buffer_size, NULL);
     if(ret != 0) {
-        trace("msgrecv() failed");
+        free(msg);
         return -1;
     }
 
     assert(msg->code == VFSMessageResult);
 
-    struct vfs_result_data* result_data = (struct vfs_result_data*)msg->data;
-    assert(result_data->result <= size);
-    memcpy(buffer, result_data->data, result_data->result);
-    return result_data->result;
+    struct deserializer result;
+    deserializer_init(&result, msg->data, msg->len);
+
+    int retcode = deserialize_int(&result);
+    if(retcode > 0) {
+        assert(retcode <= size);
+
+        const void* result_buffer = deserialize_buffer(&result, retcode);
+        memcpy(buffer, result_buffer, retcode);
+    }
+    free(msg);
+    return retcode;
 }
 
 static unsigned char* program_break = 0;

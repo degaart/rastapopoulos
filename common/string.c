@@ -327,6 +327,18 @@ int sncatf(char* buffer, size_t size, const char* fmt, ...)
     return vsncatf(buffer, size, fmt, args);
 }
 
+const char* basename(const char* filename)
+{
+    const char* result = filename;
+    for(; *filename; filename++) {
+        if(*filename == '/')
+            result = filename;
+    }
+    if(*result == '/')
+        result++;
+    return result;
+}
+
 
 
 

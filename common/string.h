@@ -30,6 +30,7 @@ int vsnprintf(char* buffer, size_t size, const char* fmt, va_list args);
 int snprintf(char* buffer, size_t size, const char* fmt, ...);
 int vsncatf(char* buffer, size_t size, const char* fmt, va_list args);
 int sncatf(char* buffer, size_t size, const char* fmt, ...);
+const char* basename(const char* filename);
 
 /*
  * RASTAPOPOULOS_KERNEL isn't defined when compiling common.a

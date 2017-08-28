@@ -63,7 +63,7 @@ void serialize_buffer_finish(struct serializer* serializer,
 {
     assert(serializer->locked);
 
-    assert(size < serializer->size - serializer->pos);
+    assert(size <= serializer->size - serializer->pos);
     serializer->pos += size;
     serializer->locked = 0;
 }
