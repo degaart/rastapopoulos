@@ -5,6 +5,7 @@
 #include <string.h>
 #include <util.h>
 #include <malloc.h>
+#include <serializer.h>
 
 /*
  * Primitive VFS
@@ -23,18 +24,102 @@ struct tar_header {
 };
 static const struct tar_header* initrd;
 
-struct filedesc {
-    int pid;
+struct descriptor {
+    list_declare_node(descriptor) node;
+    int fd;
     size_t pos;
     uint32_t mode;
     unsigned char* data;
     size_t size;
 };
-static struct filedesc file_descriptors[32];
-static int next_fd = 0;
+list_declare(descriptor_list, descriptor);
 
-#define invalid_code_path() \
-    panic("Invalid code path")
+struct procinfo {
+    list_declare_node(procinfo) node;
+    int pid;
+    int next_fd;
+    struct descriptor_list descriptors;
+};
+list_declare(procinfo_list, procinfo);
+
+static struct procinfo_list proc_infos = {0};
+
+#define INVALID_FD (-1)
+#define INVALID_PID (-1)
+
+#define MessageHandler(msgcode) \
+    static void handle_ ## msgcode (struct message* msg, struct deserializer* args, struct serializer* result)
+#define MessageCase(msg) \
+    case msg: handle_ ## msg (recv_buf, &args, &results); break
+
+static int next_fd(struct procinfo* pi)
+{
+    int result = pi->next_fd++;
+    assert(result >= 0);
+    return result;
+}
+
+static struct descriptor* descriptor_create(struct procinfo* pi)
+{
+    assert(pi);
+
+    struct descriptor* desc = malloc(sizeof(struct descriptor));
+    memset(desc, 0, sizeof(struct descriptor));
+    desc->fd = next_fd(pi);
+
+    list_append(&pi->descriptors, desc, node);
+
+    return desc;
+}
+
+static struct descriptor* descriptor_get(struct procinfo* pi, int fd)
+{
+    assert(pi);
+
+    struct descriptor* result = NULL;
+    list_foreach(descriptor, desc, &pi->descriptors, node) {
+        if(desc->fd == fd) {
+            result = desc;
+            break;
+        }
+    }
+    return result;
+}
+
+static struct procinfo* procinfo_create(int pid)
+{
+    assert(pid != INVALID_PID);
+
+    /* Assert that it does not already exists */
+    list_foreach(procinfo, pi, &proc_infos, node) {
+        if(pi->pid == pid) {
+            assert(!"procinfo already exists");
+        }
+    }
+
+    struct procinfo* pi = malloc(sizeof(struct procinfo));
+    memset(pi, 0, sizeof(struct procinfo));
+    pi->pid = pid;
+    list_init(&pi->descriptors);
+
+    list_append(&proc_infos, pi, node);
+
+    return pi;
+}
+
+static struct procinfo* procinfo_get(int pid)
+{
+    assert(pid != INVALID_PID);
+
+    struct procinfo* result = NULL;
+    list_foreach(procinfo, pi, &proc_infos, node) {
+        if(pi->pid == pid) {
+            result = pi;
+            break;
+        }
+    }
+    return result;
+}
 
 static unsigned getsize(const char *in)
 {
@@ -50,21 +135,19 @@ static unsigned getsize(const char *in)
 
 
 /*
- * Open specified file
- * Message:
- *  struct vfs_open_data {
- *      uint32_t mode;
- *      uint32_t perm;
- *      char filename[];
- *  }
+ * int open(mode, perm, filename);
  * Results:
  *  -1      Error
  *  else    File descriptor
  */
-static int handle_open(const struct message* msg, struct vfs_result_data* result_buffer)
+MessageHandler(VFSMessageOpen)
 {
-    const struct vfs_open_data* data = (const struct vfs_open_data*)msg->data;
-    assert(data->mode == O_RDONLY); /* no write support for now */
+    uint32_t mode = deserialize_int(args);
+    uint32_t perm = deserialize_int(args);
+    int filename_len = deserialize_int(args);
+    const char* filename = deserialize_buffer(args, filename_len);
+
+    assert(mode == O_RDONLY); /* no write support for now */
     
     //trace("open(%s, 0x%X, 0x%X)", data->filename, data->mode, data->perm);
     const struct tar_header* hdr = initrd;
@@ -73,64 +156,91 @@ static int handle_open(const struct message* msg, struct vfs_result_data* result
             break;
 
         unsigned size = getsize(hdr->size);
-        if(!strcmp(hdr->filename, data->filename)) {
-            /* Create descriptor */
-            int fd_index = next_fd++;
-            assert(fd_index < sizeof(file_descriptors) / sizeof(file_descriptors[0]));
+        if(!strcmp(hdr->filename, filename)) {
+            struct procinfo* pi = procinfo_get(msg->sender);
+            if(pi == NULL) {
+                pi = procinfo_create(msg->sender);
+                assert(pi != NULL);
+            }
 
-            struct filedesc* fd = &file_descriptors[fd_index];
-            fd->pid = msg->sender;
-            fd->pos = 0;
-            fd->mode = data->mode;
-            fd->data = (unsigned char*)hdr + 512;
-            fd->size = size;
+            struct descriptor* desc = descriptor_create(pi);
+            assert(desc != NULL);
 
-            result_buffer->result = fd_index;
-            return sizeof(uint32_t);
+            desc->pos = 0;
+            desc->mode = mode;
+            desc->data = (unsigned char*)hdr + 512;
+            desc->size = size;
+
+            serialize_int(result, desc->fd);
         }
 
         hdr = (const struct tar_header*)
             ((unsigned char*)hdr + 512 + ALIGN(size, 512));
     }
-    result_buffer->result = -1;
-    return sizeof(uint32_t);
+
+    serialize_int(result, -1);
 }
 
-static int handle_close(const struct message* msg, struct vfs_result_data* result_buffer)
+MessageHandler(VFSMessageClose)
 {
     assert(!"Not implemented yet");
-    return 0;
 }
 
-static int handle_read(const struct message* msg, struct vfs_result_data* result_buffer)
+/*
+ * {int, buffer} read(int fd, size_t size);
+ */
+MessageHandler(VFSMessageRead)
 {
-    const struct vfs_read_data* read_data = (const struct vfs_read_data*)msg->data;
-    //trace("VFSMessageRead(%d, %d)", read_data->fd, (int)read_data->size);
-    struct filedesc* fd = &file_descriptors[read_data->fd];
+    int fd = deserialize_int(args);
+    size_t size = deserialize_size_t(args);
 
-    size_t remaining = fd->size - fd->pos;
-    if(remaining == 0) {
-        result_buffer->result = 0;
-        return sizeof(uint32_t);
+    if(fd == INVALID_FD) {
+        serialize_int(result, -1);
+        return;
+    } else if(size == 0) {
+        serialize_int(result, 0);
+        return;
     }
 
-    size_t size = read_data->size;
-    if(size > remaining)
-        size = remaining;
+    struct procinfo* pi = procinfo_get(msg->sender);
+    if(!pi) {
+        serialize_int(result, -1);
+        return;
+    }
 
-    memcpy(result_buffer->data, 
-           fd->data + fd->pos,
+    struct descriptor* desc = descriptor_get(pi, fd);
+    if(!desc) {
+        serialize_int(result, -1);
+        return;
+    }
+
+    size_t remaining = desc->size - desc->pos;
+    if(remaining == 0) {
+        serialize_int(result, 0);
+        return;
+    } else if(size > remaining) {
+        size = remaining;
+    }
+
+    int* retcode = serialize_int(result, -1);
+    size_t max_buffer_size;
+    void* buffer = serialize_buffer(result, &max_buffer_size);
+    if(max_buffer_size < size) {
+        size = max_buffer_size;
+    }
+
+    memcpy(buffer, 
+           desc->data + desc->pos,
            size);
 
-    fd->pos += size;
-    result_buffer->result = size;
-    return sizeof(uint32_t) + size;
+    desc->pos += size;
+    serialize_buffer_finish(result, size);
+    *retcode = size;
 }
 
-static int handle_write(const struct message* msg, struct vfs_result_data* result_buffer)
+MessageHandler(VFSMessageWrite)
 {
     assert(!"Not implemented yet");
-    return 0;
 }
 
 void main()
@@ -167,6 +277,7 @@ void main()
 
     /* Begin processing messages */
     trace("VFS started");
+    list_init(&proc_infos);
 
     while(1) {
         unsigned outsiz;
@@ -178,31 +289,32 @@ void main()
             panic("msgrecv failed");
         }
 
+        struct deserializer args;
+        deserializer_init(&args, recv_buf->data, recv_buf->len);
+
+        struct serializer results;
+        serializer_init(&results, snd_buf->data, 4096 - sizeof(struct message));
+
         int out_size;
         struct vfs_result_data* out = (struct vfs_result_data*)
             ((unsigned char*)snd_buf + sizeof(struct message));
         memset(snd_buf, 0, 4096);
         switch(recv_buf->code) {
-            case VFSMessageOpen:
-                out_size = handle_open(recv_buf, out);
-                break;
-            case VFSMessageClose:
-                out_size = handle_close(recv_buf, out);
-                break;
-            case VFSMessageRead:
-                out_size = handle_read(recv_buf, out);
-                break;
-            case VFSMessageWrite:
-                out_size = handle_write(recv_buf, out);
-                break;
+            MessageCase(VFSMessageOpen);
+            MessageCase(VFSMessageClose);
+            MessageCase(VFSMessageRead);
+            MessageCase(VFSMessageWrite);
+            default:
+                panic("Unhandled message: %d", recv_buf->code);
         }
 
+        snd_buf->len = serializer_finish(&results);
+        snd_buf->reply_port = INVALID_PORT;
         snd_buf->code = VFSMessageResult;
-        snd_buf->len = out_size;
 
         ret = msgsend(recv_buf->reply_port, snd_buf);
-        if(ret != 0) {
-            panic("msgsend failed");
+        if(ret) {
+            panic("msgsend() failed");
         }
     }
 }

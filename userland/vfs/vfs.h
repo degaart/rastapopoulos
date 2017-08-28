@@ -1,26 +1,12 @@
 #pragma once
 
 
-#define     VFSMessageOpen          0x001
-#define     VFSMessageClose         0x002
-#define     VFSMessageRead          0x003
-#define     VFSMessageWrite         0x004
-#define     VFSMessageResult        0x005
-
-struct vfs_open_data {
-    uint32_t mode;
-    uint32_t perm;
-    char filename[];
-};
-
-struct vfs_read_data {
-    int fd;
-    size_t size;
-};
-
-struct vfs_result_data {
-    int result;
-    char data[];
+enum VFSMessages {
+    VFSMessageResult,
+    VFSMessageOpen,
+    VFSMessageClose,
+    VFSMessageRead,
+    VFSMessageWrite,
 };
 
 #define     O_RDONLY        0x1
