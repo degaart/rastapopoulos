@@ -21,9 +21,6 @@
 #include "initrd.h"
 #include "scheduler.h"
 
-const char* current_task_name();
-int current_task_pid();
-
 static void pf_handler(struct isr_regs* regs)
 {
     bool user_mode = regs->err_code & (1 << 2); /* user or supervisor mode */
@@ -109,26 +106,6 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
     reboot();
 }
 
-
-#define RUN_TEST(fn) \
-    do { \
-        trace("Running test %s", #fn); \
-        void fn(); \
-        fn(); \
-    } while(0)
-
-
-static void run_tests()
-{
-    //RUN_TEST(test_vmm);
-    //RUN_TEST(test_kmalloc);
-    //RUN_TEST(test_bitset);
-    //RUN_TEST(test_list);
-    RUN_TEST(test_scheduler);
-    //RUN_TEST(test_locks);
-    //RUN_TEST(test_initrd);
-}
-
 void kmain(struct multiboot_info* init_multiboot_info)
 {
     trace("*** Booted ***");
@@ -173,11 +150,11 @@ void kmain(struct multiboot_info* init_multiboot_info)
     kernel_heap_info(&heap_info);
 
     trace("Kernel map:");
-    trace("\t.text:   %p - %p", _TEXT_START_, _TEXT_END_);
-    trace("\t.rodata: %p - %p", _RODATA_START_, _RODATA_END_);
-    trace("\t.data:   %p - %p", _DATA_START_, _DATA_END_);
-    trace("\t.bss:    %p - %p", _BSS_START_, _BSS_END_);
-    trace("\theap:    %p - %p", heap_info.heap_start, heap_info.heap_start + heap_info.heap_size);
+    trace("\t.text   %p - %p", _TEXT_START_, _TEXT_END_);
+    trace("\t.rodata %p - %p", _RODATA_START_, _RODATA_END_);
+    trace("\t.data   %p - %p", _DATA_START_, _DATA_END_);
+    trace("\t.bss    %p - %p", _BSS_START_, _BSS_END_);
+    trace("\theap    %p - %p", heap_info.heap_start, heap_info.heap_start + heap_info.heap_size);
 
     for(unsigned char* page = (unsigned char*)TRUNCATE((uint32_t)_KERNEL_START_ - KERNEL_BASE_ADDR, PAGE_SIZE); 
         page < _KERNEL_END_ - KERNEL_BASE_ADDR; 
