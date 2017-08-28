@@ -8,164 +8,131 @@
 #include "pmm.h"
 #include "string.h"
 
-static struct multiboot_info multiboot_info;
-static struct heap* mi_heap;
+static const struct multiboot_info* multiboot_info;
 
-void multiboot_init(const struct multiboot_info* init_mi)
+/*
+ * Examine multiboot data and return highest address used by it
+ * Adjust addresses so it points to kernel space
+ */
+void* multiboot_init(struct multiboot_info* mi)
 {
-    /* Prepare heap for multiboot data */
-    unsigned char* heap_start = (unsigned char*)ALIGN(KERNEL_BASE_ADDR + 0x00020000, PAGE_SIZE);
-    unsigned heap_size = ALIGN(0x0009FBFF - 0x00020000, PAGE_SIZE);
-    mi_heap = heap_init(heap_start,
-                        PAGE_SIZE,
-                        heap_size);
-
     /* Init data */
-    struct multiboot_info* mi = &multiboot_info;
-    bzero(mi, sizeof(struct multiboot_info));
+    mi = (struct multiboot_info*)((char*)mi + KERNEL_BASE_ADDR);
+    multiboot_info = mi;
+    unsigned char* end = (unsigned char*)mi + sizeof(struct multiboot_info);
 
     /* Adjust init_mi address */
-    init_mi = (const struct multiboot_info*)
-        ((const unsigned char*)init_mi + KERNEL_BASE_ADDR);
-    trace("init_mi: %p", init_mi);
+    trace("multiboot_info: %p", mi);
 
-    if(init_mi->flags & MULTIBOOT_FLAG_CMDLINE) {
-        mi->flags |= MULTIBOOT_FLAG_CMDLINE;
+    if(mi->flags & MULTIBOOT_FLAG_CMDLINE) {
+        mi->cmdline += KERNEL_BASE_ADDR;
 
-        const char* mi_cmdline = (const char*)(init_mi->cmdline + KERNEL_BASE_ADDR);
-        trace("init_mi->cmdline: %p", mi_cmdline);
+        if((unsigned char*)mi->cmdline + strlen(mi->cmdline) + 1 > end)
+            end = (unsigned char*)mi->cmdline + strlen(mi->cmdline) + 1;
 
-        unsigned cmdline_size = strlen(mi_cmdline);
-        char* cmdline = heap_alloc(mi_heap,
-                                   cmdline_size + 1);
-        strlcpy(cmdline, mi_cmdline, cmdline_size + 1);
-        mi->cmdline = cmdline;
+        trace("cmdline: %s", mi->cmdline);
     }
 
-    if(init_mi->flags & MULTIBOOT_FLAG_MODINFO) {
-        mi->flags |= MULTIBOOT_FLAG_MODINFO;
+    if(mi->flags & MULTIBOOT_FLAG_MODINFO) {
+        mi->mods_addr = (struct multiboot_mod_entry*)
+            ((char*)mi->mods_addr + KERNEL_BASE_ADDR);
+        trace("mods_addr: %p", mi->mods_addr);
 
-        const struct multiboot_mod_entry* mi_mods_addr = 
-            (const struct multiboot_mod_entry*)((unsigned char*)init_mi->mods_addr + KERNEL_BASE_ADDR);
-        trace("init_mi->mods_addr: %p (from %p)", mi_mods_addr, init_mi->mods_addr);
-
-        mi->mods_count = init_mi->mods_count;
-        mi->mods_addr = heap_alloc(mi_heap,
-                                   init_mi->mods_count * sizeof(struct multiboot_mod_entry));
+        if((unsigned char*)(mi->mods_addr + mi->mods_count) > end)
+            end = (unsigned char*)(mi->mods_addr + mi->mods_count);
 
         for(int i = 0; i < mi->mods_count; i++) {
             struct multiboot_mod_entry* entry = mi->mods_addr + i;
-            const struct multiboot_mod_entry* init_entry = mi_mods_addr + i;
 
-            unsigned char* start = init_entry->start + KERNEL_BASE_ADDR;
-            unsigned char* end = init_entry->end + KERNEL_BASE_ADDR;
-            trace("init_mi->mods[%d]: %p - %p",
+            unsigned char* entry_start = entry->start + KERNEL_BASE_ADDR;
+            unsigned char* entry_end = entry->end + KERNEL_BASE_ADDR;
+            unsigned entry_size = entry_end - entry_start;
+            trace("mods[%d]: %p - %p (%d bytes)",
                   i,
-                  start,
-                  end);
+                  entry_start,
+                  entry_end,
+                  entry_size);
+            entry->start = entry_start;
+            entry->end = entry_end;
 
-            unsigned entry_size = end - start;
-            
-            entry->start = heap_alloc(mi_heap, entry_size);
-            memcpy(entry->start, start, entry_size);
-            entry->end = entry->start + entry_size;
-            if(init_entry->str) {
-                const char* str = init_entry->str + KERNEL_BASE_ADDR;
-                unsigned str_size = strlen(str);
-                entry->str = heap_alloc(mi_heap, str_size + 1);
-                strlcpy(entry->str, str, str_size + 1);
-            } else {
-                entry->str = NULL;
+            if(entry->str) {
+                entry->str = entry->str + KERNEL_BASE_ADDR;
             }
+
+            if(entry_end > end)
+                end = entry_end;
+            if(entry->str && (unsigned char*)entry->str + strlen(entry->str) + 1 > end)
+                end = (unsigned char*)entry->str + strlen(entry->str) + 1;
         }
     }
 
-    if(init_mi->flags & MULTIBOOT_FLAG_SYMBOLS2) {
-        mi->flags |= MULTIBOOT_FLAG_SYMBOLS2;
-        mi->sym2 = init_mi->sym2;
+    if(mi->flags & MULTIBOOT_FLAG_SYMBOLS2) {
+        mi->sym2.addr = (char*)mi->sym2.addr + KERNEL_BASE_ADDR;
+        trace("mi->sym2.addr: %p (%d bytes)",
+              mi->sym2.addr,
+              mi->sym2.size * mi->sym2.num);
 
-        void* sym2_addr = (unsigned char*)init_mi->sym2.addr + KERNEL_BASE_ADDR;
-        trace("init_mi->sym2.addr: %p - %p",
-              sym2_addr,
-              (uint32_t)sym2_addr + (init_mi->sym2.size * mi->sym2.num));
+        if((unsigned char*)mi->sym2.addr + (mi->sym2.size * mi->sym2.num) > end)
+            end = (unsigned char*)mi->sym2.addr + (mi->sym2.size * mi->sym2.num);
 
-
-        elf32_shdr_t* init_shdrs = sym2_addr;
-        elf32_shdr_t* shdrs = heap_alloc(mi_heap, init_mi->sym2.size * mi->sym2.num);
-        memcpy(shdrs, sym2_addr, init_mi->sym2.size * mi->sym2.num);
-        mi->sym2.addr = shdrs;
-
-        elf32_shdr_t* shstr_hdr = init_shdrs + init_mi->sym2.shndx;
+        elf32_shdr_t* shdrs = mi->sym2.addr;
+        elf32_shdr_t* shstr_hdr = shdrs + mi->sym2.shndx;
         const char* section_names = (const char*)shstr_hdr->sh_addr + KERNEL_BASE_ADDR;
 
-        /*
-         * Sections to copy:
-         *  init_mi->sym2.shndx
-         *  type == SHT_SYMTAB
-         *  name == ".strtab"
-         */
         for(int i = 0; i < mi->sym2.num; i++) {
-            bool copy = false;
-            elf32_shdr_t* init_shdr = init_shdrs + i;
-            if(init_shdr->sh_type == SHT_SYMTAB)
-                copy = true;
-            else if(i == init_mi->sym2.shndx)
-                copy = true;
-            else if(!strcmp(section_names + init_shdr->sh_name, ".strtab"))
-                copy = true;
+            elf32_shdr_t* shdr = shdrs + i;
+            shdr->sh_addr += KERNEL_BASE_ADDR;
+            trace("shdrs[%d]: %s %p (%d bytes)",
+                  i,
+                  section_names + shdr->sh_name,
+                  shdr->sh_addr,
+                  shdr->sh_size);
 
-            if(copy) {
-                elf32_shdr_t* shdr = shdrs + i;
-                shdr->sh_addr = (uint32_t)heap_alloc(mi_heap, init_shdr->sh_size);
-                memcpy((void*)shdr->sh_addr, 
-                       (unsigned char*)init_shdr->sh_addr + KERNEL_BASE_ADDR, 
-                       init_shdr->sh_size);
-            }
+            if((unsigned char*)shdr->sh_addr + shdr->sh_size > end)
+                end = (unsigned char*)shdr->sh_addr + shdr->sh_size;
         }
     }
 
-    if(init_mi->flags & MULTIBOOT_FLAG_MMAP) {
-        mi->flags |= MULTIBOOT_FLAG_MMAP;
+    if(mi->flags & MULTIBOOT_FLAG_MMAP) {
+        mi->mmap_addr = (struct multiboot_mmap_entry*)
+            ((char*)mi->mmap_addr + KERNEL_BASE_ADDR);
 
-        struct multiboot_mmap_entry* mmap_addr = (struct multiboot_mmap_entry*)
-            ((unsigned char*)init_mi->mmap_addr + KERNEL_BASE_ADDR);
-        trace("init_mi->mmap_addr: %p - %p",
-              mmap_addr,
-              mmap_addr + init_mi->mmap_len);
-        mi->mmap_len = init_mi->mmap_len;
-        mi->mmap_addr = heap_alloc(mi_heap, init_mi->mmap_len);
+        trace("mi->mmap_addr: %p (%d bytes)",
+              mi->mmap_addr,
+              mi->mmap_len);
 
-        memcpy(mi->mmap_addr,
-               mmap_addr, 
-               init_mi->mmap_len);
+        if((unsigned char*)mi->mmap_addr + mi->mmap_len > end)
+            end = (unsigned char*)mi->mmap_addr + mi->mmap_len;
     }
+
+    return end;
 }
 
 void multiboot_dump()
 {
-    trace("Multiboot info: %p", &multiboot_info);
+    trace("Multiboot info: %p", multiboot_info);
 
     char multiboot_flags[32] = {};
-    if(multiboot_info.flags & MULTIBOOT_FLAG_MEMINFO) {
+    if(multiboot_info->flags & MULTIBOOT_FLAG_MEMINFO) {
         strlcat(multiboot_flags, "MEM ", sizeof(multiboot_flags));
-        trace("Lower memory size: %dk", multiboot_info.mem_lower);
-        trace("High memory size: %dk", multiboot_info.mem_upper);
+        trace("Lower memory size: %dk", multiboot_info->mem_lower);
+        trace("High memory size: %dk", multiboot_info->mem_upper);
     }
-    if(multiboot_info.flags & MULTIBOOT_FLAG_MODINFO) {
+    if(multiboot_info->flags & MULTIBOOT_FLAG_MODINFO) {
         strlcat(multiboot_flags, "MOD ", sizeof(multiboot_flags));
-        trace("Modules count: %d", multiboot_info.mods_count);
-        trace("Modules load address: %p", multiboot_info.mods_addr);
+        trace("Modules count: %d", multiboot_info->mods_count);
+        trace("Modules load address: %p", multiboot_info->mods_addr);
     }
-    if(multiboot_info.flags & MULTIBOOT_FLAG_SYMBOLS1) {
+    if(multiboot_info->flags & MULTIBOOT_FLAG_SYMBOLS1) {
         strlcat(multiboot_flags, "SYM1 ", sizeof(multiboot_flags));
     }
-    if(multiboot_info.flags & MULTIBOOT_FLAG_SYMBOLS2) {
+    if(multiboot_info->flags & MULTIBOOT_FLAG_SYMBOLS2) {
         strlcat(multiboot_flags, "SYM2 ", sizeof(multiboot_flags));
     }
-    if(multiboot_info.flags & MULTIBOOT_FLAG_MMAP) {
+    if(multiboot_info->flags & MULTIBOOT_FLAG_MMAP) {
         strlcat(multiboot_flags, "MMAP ", sizeof(multiboot_flags));
-        trace("Memory map len: %d", multiboot_info.mmap_len);
-        trace("Memory map load address: %p", multiboot_info.mmap_addr);
+        trace("Memory map len: %d", multiboot_info->mmap_len);
+        trace("Memory map load address: %p", multiboot_info->mmap_addr);
     }
 
     trace("Multiboot flags: %s", multiboot_flags);
@@ -174,13 +141,9 @@ void multiboot_dump()
 
 const struct multiboot_info* multiboot_get_info()
 {
-    return &multiboot_info;
+    return multiboot_info;
 }
 
-struct heap_info multiboot_heap_info()
-{
-    return heap_info(mi_heap);
-}
 
 
 

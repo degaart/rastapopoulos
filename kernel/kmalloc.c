@@ -13,10 +13,10 @@
 struct heap* kernel_heap = NULL;
 static bool trace_enabled = false;
 
-void kmalloc_init()
+void kmalloc_init(void* start)
 {
-    unsigned char* heap_start = (unsigned char*)ALIGN((uint32_t)_KERNEL_END_, PAGE_SIZE);
-    unsigned max_size = ((unsigned char*)(4096 * 1024)) - heap_start;
+    unsigned char* heap_start = (unsigned char*)ALIGN((uint32_t)start, PAGE_SIZE);
+    unsigned max_size = 0xC0400000 - (uint32_t)heap_start;
     kernel_heap = heap_init(heap_start, PAGE_SIZE * 64, max_size);
 }
 

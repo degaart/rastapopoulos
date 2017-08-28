@@ -180,14 +180,6 @@ void vmm_init()
         vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
-    /* Multiboot heap */
-    struct heap_info multiboot_heap = multiboot_heap_info();
-    for(uint32_t page = (uint32_t)multiboot_heap.address;
-        page < (uint32_t)multiboot_heap.address + multiboot_heap.size; 
-        page += PAGE_SIZE) {
-        vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT);
-    }
-
     current_pagedir_va = pagedir;
 
     /* Enable paging */
