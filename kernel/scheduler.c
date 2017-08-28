@@ -563,7 +563,7 @@ static uint32_t syscall_mmap_handler(struct isr_regs* regs)
         vmm_map(page, frame, vmm_flags);
     }
 
-    trace("mmap(%p, %d, %d)", addr, size, flags);
+    //trace("mmap(%p, %d, %d)", addr, size, flags);
 
     return (uint32_t)addr;
 }

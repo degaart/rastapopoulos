@@ -129,20 +129,21 @@ static void run_tests()
     //RUN_TEST(test_initrd);
 }
 
-void kmain(const struct multiboot_info* init_multiboot_info)
+void kmain(struct multiboot_info* init_multiboot_info)
 {
     trace("*** Booted ***");
  
     /*
-     * Multiboot data can be loaded in kernel heap area
-     * We solve this problem by relocating multiboot data in
-     * lower conventional memory. This will limit our modules
-     * and debug symbols to < 600Kb, but this will do for now
+     * This function will adjust multiboot info structure addresses
+     * and return the highest address it uses
      */
-    multiboot_init(init_multiboot_info);
+    unsigned char* multiboot_end = multiboot_init(init_multiboot_info);
+    trace("multiboot_end: %p", multiboot_end);
+    if(multiboot_end >= (unsigned char*)0xC0400000)
+        panic("Multiboot data too large to fit into initial kernel memory");
 
     // Init kernel heap
-    kmalloc_init();
+    kmalloc_init(multiboot_end);
 
     // Load symbols
     load_symbols(multiboot_get_info());
@@ -165,16 +166,18 @@ void kmain(const struct multiboot_info* init_multiboot_info)
 
     /*
      * Reserve currently used memory
-     * Low memory: 0x00000000 - 0x000FFFFF
      * kernel code and data section
-     * multiboot heap
      * initial kernel heap
-     * TODO: Free conventional memory after we load multiboot modules
      */
-    for(uint32_t page = 0; page < 0xFFFFF; page += PAGE_SIZE) {
-        if(pmm_exists(page))
-            pmm_reserve(page);
-    }
+    struct kernel_heap_info heap_info;
+    kernel_heap_info(&heap_info);
+
+    trace("Kernel map:");
+    trace("\t.text:   %p - %p", _TEXT_START_, _TEXT_END_);
+    trace("\t.rodata: %p - %p", _RODATA_START_, _RODATA_END_);
+    trace("\t.data:   %p - %p", _DATA_START_, _DATA_END_);
+    trace("\t.bss:    %p - %p", _BSS_START_, _BSS_END_);
+    trace("\theap:    %p - %p", heap_info.heap_start, heap_info.heap_start + heap_info.heap_size);
 
     for(unsigned char* page = (unsigned char*)TRUNCATE((uint32_t)_KERNEL_START_ - KERNEL_BASE_ADDR, PAGE_SIZE); 
         page < _KERNEL_END_ - KERNEL_BASE_ADDR; 
@@ -183,10 +186,6 @@ void kmain(const struct multiboot_info* init_multiboot_info)
             pmm_reserve((uint32_t)page);
     }
 
-    struct heap_info mi_heap_info = multiboot_heap_info();
-
-    struct kernel_heap_info heap_info;
-    kernel_heap_info(&heap_info);
     for(uint32_t page = TRUNCATE(heap_info.heap_start, PAGE_SIZE) - KERNEL_BASE_ADDR; 
         page < heap_info.heap_start + heap_info.heap_size - KERNEL_BASE_ADDR; 
         page += PAGE_SIZE) {
@@ -197,6 +196,7 @@ void kmain(const struct multiboot_info* init_multiboot_info)
 
     // Virtual memory manager
     vmm_init();
+    // By this point, multiboot data is not valid anymore
 
     // PIC
     pic_init();

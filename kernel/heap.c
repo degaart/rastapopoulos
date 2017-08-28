@@ -152,7 +152,7 @@ struct heap_info heap_info(struct heap* heap)
 static struct heap_block_header* heap_grow(struct heap* heap, unsigned size)
 {
     size = ALIGN(size, PAGE_SIZE);
-    trace("Growing heap by %d", size);
+    //trace("Growing heap by %d", size);
 
     struct heap_block_header* last = last_block(heap);
     assert(last != NULL);

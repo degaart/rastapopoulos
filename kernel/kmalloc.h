@@ -7,7 +7,7 @@ struct kernel_heap_info {
     uint32_t heap_size;
 };
 
-void kmalloc_init();
+void kmalloc_init(void* start);
 void* kmalloc(unsigned size);
 void* kmalloc_a(unsigned size, unsigned alignment);
 void kfree(void* address);

@@ -68,10 +68,9 @@ struct multiboot_mod_entry {
 };
 
 
-void multiboot_init(const struct multiboot_info* init_mi);
+void* multiboot_init(struct multiboot_info* init_mi);
 void multiboot_dump();
 const struct multiboot_info* multiboot_get_info();
-struct heap_info multiboot_heap_info();
 
 
 
