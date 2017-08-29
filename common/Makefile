@@ -28,6 +28,7 @@ obj/Depends.mk:
 
 obj/%.c.o:
 	@ echo "[CC] $*.c"
+	@ $(CC) -c -S -o $@.S $(CFLAGS) $*.c
 	@ $(CC) -c -o $@ $(CFLAGS) $*.c
 	@ $(CC) -c -S -o $@.S $(CFLAGS) $*.c
 
