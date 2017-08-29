@@ -89,7 +89,6 @@ static void irq_stub(struct isr_regs* regs)
      * TODO: Check and handle spurious IRQ7
      */
     int irq = regs->int_no - 0x20;
-    //eoi(irq);
 
     enter_critical_section();
     if(irq_handlers[irq]) {
@@ -103,6 +102,8 @@ static void irq_stub(struct isr_regs* regs)
         }
     }
     leave_critical_section();
+    
+    eoi(irq);
 }
 
 

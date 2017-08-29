@@ -146,18 +146,20 @@ static void test_ata()
     outb(0x1F6, (uint8_t)(0xE0|((drive & 1)<<4)|((addr & 0x0F) >> 24)));
     outb(0x1F7, 0x20);                      /* command */
 
+    trace("waiting for drive to be ready");
     while (!(inb(0x1F7) & 0x08));           /* wait for drive to be ready */
+    trace("reading sectors");
     for(int i = 0; i < 256; i++) {
         int w = inw(0x1F0);
         ((uint16_t*)buffer)[i] = w;
     }
 
-    assert(buffer[0] = 0xEB);
-    assert(buffer[1] = 0x63);
-    assert(buffer[2] = 0x90);
-    assert(buffer[3] = 0x00);
-    assert(buffer[510] = 0x55);
-    assert(buffer[511] = 0xAA);
+    assert(buffer[0] == 0xEB);
+    assert(buffer[1] == 0x63);
+    assert(buffer[2] == 0x90);
+    assert(buffer[3] == 0x00);
+    assert(buffer[510] == 0x55);
+    assert(buffer[511] == 0xAA);
 }
 
 void kernel_task_entry()
