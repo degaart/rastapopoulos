@@ -8,7 +8,7 @@
 typedef void (*format_callback_t)(int, void*);
 
 void itoa(char* str, unsigned n);
-void itox(char* str, unsigned n);
+int itox(char* str, unsigned n);
 uint32_t xtoa(const char* str);
 int formatv(format_callback_t callback, 
             void* callback_params,

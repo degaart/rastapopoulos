@@ -37,7 +37,7 @@ void pic_init()
 
     /* map interrupt vectors (ICW2) */
     outb(PIC0_DATA, 0x20);              /* IRQ0-IRQ7 => int 0x20 - 0x27 */
-    outb(PIC1_DATA, 0x28);              /* IRQ8-IRQ16 => int 0x38-0x30 */
+    outb(PIC1_DATA, 0x28);              /* IRQ8-IRQ16 => int 0x28 - 0x30 */
 
     /* ICW3 (cascading configuration) */
     outb(PIC0_DATA, 1 << 2);            /* slave pic connected to irq2 */
@@ -52,7 +52,7 @@ void pic_init()
     outb(PIC1_DATA, 0);
 
     /* Install interrupt handler */
-    for(unsigned irq = 0x20; irq < 0x29; irq++)
+    for(unsigned irq = 0x20; irq < 0x31; irq++)
         idt_install(irq, irq_stub, false);
 }
 
@@ -89,7 +89,7 @@ static void irq_stub(struct isr_regs* regs)
      * TODO: Check and handle spurious IRQ7
      */
     int irq = regs->int_no - 0x20;
-    eoi(irq);
+    //eoi(irq);
 
     enter_critical_section();
     if(irq_handlers[irq]) {
