@@ -67,5 +67,10 @@ void* sbrk(ptrdiff_t incr);
 
 int hwportopen(int port);
 
+int blockdrv_read(void* buffer, size_t size, uint32_t sector);
+uint32_t blockdrv_sector_count();
+
+
+
 
 

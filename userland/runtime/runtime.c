@@ -12,6 +12,7 @@
 #include <stdarg.h>
 #include "malloc.h"
 #include "util.h"
+#include "../blockdrv/blockdrv.h"
 
 struct pcb pcb;
 int errno = 0;
@@ -397,6 +398,79 @@ int hwportopen(int port)
                       0,
                       0);
     return ret;
+}
+
+int blockdrv_read(void* buffer, size_t size, uint32_t sector)
+{
+    if(size < 512)
+        return -1;
+
+    size_t msg_size = sizeof(struct message) + sizeof(uint32_t) + 512;
+    struct message* msg = malloc(msg_size);
+    msg->reply_port = pcb.ack_port;
+    msg->code = BlockDrvMessageRead;
+
+    struct serializer request;
+    serializer_init(&request, msg->data, msg_size - sizeof(struct message));
+    serialize_int(&request, sector);
+
+    msg->len = serializer_finish(&request);
+
+    int ret = msgsend(BlockDrvPort, msg);
+    if(ret) {
+        free(msg);
+        return -1;
+    }
+
+    ret = msgrecv(pcb.ack_port, msg, msg_size, NULL);
+    if(ret) {
+        free(msg);
+        return -1;
+    }
+
+    assert(msg->code == BlockDrvMessageResult);
+
+    struct deserializer result;
+    deserializer_init(&result, msg->data, msg->len);
+
+    int retcode = deserialize_int(&result);
+    if(retcode == 0) {
+        memcpy(buffer, deserialize_buffer(&result, 512), 512);
+    }
+    free(msg);
+
+    return retcode;
+}
+
+uint32_t blockdrv_sector_count()
+{
+    size_t buffer_size = sizeof(struct message) + sizeof(uint32_t);
+    struct message* msg = malloc(buffer_size);
+    msg->reply_port = pcb.ack_port;
+    msg->code = BlockDrvMessageSectorCount;
+    msg->len = 0;
+
+    int ret = msgsend(BlockDrvPort, msg);
+    if(ret) {
+        free(msg);
+        return (uint32_t)-1;
+    }
+
+    ret = msgrecv(pcb.ack_port, msg, buffer_size, NULL);
+    if(ret) {
+        free(msg);
+        return (uint32_t)-1;
+    }
+
+    assert(msg->code == BlockDrvMessageResult);
+
+    struct deserializer result;
+    deserializer_init(&result, msg->data, msg->len);
+
+    uint32_t sectorcount = deserialize_int(&result);
+    free(msg);
+
+    return sectorcount;
 }
 
 void main();
