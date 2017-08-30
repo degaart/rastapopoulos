@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "string.h"
 #include "locks.h"
+#include "registers.h"
 
 #define PIC0_COMMAND            0x20
 #define PIC0_DATA               0x21
@@ -80,17 +81,26 @@ static void eoi(unsigned irq)
     outb(PIC0_COMMAND, COMMAND_EOI);
 }
 
+/*
+ * IRQ handling
+ * On receiving an IRQ, mask the IRQ and then ack it
+ * After the handler acknowledges the IRQ, unmask it
+ */
 static void irq_stub(struct isr_regs* regs)
 {
+    assert(!interrupts_enabled());
+
     static unsigned warn_unhandled = 0xFFFFFFFF;
 
     /*
-     * TODO: Should we acknowledge the interrupt after calling the handler?
+     * Acknowledge the IRQ after calling the handler, except the timer,
+     * as the timer may not return
      * TODO: Check and handle spurious IRQ7
      */
     int irq = regs->int_no - 0x20;
+    if(irq == 0)
+        eoi(irq);
 
-    enter_critical_section();
     if(irq_handlers[irq]) {
         irq_handlers[irq](irq, regs);
         warn_unhandled |= (1 << irq);
@@ -101,9 +111,9 @@ static void irq_stub(struct isr_regs* regs)
             warn_unhandled &= ~(1 << irq);
         }
     }
-    leave_critical_section();
     
-    eoi(irq);
+    if(irq)
+        eoi(irq);
 }
 
 
