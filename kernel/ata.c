@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include "io.h"
 #include "kdebug.h"
+#include "crc32.h"
 
 /*
  * http://www.osdever.net/tutorials/view/lba-hdd-access-via-pio
@@ -226,30 +227,26 @@ void test_ata()
     if(!success) {
         trace("\tNot Detected");
     } else {
-        trace("\tDetected. LBA48: %s", id.lba48 ? "true": "false");
+        trace("\tSize: %d sectors (%d Mb)", id.maxlba28, id.maxlba28 / 2 / 1024);
 
-        trace("Reading first sector of primary master");
+        uint32_t crc = crc_init(); 
+        for(uint32_t sector = 0; sector < id.maxlba28; sector++) {
+            if((sector % 1000) == 0)
+                trace("Reading sector %d", sector);
+            unsigned char buffer[512];
+            int ret = ata_read_lba28(buffer, sizeof(buffer),
+                                     1,
+                                     ATA0_BASE, 0,
+                                     sector);
+            if(ret < 512) {
+                panic("Read failed. Ret: %d", ret);
+            }
 
-        unsigned char buffer[512];
-        int ret = ata_read_lba28(buffer, sizeof(buffer),
-                                 1,
-                                 ATA0_BASE, 0,
-                                 0);
-        if(ret < 512) {
-            panic("Read failed. Ret: %d", ret);
+            crc = crc_update(crc, buffer, sizeof(buffer));
         }
+        crc = crc_finalize(crc);
 
-        trace("buffer[0]: %X", (int)buffer[0]);
-        trace("buffer[1]: %X", (int)buffer[1]);
-        trace("buffer[2]: %X", (int)buffer[2]);
-        trace("buffer[3]: %X", (int)buffer[3]);
-
-        assert(buffer[0] == 0xEB);
-        assert(buffer[1] == 0x63);
-        assert(buffer[2] == 0x90);
-        assert(buffer[3] == 0x00);
-        assert(buffer[510] == 0x55);
-        assert(buffer[511] == 0xAA);
+        trace("crc32: 0x%X", crc);
     }
 }
 
