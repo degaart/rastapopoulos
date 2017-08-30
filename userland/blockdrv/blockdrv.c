@@ -1,9 +1,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "io.h"
-#include "kdebug.h"
-#include "crc32.h"
+#include <io.h>
+#include <runtime.h>
+#include <crc32.h>
+#include <debug.h>
 
 /*
  * http://www.osdever.net/tutorials/view/lba-hdd-access-via-pio
@@ -219,8 +220,26 @@ static int ata_read_lba28(void* buffer, size_t buffer_size,
     return result;
 }
 
-void test_ata()
+static void openports(int base)
 {
+    for(int i = ATA_PORT_DATA; i <= ATA_PORT_STATUS; i++) {
+        int ret = hwportopen(base + i);
+        if(ret) {
+            panic("Failed to open port 0x%X", base + i);
+        }
+    }
+
+    int ret = hwportopen(base + ATA_PORT_DEVCTRL);
+    if(ret) {
+        panic("Failed to open port 0x%X", base + ATA_PORT_DEVCTRL);
+    }
+}
+
+void main()
+{
+    trace("Opening I/O ports");
+    openports(ATA0_BASE);
+
     trace("Detecting Primary Master");
     struct ata_identify_data id;
     bool success = identify(&id, ATA0_BASE, 0);

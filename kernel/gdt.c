@@ -65,7 +65,7 @@ struct tss_entry {
     uint16_t reserved10;
     uint16_t trap;
     uint16_t iomap_base;
-    uint8_t iomap[(65536 / 8) + 1];
+    uint8_t iomap[IOMAP_SIZE];
 } __attribute__((packed));
 
 struct gdt_entry {
@@ -170,17 +170,10 @@ static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t acces
     gdt_entries[num].access      = access;
 }
 
-void gdt_iomap_set(unsigned port, unsigned value)
+void gdt_iomap_set(void* buffer, size_t size)
 {
-    int idx = port / (sizeof(uint8_t)*8);
-    int off = port % (sizeof(uint8_t)*8);
-
-    uint8_t mask = 1 << off;
-
-    if(value)
-        tss.iomap[idx] |= mask;
-    else
-        tss.iomap[idx] &= ~mask;
+    assert(size <= sizeof(tss.iomap));
+    memcpy(tss.iomap, buffer, size);
 }
 
 void tss_set_kernel_stack(void* esp0)

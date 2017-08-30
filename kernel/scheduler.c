@@ -26,6 +26,7 @@ struct task {
     char name[TASK_NAME_MAX];
     struct pagedir* pagedir;
     struct context context;
+    uint8_t iomap[65536 / 8];
 
     /* Waking condition */
     int wait_canrecv_port;          /* Wait until port has a message to receive */
@@ -118,6 +119,7 @@ static void task_switch(struct task* task)
 
     vmm_copy_kernel_mappings(task->pagedir);
     tss_set_kernel_stack(KERNEL_STACK + PAGE_SIZE);
+    gdt_iomap_set(task->iomap, sizeof(task->iomap));
     switch_context(&task->context);
 
     panic("Invalid code path");
@@ -211,6 +213,31 @@ static void scheduler_timer(void* data, const struct isr_regs* regs)
     invalid_code_path();
 }
 
+void task_iomap_set(struct task* task, int port, int allow)
+{
+    assert(port >= 0 && port < 65536);
+
+    int idx = port / 8;
+    int off = port % 8;
+    uint8_t mask = 1 << off;
+
+    if(allow)
+        task->iomap[idx] &= ~mask;
+    else
+        task->iomap[idx] |= mask;
+}
+
+bool task_iomap_test(const struct task* task, int port)
+{
+    assert(port >= 0 && port < 65536);
+
+    int idx = port / 8;
+    int off = port % 8;
+    uint8_t mask = 1 << off;
+
+    return (task->iomap[idx] & mask);
+}
+
 /*
  * Create a new task structure (but does not push it to any queues)
  */
@@ -218,6 +245,8 @@ static struct task* task_create(const char* name)
 {
     struct task* result = kmalloc(sizeof(struct task));
     bzero(result, sizeof(struct task));
+    memset(result->iomap, 0xFF, sizeof(result->iomap));
+    task_iomap_set(result, DEBUG_PORT, 1);
 
     result->pid = next_pid_value++;
     assert(result->pid < 64);
@@ -568,6 +597,22 @@ static uint32_t syscall_mmap_handler(struct isr_regs* regs)
     return (uint32_t)addr;
 }
 
+/*
+ * Allow current process access to specified hardware port
+ * Params:
+ *  ebx         Port number
+ * Returns:
+ *  0           Success
+ *  -1          Error
+ */
+static uint32_t syscall_hwportopen_handler(struct isr_regs* regs)
+{
+    int port = regs->ebx;
+    task_iomap_set(current_task, port, 1);
+    gdt_iomap_set(current_task->iomap, sizeof(current_task->iomap));
+    return 0;
+}
+
 static void scheduler_perform_checks()
 {
     /* check1: current task and idle task should not be on any queue */
@@ -643,6 +688,7 @@ void scheduler_start()
     syscall_register(SYSCALL_EXEC, syscall_exec_handler);
     syscall_register(SYSCALL_MMAP, syscall_mmap_handler);
     syscall_register(SYSCALL_BLOCK, syscall_block_handler);
+    syscall_register(SYSCALL_HWPORTOPEN, syscall_hwportopen_handler);
 
     /* Map kernel stack */ 
     uint32_t stack_frame = pmm_alloc();

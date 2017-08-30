@@ -85,16 +85,9 @@ MessageHandler(KernelMessageReboot)
     reboot();
 }
 
-void test_ata();
-
 void kernel_task_entry()
 {
     trace("kernel_task started");
-
-    trace("Testing ATA commands");
-    test_ata();
-    reboot();
-
 
     // Open kernel_task port
     int ret = port_open(KernelPort);

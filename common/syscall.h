@@ -14,6 +14,7 @@
 #define SYSCALL_EXEC            11
 #define SYSCALL_MMAP            13
 #define SYSCALL_MUNMAP          14
+#define SYSCALL_HWPORTOPEN      15
 
 /* put current task into sleeping queue */
 #define SYSCALL_BLOCK           17

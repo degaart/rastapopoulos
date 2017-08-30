@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>
+
 #define KERNEL_CODE_SEG     0x08
 #define KERNEL_DATA_SEG     0x10
 #define USER_CODE_SEG       0x18
@@ -10,6 +12,7 @@
 #define RPL1                0x1
 #define RPL2                0x2
 #define RPL3                0x3
+#define IOMAP_SIZE          ((65536 / 8) + 1)
 
 void gdt_init();
 void gdt_flush(void* gdtr);
@@ -23,5 +26,5 @@ void* tss_get_kernel_stack();
  * Set port to 0 to allow usermode to access it
  * By default, all ports are forbidden to usermode
  */
-void gdt_iomap_set(unsigned port, unsigned value);
+void gdt_iomap_set(void* buffer, size_t size);
 

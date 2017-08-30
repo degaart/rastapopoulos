@@ -388,6 +388,17 @@ void* sbrk(ptrdiff_t incr)
     }
 }
 
+int hwportopen(int port)
+{
+    int ret = syscall(SYSCALL_HWPORTOPEN,
+                      port,
+                      0,
+                      0,
+                      0,
+                      0);
+    return ret;
+}
+
 void main();
 void runtime_entry()
 {
