@@ -5,6 +5,19 @@
 #include <runtime.h>
 #include <crc32.h>
 #include <debug.h>
+#include <serializer.h>
+#include <port.h>
+#include <malloc.h>
+#include "blockdrv.h"
+
+#define MessageHandler(msgcode) \
+    static void handle_ ## msgcode (const struct ata_identify_data* id,\
+                                    struct message* msg, \
+                                    struct deserializer* args, \
+                                    struct serializer* result)
+#define MessageCase(msg) \
+    case msg: handle_ ## msg (&id, recv_buf, &args, &results); break
+
 
 /*
  * http://www.osdever.net/tutorials/view/lba-hdd-access-via-pio
@@ -235,8 +248,57 @@ static void openports(int base)
     }
 }
 
+/*
+ * int blockdrv_read(uint32_t sector);
+ * Returns:
+ *  uint32_t status
+ *      0           Success
+ *      !=0         Failure
+ *  uint8_t[512] data
+ */
+MessageHandler(BlockDrvMessageRead)
+{
+    uint32_t sector = deserialize_int(args);
+
+    int* retcode = serialize_int(result, -1);
+
+    size_t buffer_size;
+    void* buffer = serialize_buffer(result, &buffer_size);
+    assert(buffer_size >= 512);
+
+    int read_ret = ata_read_lba28(buffer, buffer_size,
+                                  1,
+                                  ATA0_BASE, 0,
+                                  sector);
+    if(read_ret != 512) {
+        *retcode = -1;
+        serialize_buffer_finish(result, 0);
+    } else {
+        *retcode = 0;
+        serialize_buffer_finish(result, 512);
+    }
+}
+
+/*
+ * Get sector count
+ * Params: none
+ * Returns:
+ *  uint32_t sector_count, 0xFFFFFFFF in case of error
+ */
+MessageHandler(BlockDrvMessageSectorCount)
+{
+    serialize_int(result, id->maxlba28);
+}
+
 void main()
 {
+    int ret;
+
+    ret = port_open(BlockDrvPort);
+    if(ret < 0) {
+        panic("Failed to open BlockDrv port");
+    }
+
     trace("Opening I/O ports");
     openports(ATA0_BASE);
 
@@ -244,28 +306,43 @@ void main()
     struct ata_identify_data id;
     bool success = identify(&id, ATA0_BASE, 0);
     if(!success) {
-        trace("\tNot Detected");
-    } else {
-        trace("\tSize: %d sectors (%d Mb)", id.maxlba28, id.maxlba28 / 2 / 1024);
+        panic("ATA Primary Master not detected");
+    }
 
-        uint32_t crc = crc_init(); 
-        for(uint32_t sector = 0; sector < id.maxlba28; sector++) {
-            if((sector % 1000) == 0)
-                trace("Reading sector %d", sector);
-            unsigned char buffer[512];
-            int ret = ata_read_lba28(buffer, sizeof(buffer),
-                                     1,
-                                     ATA0_BASE, 0,
-                                     sector);
-            if(ret < 512) {
-                panic("Read failed. Ret: %d", ret);
-            }
-
-            crc = crc_update(crc, buffer, sizeof(buffer));
+    struct message* recv_buf = malloc(4096);
+    struct message* snd_buf = malloc(4096);
+    
+    trace("Block driver started");
+    while(1) {
+        ret = msgrecv(BlockDrvPort,
+                      recv_buf,
+                      4096,
+                      NULL);
+        if(ret) {
+            panic("msgrecv failed");
         }
-        crc = crc_finalize(crc);
 
-        trace("crc32: 0x%X", crc);
+        struct deserializer args;
+        deserializer_init(&args, recv_buf->data, recv_buf->len);
+
+        struct serializer results;
+        serializer_init(&results, snd_buf->data, 4096 - sizeof(struct message));
+
+        switch(recv_buf->code) {
+            MessageCase(BlockDrvMessageSectorCount);
+            MessageCase(BlockDrvMessageRead);
+            default:
+                panic("Unhandled message: %d", recv_buf->code);
+        }
+
+        snd_buf->len = serializer_finish(&results);
+        snd_buf->reply_port = INVALID_PORT;
+        snd_buf->code = BlockDrvMessageResult;
+
+        ret = msgsend(recv_buf->reply_port, snd_buf);
+        if(ret) {
+            panic("msgsend failed");
+        }
     }
 }
 
