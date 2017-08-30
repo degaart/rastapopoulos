@@ -19,6 +19,14 @@ void main()
         invalid_code_path();
     }
 
+    /* Start our block driver test */
+    int blockdrv_pid = fork();
+    if(!blockdrv_pid) {
+        exec("blockdrv.elf");
+        invalid_code_path();
+    }
+
+#if 0
     /* Try to read from initrd */
     int fd = open("init.c", O_RDONLY, 0);
     assert(fd != -1);
@@ -33,5 +41,6 @@ void main()
 
         debug_writen(buffer, ret);
     }
+#endif
 }
 

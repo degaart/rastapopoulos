@@ -65,3 +65,7 @@ extern int errno;
 
 void* sbrk(ptrdiff_t incr);
 
+int hwportopen(int port);
+
+
+

@@ -127,7 +127,6 @@ void kmain(struct multiboot_info* init_multiboot_info)
     
     // GDT
     gdt_init();
-    gdt_iomap_set(DEBUG_PORT, 0);
 
     // IDT
     idt_init();
