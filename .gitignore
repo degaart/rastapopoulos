@@ -50,6 +50,7 @@ userland/logger/obj
 userland/primes/obj
 userland/sleeper/obj
 userland/vfs/obj
+tools/*/obj
 
 
 
