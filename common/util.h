@@ -36,7 +36,13 @@
     ((typeof(val)) \
     (( ((uint32_t)(val)) % ((uint32_t)(align)) ) == 0))
 
-uint64_t rdtsc();
+static inline uint64_t rdtsc()
+{
+    uint64_t ret;
+    asm volatile ( "rdtsc" : "=A"(ret) );
+    return ret;
+}
+
 unsigned hash2(const void* data, unsigned size, unsigned start_hash);
 unsigned hash(const void* data, unsigned size);
 

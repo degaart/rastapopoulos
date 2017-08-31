@@ -199,8 +199,13 @@ void kmain(struct multiboot_info* init_multiboot_info)
     // IPC System
     ipc_init();
 
+#if 1
+    void test_string();
+    test_string();
+#else
     // Start system
     scheduler_start();
+#endif
 
     reboot();
 }
