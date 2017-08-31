@@ -24,13 +24,13 @@ void test_string()
     trace("str: %s", str);
 #endif
 
-    snprintf(str, sizeof(str), "%d %s 0x%X %p %lld 0x%llX",
+    snprintf(str, sizeof(str), "%d %s 0x%012X %p %lld 0x%llX",
              123456, "chat", 0xabcdef,
              0xdeadbeef,
              7777712173972183782LL,
              0xabcdef12345);
     trace("str: %s", str);
-    assert(!strcmp(str, "123456 chat 0xABCDEF 0xDEADBEEF 7777712173972183782 0xABCDEF12345"));
+    assert(!strcmp(str, "123456 chat 0x000000ABCDEF 0xDEADBEEF 7777712173972183782 0xABCDEF12345"));
 }
 
 void strreverse(char* buffer, size_t size)
@@ -155,6 +155,9 @@ int formatv(format_callback_t callback,
         char* p;
         int l = 0;
         bool breakwhile = false;
+        int width = 0;
+        int leading_zero = 0;
+        size_t len;
 
         if(*fmt == '%') {
             while(!breakwhile) {
@@ -168,6 +171,14 @@ int formatv(format_callback_t callback,
                         } else {
                             llval = va_arg(args, unsigned long long);
                             format_int(num_buffer, sizeof(num_buffer), llval, 10);
+                        }
+
+                        len = strlen(num_buffer);
+                        if(leading_zero && len < width) {
+                            for(int i = 0; i < width - len; i++) {
+                                callback('0', callback_params);
+                                ret++;
+                            }
                         }
 
                         p = num_buffer;
@@ -196,6 +207,14 @@ int formatv(format_callback_t callback,
                         } else {
                             llval = va_arg(args, unsigned long long);
                             format_int(num_buffer, sizeof(num_buffer), llval, 16);
+                        }
+
+                        len = strlen(num_buffer);
+                        if(leading_zero && len < width) {
+                            for(int i = 0; i < width - len; i++) {
+                                callback('0', callback_params);
+                                ret++;
+                            }
                         }
 
                         p = num_buffer;
@@ -228,6 +247,18 @@ int formatv(format_callback_t callback,
                         break;
                     case 'l':
                         l++;
+                        break;
+                    case '0':
+                        if(!width) {
+                            leading_zero++;
+                            break;
+                        }
+                    case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
+                        if(!width) {
+                            width = *fmt - '0';
+                        } else {
+                            width = (width * 10) + (*fmt - '0');
+                        }
                         break;
                     default:
                         if(*fmt) {
