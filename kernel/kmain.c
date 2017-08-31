@@ -155,6 +155,18 @@ void kmain(struct multiboot_info* init_multiboot_info)
     trace("\t.bss    %p - %p", _BSS_START_, _BSS_END_);
     trace("\theap    %p - %p", heap_info.heap_start, heap_info.heap_start + heap_info.heap_size);
 
+    /* Conventional memory http://wiki.osdev.org/Memory_Map_(x86) */
+    for(uint32_t page = 0x00000000; page < 0x00001000; page += PAGE_SIZE) {
+        if(pmm_exists(page))
+            pmm_reserve(page);
+    }
+
+    for(uint32_t page = 0x0009F000; page < 0x000FFFFF; page += PAGE_SIZE) {
+        if(pmm_exists(page))
+            pmm_reserve(page);
+    }
+
+    /* Kernel code+data */
     for(unsigned char* page = (unsigned char*)TRUNCATE((uint32_t)_KERNEL_START_ - KERNEL_BASE_ADDR, PAGE_SIZE); 
         page < _KERNEL_END_ - KERNEL_BASE_ADDR; 
         page += PAGE_SIZE) {
@@ -162,6 +174,7 @@ void kmain(struct multiboot_info* init_multiboot_info)
             pmm_reserve((uint32_t)page);
     }
 
+    /* Kernel heap */
     for(uint32_t page = TRUNCATE(heap_info.heap_start, PAGE_SIZE) - KERNEL_BASE_ADDR; 
         page < heap_info.heap_start + heap_info.heap_size - KERNEL_BASE_ADDR; 
         page += PAGE_SIZE) {
