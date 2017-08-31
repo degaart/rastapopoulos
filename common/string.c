@@ -1,55 +1,124 @@
 #include "string.h"
+#include "debug.h"
+
+void test_string()
+{
+    char str[128] = "abcdef";
+
+    strreverse(str, -1);
+    assert(!strcmp(str, "fedcba"));
+
+    int ret = lltoa(str, sizeof(str), 7777712173972183782LL);
+    assert(ret == 20);
+    assert(!strcmp(str, "7777712173972183782"));
+
+    ret = lltoa(str, sizeof(str), 0);
+    assert(ret == 2);
+    assert(!strcmp(str, "0"));
+
+#if 0
+    snprintf(str, sizeof(str), "%d", 123456);
+    assert(!strcmp(str, "123456"));
+
+    snprintf2(str, sizeof(str), "%lld", 7777712173972183782LL);
+    trace("str: %s", str);
+#endif
+
+    snprintf(str, sizeof(str), "%d %s 0x%X %p %lld 0x%llX",
+             123456, "chat", 0xabcdef,
+             0xdeadbeef,
+             7777712173972183782LL,
+             0xabcdef12345);
+    trace("str: %s", str);
+    assert(!strcmp(str, "123456 chat 0xABCDEF 0xDEADBEEF 7777712173972183782 0xABCDEF12345"));
+}
+
+void strreverse(char* buffer, size_t size)
+{
+    if(size == (size_t)-1)
+        size = strlen(buffer);
+
+    int start = 0;
+    int end = size - 1;
+    while(start < end) {
+        int tmp = *(buffer + start);
+        *(buffer + start) = *(buffer + end);
+        *(buffer + end) = tmp;
+
+        start++;
+        end--;
+    }
+}
+
+/*
+ * Convert unsigned 64-bit integer into string
+ * Params:
+ *  buffer          Output buffer
+ *  size            Buffer size in bytes
+ *  n               Number to convert
+ *  base            Base. 7, 10 or 16
+ * Returns:
+ *  Number of bytes that would be written if buffer was large enough
+ *  I.e. error if result > size
+ */
+int format_int(char* buffer, size_t size, unsigned long long n, int base)
+{
+    int ret = 0;
+
+    if(size) {
+        *buffer = '\0';
+    }
+
+    char* out = buffer;
+    while((!ret) || n) {
+        if(size) {
+            int d = n % base;
+            if(d < 10)
+                *out = '0' + d;
+            else
+                *out = 'A' + (d - 10);
+
+            out++;
+            size--;
+        }
+
+        n /= base;
+        ret++;
+    }
+
+    if(size) {
+        *out = 0;
+        strreverse(buffer, -1);
+    }
+    ret++;
+
+    return ret;
+}
+
+/*
+ * Convert unsigned 64-bit integer into string
+ * Params:
+ *  buffer          Output buffer
+ *  size            Buffer size in bytes
+ *  n               Number to convert
+ * Returns:
+ *  Number of bytes that would be written if buffer was large enough
+ *  I.e. error if result > size
+ */
+int lltoa(char* buffer, size_t size, unsigned long long n)
+{
+    int ret = format_int(buffer, size, n, 10);
+    return ret;
+}
 
 void itoa(char* str, unsigned n)
 {
-    if(n == 0) {
-        *str = '0';
-        *(str+1) = '\0';
-        return;
-    } else if(n < 10) {
-        *str = '0' + n;
-        *(str+1) = '\0';
-        return;
-    } else {
-        char* out = str;
-        
-        /* max: 65536 */
-        unsigned current_divisor = 1000000000;
-        bool zeroes = true;
-        while(current_divisor) {
-            int digit = n / current_divisor;
-            if(digit) {
-                *(out++) = '0' + digit;
-                zeroes = false;
-            } else if(!zeroes)
-                *(out++) = '0' + digit;
-
-            
-            n %= current_divisor;
-            current_divisor /= 10;
-        }
-        *out = '\0';
-    }
+    format_int(str, 15, n, 10);
 }
 
 int itox(char* str, unsigned n)
 {
-    char* out = str;
-    unsigned nibble = 8;
-    int ret;
-
-    while(nibble) {
-        unsigned shift = (nibble - 1) * 4;
-        int digit = (n >> shift) & 0x0F;
-        if(digit < 10)
-            *(out++) = (char)('0' + digit);
-        else
-            *(out++) = (char)('A' + digit - 10);
-
-        nibble--;
-        ret++;
-    }
-    *out = '\0';
+    int ret = format_int(str, 9, n, 16); 
     return ret;
 }
 
@@ -80,77 +149,97 @@ int formatv(format_callback_t callback,
 {
     int ret = 0;
     while(*fmt) {
-        char num_buffer[16];
+        char num_buffer[64];
         unsigned val;
+        unsigned long long llval;
         char* p;
+        int l = 0;
+        bool breakwhile = false;
 
-        switch(*fmt) {
-        case '%':
-            switch(*(fmt+1)) {
-            case 'd':
-            case 'u':
-                val = va_arg(args, unsigned);
-
-                itoa(num_buffer, val);
-                p = num_buffer;
-                while(*p) {
-                    callback(*(p++), callback_params);
-                    ret++;
-                }
-
+        if(*fmt == '%') {
+            while(!breakwhile) {
                 fmt++;
-                break;
-            case 's':
-                p = va_arg(args, char*);
+                switch(*fmt) {
+                    case 'd':
+                    case 'u':
+                        if(l < 2) {
+                            val = va_arg(args, unsigned);
+                            format_int(num_buffer, sizeof(num_buffer), val, 10);
+                        } else {
+                            llval = va_arg(args, unsigned long long);
+                            format_int(num_buffer, sizeof(num_buffer), llval, 10);
+                        }
 
-                while(*p) {
-                    callback(*(p++), callback_params);
-                    ret++;
-                }
+                        p = num_buffer;
+                        while(*p) {
+                            callback(*(p++), callback_params);
+                            ret++;
+                        }
 
-                fmt++;
-                break;
-            case 'X':
-            case 'x':
-                val = va_arg(args, unsigned);
+                        breakwhile = true;
+                        break;
+                    case 's':
+                        p = va_arg(args, char*);
 
-                itox(num_buffer, val);
-                p = num_buffer;
-                while(*p) {
-                    callback(*(p++), callback_params);
-                    ret++;
-                }
+                        while(*p) {
+                            callback(*(p++), callback_params);
+                            ret++;
+                        }
 
-                fmt++;
-                break;
-            case 'p':
-            case 'P':
-                val = va_arg(args, unsigned);
+                        breakwhile = true;
+                        break;
+                    case 'X':
+                    case 'x':
+                        if(l < 2) {
+                            val = va_arg(args, unsigned);
+                            format_int(num_buffer, sizeof(num_buffer), val, 16);
+                        } else {
+                            llval = va_arg(args, unsigned long long);
+                            format_int(num_buffer, sizeof(num_buffer), llval, 16);
+                        }
 
-                num_buffer[0] = '0';
-                num_buffer[1] = 'x';
-                itox(num_buffer + 2, val);
-                p = num_buffer;
-                while(*p) {
-                    callback(*(p++), callback_params);
-                    ret++;
-                }
+                        p = num_buffer;
+                        while(*p) {
+                            callback(*(p++), callback_params);
+                            ret++;
+                        }
 
-                fmt++;
-                break;
-            default:
-                if(*(fmt+1)) {
-                    callback(*(fmt+1), callback_params);
-                    fmt++;
-                    ret++;
-                }
-            } //switch(*(fmt+1))
-            break;
-        default:
+                        breakwhile = true;
+                        break;
+                    case 'p':
+                    case 'P':
+                        strlcpy(num_buffer, "0x", sizeof(num_buffer));
+
+                        if(l < 2) {
+                            val = va_arg(args, unsigned);
+                            format_int(num_buffer + 2, sizeof(num_buffer) - 2, val, 16);
+                        } else {
+                            llval = va_arg(args, unsigned long long);
+                            format_int(num_buffer + 2, sizeof(num_buffer) - 2, llval, 16);
+                        }
+
+                        p = num_buffer;
+                        while(*p) {
+                            callback(*(p++), callback_params);
+                            ret++;
+                        }
+
+                        breakwhile = true;
+                        break;
+                    case 'l':
+                        l++;
+                        break;
+                    default:
+                        if(*fmt) {
+                            callback(*fmt, callback_params);
+                            ret++;
+                        }
+                } //switch(*fmt)
+            } // while(!breakwhile)
+        } else { // *fmt == '%'
             callback(*fmt, callback_params);
             ret++;
-            break;
-        } //switch(*fmt)
+        } // *fmt == '%'
         fmt++;
     } // while(fmt)
     return ret;

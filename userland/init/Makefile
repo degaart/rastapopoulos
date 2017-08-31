@@ -20,14 +20,15 @@ obj:
 
 obj/init.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
 	@ echo "[LD] $@"
-	@ $(LD) \
+	@ $(CC) \
 		-T ../userland.ld \
 		-o $@ \
-		-Map $@.map \
+		-Wl,-Map,$@.map \
 		$(LDFLAGS) \
 		$^ \
 		../runtime/obj/runtime.a \
-		../../common/obj/common.a
+		../../common/obj/common.a \
+		-lgcc
 
 obj/Depends.mk:
 	@ CC="$(CC)" \

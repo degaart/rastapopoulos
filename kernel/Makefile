@@ -21,16 +21,17 @@ obj/test: obj
 
 -include obj/Depends.mk
 
-obj/kernel.elf: $(OBJS) $(ASM_OBJS)
+obj/kernel.elf: $(OBJS) $(ASM_OBJS) ../common/obj/common.a
 	@ echo "[LD] $@"
-	@ $(LD) \
+	@ $(CC) \
 		-T kernel.ld \
 		-o $@ \
-		-Map obj/kernel.map \
+		-Wl,-Map,obj/kernel.map \
 		$(LDFLAGS) \
 		$(OBJS) \
 		$(filter-out obj/kstub.asm.o,$(ASM_OBJS)) \
-		../common/obj/common.a
+		../common/obj/common.a \
+		-lgcc
 
 obj/Depends.mk:
 	@ CC="$(CC)" \

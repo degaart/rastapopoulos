@@ -7,9 +7,12 @@
 
 typedef void (*format_callback_t)(int, void*);
 
+void strreverse(char* buffer, size_t size);
+int lltoa(char* buffer, size_t size, unsigned long long n);
 void itoa(char* str, unsigned n);
 int itox(char* str, unsigned n);
 uint32_t xtoa(const char* str);
+int format_int(char* buffer, size_t size, unsigned long long n, int base);
 int formatv(format_callback_t callback, 
             void* callback_params,
             const char* fmt,
