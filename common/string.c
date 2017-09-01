@@ -1,38 +1,6 @@
 #include "string.h"
 #include "debug.h"
 
-void test_string()
-{
-    char str[128] = "abcdef";
-
-    strreverse(str, -1);
-    assert(!strcmp(str, "fedcba"));
-
-    int ret = lltoa(str, sizeof(str), 7777712173972183782LL);
-    assert(ret == 20);
-    assert(!strcmp(str, "7777712173972183782"));
-
-    ret = lltoa(str, sizeof(str), 0);
-    assert(ret == 2);
-    assert(!strcmp(str, "0"));
-
-#if 0
-    snprintf(str, sizeof(str), "%d", 123456);
-    assert(!strcmp(str, "123456"));
-
-    snprintf2(str, sizeof(str), "%lld", 7777712173972183782LL);
-    trace("str: %s", str);
-#endif
-
-    snprintf(str, sizeof(str), "%d %s 0x%012X %p %lld 0x%llX",
-             123456, "chat", 0xabcdef,
-             0xdeadbeef,
-             7777712173972183782LL,
-             0xabcdef12345);
-    trace("str: %s", str);
-    assert(!strcmp(str, "123456 chat 0x000000ABCDEF 0xDEADBEEF 7777712173972183782 0xABCDEF12345"));
-}
-
 void strreverse(char* buffer, size_t size)
 {
     if(size == (size_t)-1)
@@ -303,20 +271,6 @@ void bzero(void* buffer, uint32_t size)
 
 void memcpy(void* dest, const void* source, size_t size)
 {
-#if 0
-    uint8_t* src = (uint8_t*)source;
-    uint8_t* dst = (uint8_t*)dest;
-
-    while(size--) {
-        *(dst++) = *(src++);
-    }
-#elif 0
-    const unsigned char* src = (const unsigned char*)source;
-    unsigned char* dst = (unsigned char*)dst;
-    for(size_t i = 0; i < size; i++) {
-        dst[i] = src[i];
-    }
-#else
     // Stolen from xv6
     const char *s;
     char *d;
@@ -333,7 +287,6 @@ void memcpy(void* dest, const void* source, size_t size)
         while(n-- > 0)
             *d++ = *s++;
     }
-#endif
 }
 
 

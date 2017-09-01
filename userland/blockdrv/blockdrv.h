@@ -3,5 +3,5 @@
 enum BlockDrvMessages {
     BlockDrvMessageResult,
     BlockDrvMessageSectorCount,
-    BlockDrvMessageRead,
+    BlockDrvMessageReadSector,
 };

@@ -21,6 +21,7 @@ struct debug_sym {
 static unsigned             _debug_syms_count = 0;
 static struct debug_sym*    _debug_syms = NULL;
 static char*                _debug_strings = NULL;
+extern uint64_t             tsc_freq;
 
 static void __log_callback(int ch, void* unused)
 {
@@ -54,7 +55,13 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
 
     enter_critical_section();
 
-    format(__log_callback, NULL, "[%s:%d][%s] ", basename, line, func);
+
+    uint64_t ts = rdtsc();
+    if(tsc_freq)
+        ts /= tsc_freq;
+    else
+        ts = 0;
+    format(__log_callback, NULL, "[%lld][%s:%d][%s] ", ts, basename, line, func);
 
     va_list args;
     va_start(args, fmt);

@@ -256,7 +256,7 @@ static void openports(int base)
  *      !=0         Failure
  *  uint8_t[512] data
  */
-MessageHandler(BlockDrvMessageRead)
+MessageHandler(BlockDrvMessageReadSector)
 {
     uint32_t sector = deserialize_int(args);
 
@@ -330,7 +330,7 @@ void main()
 
         switch(recv_buf->code) {
             MessageCase(BlockDrvMessageSectorCount);
-            MessageCase(BlockDrvMessageRead);
+            MessageCase(BlockDrvMessageReadSector);
             default:
                 panic("Unhandled message: %d", recv_buf->code);
         }

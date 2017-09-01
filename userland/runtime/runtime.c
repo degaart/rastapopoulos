@@ -408,7 +408,7 @@ int blockdrv_read(void* buffer, size_t size, uint32_t sector)
     size_t msg_size = sizeof(struct message) + sizeof(uint32_t) + 512;
     struct message* msg = malloc(msg_size);
     msg->reply_port = pcb.ack_port;
-    msg->code = BlockDrvMessageRead;
+    msg->code = BlockDrvMessageReadSector;
 
     struct serializer request;
     serializer_init(&request, msg->data, msg_size - sizeof(struct message));
