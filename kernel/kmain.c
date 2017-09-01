@@ -106,17 +106,13 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
     reboot();
 }
 
-uint64_t tsc_freq;
 
 void kmain(struct multiboot_info* init_multiboot_info)
 {
     /*
-     * Calibrate tsc
+     * Init debug/loggin functions
      */
-    uint64_t tsc0 = rdtsc();
-    io_delay();
-    uint64_t tsc1 = rdtsc();
-    tsc_freq = tsc1 - tsc0;
+    kdebug_init();
 
     trace("*** Booted ***");
  
