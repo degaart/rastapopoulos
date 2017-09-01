@@ -11,47 +11,28 @@ void serializer_init(struct serializer* serializer,
     serializer->locked = 0;
 }
 
-int* serialize_int(struct serializer* serializer, int val)
-{
-    if(serializer->locked)
-        return NULL;
-
-    size_t max_size;
-    int* buf = serialize_buffer(serializer, &max_size);
-    if(max_size < sizeof(int)) {
-        serialize_buffer_finish(serializer, 0);
-        return NULL;
-    }
-    serialize_buffer_finish(serializer, sizeof(int));
-    *buf = val;
-    return buf;
+#define SERIALIZE(name, datatype)                                   \
+datatype * name (struct serializer* serializer, datatype val) {     \
+    assert(!serializer->locked);                                    \
+    size_t max_size;                                                \
+    datatype * buf = serialize_buffer(serializer, &max_size);       \
+    assert(buf && max_size >= sizeof(datatype));                    \
+    serialize_buffer_finish(serializer, sizeof(datatype));          \
+    *buf = val;                                                     \
+    return buf;                                                     \
 }
 
-size_t* serialize_size_t(struct serializer* serializer, size_t val)
-{
-    if(serializer->locked)
-        return NULL;
-
-    size_t max_size;
-    size_t* buf = serialize_buffer(serializer, &max_size);
-    if(max_size < sizeof(size_t)) {
-        serialize_buffer_finish(serializer, 0);
-        return NULL;
-    }
-    serialize_buffer_finish(serializer, sizeof(size_t));
-    *buf = val;
-    return buf;
-}
+SERIALIZE(serialize_int, int);
+SERIALIZE(serialize_size_t, size_t);
+SERIALIZE(serialize_int64, long long);
 
 void* serialize_buffer(struct serializer* serializer,
                        size_t* max_size)
 {
-    if(serializer->locked)
-        return NULL;
+    assert(!serializer->locked);
     
     size_t rem = serializer->size - serializer->pos;
-    if(!rem)
-        return NULL;
+    assert(rem > 0);
 
     serializer->locked = 1;
     *max_size = rem;
@@ -96,10 +77,16 @@ size_t deserialize_size_t(struct deserializer* deserializer)
     return *((const size_t*)buf);
 }
 
+long long deserialize_int64(struct deserializer* deserializer)
+{
+    const void* buf = deserialize_buffer(deserializer, sizeof(long long));
+    assert(buf != NULL);
+    return *((const long long*)buf);
+}
+
 const void* deserialize_buffer(struct deserializer* deserializer, size_t size)
 {
-    if(size > deserializer->size - deserializer->pos)
-        return NULL;
+    assert(size <= deserializer->size - deserializer->pos);
     const void* result = deserializer->buffer + deserializer->pos;
     deserializer->pos += size;
     return result;

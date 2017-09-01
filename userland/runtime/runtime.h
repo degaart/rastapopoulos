@@ -69,8 +69,7 @@ int hwportopen(int port);
 
 int blockdrv_read_sector(void* buffer, size_t size, uint32_t sector);
 uint32_t blockdrv_sector_count();
-
-
-
+uint64_t blockdrv_total_size();
+int blockdrv_read(void* buffer, size_t size, uint64_t offset);
 
 

@@ -473,6 +473,80 @@ uint32_t blockdrv_sector_count()
     return sectorcount;
 }
 
+uint64_t blockdrv_total_size()
+{
+    size_t buffer_size = sizeof(struct message) + sizeof(uint64_t);
+    struct message* msg = malloc(buffer_size);
+    msg->reply_port = pcb.ack_port;
+    msg->code = BlockDrvMessageTotalSize;
+    msg->len = 0;
+
+    int ret = msgsend(BlockDrvPort, msg);
+    if(ret) {
+        free(msg);
+        return (uint64_t)-1;
+    }
+
+    ret = msgrecv(pcb.ack_port, msg, buffer_size, NULL);
+    if(ret) {
+        free(msg);
+        return (uint64_t)-1;
+    }
+
+    assert(msg->code == BlockDrvMessageResult);
+    assert(msg->len == sizeof(uint64_t));
+
+    struct deserializer result;
+    deserializer_init(&result, msg->data, msg->len);
+
+    uint64_t total_size = deserialize_int64(&result);
+    free(msg);
+
+    return total_size;
+}
+
+int blockdrv_read(void* buffer, size_t size, uint64_t offset)
+{
+    size_t buffer_size = sizeof(struct message) + sizeof(int64_t) + sizeof(int) + size;
+    struct message* msg = malloc(buffer_size);
+
+    struct serializer request;
+    serializer_init(&request, msg->data, buffer_size - sizeof(struct message));
+    serialize_int64(&request, offset);
+    serialize_int(&request, (int)size);
+
+    msg->reply_port = pcb.ack_port;
+    msg->code = BlockDrvMessageRead;
+    msg->len = serializer_finish(&request);
+
+    int ret = msgsend(BlockDrvPort, msg);
+    if(ret) {
+        free(msg);
+        return -1;
+    }
+
+    ret = msgrecv(pcb.ack_port, msg, buffer_size, NULL);
+    if(ret) {
+        free(msg);
+        return -1;
+    }
+
+    assert(msg->code == BlockDrvMessageResult);
+
+    struct deserializer result;
+    deserializer_init(&result, msg->data, msg->len);
+
+    int retcode = deserialize_int(&result);
+    if(retcode > 0) {
+        assert(retcode <= size);
+
+        const void* src = deserialize_buffer(&result, retcode);
+        memcpy(buffer, src, retcode);
+    }
+    free(msg);
+    return retcode;
+}
+
 void main();
 void runtime_entry()
 {

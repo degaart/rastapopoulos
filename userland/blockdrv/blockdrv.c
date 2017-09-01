@@ -8,6 +8,7 @@
 #include <serializer.h>
 #include <port.h>
 #include <malloc.h>
+#include <string.h>
 #include "blockdrv.h"
 
 #define MessageHandler(msgcode) \
@@ -64,6 +65,8 @@
 #define ATA_STATUS_ATAPI1               0xEB
 #define ATA_STATUS_SATA0                0x3C
 #define ATA_STATUS_SATA1                0x3C
+
+#define SECTOR_SIZE                     512
 
 static void ata_soft_reset(int base)
 {
@@ -161,6 +164,9 @@ static bool identify(struct ata_identify_data* result, int base, int drive)
     return true;
 }
 
+/*
+ * TODO: Make this return the number of read sectors
+ */
 static int ata_read_lba28(void* buffer, size_t buffer_size,
                           int sectors,
                           int base, int slave,
@@ -170,7 +176,7 @@ static int ata_read_lba28(void* buffer, size_t buffer_size,
     assert(slave == 0 || slave == 1);
 
     uint16_t* wbuffer = buffer;
-    if(buffer_size < 512 * sectors)
+    if(buffer_size < SECTOR_SIZE * sectors)
         return -1;
 
     /* check BSY and DRQ. Must be clear */
@@ -220,8 +226,9 @@ static int ata_read_lba28(void* buffer, size_t buffer_size,
         for(int i = 0; i < 256; i++) {
             *wbuffer = inw(base + ATA_PORT_DATA);
             wbuffer++;
-            result += 2;
         }
+
+        result++;
 
         /* delay */
         inb(base + ATA_PORT_ALTSTATUS);
@@ -248,13 +255,92 @@ static void openports(int base)
     }
 }
 
+static int perform_read(unsigned char* buffer, size_t buffer_size,
+                        unsigned long long offset, int byte_count,
+                        unsigned long long device_size)
+{
+    int read_bytes = 0;
+
+    if(byte_count < 0 || buffer_size == 0) {
+        return -1;
+    } else if(byte_count == 0) {
+        return 0;
+    } else if(offset >= device_size) {
+        return 0;
+    }
+
+    if(byte_count > device_size - offset)
+        byte_count = (int32_t)(device_size - offset);
+
+    int ret;
+    while(byte_count) {
+        /* 
+         * If the offset or the size is not aligned, we need to do first an aligned read
+         * in a temporary buffer and copy back
+         */
+        if((offset % SECTOR_SIZE) || (byte_count < SECTOR_SIZE)) {
+            unsigned char tmp[SECTOR_SIZE];
+            uint32_t sector = offset / SECTOR_SIZE;             /* sector index */
+            int offset_in_sector = offset % SECTOR_SIZE;        /* offset we need inside sector */
+            int data_size = SECTOR_SIZE - offset_in_sector;     /* size of data we need */
+            if(data_size > buffer_size)
+                data_size = buffer_size;
+            if(data_size > byte_count)
+                data_size = byte_count;
+
+            ret = ata_read_lba28(tmp, sizeof(tmp), 
+                                 1, 
+                                 ATA0_BASE, 0, 
+                                 sector);
+            if(ret != 1) {
+                return read_bytes;
+            }
+
+            memcpy(buffer, tmp + offset_in_sector, data_size);
+            offset += data_size;
+
+            buffer += data_size;
+            byte_count -= data_size;
+            read_bytes += data_size;
+            buffer_size -= data_size;
+        }
+
+        /*
+         * Read maximum number of whole-sectors we can read
+         */
+        if(byte_count >= SECTOR_SIZE) {
+            int wholesectors = byte_count / SECTOR_SIZE;
+            uint32_t start_sector = offset / SECTOR_SIZE;
+
+            ret = ata_read_lba28(buffer, buffer_size,
+                                 wholesectors,
+                                 ATA0_BASE, 0,
+                                 start_sector);
+            if(ret <= 0) {
+                return read_bytes;
+            }
+
+            unsigned data_size = wholesectors * SECTOR_SIZE;
+            offset += data_size;
+            buffer += data_size;
+            byte_count -= data_size;
+            read_bytes += data_size;
+            buffer_size -= data_size;
+        }
+
+        assert(byte_count >= 0);
+    }
+
+    return read_bytes;
+}
+
 /*
  * int blockdrv_read(uint32_t sector);
  * Returns:
  *  uint32_t status
  *      0           Success
  *      !=0         Failure
- *  uint8_t[512] data
+ *  uint8_t[SECTOR_SIZE] data
  */
 MessageHandler(BlockDrvMessageReadSector)
 {
@@ -264,18 +350,18 @@ MessageHandler(BlockDrvMessageReadSector)
 
     size_t buffer_size;
     void* buffer = serialize_buffer(result, &buffer_size);
-    assert(buffer_size >= 512);
+    assert(buffer_size >= SECTOR_SIZE);
 
     int read_ret = ata_read_lba28(buffer, buffer_size,
                                   1,
                                   ATA0_BASE, 0,
                                   sector);
-    if(read_ret != 512) {
+    if(read_ret != 1) {
         *retcode = -1;
         serialize_buffer_finish(result, 0);
     } else {
         *retcode = 0;
-        serialize_buffer_finish(result, 512);
+        serialize_buffer_finish(result, SECTOR_SIZE);
     }
 }
 
@@ -288,6 +374,42 @@ MessageHandler(BlockDrvMessageReadSector)
 MessageHandler(BlockDrvMessageSectorCount)
 {
     serialize_int(result, id->maxlba28);
+}
+
+MessageHandler(BlockDrvMessageTotalSize)
+{
+    serialize_int64(result, (uint32_t)id->maxlba28 * SECTOR_SIZE);
+}
+
+/*
+ * Read bytes from block device
+ *
+ * Params:
+ *  uint64_t        Offset to start reading from
+ *  int32_t         Number of bytes to read
+ * Returns:
+ *  int             Number of bytes actually read (-1 in case of error, 0 if end of device)
+ *  uint8_t[]       Data
+ */
+MessageHandler(BlockDrvMessageRead)
+{
+    uint64_t offset = deserialize_int64(args);
+    int32_t byte_count = deserialize_int(args);
+    unsigned long long device_size = (uint64_t)id->maxlba28 * SECTOR_SIZE;
+
+    int* retcode = serialize_int(result, -1);
+
+    size_t buffer_size;
+    unsigned char* buffer = serialize_buffer(result, &buffer_size);
+
+    *retcode = perform_read(buffer, buffer_size,
+                            offset, byte_count,
+                            device_size);
+
+    if(*retcode >= 0)
+        serialize_buffer_finish(result, *retcode);
+    else
+        serialize_buffer_finish(result, 0);
 }
 
 void main()
@@ -331,6 +453,8 @@ void main()
         switch(recv_buf->code) {
             MessageCase(BlockDrvMessageSectorCount);
             MessageCase(BlockDrvMessageReadSector);
+            MessageCase(BlockDrvMessageTotalSize);
+            MessageCase(BlockDrvMessageRead);
             default:
                 panic("Unhandled message: %d", recv_buf->code);
         }
