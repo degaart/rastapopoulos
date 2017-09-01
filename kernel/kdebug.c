@@ -21,7 +21,8 @@ struct debug_sym {
 static unsigned             _debug_syms_count = 0;
 static struct debug_sym*    _debug_syms = NULL;
 static char*                _debug_strings = NULL;
-extern uint64_t             tsc_freq;
+static uint64_t             tsc_freq;
+static uint64_t             tsc_start;
 
 static void __log_callback(int ch, void* unused)
 {
@@ -56,12 +57,12 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     enter_critical_section();
 
 
-    uint64_t ts = rdtsc();
+    uint64_t ts = rdtsc() - tsc_start;
     if(tsc_freq)
         ts /= tsc_freq;
     else
         ts = 0;
-    format(__log_callback, NULL, "[%lld][%s:%d][%s] ", ts, basename, line, func);
+    format(__log_callback, NULL, "%06lld [%s:%d][%s] ", ts, basename, line, func);
 
     va_list args;
     va_start(args, fmt);
@@ -187,4 +188,20 @@ void __assertion_failed(const char* function, const char* file, int line, const 
     __log(function, file, line, "Assertion failed: %s", expression);
     abort();
 }
+
+void kdebug_init()
+{
+    /*
+     * Calibrate tsc
+     */
+    uint64_t tsc0 = rdtsc();
+    io_delay();
+    io_delay();
+    io_delay();
+    io_delay();
+    uint64_t tsc1 = rdtsc();
+    tsc_freq = tsc1 - tsc0;
+    tsc_start = rdtsc();
+}
+
 
