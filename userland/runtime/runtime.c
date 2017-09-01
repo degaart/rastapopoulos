@@ -400,7 +400,7 @@ int hwportopen(int port)
     return ret;
 }
 
-int blockdrv_read(void* buffer, size_t size, uint32_t sector)
+int blockdrv_read_sector(void* buffer, size_t size, uint32_t sector)
 {
     if(size < 512)
         return -1;
