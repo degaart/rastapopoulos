@@ -25,11 +25,13 @@ tar -cf initrd.tar -C userland/init/obj init.elf
 tar -uf initrd.tar -C userland/logger/obj logger.elf
 tar -uf initrd.tar -C userland/vfs/obj vfs.elf
 tar -uf initrd.tar -C userland/blockdrv/obj blockdrv.elf
+tar -uf initrd.tar -C userland/fat/obj fat.elf
 tar -uf initrd.tar -C userland/init init.c
 
 # Copy relevant kernel files
 for file in kernel/obj/kernel.elf \
-            initrd.tar
+            initrd.tar \
+            userland/init/init.c
 do
     ./copyfile.sh disk.img "$file" L:/ || {
         echo "copyfile failed"
