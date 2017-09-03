@@ -496,17 +496,7 @@ static uint32_t syscall_exec_handler(struct isr_regs* regs)
     }
 
     /* Unmap process memory */
-    for(unsigned char* va = (unsigned char*)USER_START;
-        va < USER_STACK; 
-        va += PAGE_SIZE) {
-
-        assert(va != USER_STACK);
-        uint32_t pa = vmm_get_physical(va);
-        if(pa) {
-            vmm_unmap(va);
-            pmm_free(pa);
-        }
-    }
+    vmm_reset_current_pagedir();
 
     /* Load elf file */
     elf_entry_t entry = load_elf(file->data, file->size);

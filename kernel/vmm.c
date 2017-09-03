@@ -225,56 +225,6 @@ static void vmm_map_linear(struct pagedir* pagedir, uint32_t va, uint32_t pa, ui
 }
 
 /*
- * Map pages using another pagedir
- */
-void vmm_pagedir_map(struct pagedir* pagedir, void* va, uint32_t pa, uint32_t flags)
-{
-    panic("Bad code");
-
-    assert(paging_enabled);
-
-    assert(flags & VMM_PAGE_PRESENT);
-    assert(IS_ALIGNED(va, PAGE_SIZE));
-    assert(IS_ALIGNED(pa, PAGE_SIZE));
-
-    struct va_info info = va_info((void*)va);
-
-    /* Check if present in page directory */
-    bool pde_present = pagedir->entries[info.dir_index] & PDE_PRESENT;
-    if(!pde_present) {
-        /*
-         * NOTE: Do not call kmalloc in this function as kmalloc
-         * might call vmm_map
-         *
-         * Alloc 4k frame for page table
-         */
-        uint32_t table_pa = pmm_alloc();
-        assert(table_pa != INVALID_FRAME);
-
-        /* And stash into pagedir */
-        pagedir->entries[info.dir_index] = ((uint32_t)table_pa) | PDE_PRESENT | PDE_USER | PDE_WRITABLE;
-
-        struct pagetable* table = vmm_transient_map(table_pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-        bzero(table, sizeof(struct pagetable));
-
-        table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
-
-        vmm_transient_unmap(table);
-    } else {
-        uint32_t table_pa = pagedir->entries[info.dir_index] & PDE_FRAME;
-        struct pagetable* table = vmm_transient_map(table_pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
-
-        if(table->entries[info.table_index] & PTE_PRESENT) {
-            trace("VA %p already mapped", va);
-            abort();
-        }
-
-        table->entries[info.table_index] = (pa & PTE_FRAME) | flags;
-        vmm_transient_unmap(table);
-    }
-}
-
-/*
  * Map pages while paging is enabled
  */
 void vmm_map(void* va, uint32_t pa, uint32_t flags)
@@ -460,6 +410,39 @@ struct pagedir* vmm_clone_pagedir()
     return result;
 }
 
+/*
+ * Reset current pagedir so only the kernel mappings stay
+ */
+void vmm_reset_current_pagedir()
+{
+    /* 
+     * Care: the kernel stack for current process is in the user-part of memory 
+     * For now: we just forego resetting the last PDE and all would be well
+     * but a better solution would be to move kernel stacks in kernel
+     * memory area
+     */
+    for(unsigned i = USER_PDE_START; i < USER_PDE_END; i++) {
+        if(current_pagedir->entries[i] & PDE_PRESENT) {
+            uint32_t table_frame = current_pagedir->entries[i] & PDE_FRAME;
+
+            struct va_info info = {
+                .dir_index = i,
+                .table_index = 0
+            };
+
+            struct pagetable* table = get_pagetable(info);
+            for(unsigned i = 0; i < 1024; i++) {
+                if(table->entries[i] & PTE_PRESENT) {
+                    uint32_t frame = table->entries[i] & PTE_FRAME;
+                    pmm_free(frame);
+                }
+            }
+            pmm_free(table_frame);
+            current_pagedir->entries[i] = 0;
+        }
+    }
+}
+
 void vmm_destroy_pagedir(struct pagedir* pagedir)
 {
     for(unsigned i = USER_PDE_START; i <= USER_PDE_END; i++) {
@@ -614,4 +597,8 @@ void vmm_copy_kernel_mappings(struct pagedir* pagedir)
 
     leave_critical_section();
 }
+
+
+
+
 

@@ -21,7 +21,6 @@ struct pagedir;
 
 void vmm_init();
 void vmm_map(void* va, uint32_t pa, uint32_t flags);
-void vmm_pagedir_map(struct pagedir* pagedir, void* va, uint32_t pa, uint32_t flags);
 void vmm_unmap(void* va);
 void vmm_remap(void* va, uint32_t flags);
 void vmm_flush_tlb(void* va);
@@ -29,6 +28,7 @@ bool vmm_paging_enabled();
 void vmm_copy_kernel_mappings(struct pagedir* pagedir); /* copy current kernel mappings into specified pagedir */
 void vmm_switch_pagedir(struct pagedir* pagedir); /* VA, but translated internally into physical address */
 void vmm_destroy_pagedir(struct pagedir* pagedir);
+void vmm_reset_current_pagedir();                       /* Reset all user mappings of current pagetable */
 
 #if 0
 struct pagedir* vmm_current_pagedir();
