@@ -133,67 +133,49 @@ static unsigned getsize(const char *in)
     return size;
 }
 
-
-/*
- * int open(mode, perm, filename);
- * Results:
- *  -1      Error
- *  else    File descriptor
- */
-MessageHandler(VFSMessageOpen)
+/*************************************************************************
+ * API functions implementations
+ *************************************************************************/
+static int open_fn(struct procinfo* pinfo,
+                   const char* filename, int mode, int perm)
 {
-    uint32_t mode = deserialize_int(args);
-    uint32_t perm = deserialize_int(args);
-    int filename_len = deserialize_int(args);
-    const char* filename = deserialize_buffer(args, filename_len);
-
     assert(mode == O_RDONLY); /* no write support for now */
-    
-    //trace("open(%s, 0x%X, 0x%X)", data->filename, data->mode, data->perm);
-    const struct tar_header* hdr = initrd;
-    while(true) {
-        if(hdr->filename[0] == 0)
-            break;
 
-        unsigned size = getsize(hdr->size);
-        if(!strcmp(hdr->filename, filename)) {
-            struct procinfo* pi = procinfo_get(msg->sender);
-            if(pi == NULL) {
-                pi = procinfo_create(msg->sender);
-                assert(pi != NULL);
-            }
-
-            struct descriptor* desc = descriptor_create(pi);
-            assert(desc != NULL);
-
-            desc->pos = 0;
-            desc->mode = mode;
-            desc->data = (unsigned char*)hdr + 512;
-            desc->size = size;
-
-            serialize_int(result, desc->fd);
-        }
-
-        hdr = (const struct tar_header*)
-            ((unsigned char*)hdr + 512 + ALIGN(size, 512));
+    FIL hfile;
+    FRESULT fres = f_open(&hfile, filename, FA_READ);
+    if(fres != FR_OK) {
+        return -1;
     }
 
-    serialize_int(result, -1);
+    struct descriptor* desc = descriptor_create(pinfo);
+    assert(desc != NULL);
+
+    desc->pos = 0;
+    desc->mode = mode;
+    desc->data = (unsigned char*)hdr + 512;
+    desc->size = size;
+    memcpy(&desc->hfile, &hfile, sizeof(hfile));
+
+    return desc->fd;
 }
 
-MessageHandler(VFSMessageClose)
+static int close_fn(struct procinfo* pinfo,
+                    int fd)
 {
-    assert(!"Not implemented yet");
+    struct descriptor* desc = descriptor_get(pinfo, fd);
+    assert(desc);
+    assert(desc->fd == fd);
+
+    f_close(&desc->hfile);
+    memset(&desc->file, 0, sizeof(desc->hfile));
+
+    descriptor_destroy(pinfo, desc);
+    return 0;
 }
 
-/*
- * {int, buffer} read(int fd, size_t size);
- */
-MessageHandler(VFSMessageRead)
+static int read_fn(struct procinfo* pinfo,
+                   int fd, void* buffer, size_t size)
 {
-    int fd = deserialize_int(args);
-    size_t size = deserialize_size_t(args);
-
     if(fd == INVALID_FD) {
         serialize_int(result, -1);
         return;
@@ -221,6 +203,47 @@ MessageHandler(VFSMessageRead)
     } else if(size > remaining) {
         size = remaining;
     }
+
+}
+
+static int write_fn(int fd, const void* buffer, size_t size)
+{
+}
+
+
+/*************************************************************************
+ * API functions wrappers
+ *************************************************************************/
+/*
+ * int open(mode, perm, filename);
+ * Results:
+ *  -1      Error
+ *  else    File descriptor
+ */
+MessageHandler(VFSMessageOpen)
+{
+    uint32_t mode = deserialize_int(args);
+    uint32_t perm = deserialize_int(args);
+    int filename_len = deserialize_int(args);
+    const char* filename = deserialize_buffer(args, filename_len);
+
+
+    serialize_int(result, -1);
+}
+
+MessageHandler(VFSMessageClose)
+{
+    assert(!"Not implemented yet");
+}
+
+/*
+ * {int, buffer} read(int fd, size_t size);
+ */
+MessageHandler(VFSMessageRead)
+{
+    int fd = deserialize_int(args);
+    size_t size = deserialize_size_t(args);
+
 
     int* retcode = serialize_int(result, -1);
     size_t max_buffer_size;
@@ -252,22 +275,11 @@ void main()
         panic("Failed to open VFS port");
     }
 
-    /* Load initrd by asking kernel to copy it into our address space */
-    trace("Loading initrd");
-    size_t initrd_size = initrd_get_size();
-    size_t offset = 0;
-    unsigned char* initrd_buffer = malloc(initrd_size);
-    initrd = (struct tar_header*)initrd_buffer;
-
-    while(offset < initrd_size) {
-        ret = initrd_read(initrd_buffer, initrd_size - offset, offset);
-        if(ret == -1)
-            panic("Failed to read initrd");
-        else if(!ret)
-            break;
-
-        offset += ret;
-        initrd_buffer += ret;
+    /* Mount volume */
+    FATFS fat = {0};
+    FRESULT fres = f_mount(&fat, "0:/", 1);
+    if(fres != FR_OK) {
+        panic("mount() failed: %d", fres);
     }
 
     /* Alloc memory for receiving and sending messages */

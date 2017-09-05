@@ -5,6 +5,7 @@
 #include <crc32.h>
 #include "ff.h"
 
+#if 0
 void main()
 {
     trace("Testing FAT support");
@@ -76,6 +77,7 @@ void main()
 
     trace("init.c crc32: 0x%04X", crc);
 }
+#endif
 
 
 
