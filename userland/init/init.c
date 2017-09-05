@@ -20,19 +20,11 @@ void main()
         invalid_code_path();
     }
 
-    int fat_pid = fork();
-    if(!fat_pid) {
-        exec("fat.elf");
-        invalid_code_path();
-    }
-
-#if 0
     /* Start vfs */
     int vfs_pid = fork();
     if(!vfs_pid) {
         exec("vfs.elf");
         invalid_code_path();
     }
-#endif
 }
 
