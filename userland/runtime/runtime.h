@@ -60,6 +60,7 @@ void* mmap(void* addr, size_t size, uint32_t flags);
 #define     MAX_PATH        260
 int open(const char* filename, unsigned flags, int mode);
 int read(int fd, void* buffer, size_t size);
+int close(int fd);
 
 extern int errno;
 

@@ -24,8 +24,10 @@ static void test_fat_read()
                 crc = crc_update(crc, buffer, read_bytes);
             }
         }
-        crc = crc_finalize(crc);
+        int ret = close(fd);
+        assert(ret == 0);
 
+        crc = crc_finalize(crc);
         trace("init.c CRC32: 0x%04X", crc);
     }
 }

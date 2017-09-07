@@ -369,6 +369,43 @@ int read(int fd, void* buffer, size_t size)
     return retcode;
 }
 
+int close(int fd)
+{
+    assert(fd != -1);
+
+    size_t buffer_size = sizeof(struct message) + sizeof(int);
+    struct message* msg = malloc(buffer_size);
+    msg->reply_port = pcb.ack_port;
+    msg->code = VFSMessageClose;
+
+    struct serializer request;
+    serializer_init(&request, msg->data, buffer_size - sizeof(struct message));
+    serialize_int(&request, fd);
+    msg->len = serializer_finish(&request);
+
+    int ret = msgsend(VFSPort, msg);
+    if(ret != 0) {
+        free(msg);
+        return -1;
+    }
+
+    ret = msgrecv(pcb.ack_port, msg, buffer_size, NULL);
+    if(ret != 0) {
+        free(msg);
+        return -1;
+    }
+
+    assert(msg->code == VFSMessageResult);
+
+    struct deserializer result;
+    deserializer_init(&result, msg->data, msg->len);
+
+    int retcode = deserialize_int(&result);
+    free(msg);
+
+    return retcode;
+}
+
 static unsigned char* program_break = 0;
 void* sbrk(ptrdiff_t incr)
 {
