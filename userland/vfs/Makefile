@@ -5,16 +5,19 @@ include ../../config.mk
 
 CFLAGS += -I ../../common -I ../runtime
 
-SRCS := $(wildcard *.c) $(wildcard test/*.c)
-HDRS := $(wildcard *.h) $(wildcard test/*.h)
+SRCS := $(wildcard *.c) $(wildcard test/*.c) $(wildcard fat/*.c)
+HDRS := $(wildcard *.h) $(wildcard test/*.h) $(wildcard fat/*.h)
 OBJS := $(patsubst %.c,obj/%.c.o,$(SRCS))
 ASM_SRCS := $(wildcard *.asm)
 ASM_OBJS := $(patsubst %.asm,obj/%.asm.o,$(ASM_SRCS))
 
-all: obj obj/vfs.elf
+all: obj obj/fat obj/vfs.elf
 
 obj:
 	@ mkdir -p obj
+
+obj/fat:
+	@ mkdir -p obj/fat
 
 -include obj/Depends.mk
 

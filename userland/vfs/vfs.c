@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "port.h"
 #include "vfs.h"
+#include "fat/ff.h"
 #include <string.h>
 #include <util.h>
 #include <malloc.h>
@@ -29,8 +30,7 @@ struct descriptor {
     int fd;
     size_t pos;
     uint32_t mode;
-    unsigned char* data;
-    size_t size;
+    FIL hfile;
 };
 list_declare(descriptor_list, descriptor);
 
@@ -84,6 +84,17 @@ static struct descriptor* descriptor_get(struct procinfo* pi, int fd)
         }
     }
     return result;
+}
+
+static void descriptor_destroy(struct procinfo* pi, struct descriptor* desc)
+{
+    assert(pi != NULL);
+    assert(desc != NULL);
+
+    list_remove(&pi->descriptors,
+                desc,
+                node);
+    free(desc);
 }
 
 static struct procinfo* procinfo_create(int pid)
@@ -152,8 +163,6 @@ static int open_fn(struct procinfo* pinfo,
 
     desc->pos = 0;
     desc->mode = mode;
-    desc->data = (unsigned char*)hdr + 512;
-    desc->size = size;
     memcpy(&desc->hfile, &hfile, sizeof(hfile));
 
     return desc->fd;
@@ -167,7 +176,7 @@ static int close_fn(struct procinfo* pinfo,
     assert(desc->fd == fd);
 
     f_close(&desc->hfile);
-    memset(&desc->file, 0, sizeof(desc->hfile));
+    memset(&desc->hfile, 0, sizeof(desc->hfile));
 
     descriptor_destroy(pinfo, desc);
     return 0;
@@ -176,50 +185,35 @@ static int close_fn(struct procinfo* pinfo,
 static int read_fn(struct procinfo* pinfo,
                    int fd, void* buffer, size_t size)
 {
-    if(fd == INVALID_FD) {
-        serialize_int(result, -1);
-        return;
-    } else if(size == 0) {
-        serialize_int(result, 0);
-        return;
-    }
+    if(fd == INVALID_FD)
+        return -1;
+    else if(size == 0)
+        return 0;
 
-    struct procinfo* pi = procinfo_get(msg->sender);
-    if(!pi) {
-        serialize_int(result, -1);
-        return;
-    }
+    struct descriptor* desc = descriptor_get(pinfo, fd);
+    if(!desc)
+        return -1;
 
-    struct descriptor* desc = descriptor_get(pi, fd);
-    if(!desc) {
-        serialize_int(result, -1);
-        return;
-    }
-
-    size_t remaining = desc->size - desc->pos;
-    if(remaining == 0) {
-        serialize_int(result, 0);
-        return;
-    } else if(size > remaining) {
-        size = remaining;
-    }
-
+    unsigned read_bytes;
+    FRESULT fres = f_read(&desc->hfile,
+                          buffer,
+                          size,
+                          &read_bytes);
+    if(fres != FR_OK)
+        return -1;
+    
+    return (int)read_bytes;
 }
 
 static int write_fn(int fd, const void* buffer, size_t size)
 {
+    return -1;
 }
 
 
 /*************************************************************************
  * API functions wrappers
  *************************************************************************/
-/*
- * int open(mode, perm, filename);
- * Results:
- *  -1      Error
- *  else    File descriptor
- */
 MessageHandler(VFSMessageOpen)
 {
     uint32_t mode = deserialize_int(args);
@@ -227,23 +221,34 @@ MessageHandler(VFSMessageOpen)
     int filename_len = deserialize_int(args);
     const char* filename = deserialize_buffer(args, filename_len);
 
+    struct procinfo* pi = procinfo_get(msg->sender);
+    if(!pi) {
+        pi = procinfo_create(msg->sender);
+    }
+    assert(pi != NULL);
 
-    serialize_int(result, -1);
+    int fd = open_fn(pi, filename, mode, perm);
+    serialize_int(result, fd);
 }
 
 MessageHandler(VFSMessageClose)
 {
-    assert(!"Not implemented yet");
+    int fd = deserialize_int(args);
+
+    struct procinfo* pi = procinfo_get(msg->sender);
+    assert(pi != NULL);
+
+    int retcode = close_fn(pi, fd);
+    serialize_int(result, retcode);
 }
 
-/*
- * {int, buffer} read(int fd, size_t size);
- */
 MessageHandler(VFSMessageRead)
 {
     int fd = deserialize_int(args);
     size_t size = deserialize_size_t(args);
 
+    struct procinfo* pi = procinfo_get(msg->sender);
+    assert(pi != NULL);
 
     int* retcode = serialize_int(result, -1);
     size_t max_buffer_size;
@@ -252,18 +257,29 @@ MessageHandler(VFSMessageRead)
         size = max_buffer_size;
     }
 
-    memcpy(buffer, 
-           desc->data + desc->pos,
-           size);
+    int read_size = read_fn(pi,
+                            fd,
+                            buffer,
+                            size);
+    if(read_size > 0)
+        serialize_buffer_finish(result, read_size);
+    else
+        serialize_buffer_finish(result, 0);
 
-    desc->pos += size;
-    serialize_buffer_finish(result, size);
-    *retcode = size;
+    *retcode = read_size;
 }
 
 MessageHandler(VFSMessageWrite)
 {
-    assert(!"Not implemented yet");
+    int fd = deserialize_int(args);
+    size_t size = deserialize_size_t(args);
+    const void* buffer = deserialize_buffer(args, size);
+
+    struct procinfo* pi = procinfo_get(msg->sender);
+    assert(pi != NULL);
+
+    int* retcode = serialize_int(result, -1);
+    *retcode = write_fn(fd, buffer, size);
 }
 
 void main()
