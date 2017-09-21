@@ -2,6 +2,7 @@
 
 set -eou pipefail
 
+make --no-print-directory -C tools || exit 1
 make --no-print-directory -C common || exit 1
 make --no-print-directory -C kernel || exit 1
 make --no-print-directory -C userland || exit 1
@@ -25,7 +26,6 @@ tar -cf initrd.tar -C userland/init/obj init.elf
 tar -uf initrd.tar -C userland/logger/obj logger.elf
 tar -uf initrd.tar -C userland/vfs/obj vfs.elf
 tar -uf initrd.tar -C userland/blockdrv/obj blockdrv.elf
-#tar -uf initrd.tar -C userland/fat/obj fat.elf
 tar -uf initrd.tar -C userland/init init.c
 
 # Copy relevant kernel files

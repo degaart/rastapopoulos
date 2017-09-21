@@ -53,6 +53,8 @@ userland/vfs/obj
 
 userland/*/obj
 tools/*/obj
+tools/rpctest/tst_*
+
 
 
 
