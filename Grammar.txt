@@ -1,0 +1,47 @@
++-------------+
+| RPC grammar |
++-------------+
+
+statement::
+    function-declaration |
+    struct-declaration
+
+type::
+    TYPENAME |
+    TYPENAME MODIFIER |
+    MODIFIER TYPENAME |
+    STRUCT TYPENAME |
+    STRUCT TYPENAME MODIFIER |
+    MODIFIER STRUCT TYPENAME
+
+function-declaration::
+    type IDENTIFIER LBRACE function-param-list RBRACE SEMICOLON
+
+function-param-list::
+    function-param COLON function-param-list |
+    function-param |
+
+function-param::
+    type IDENTIFIER
+
+struct-declaration::
+    STRUCT IDENTIFIER LBRACKET struct-element-list RBRACKET SEMICOLON
+
+struct-element-list::
+    struct-element SEMICOLON struct-element-list |
+    struct-element
+
+struct-element::
+    type IDENTIFIER
+
+TYPENAME::      "int" | "string" | "long" | "blob" | "struct"
+MODIFIER::      "oneway" | "out"
+IDENTIFIER::    [a-zA-Z_][a-zA-Z0-9_]+
+LBRACE::        "("
+RBRACE::        ")"
+LBRACKET::      "{"
+RBRACKET::      "}"
+SEMICOLON::     ";"
+COLON::         ","
+STRUCT::        "struct"
+

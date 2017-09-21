@@ -1,0 +1,14 @@
+int ret_int();
+long ret_long();
+void in_int(int val);
+void in_long(long val);
+void in_string(string val);
+void in_blob(blob val);
+void out_int(out int result);
+void out_long(out long result);
+void out_string(out string result);
+void out_blob(out blob result);
+oneway void ow(string str);
+
+
+
