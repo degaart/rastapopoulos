@@ -1,7 +1,0 @@
-name: sqlite
-url: sqlite-autoconf-3081002.tar.gz
-extract-dir: sqlite-autoconf-3081002
-version: 3.8.10.2
-build: make 
-install: make install
-configure: "$EXTRACT_DIR/configure" --prefix="$PREFIX" --disable-static CFLAGS="-O2 -DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_COLUMN_METADATA=1 -DSQLITE_ENABLE_UNLOCK_NOTIFY=1 -DSQLITE_SECURE_DELETE=1"

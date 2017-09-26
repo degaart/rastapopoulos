@@ -1,7 +1,0 @@
-url: nasm-2.12.02.tar.xz
-version: 2.12.02
-extract-dir: nasm-2.12.02
-configure: cd "$EXTRACT_DIR" && ./configure --prefix="${PREFIX}"
-build: cd "$EXTRACT_DIR" && make -j$NJOBS
-install: cd "$EXTRACT_DIR" && make install
-detect: nasm -v|head -n1|grep -Eo "NASM version [^ ]+"|cut -d' ' -f3
