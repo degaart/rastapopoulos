@@ -3,16 +3,12 @@
 +-------------+
 
 statement::
-    function-declaration |
-    struct-declaration
+    function-declaration
 
 type::
     TYPENAME |
     TYPENAME MODIFIER |
-    MODIFIER TYPENAME |
-    STRUCT TYPENAME |
-    STRUCT TYPENAME MODIFIER |
-    MODIFIER STRUCT TYPENAME
+    MODIFIER TYPENAME
 
 function-declaration::
     type IDENTIFIER LBRACE function-param-list RBRACE SEMICOLON
@@ -24,17 +20,7 @@ function-param-list::
 function-param::
     type IDENTIFIER
 
-struct-declaration::
-    STRUCT IDENTIFIER LBRACKET struct-element-list RBRACKET SEMICOLON
-
-struct-element-list::
-    struct-element SEMICOLON struct-element-list |
-    struct-element
-
-struct-element::
-    type IDENTIFIER
-
-TYPENAME::      "int" | "string" | "long" | "blob" | "struct"
+TYPENAME::      "int" | "string" | "long" | "blob"
 MODIFIER::      "oneway" | "out"
 IDENTIFIER::    [a-zA-Z_][a-zA-Z0-9_]+
 LBRACE::        "("
@@ -43,5 +29,4 @@ LBRACKET::      "{"
 RBRACKET::      "}"
 SEMICOLON::     ";"
 COLON::         ","
-STRUCT::        "struct"
 
