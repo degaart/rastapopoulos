@@ -1,7 +1,0 @@
-url: libtool-2.4.2.tar.xz
-version: 2.4.2
-extract-dir: libtool-2.4.2
-configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}"
-build: make -j$NJOBS
-install: make install
-detect: libtool --version|grep -Eo 'libtool \(GNU libtool\) [^ ]+'|sed 's/libtool (GNU libtool) //'

@@ -1,8 +1,0 @@
-url: gmp-6.1.2.tar.bz2
-version: 6.1.2
-extract-dir: gmp-6.1.2
-configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-static
-build: make -j$NJOBS
-install: make install
-
-

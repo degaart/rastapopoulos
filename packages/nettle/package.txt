@@ -1,7 +1,0 @@
-url: nettle-2.7.tar.gz
-version: 2.7
-extract-dir: nettle-2.7
-configure: "${EXTRACT_DIR}"/configure --prefix="${PREFIX}" --disable-dependency-tracking
-build: make -j$NJOBS
-install: make install
-depends: gmp
