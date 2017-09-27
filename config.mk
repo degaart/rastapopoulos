@@ -12,7 +12,8 @@ CFLAGS := -masm=intel \
     -O0 -g \
     -std=gnu99 \
     -fno-asynchronous-unwind-tables \
-    -fno-strict-aliasing
+    -fno-strict-aliasing \
+	-DRASTAPOPOULOS
 
 LDFLAGS = -nostdlib -static -g
 

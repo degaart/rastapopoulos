@@ -1,0 +1,5 @@
+int blkimpl_read(out blob buffer, int offset);
+long blkimpl_total_size();
+int blkimpl_sector_count();
+int blkimpl_read_sector(out blob buffer, int sector);
+

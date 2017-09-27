@@ -6,13 +6,14 @@
 struct hc {
     FILE* h;
     FILE* c;
+    const char* hf;     /* header filename */
+    const char* cf;     /* source filename */
 };
 
 struct files {
     struct hc srv;
     struct hc comm;
     struct hc clt;
-    const char* prefix;
 };
 extern struct files _files;
 

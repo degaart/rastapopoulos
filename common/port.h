@@ -46,6 +46,6 @@ bool msgpeek(int port);
 #define KernelPort              0
 #define LoggerPort              1
 #define VFSPort                 2
-#define BlockDrvPort            3
+#define BlkPort                 3
 
 

@@ -11,9 +11,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include "tst_common.h"
-#include "tst_server.h"
-#include "tst_client.h"
+#include "obj/tst_common.h"
+#include "obj/tst_server.h"
+#include "obj/tst_client.h"
 
 #define SIGNATURE 0xB16B00B5
 

@@ -3,7 +3,7 @@
 
 include ../config.mk
 
-CFLAGS += -I ../common -DRASTAPOPOULOS_KERNEL
+CFLAGS += -I ../common -DKERNEL
 
 SRCS := $(wildcard *.c) $(wildcard test/*.c)
 HDRS := $(wildcard *.h) $(wildcard test/*.h)

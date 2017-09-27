@@ -10,14 +10,7 @@
 #include <malloc.h>
 #include <string.h>
 #include "blockdrv.h"
-
-#define MessageHandler(msgcode) \
-    static void handle_ ## msgcode (const struct ata_identify_data* id,\
-                                    struct message* msg, \
-                                    struct deserializer* args, \
-                                    struct serializer* result)
-#define MessageCase(msg) \
-    case msg: handle_ ## msg (&id, recv_buf, &args, &results); break
+#include "blockdrv_server.h"
 
 
 /*
@@ -68,6 +61,7 @@
 
 #define SECTOR_SIZE                     512
 
+
 static void ata_soft_reset(int base)
 {
     int dcr = base + ATA_PORT_DEVCTRL;
@@ -94,6 +88,7 @@ struct ata_identify_data {
     uint32_t maxlba28;
     uint64_t maxlba48;
 };
+struct ata_identify_data _id;
 
 static bool identify(struct ata_identify_data* result, int base, int drive)
 {
@@ -335,33 +330,35 @@ static int perform_read(unsigned char* buffer, size_t buffer_size,
 }
 
 /*
- * int blockdrv_read(uint32_t sector);
- * Returns:
- *  uint32_t status
- *      0           Success
- *      !=0         Failure
- *  uint8_t[SECTOR_SIZE] data
+ * Read sector
+ * Params:
+ *  buffer          Buffer
+ *  buffer_size     Size of buffer in bytes. Must be >= SECTOR_SIZE
+ *  int             Sector index
+ * Returns
+ *  0 in case of success.
+ *  Any other value denotes failure.
  */
-MessageHandler(BlockDrvMessageReadSector)
+int handle_blkimpl_read_sector(int sender_pid, 
+                               /* out */ void* buffer, 
+                               /* in, out */ size_t* buffer_size, 
+                               int sector)
 {
-    uint32_t sector = deserialize_int(args);
+    if(*buffer_size < SECTOR_SIZE) {
+        *buffer_size = 0;
+        return -1;
+    }
 
-    int* retcode = serialize_int(result, -1);
-
-    size_t buffer_size;
-    void* buffer = serialize_buffer(result, &buffer_size);
-    assert(buffer_size >= SECTOR_SIZE);
-
-    int read_ret = ata_read_lba28(buffer, buffer_size,
+    int read_ret = ata_read_lba28(buffer, *buffer_size,
                                   1,
                                   ATA0_BASE, 0,
                                   sector);
     if(read_ret != 1) {
-        *retcode = -1;
-        serialize_buffer_finish(result, 0);
+        *buffer_size = 0;
+        return -1;
     } else {
-        *retcode = 0;
-        serialize_buffer_finish(result, SECTOR_SIZE);
+        *buffer_size = SECTOR_SIZE;
+        return 0;
     }
 }
 
@@ -369,54 +366,56 @@ MessageHandler(BlockDrvMessageReadSector)
  * Get sector count
  * Params: none
  * Returns:
- *  uint32_t sector_count, 0xFFFFFFFF in case of error
+ *  Sector count
+ *  0xFFFFFFFF in case of error
  */
-MessageHandler(BlockDrvMessageSectorCount)
+int handle_blkimpl_sector_count(int sender_pid)
 {
-    serialize_int(result, id->maxlba28);
+    return _id.maxlba28;
 }
 
-MessageHandler(BlockDrvMessageTotalSize)
+/*
+ * Get total size of block device
+ * Returns:
+ *  long long   Total size of block device in bytes
+ */
+long long handle_blkimpl_total_size(int sender_pid)
 {
-    serialize_int64(result, (uint32_t)id->maxlba28 * SECTOR_SIZE);
+    return (long long)_id.maxlba28 * SECTOR_SIZE;
 }
 
 /*
  * Read bytes from block device
- *
  * Params:
- *  uint64_t        Offset to start reading from
- *  int32_t         Number of bytes to read
+ *  buffer          Output buffer
+ *  buffer_size     Number of bytes to read
+ *  offset          Offset
  * Returns:
- *  int             Number of bytes actually read (-1 in case of error, 0 if end of device)
- *  uint8_t[]       Data
+ *  Number of bytes actually read.
+ *  0 on end of device
+ *  -1 in case of error
  */
-MessageHandler(BlockDrvMessageRead)
+int handle_blkimpl_read(int sender_pid, 
+                        /* out */ void* buffer, 
+                        /* in, out */ size_t* buffer_size, 
+                        int offset)
 {
-    uint64_t offset = deserialize_int64(args);
-    int32_t byte_count = deserialize_int(args);
-    unsigned long long device_size = (uint64_t)id->maxlba28 * SECTOR_SIZE;
-
-    int* retcode = serialize_int(result, -1);
-
-    size_t buffer_size;
-    unsigned char* buffer = serialize_buffer(result, &buffer_size);
-
-    *retcode = perform_read(buffer, buffer_size,
-                            offset, byte_count,
-                            device_size);
-
-    if(*retcode >= 0)
-        serialize_buffer_finish(result, *retcode);
+    unsigned long long device_size = (unsigned long long)_id.maxlba28 * SECTOR_SIZE;
+    int result = perform_read(buffer, *buffer_size,
+                              offset, *buffer_size,
+                              device_size);
+    if(result >= 0)
+        *buffer_size = result;
     else
-        serialize_buffer_finish(result, 0);
+        *buffer_size = 0;
+    return result;
 }
 
 void main()
 {
     int ret;
 
-    ret = port_open(BlockDrvPort);
+    ret = port_open(BlkPort);
     if(ret < 0) {
         panic("Failed to open BlockDrv port");
     }
@@ -425,48 +424,15 @@ void main()
     openports(ATA0_BASE);
 
     trace("Detecting Primary Master");
-    struct ata_identify_data id;
-    bool success = identify(&id, ATA0_BASE, 0);
+    bool success = identify(&_id, ATA0_BASE, 0);
     if(!success) {
         panic("ATA Primary Master not detected");
     }
 
-    struct message* recv_buf = malloc(4096);
-    struct message* snd_buf = malloc(4096);
-    
     trace("Block driver started");
-    while(1) {
-        ret = msgrecv(BlockDrvPort,
-                      recv_buf,
-                      4096,
-                      NULL);
-        if(ret) {
-            panic("msgrecv failed");
-        }
+    rpc_dispatch(BlkPort);
 
-        struct deserializer args;
-        deserializer_init(&args, recv_buf->data, recv_buf->len);
+    panic("Invalid code path");
 
-        struct serializer results;
-        serializer_init(&results, snd_buf->data, 4096 - sizeof(struct message));
-
-        switch(recv_buf->code) {
-            MessageCase(BlockDrvMessageSectorCount);
-            MessageCase(BlockDrvMessageReadSector);
-            MessageCase(BlockDrvMessageTotalSize);
-            MessageCase(BlockDrvMessageRead);
-            default:
-                panic("Unhandled message: %d", recv_buf->code);
-        }
-
-        snd_buf->len = serializer_finish(&results);
-        snd_buf->reply_port = INVALID_PORT;
-        snd_buf->code = BlockDrvMessageResult;
-
-        ret = msgsend(recv_buf->reply_port, snd_buf);
-        if(ret) {
-            panic("msgsend failed");
-        }
-    }
 }
 

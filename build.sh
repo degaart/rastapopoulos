@@ -25,7 +25,7 @@ fi
 tar -cf initrd.tar -C userland/init/obj init.elf
 tar -uf initrd.tar -C userland/logger/obj logger.elf
 tar -uf initrd.tar -C userland/vfs/obj vfs.elf
-tar -uf initrd.tar -C userland/blockdrv/obj blockdrv.elf
+tar -uf initrd.tar -C userland/blk/obj blk.elf
 tar -uf initrd.tar -C userland/init init.c
 
 # Copy relevant kernel files

@@ -54,7 +54,7 @@ void generate_commonside(const struct RPCStatement* statements)
     generate_messagecodes(statements);
 
     fprintf(_files.comm.h,
-            "#ifdef __STDC_HOSTED__\n"
+            "#if __STDC_HOSTED__\n"
             "struct message {\n"
             "\tint reply_port;             /* Port number to send response to */\n"
             "\tunsigned code;              /* Message code, interpretation depends on receiver */\n"
@@ -68,6 +68,7 @@ void generate_commonside(const struct RPCStatement* statements)
             "#include <port.h>\n"
             "#endif\n"
             "\n");
+
 }
 
 
