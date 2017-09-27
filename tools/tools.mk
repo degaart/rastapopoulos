@@ -1,13 +1,18 @@
 .SUFFIXES:
 .PHONY: clean all
 
-CC=cc
+CC := cc
+CFLAGS += -ferror-limit=5
 
 SRCS:=$(wildcard *.c)
 HDRS:=$(wildcard *.h)
 OBJS:=$(patsubst %.c,obj/%.c.o,$(SRCS))
 
 all: obj obj/$(PROGRAM) obj/Depends.mk
+
+clean:
+	@ echo "[CLEAN] " $(wildcard obj/*)
+	@ rm -f obj/*
 
 -include obj/Depends.mk
 
@@ -26,6 +31,4 @@ obj/%.c.o:
 	@ echo "[CC] $@"
 	@ $(CC) -c -o $@ $(CFLAGS) $<
 
-clean:
-	@ rm -vf obj/*
 

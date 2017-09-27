@@ -11,23 +11,24 @@ OBJS := $(patsubst %.c,obj/%.c.o,$(SRCS))
 ASM_SRCS := $(wildcard *.asm)
 ASM_OBJS := $(patsubst %.asm,obj/%.asm.o,$(ASM_SRCS))
 
-all: obj obj/primes.elf
+all: obj obj/blk.elf
 
 obj:
 	@ mkdir -p obj
 
 -include obj/Depends.mk
 
-obj/primes.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
+obj/blk.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
 	@ echo "[LD] $@"
-	@ $(LD) \
-		-T ../userland.ld \
+	@ $(CC) \
+		-T blockdrv.ld \
 		-o $@ \
-		-Map $@.map \
+		-Wl,-Map,$@.map \
 		$(LDFLAGS) \
 		$^ \
 		../runtime/obj/runtime.a \
-		../../common/obj/common.a
+		../../common/obj/common.a \
+		-lgcc
 
 obj/Depends.mk:
 	@ CC="$(CC)" \

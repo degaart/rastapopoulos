@@ -32,9 +32,19 @@ static void test_fat_read()
     }
 }
 
+static void test_log()
+{
+    trace("It works!!!");
+    while(1);
+}
+
 static void run_tests()
 {
+#if 1
     test_fat_read();
+#else
+    test_log();
+#endif
 }
 
 void main()
@@ -46,10 +56,11 @@ void main()
         invalid_code_path();
     }
 
+#if 1
     /* Start block driver */
     int blockdrv_pid = fork();
     if(!blockdrv_pid) {
-        exec("blockdrv.elf");
+        exec("blk.elf");
         invalid_code_path();
     }
 
@@ -59,6 +70,7 @@ void main()
         exec("vfs.elf");
         invalid_code_path();
     }
+#endif
 
     /* Run tests */
     run_tests();

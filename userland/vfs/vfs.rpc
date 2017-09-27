@@ -1,0 +1,5 @@
+int vfs_write(int fd, int size, blob buffer);
+int vfs_read(out blob buffer, int fd, int size);
+int vfs_close(int fd);
+int vfs_open(string filename, int open_mode, int create_perms);
+

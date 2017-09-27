@@ -3,6 +3,8 @@
 #include "port.h"
 #include "vfs.h"
 #include "fat/ff.h"
+#include "vfs_server.h"
+
 #include <string.h>
 #include <util.h>
 #include <malloc.h>
@@ -214,72 +216,68 @@ static int write_fn(int fd, const void* buffer, size_t size)
 /*************************************************************************
  * API functions wrappers
  *************************************************************************/
-MessageHandler(VFSMessageOpen)
+int handle_vfs_open(int sender_pid, const char* filename, int open_mode, int create_perms)
 {
-    uint32_t mode = deserialize_int(args);
-    uint32_t perm = deserialize_int(args);
-    int filename_len = deserialize_int(args);
-    const char* filename = deserialize_buffer(args, filename_len);
-
-    struct procinfo* pi = procinfo_get(msg->sender);
+    struct procinfo* pi = procinfo_get(sender_pid);
     if(!pi) {
-        pi = procinfo_create(msg->sender);
+        pi = procinfo_create(sender_pid);
     }
     assert(pi != NULL);
 
-    int fd = open_fn(pi, filename, mode, perm);
-    serialize_int(result, fd);
+    if(open_mode != O_RDONLY) {
+        struct task_info sender_info;
+        bool ret = get_task_info(sender_pid, &sender_info);
+        assert(ret != false);
+
+        trace("Invalid mode 0x%X requested from %s (%d)",
+              open_mode,
+              sender_info.name,
+              sender_info.pid);
+    }
+
+    int fd = open_fn(pi, filename, open_mode, create_perms);
+    return fd;
 }
 
-MessageHandler(VFSMessageClose)
+int handle_vfs_close(int sender_pid, int fd)
 {
-    int fd = deserialize_int(args);
-
-    struct procinfo* pi = procinfo_get(msg->sender);
+    struct procinfo* pi = procinfo_get(sender_pid);
     assert(pi != NULL);
 
     int retcode = close_fn(pi, fd);
-    serialize_int(result, retcode);
+    return retcode;
 }
 
-MessageHandler(VFSMessageRead)
+int handle_vfs_read(int sender_pid, 
+                    /* out */ void* buffer, /* in, out */ size_t* buffer_size, 
+                    int fd, 
+                    int size)
 {
-    int fd = deserialize_int(args);
-    size_t size = deserialize_size_t(args);
-
-    struct procinfo* pi = procinfo_get(msg->sender);
+    struct procinfo* pi = procinfo_get(sender_pid);
     assert(pi != NULL);
 
-    int* retcode = serialize_int(result, -1);
-    size_t max_buffer_size;
-    void* buffer = serialize_buffer(result, &max_buffer_size);
-    if(max_buffer_size < size) {
-        size = max_buffer_size;
-    }
+    if(size > *buffer_size)
+        size = *buffer_size;
 
     int read_size = read_fn(pi,
                             fd,
                             buffer,
                             size);
-    if(read_size > 0)
-        serialize_buffer_finish(result, read_size);
-    else
-        serialize_buffer_finish(result, 0);
+    *buffer_size = read_size;
 
-    *retcode = read_size;
+    return read_size;
 }
 
-MessageHandler(VFSMessageWrite)
+int handle_vfs_write(int sender_pid, int fd, int size, const void* buffer, size_t buffer_size)
 {
-    int fd = deserialize_int(args);
-    size_t size = deserialize_size_t(args);
-    const void* buffer = deserialize_buffer(args, size);
-
-    struct procinfo* pi = procinfo_get(msg->sender);
+    struct procinfo* pi = procinfo_get(sender_pid);
     assert(pi != NULL);
 
-    int* retcode = serialize_int(result, -1);
-    *retcode = write_fn(fd, buffer, size);
+    if(size > buffer_size)
+        size = buffer_size;
+
+    int retcode = write_fn(fd, buffer, size);
+    return retcode;
 }
 
 void main()
@@ -298,53 +296,7 @@ void main()
         panic("mount() failed: %d", fres);
     }
 
-    /* Alloc memory for receiving and sending messages */
-    trace("Prepare buffers");
-    struct message* recv_buf = malloc(4096);
-    struct message* snd_buf = malloc(4096);
-
-    /* Begin processing messages */
-    trace("VFS started");
-    list_init(&proc_infos);
-
-    while(1) {
-        unsigned outsiz;
-        int ret = msgrecv(VFSPort, 
-                          recv_buf, 
-                          4096, 
-                          &outsiz);
-        if(ret != 0) {
-            panic("msgrecv failed");
-        }
-
-        struct deserializer args;
-        deserializer_init(&args, recv_buf->data, recv_buf->len);
-
-        struct serializer results;
-        serializer_init(&results, snd_buf->data, 4096 - sizeof(struct message));
-
-        int out_size;
-        struct vfs_result_data* out = (struct vfs_result_data*)
-            ((unsigned char*)snd_buf + sizeof(struct message));
-        memset(snd_buf, 0, 4096);
-        switch(recv_buf->code) {
-            MessageCase(VFSMessageOpen);
-            MessageCase(VFSMessageClose);
-            MessageCase(VFSMessageRead);
-            MessageCase(VFSMessageWrite);
-            default:
-                panic("Unhandled message: %d", recv_buf->code);
-        }
-
-        snd_buf->len = serializer_finish(&results);
-        snd_buf->reply_port = INVALID_PORT;
-        snd_buf->code = VFSMessageResult;
-
-        ret = msgsend(recv_buf->reply_port, snd_buf);
-        if(ret) {
-            panic("msgsend() failed");
-        }
-    }
+    rpc_dispatch(VFSPort);
 }
 
 

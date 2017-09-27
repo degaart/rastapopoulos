@@ -1,0 +1,2 @@
+oneway void logger_trace(string msg);
+

@@ -15,6 +15,7 @@ extern unsigned char __END__[];
 struct pcb {
     int ack_port;
 };
+extern struct pcb pcb;
 
 void debug_write(const char* str);
 void debug_writen(const char* str, size_t count);
@@ -28,9 +29,6 @@ void exec(const char* filename);
 
 struct task_info;
 bool get_task_info(int pid, struct task_info* buffer);
-
-size_t initrd_get_size();
-int initrd_read(void* dest, size_t size, size_t offset);
 
 #define     PROT_NONE           0x0
 #define     PROT_READ           0x1
@@ -68,9 +66,15 @@ void* sbrk(ptrdiff_t incr);
 
 int hwportopen(int port);
 
-int blockdrv_read_sector(void* buffer, size_t size, uint32_t sector);
-uint32_t blockdrv_sector_count();
-uint64_t blockdrv_total_size();
-int blockdrv_read(void* buffer, size_t size, uint64_t offset);
+int blk_read_sector(void* buffer, size_t size, uint32_t sector);
+uint32_t blk_sector_count();
+uint64_t blk_total_size();
+int blk_read(void* buffer, size_t size, uint64_t offset);
 
+#define handle_rpc_ret(ret) \
+    switch(ret) { \
+        case RPC_FAIL_SEND: panic("%s: msgsend() failed", __func__); break; \
+        case RPC_FAIL_RECV: panic("%s: msgrecv() failed", __func__); break; \
+    }
+        
 

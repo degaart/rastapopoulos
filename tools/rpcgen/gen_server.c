@@ -32,6 +32,11 @@ static void generate_result_serializer(FILE* file,
             case VoidType:
                 break;
             case IntType:
+                fprintf(file,
+                        "\tassert(avail >= 1); /* result typecode */\n"
+                        "\t*((char*)result_ptr) = 'I';\n"
+                        "\tresult_ptr++;\n"
+                        "\tavail--;\n");
                 fprintf(file, 
                         "\tassert(avail >= sizeof(int));\n"
                         "\t*((int*)result_ptr) = fn_result;\n"
@@ -40,6 +45,11 @@ static void generate_result_serializer(FILE* file,
                         "\n");
                 break;
             case LongType:
+                fprintf(file,
+                        "\tassert(avail >= 1); /* result typecode */\n"
+                        "\t*((char*)result_ptr) = 'L';\n"
+                        "\tresult_ptr++;\n"
+                        "\tavail--;\n");
                 fprintf(file, 
                         "\tassert(avail >= sizeof(long long));\n"
                         "\t*((int*)result_ptr) = fn_result;\n"
@@ -56,6 +66,14 @@ static void generate_result_serializer(FILE* file,
             if(arg->type->modifier == OutModifier) {
                 switch(arg->type->type) {
                     case IntType:
+                        fprintf(file,
+                                "\t/* Serialize %s typecode */\n"
+                                "\tassert(avail >= 1);\n"
+                                "\t*((char*)result_ptr) = 'I';\n"
+                                "\tresult_ptr++;\n"
+                                "\tavail--;\n"
+                                "\n",
+                                arg->name);
                         fprintf(_files.srv.c,
                                 "\t/* Serialize %s */\n"
                                 "\tassert(avail >= sizeof(int));\n"
@@ -66,6 +84,14 @@ static void generate_result_serializer(FILE* file,
                                 arg->name, arg->name);
                         break;
                     case StringType:
+                        fprintf(file,
+                                "\t/* Serialize %s typecode */\n"
+                                "\tassert(avail >= 1);\n"
+                                "\t*((char*)result_ptr) = 'S';\n"
+                                "\tresult_ptr++;\n"
+                                "\tavail--;\n"
+                                "\n",
+                                arg->name);
                         fprintf(_files.srv.c, 
                                 "\t/* Serialize %s */\n"
                                 "\tassert(avail >= sizeof(size_t));\n"
@@ -85,6 +111,14 @@ static void generate_result_serializer(FILE* file,
                                 arg->name, arg->name, arg->name);
                         break;
                     case LongType:
+                        fprintf(file,
+                                "\t/* Serialize %s typecode */\n"
+                                "\tassert(avail >= 1);\n"
+                                "\t*((char*)result_ptr) = 'L';\n"
+                                "\tresult_ptr++;\n"
+                                "\tavail--;\n"
+                                "\n",
+                                arg->name);
                         fprintf(_files.srv.c, 
                                 "\t/* Serialize %s */\n"
                                 "\tassert(avail >= sizeof(long long));\n"
@@ -95,6 +129,14 @@ static void generate_result_serializer(FILE* file,
                                 arg->name, arg->name);
                         break;
                     case BlobType:
+                        fprintf(file,
+                                "\t/* Serialize %s typecode */\n"
+                                "\tassert(avail >= 1);\n"
+                                "\t*((char*)result_ptr) = 'B';\n"
+                                "\tresult_ptr++;\n"
+                                "\tavail--;\n"
+                                "\n",
+                                arg->name);
                         fprintf(_files.srv.c, 
                                 "\t/* Serialize %s */\n"
                                 "\tassert(avail >= sizeof(size_t));\n"
@@ -169,24 +211,22 @@ static void generate_handler_call(FILE* file,
 
     switch(fn->return_type->type) {
         case VoidType:
-            fprintf(_files.srv.c, "\thandle_%s(", fn->name);
+            fprintf(_files.srv.c, "\thandle_%s(sender_pid", fn->name);
             break;
         case IntType:
-            fprintf(_files.srv.c, "\tint fn_result = handle_%s(", fn->name);
+            fprintf(_files.srv.c, "\tint fn_result = handle_%s(sender_pid", fn->name);
             break;
         case LongType:
-            fprintf(_files.srv.c, "\tlong long fn_result = handle_%s(", fn->name);
+            fprintf(_files.srv.c, "\tlong long fn_result = handle_%s(sender_pid", fn->name);
             break;
         default:
             assert(!"Invalid code path");
     }
 
-    arg_index = 0;
-    for(const struct RPCArgument* arg = fn->args; arg; arg = arg->next, arg_index++) {
-        if(arg->type->modifier == NullModifier) {
-            if(arg_index)
-                fprintf(_files.srv.c, ", ");
+    for(const struct RPCArgument* arg = fn->args; arg; arg = arg->next) {
+        fprintf(_files.srv.c, ", ");
 
+        if(arg->type->modifier == NullModifier) {
             switch(arg->type->type) {
                 case IntType:
                 case LongType:
@@ -202,9 +242,6 @@ static void generate_handler_call(FILE* file,
             }
 
         } else if(arg->type->modifier == OutModifier) {
-            if(arg_index)
-                fprintf(_files.srv.c, ", ");
-
             switch(arg->type->type) {
                 case IntType:
                 case LongType:
@@ -238,7 +275,9 @@ static void generate_arg_deserializer(FILE* file,
     fprintf(file, 
             "\t/* Deserialize arguments */\n"
             "\tconst unsigned char* in_ptr = argbuf;\n"
-            "\tsize_t in_size = argbuf_size;\n\n");
+            "\tsize_t in_size = argbuf_size;\n"
+            "\tchar typecode;\n"
+            "\n");
 
     for(const struct RPCArgument* arg = fn->args; arg; arg = arg->next) {
         if(arg->type->modifier == NullModifier) {
@@ -246,6 +285,14 @@ static void generate_arg_deserializer(FILE* file,
 
             switch(arg->type->type) {
                 case IntType:
+                    fprintf(file,
+                            "\tassert(in_size >= 1); /* %s typecode */\n"
+                            "\ttypecode = *((const char*)in_ptr);\n"
+                            "\tassert(typecode == 'i');\n"
+                            "\tin_ptr++;\n"
+                            "\tin_size--;\n"
+                            "\n",
+                            arg->name);
                     fprintf(_files.srv.c, 
                             "\tassert(in_size >= sizeof(int));\n"
                             "\tint arg_%s = *((const int*)in_ptr);\n"
@@ -255,6 +302,14 @@ static void generate_arg_deserializer(FILE* file,
                             arg->name);
                     break;
                 case StringType:
+                    fprintf(file,
+                            "\tassert(in_size >= 1); /* %s typecode */\n"
+                            "\ttypecode = *((const char*)in_ptr);\n"
+                            "\tassert(typecode == 's');\n"
+                            "\tin_ptr++;\n"
+                            "\tin_size--;\n"
+                            "\n",
+                            arg->name);
                     fprintf(_files.srv.c, 
                             "\tassert(in_size >= sizeof(size_t));\n"
                             "\tsize_t arg_%s_size = *((const size_t*)in_ptr);\n"
@@ -272,6 +327,14 @@ static void generate_arg_deserializer(FILE* file,
                             arg->name);
                     break;
                 case LongType:
+                    fprintf(file,
+                            "\tassert(in_size >= 1); /* %s typecode */\n"
+                            "\ttypecode = *((const char*)in_ptr);\n"
+                            "\tassert(typecode == 'l');\n"
+                            "\tin_ptr++;\n"
+                            "\tin_size--;\n"
+                            "\n",
+                            arg->name);
                     fprintf(_files.srv.c, 
                             "\tassert(in_size >= sizeof(long long));\n"
                             "\tlong long arg_%s = *((const long long*)in_ptr);\n"
@@ -281,6 +344,14 @@ static void generate_arg_deserializer(FILE* file,
                             arg->name);
                     break;
                 case BlobType:
+                    fprintf(file,
+                            "\tassert(in_size >= 1); /* %s typecode */\n"
+                            "\ttypecode = *((const char*)in_ptr);\n"
+                            "\tassert(typecode == 'b');\n"
+                            "\tin_ptr++;\n"
+                            "\tin_size--;\n"
+                            "\n",
+                            arg->name);
                     fprintf(_files.srv.c, 
                             "\tassert(in_size >= sizeof(size_t));\n"
                             "\tsize_t arg_%s_size = *((const size_t*)in_ptr);\n"
@@ -308,9 +379,19 @@ static void generate_arg_deserializer(FILE* file,
                     break;
                 case StringType:
                     fprintf(file,
+                            "\tassert(in_size >= 1); /* %s typecode */\n"
+                            "\ttypecode = *((const char*)in_ptr);\n"
+                            "\tassert(typecode == 'S');\n"
+                            "\tin_ptr++;\n"
+                            "\tin_size--;\n"
+                            "\n",
+                            arg->name);
+                    fprintf(file,
                             "\t/* Deserialize buffer size for string %s */\n"
                             "\tassert(in_size >= sizeof(size_t));\n"
                             "\tsize_t out_%s_size = *((const size_t*)in_ptr);\n"
+                            "\tin_ptr += sizeof(size_t);\n"
+                            "\tin_size -= sizeof(size_t);\n"
                             "\n",
                             arg->name, arg->name);
                     break;
@@ -318,9 +399,19 @@ static void generate_arg_deserializer(FILE* file,
                     break;
                 case BlobType:
                     fprintf(file,
+                            "\tassert(in_size >= 1); /* %s typecode */\n"
+                            "\ttypecode = *((const char*)in_ptr);\n"
+                            "\tassert(typecode == 'B');\n"
+                            "\tin_ptr++;\n"
+                            "\tin_size--;\n"
+                            "\n",
+                            arg->name);
+                    fprintf(file,
                             "\t/* Deserialize buffer size for blob %s */\n"
                             "\tassert(in_size >= sizeof(size_t));\n"
                             "\tsize_t out_%s_size = *((const size_t*)in_ptr);\n"
+                            "\tin_ptr += sizeof(size_t);\n"
+                            "\tin_size -= sizeof(size_t);\n"
                             "\n",
                             arg->name, arg->name);
                     break;
@@ -338,6 +429,7 @@ static void generate_marshaller_decl(FILE* file,
 {
     fprintf(_files.srv.c, 
             "static size_t marshall_%s("
+            "int sender_pid, "
             "void* resbuf, "
             "size_t resbuf_size, "
             "const void* argbuf, "
@@ -376,7 +468,7 @@ static void generate_dispatcher(const struct RPCStatement* statements)
 {
     /* Dispatcher */
     fprintf(_files.srv.c, 
-            "void dispatch(int port)\n"
+            "void rpc_dispatch(int port)\n"
             "{\n"
             "\tstruct message* snd_buf = malloc(4096);\n"
             "\tstruct message* rcv_buf = malloc(4096);\n"
@@ -397,7 +489,10 @@ static void generate_dispatcher(const struct RPCStatement* statements)
             strupper(uname);
             fprintf(_files.srv.c, 
                     "\t\t\tcase MSG_%s:\n"
-                    "\t\t\t\tresult = marshall_%s(snd_buf->data, snd_buf_size, rcv_buf->data, rcv_buf->len);\n"
+                    "\t\t\t\tresult = marshall_%s(\n"
+                    "\t\t\t\t\trcv_buf->sender,\n"
+                    "\t\t\t\t\tsnd_buf->data, snd_buf_size,\n"
+                    "\t\t\t\t\trcv_buf->data, rcv_buf->len);\n"
                     "\t\t\t\tbreak;\n",
                    uname,
                    st->fn->name);
@@ -406,7 +501,7 @@ static void generate_dispatcher(const struct RPCStatement* statements)
     }
     fprintf(_files.srv.c, 
             "\t\t\tdefault:\n"
-            "\t\t\t\tpanic(\"Invalid message code\");\n");
+            "\t\t\t\tpanic(\"Invalid message code 0x%%X from %%d\", rcv_buf->code, rcv_buf->sender);\n");
     fprintf(_files.srv.c, 
             "\t\t}\n"
             "\n");
@@ -430,16 +525,16 @@ static void generate_declaration(const struct RPCStatement* statements,
 {
     switch(fn->return_type->type) {
         case VoidType:
-            fprintf(_files.srv.h, "void handle_%s(", fn->name);
+            fprintf(_files.srv.h, "void handle_%s(int sender_pid", fn->name);
             break;
         case IntType:
-            fprintf(_files.srv.h, "int handle_%s(", fn->name);
+            fprintf(_files.srv.h, "int handle_%s(int sender_pid", fn->name);
             break;
         case StringType:
             panic("Invalid function result type");
             break;
         case LongType:
-            fprintf(_files.srv.h, "long long handle_%s(", fn->name);
+            fprintf(_files.srv.h, "long long handle_%s(int sender_pid", fn->name);
             break;
         case BlobType:
             panic("Invalid function result type");
@@ -448,12 +543,10 @@ static void generate_declaration(const struct RPCStatement* statements,
             assert(!"Invalid code path");
     }
 
-    int arg_index = 0;
-    for(const struct RPCArgument* arg = fn->args; arg; arg = arg->next, arg_index++) {
-        if(arg->type->modifier == NullModifier) {
-            if(arg_index)
-                fprintf(_files.srv.h, ", ");
+    for(const struct RPCArgument* arg = fn->args; arg; arg = arg->next) {
+        fprintf(_files.srv.h, ", ");
 
+        if(arg->type->modifier == NullModifier) {
             switch(arg->type->type) {
                 case IntType:
                     fprintf(_files.srv.h, "int %s", arg->name);
@@ -471,9 +564,6 @@ static void generate_declaration(const struct RPCStatement* statements,
                     assert(!"Invalid code path");
             }
         } else if(arg->type->modifier == OutModifier) {
-            if(arg_index)
-                fprintf(_files.srv.h, ", ");
-
             switch(arg->type->type) {
                 case IntType:
                     fprintf(_files.srv.h, "/* out */ int* %s", arg->name);
@@ -481,7 +571,6 @@ static void generate_declaration(const struct RPCStatement* statements,
                 case StringType:
                     fprintf(_files.srv.h, "/* out */ char* %s, /* in */ size_t %s_size", 
                             arg->name, arg->name);
-                    arg_index++;
                     break;
                 case LongType:
                     fprintf(_files.srv.h, "/* out */ long long* %s", arg->name);
@@ -489,7 +578,6 @@ static void generate_declaration(const struct RPCStatement* statements,
                 case BlobType:
                     fprintf(_files.srv.h, "/* out */ void* %s, ", arg->name);
                     fprintf(_files.srv.h, "/* in, out */ size_t* %s_size", arg->name);
-                    arg_index++;
                     break;
                 default:
                     assert(!"Invalid code path");
@@ -513,7 +601,7 @@ static void generate_declarations(const struct RPCStatement* statements)
 
     fprintf(_files.srv.h,
             "/* dispatcher */\n"
-            "void dispatch(int);\n"
+            "void rpc_dispatch(int);\n"
             "\n");
 }
 
@@ -523,17 +611,30 @@ void generate_serverside(const struct RPCStatement* statements)
 
     fprintf(_files.srv.c,
             "#include <stddef.h>\n"
-            "#include \"%scommon.h\"\n"
-            "#include \"%sserver.h\"\n"
+            "#include \"%s\"\n"
+            "#include \"%s\"\n"
             "\n"
-            "#ifdef __STDC_HOSTED__\n"
-            "#include <stdlib.h>\n"
-            "#include <assert.h>\n"
-            "#include <string.h>\n"
-            "#define panic(s) assert(!(s))\n"
+            "#if __STDC_HOSTED__\n"
+            "#  include <stdlib.h>\n"
+            "#  include <assert.h>\n"
+            "#  include <string.h>\n"
+            "#  define panic(s) assert(!(s))\n"
+            "#else\n"
+            "#  include <debug.h>\n"
+            "#  include <port.h>\n"
+            "#  include <string.h>\n"
+            "#  include <util.h>\n"
+            "#  ifdef KERNEL\n"
+            "#      include \"kmalloc.h\"\n"
+            "#      define malloc(s) kmalloc(s)\n"
+            "#      define free(s) kfree(s)\n"
+            "#  else\n"
+            "#      include <malloc.h>\n"
+            "#      include <runtime.h>\n"
+            "#  endif\n"
             "#endif\n"
             "\n",
-            _files.prefix, _files.prefix);
+            _files.comm.hf, _files.srv.hf);
     generate_marshallers(statements);
     generate_dispatcher(statements);
 }

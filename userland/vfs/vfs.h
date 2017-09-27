@@ -1,14 +1,5 @@
 #pragma once
 
-
-enum VFSMessages {
-    VFSMessageResult,
-    VFSMessageOpen,
-    VFSMessageClose,
-    VFSMessageRead,
-    VFSMessageWrite,
-};
-
 #define     O_RDONLY        0x1
 #define     O_WRONLY        0x2
 #define     O_RDWR          (O_RDONLY|O_WRONLY)

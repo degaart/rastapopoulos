@@ -1,6 +1,6 @@
-PROGRAM:=rpcgen
-CFLAGS:=-g
-LDFLAGS:=-g
+PROGRAM := rpcgen
+CFLAGS += -g
+LDFLAGS += -g
 
 include ../tools.mk
 

@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <libgen.h>
 #include "rpc_types.h"
 #include "rpcgen.h"
 
@@ -454,15 +455,24 @@ char* stringify_type(const struct RPCType* type)
 
 int main(int argc, char** argv)
 {
-    if(argc < 4) {
-        fprintf(stderr, "Usage: %s <input-file> <output-dir> <prefix>\n",
+    if(argc < 8) {
+        fprintf(stderr, 
+                "Usage: %s "
+                "<infile> "
+                "<common-header-file> <common-source-file> "
+                "<server-header-file> <server-source-file> "
+                "<client-header-file> <client-source-file>\n",
                 argv[0]);
         return 1;
     }
 
     const char* infile = argv[1];
-    const char* outdir = argv[2];
-    const char* prefix = argv[3];
+    _files.comm.hf = argv[2];
+    _files.comm.cf = argv[3];
+    _files.srv.hf = argv[4];
+    _files.srv.cf = argv[5];
+    _files.clt.hf = argv[6];
+    _files.clt.cf = argv[7];
 
     struct stream s;
     FILE* f = fopen(infile, "rt");
@@ -504,30 +514,52 @@ int main(int argc, char** argv)
     struct RPCStatement* statements = read_statements();
 
     /* open output files */
-#define X(a, b) \
+#define X(handle, filename) \
     do { \
-        size_t filename_size = strlen(outdir) + strlen(prefix) + 64; \
-        char* filename = malloc(filename_size); \
-        snprintf(filename, filename_size, "%s/%s%s", outdir, prefix, b); \
-        a = fopen(filename, "wt"); \
-        if(!a) { \
+        handle = fopen(filename, "wt"); \
+        if(!handle) { \
             fprintf(stderr, "open(\"%s\"): %s\n", \
                     filename, \
                     strerror(errno)); \
             return 1; \
         } \
-        free(filename); \
     } while(0)
 
-    X(_files.srv.h, "server.h");
-    X(_files.srv.c, "server.c");
-    X(_files.clt.h, "client.h");
-    X(_files.clt.c, "client.c");
-    X(_files.comm.h, "common.h");
-    X(_files.comm.c, "common.c");
+    X(_files.srv.h, _files.srv.hf);
+    X(_files.srv.c, _files.srv.cf);
+    X(_files.clt.h, _files.clt.hf);
+    X(_files.clt.c, _files.clt.cf);
+    X(_files.comm.h, _files.comm.hf);
+    X(_files.comm.c, _files.comm.cf);
+
 #undef X
 
-    _files.prefix = prefix;
+#define X(field) \
+    do { \
+        char* buf = strdup(field); \
+        field = strdup(basename(buf)); \
+        free(buf); \
+    } while(0)
+
+    X(_files.srv.hf);
+    X(_files.srv.cf);
+    X(_files.clt.hf);
+    X(_files.clt.cf);
+    X(_files.comm.hf);
+    X(_files.comm.cf);
+
+#undef X
+
+#if 0
+#define X(field) printf(#field " = \"%s\"\n", field)
+    X(_files.srv.hf);
+    X(_files.srv.cf);
+    X(_files.clt.hf);
+    X(_files.clt.cf);
+    X(_files.comm.hf);
+    X(_files.comm.cf);
+#undef X
+#endif
 
     fprintf(_files.srv.h, "#pragma once\n\n");
     fprintf(_files.clt.h, "#pragma once\n\n");

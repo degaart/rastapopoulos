@@ -65,8 +65,8 @@ DRESULT disk_read (
         return RES_NOTRDY;
     }
 
-    int ret = blockdrv_read_sector(buff, 512 * count,
-                                   sector);
+    int ret = blk_read_sector(buff, 512 * count,
+                              sector);
     if(ret)
         return RES_ERROR;
     return RES_OK;

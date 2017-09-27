@@ -8,16 +8,14 @@ all:
 	@ make -C init
 	@ make -C logger
 	@ make -C vfs
-	@ make -C blockdrv
-	#@ make -C fat
+	@ make -C blk
 
 clean:
 	@ make -C runtime clean
 	@ make -C init clean
 	@ make -C logger clean
 	@ make -C vfs clean
-	@ make -C blockdrv clean
-	#@ make -C fat clean
+	@ make -C blk clean
 
 
 

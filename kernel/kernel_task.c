@@ -14,74 +14,30 @@
 #include "kmalloc.h"
 #include "io.h"
 
-#define MessageHandler(msg) \
-    static void handle_ ## msg (struct deserializer* args, struct serializer* result)
-#define MessageCase(msg) \
-    case msg: handle_ ## msg (&deserializer, &serializer); break
+#include "kernel_task_server.h"
 
-MessageHandler(KernelMessageInitrdGetSize)
+int handle_kernel_get_task_info(int sender_pid, int pid, /* out */ void* buffer, /* in, out */ size_t* buffer_size)
 {
-    int size = initrd_get_size();
-    int* ptr = serialize_int(result, size);
-    assert(*ptr == size);                   /* just debugging. Can be removed */
-}
+    if(*buffer_size < sizeof(struct task_info))
+        return -1;
 
-MessageHandler(KernelMessageInitrdRead)
-{
-    size_t size = deserialize_size_t(args);
-    size_t offset = deserialize_size_t(args);
-
-    int* intret = serialize_int(result, -1);
-
-    size_t buffer_size;
-    void* buffer = serialize_buffer(result, &buffer_size);
-    if(buffer_size == 0) {
-        serialize_buffer_finish(result, 0);
-        *intret = -1;
-        return;
-    } else if(buffer_size < size) {
-        size = buffer_size;
-    }
-
-    int ret = initrd_read(buffer, size, offset);
-    if(ret == -1) {
-        serialize_buffer_finish(result, 0);
-        *intret = -1;
-        return;
-    }
-
-    serialize_buffer_finish(result, ret);
-    *intret = ret;
-}
-
-MessageHandler(KernelMessageGetTaskInfo)
-{
-    int pid = deserialize_int(args);
-
-    int* ret = serialize_int(result, -1);
-    size_t buffer_size;
-    struct task_info* buffer = serialize_buffer(result, &buffer_size);
-    if(buffer_size < sizeof(struct task_info)) {
-        serialize_buffer_finish(result, 0);
-        return;
-    }
+    struct task_info* ti = buffer;
 
     enter_critical_section();
-    bool fret = get_task_info(buffer, pid);
+    bool success = get_task_info(ti, pid);
     leave_critical_section();
 
-    if(!fret) {
-        serialize_buffer_finish(result, 0);
-        return;
+    if(!success) {
+        return -1;
+    } else {
+        *buffer_size = sizeof(struct task_info);
+        return 0;
     }
-
-    *ret = 0;
-    serialize_buffer_finish(result, sizeof(struct task_info));
 }
 
-MessageHandler(KernelMessageReboot)
+void handle_kernel_reboot(int sender_pid)
 {
-    trace("Reboot requested");
+    trace("Reboot requested by pid %d", sender_pid);
     reboot();
 }
 
@@ -109,42 +65,9 @@ void kernel_task_entry()
         jump_to_usermode(entry);
     }
 
-    // alloc memory for messages
-    struct message* recv_buf = kmalloc(4096);
-    struct message* snd_buf = kmalloc(4096);
-
-    // Wait for messages
-    while(true) {
-        unsigned outsize;
-        int ret = msgrecv(KernelPort, recv_buf, PAGE_SIZE, &outsize);
-        if(ret) {
-            panic("msgrecv failed");
-        }
-
-        struct deserializer deserializer;
-        deserializer_init(&deserializer, recv_buf->data, recv_buf->len);
-        
-        struct serializer serializer;
-        serializer_init(&serializer, snd_buf->data, PAGE_SIZE - sizeof(struct message));
-
-        switch((enum KernelMessages)recv_buf->code) {
-            MessageCase(KernelMessageInitrdGetSize);
-            MessageCase(KernelMessageInitrdRead);
-            MessageCase(KernelMessageGetTaskInfo);
-            MessageCase(KernelMessageReboot);
-            default:
-                panic("Invalid message code: %d", recv_buf->code);
-        }
-
-        size_t datalen = serializer_finish(&serializer);
-        snd_buf->reply_port = INVALID_PORT;
-        snd_buf->code = KernelMessageResult;
-        snd_buf->len = datalen;
-
-        ret = msgsend(recv_buf->reply_port, snd_buf);
-        if(ret)
-            panic("msgsend() failed");
-    }
+    // Dispatch messages
+    rpc_dispatch(KernelPort);
+    panic("Invalid code path");
 }
 
 
