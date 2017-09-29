@@ -1,0 +1,118 @@
+unsigned alternate_vm_memio(x86emu_t *emu, uint32_t addr, uint32_t *val, uint32_t type)
+{
+  x86emu_mem_t *mem = emu->mem;
+
+  uint32_t bits = type & 0xFF;
+  type &= ~0xFF;
+
+  mem->invalid = 0;
+
+  switch(type)
+  {
+    case X86EMU_MEMIO_R:
+      switch(bits)
+      {
+        case X86EMU_MEMIO_8:
+          *val = mem_read_byte(addr);
+          break;
+        case X86EMU_MEMIO_16:
+          *val = mem_read_word(addr);
+          break;
+        case X86EMU_MEMIO_32:
+          *val = mem_read_long(addr);
+          break;
+        case X86EMU_MEMIO_8_NOPERM:
+          *val = mem_read_byte(addr);
+          break;
+      }
+      break;
+
+    case X86EMU_MEMIO_W:
+      switch(bits)
+      {
+        case X86EMU_MEMIO_8:
+          mem_write_byte(addr, *val);
+          break;
+        case X86EMU_MEMIO_16:
+          mem_write_word(addr, *val);
+          break;
+        case X86EMU_MEMIO_32:
+          mem_write_long(addr, *val);
+          break;
+        case X86EMU_MEMIO_8_NOPERM:
+          mem_write_byte(addr, *val);
+          break;
+      }
+      break;
+
+    case X86EMU_MEMIO_X:
+      switch(bits)
+      {
+        case X86EMU_MEMIO_8:
+          *val = mem_read_byte(addr);
+          break;
+        case X86EMU_MEMIO_16:
+          *val = mem_read_word(addr);
+          break;
+        case X86EMU_MEMIO_32:
+          *val = mem_read_long(addr);
+          break;
+      }
+      break;
+
+    case X86EMU_MEMIO_I:
+      switch(bits)
+      {
+        case X86EMU_MEMIO_8:
+          *val = inb(addr);
+          break;
+        case X86EMU_MEMIO_16:
+          *val = inw(addr);
+          break;
+        case X86EMU_MEMIO_32:
+          *val = inl(addr);
+          break;
+      }
+      break;
+
+    case X86EMU_MEMIO_O:
+      switch(bits)
+      {
+        case X86EMU_MEMIO_8:
+          outb(addr, *val);
+          break;
+        case X86EMU_MEMIO_16:
+          outw(addr, *val);
+          break;
+        case X86EMU_MEMIO_32:
+          outl(addr, *val);
+          break;
+      }
+      break;
+  }
+
+  return 0;
+}
+
+
+
+/////////////////////////////////////////////////////////////
+x86emu_t* emu = x86emu_new(X86EMU_PERM_RWX, X86EMU_PERM_RWX);
+
+x86emu_set_memio_handler(emu, (x86emu_memio_handler_t*) alternate_vm_memio);
+
+x86emu_set_seg_register(emu, emu->x86.R_CS_SEL, 0);
+emu->x86.R_IP = 0x7C00;
+
+mem_write_word(0x7C00, 0x10CD);
+mem_write_byte(0x7C02, 0xF4);
+
+emu->x86.R_AX = 0x4F02;
+emu->x86.R_BX = 0x117;
+
+x86emu_run(emu, X86EMU_RUN_LOOP);
+
+dprintf(3, "AX: %x\n", emu->x86.R_AX);
+
+
+
