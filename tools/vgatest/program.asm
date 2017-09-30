@@ -3,5 +3,10 @@ ORG 0x7C00
 
 start:
     mov ax, 0xDEAD
-    jmp $
+    mov eax, 0xDEADBEEF
+    jmp halt
+
+halt:
+    jmp halt
+
 

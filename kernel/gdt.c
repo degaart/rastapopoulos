@@ -82,7 +82,7 @@ struct gdt_ptr {
    uint32_t base;               // The address of the first gdt_entry struct.
 } __attribute__((packed));
 
-static struct gdt_entry gdt_entries[6];
+static struct gdt_entry gdt_entries[8];
 static struct gdt_ptr   gdt_ptr;
 static struct tss_entry tss;
 
@@ -141,6 +141,21 @@ void gdt_init()
     ); /* TSS */
 
     assert(sizeof(tss) >= 103);
+
+    set_descriptor(
+        6,
+        0x0, 0xFFFFF,
+        GDT_READABLE|GDT_CODE|GDT_TYPE(1)|GDT_PRESENT,
+        GDT_16BIT|GDT_GRAN1B
+    ); /* 16-bit code */
+    set_descriptor(
+        7,
+        0x0, 0xFFFFF,
+        GDT_WRITABLE|GDT_TYPE(1)|GDT_PRESENT,
+        GDT_16BIT|GDT_GRAN1B
+    ); /* 16-bit data */
+
+
 
     gdt_flush(&gdt_ptr);
     tss_flush();

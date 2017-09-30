@@ -59,9 +59,10 @@ _kernel_entry:
 
 .unmap_low:
     ; Unmap low 4MB
-    mov     DWORD [initial_pagedir], 0
-    mov     ecx, cr3
-    mov     cr3, ecx
+    ; TODO: Decomment this code
+    ; mov     DWORD [initial_pagedir], 0
+    ; mov     ecx, cr3
+    ; mov     cr3, ecx
 
 .setup_stack:
     ; Setup kernel stack

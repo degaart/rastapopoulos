@@ -106,6 +106,16 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
     reboot();
 }
 
+#include "int10_stub.h"
+void int10();
+void test_int10()
+{
+    trace("Testing int10 calls");
+
+    /* Copy stub to 0x7C00 */
+    memcpy((void*)0x7C00, obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
+    int10();
+}
 
 void kmain(struct multiboot_info* init_multiboot_info)
 {
@@ -139,6 +149,9 @@ void kmain(struct multiboot_info* init_multiboot_info)
     idt_flush();
     idt_install(14, pf_handler, true);
     idt_install(13, gpf_handler, true);
+    
+    // test int10
+    test_int10();
 
     // Physical memory manager
     pmm_init(multiboot_get_info());
@@ -161,13 +174,11 @@ void kmain(struct multiboot_info* init_multiboot_info)
     trace("\t.bss    %p - %p", _BSS_START_, _BSS_END_);
     trace("\theap    %p - %p", heap_info.heap_start, heap_info.heap_start + heap_info.heap_size);
 
-    /* Conventional memory http://wiki.osdev.org/Memory_Map_(x86) */
-    for(uint32_t page = 0x00000000; page < 0x00001000; page += PAGE_SIZE) {
-        if(pmm_exists(page))
-            pmm_reserve(page);
-    }
-
-    for(uint32_t page = 0x0009F000; page < 0x000FFFFF; page += PAGE_SIZE) {
+    /*
+     * Reserve entire lower 1MB of memory so we can use vm86/swith to real mode for
+     * video bios calls
+     */
+    for(uint32_t page = 0x00000000; page < 0x100000; page += PAGE_SIZE) {
         if(pmm_exists(page))
             pmm_reserve(page);
     }

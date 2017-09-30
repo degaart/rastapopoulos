@@ -24,17 +24,14 @@ unsigned memio_handler(x86emu_t *emu, u32 addr, u32 *val, unsigned type)
 #define R(N,T) \
     case N: \
         *val = *((T*)(memory + addr)); \
-        printf("read %s %s at 0x%04X => 0x%X\n", #N, #T, addr, *val); \
         break
 #define X(N,T) \
     case N: \
         *val = *((T*)(memory + addr)); \
-        printf("read instruction %s %s at 0x%04X => 0x%X\n", #N, #T, addr, *val); \
         break
 #define W(N, T) \
     case N: \
         *((T*)(memory + addr)) = *val; \
-        printf("write %s %s 0x%X at 0x%04X\n", #N, #T, *val, addr); \
         break
 
 
@@ -48,6 +45,7 @@ unsigned memio_handler(x86emu_t *emu, u32 addr, u32 *val, unsigned type)
                 default:
                     assert(!"Invalid code path");
             }
+            break;
         case X86EMU_MEMIO_X:
             switch(bits) {
                 X(X86EMU_MEMIO_8, uint8_t);
@@ -148,7 +146,7 @@ int main()
 {
     x86emu_t* emu = x86emu_new(X86EMU_PERM_RWX, X86EMU_PERM_RWX);
     x86emu_set_log(emu, 512, logger);
-    emu->log.trace = X86EMU_TRACE_DEFAULT;
+    emu->log.trace = X86EMU_TRACE_CODE;
 
     size_t memory_size = MEM_SIZE;
     unsigned char* memory = malloc(memory_size);
