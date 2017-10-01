@@ -7,6 +7,8 @@
 BITS 16
 ORG 0x7C00
 
+%define STATE_BASE      0x7D00
+
 start:
     ; We're in 16-bit protected mode
     ; Assume interrupts already cleared
@@ -24,7 +26,7 @@ start:
 
     ; Disable PE bit
     mov     eax, cr0
-    and     eax, 0xFFFFFFFF & ~0x00000001   ; PE
+    and     eax, 0xFFFFFFFF & ~0x00000001   ; PE (the bitwise `and` is there to fix a nasm warning)
     and     eax, 0xFFFFFFFF & ~0x80000000   ; PG
     mov     cr0, eax
 
@@ -45,20 +47,54 @@ rmode:
     mov     ss, ax
     mov     sp, 0x7E00
 
-    ; Write message to screen as a celebration
+    ; Check 32-bit PM stub correctly wrote params
+    ;
+    ; param0        [ebp + 8] 0x7D00      [STATE_BASE + 0]    uint32_t[8]. Registers to pass to int 10h.
+    ; esp                     0x7D20      [STATE_BASE + 32]   Original esp value.
+    ; .return_addr            0x7D24      [STATE_BASE + 36]   Protected mode return address.
+    ; cs                      0x7D28      [STATE_BASE + 40]   PM code segment. Zero-extended.
+    ; ds                      0x7D2C      [STATE_BASE + 44]   PM data segment. Zero-extended.
+    ; idtr                    0x7D30      [STATE_BASE + 48]   Original IDTR. 8 bytes.
+    ; gdtr                    0x7D38      [STATE_BASE + 56]   Original GDTR. 12 bytes.
+    ; sentinel                0x7D44      [STATE_BASE + 68]   Sentinel. 0xDEADBEEF
+    ;
     xchg    bx, bx
-	mov     ah, 0x13                    ; function
-	mov     al, 1                       ; update cursor
-	mov     bh, 0                       ; page
-	mov     bl, 0x07                    ; attribute
-	mov     cx, (hello_end - hello)
-    mov     dh, 0                       ; row
-    mov     dl, 0                       ; col
-    mov     bp, hello
-	int     0x10
+    mov     eax, [STATE_BASE + 0x44]
+    cmp     eax, 0xDEADBEEF
+    jne     bad_params
+
+    mov     eax, [STATE_BASE + 0x00]
+    mov     ebx, [STATE_BASE + 0x04]
+    mov     ecx, [STATE_BASE + 0x08]
+    mov     edx, [STATE_BASE + 0x0C]
+    mov     ebp, [STATE_BASE + 0x10]
+    mov     esi, [STATE_BASE + 0x14]
+    mov     edi, [STATE_BASE + 0x18]
+
+    ; Call int 0x10
+    int     0x10
 
     jmp     $                           ; infinite loop
 
+bad_params:
+    mov     ax, bad_params_str
+    call    debug_write
+    jmp     $
+
+debug_write:
+    push    si
+    mov     si, ax
+.write_loop:
+    mov     al, [si]
+    cmp     al, 0
+    jz      .return
+
+    out     0xE9, al
+    inc     si
+    jmp     .write_loop
+.return:
+    pop si
+    ret
 
 ; Real-mode idt
 idt:
@@ -67,4 +103,7 @@ idt:
 
 hello: db "It works!"
 hello_end:
+
+bad_params_str: db "Bad parameters passed to real-mode stub!", 10, 0
+
 
