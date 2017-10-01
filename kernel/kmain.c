@@ -107,14 +107,45 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
 }
 
 #include "int10_stub.h"
-void int10();
+void int10(uint32_t*);
 void test_int10()
 {
     trace("Testing int10 calls");
 
     /* Copy stub to 0x7C00 */
     memcpy((void*)0x7C00, obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
-    int10();
+
+    /* call thunk */
+#if 0
+    ; Write message to screen as a celebration
+    xchg    bx, bx
+	mov     ah, 0x13                    ; function
+	mov     al, 1                       ; update cursor
+	mov     bh, 0                       ; page
+	mov     bl, 0x07                    ; attribute
+	mov     cx, (hello_end - hello)
+    mov     dh, 0                       ; row
+    mov     dl, 0                       ; col
+    mov     bp, hello
+	int     0x10
+
+    AH = 0Eh
+    AL = character to write
+    BH = page number
+    BL = foreground color (graphics modes only)
+#endif
+
+    uint32_t regs[8] = {
+        0x0E2A,                 /* eax */
+        0x0007,                 /* ebx */
+        0x0000,                 /* ecx */
+        0x0000,                 /* edx */
+        0x0000,                 /* ebp */
+        0x0000,                 /* esi */
+        0x0000,                 /* edi */
+        0x0000,                 /* reserved */
+    };
+    int10(regs);
 }
 
 void kmain(struct multiboot_info* init_multiboot_info)
