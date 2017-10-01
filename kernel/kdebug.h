@@ -12,3 +12,7 @@ void debug_printv(const char* fmt, va_list args);
 void debug_printf(const char* fmt, ...);
 void kdebug_init();
 
+
+#define BREAKPOINT() \
+    asm volatile("xchg %%bx, %%bx\n":::"memory")
+
