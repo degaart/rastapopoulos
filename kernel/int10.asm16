@@ -88,12 +88,13 @@ rmode:
 
     ; Now, we need to transition back to PM
     ; Use a temporary GDT, as the old gdt is probably in a paged area
-    lea     ecx, [INT10_SCRATCH + P_GDTR + 2]
-    mov     eax, [ecx]
+    break
+    mov     ax, [INT10_SCRATCH + P_GDTR]
+    mov     [gdt32.limit], ax
+    mov     eax, [INT10_SCRATCH + P_GDTR + 2]
     sub     eax, 0xC0000000
-    mov     [ecx], eax
-    lea     eax, [INT10_SCRATCH + P_GDTR]
-    lgdt    [eax]
+    mov     [gdt32.base], eax
+    lgdt    [gdt32]
 
     mov     eax, cr0
     or      eax, 0x00000001             ; PE
@@ -141,6 +142,11 @@ pmode:
     mov     eax, [INT10_SCRATCH + P_ESP]
     mov     esp, eax
 
+    ; reload gdt to it's virtual address
+    break
+    lgdt    [INT10_SCRATCH + P_GDTR]
+
+    ; load idt with virtual address
     xor     eax, eax
     mov     ax, [INT10_SCRATCH + P_IDTR]
     mov     ebx, [INT10_SCRATCH + P_IDTR + 2]
@@ -157,14 +163,10 @@ idt16:
     dw      0x3FF               ; limit (4 bytes * 255 - 1) 
     dd      0x0                 ; base
 
-; PM temporary GDT
+; Temporary GDTR
 gdt32:
-    dd 0x00000000, 0x00000000       ; NULL selector
-    dd 0x0000FFFF, 0x000F9A00       ; code selector
-    dd 0x0000FFFF, 0x000F9200       ; data selector
-gdt32_ptr:
-    dw (8 * 3) - 1
-    dd gdt32
+    .limit: dw 0
+    .base:  dd 0
 
 hello: db "It works!"
 hello_end:

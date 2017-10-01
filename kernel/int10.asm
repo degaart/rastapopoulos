@@ -85,7 +85,6 @@ return_addr:
     ; Seems there is a stack corruption, but esp is valid
 
     ; 16-bit code should return here
-    break
     popa
     pop     ebp
     ret

@@ -133,7 +133,9 @@ void test_int10()
         0x0000,                 /* edi */
         0x0000,                 /* reserved */
     };
+    BREAKPOINT();
     int10(regs);
+    BREAKPOINT();
 }
 
 void kmain(struct multiboot_info* init_multiboot_info)
