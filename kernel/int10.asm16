@@ -5,9 +5,9 @@
 ; Place this code at 0:0x7C00
 ;
 BITS 16
-ORG 0x7C00
 
-%define STATE_BASE      0x7D00
+%include "int10.inc"
+ORG INT10_ORG
 
 start:
     ; We're in 16-bit protected mode
@@ -22,7 +22,7 @@ start:
     mov     gs, ax
     mov     ss, ax
 
-    mov     esp, 0x7E00                     ; stack must be accessible
+    mov     esp, INT10_STACK                ; stack must be accessible
 
     ; Disable PE bit
     mov     eax, cr0
@@ -31,7 +31,7 @@ start:
     mov     cr0, eax
 
     ; load real-mode idt
-    mov     eax, idt
+    mov     eax, idt16
     lidt    [eax]
 
     ; far jump to real-mode code
@@ -45,36 +45,62 @@ rmode:
     mov     fs, ax
     mov     gs, ax
     mov     ss, ax
-    mov     sp, 0x7E00
+    mov     sp, INT10_STACK
 
     ; Check 32-bit PM stub correctly wrote params
     ;
-    ; param0        [ebp + 8] 0x7D00      [STATE_BASE + 0]    uint32_t[8]. Registers to pass to int 10h.
-    ; esp                     0x7D20      [STATE_BASE + 32]   Original esp value.
-    ; .return_addr            0x7D24      [STATE_BASE + 36]   Protected mode return address.
-    ; cs                      0x7D28      [STATE_BASE + 40]   PM code segment. Zero-extended.
-    ; ds                      0x7D2C      [STATE_BASE + 44]   PM data segment. Zero-extended.
-    ; idtr                    0x7D30      [STATE_BASE + 48]   Original IDTR. 8 bytes.
-    ; gdtr                    0x7D38      [STATE_BASE + 56]   Original GDTR. 12 bytes.
-    ; sentinel                0x7D44      [STATE_BASE + 68]   Sentinel. 0xDEADBEEF
+    ; param0        [ebp + 8] 0x7D00      [INT10_SCRATCH + 0]    uint32_t[8]. Registers to pass to int 10h.
+    ; esp                     0x7D20      [INT10_SCRATCH + 32]   Original esp value.
+    ; .return_addr            0x7D24      [INT10_SCRATCH + 36]   Protected mode return address.
+    ; cs                      0x7D28      [INT10_SCRATCH + 40]   PM code segment. Zero-extended.
+    ; ds                      0x7D2C      [INT10_SCRATCH + 44]   PM data segment. Zero-extended.
+    ; idtr                    0x7D30      [INT10_SCRATCH + 48]   Original IDTR. 8 bytes.
+    ; gdtr                    0x7D38      [INT10_SCRATCH + 56]   Original GDTR. 12 bytes.
+    ; sentinel                0x7D44      [INT10_SCRATCH + 68]   Sentinel. 0xDEADBEEF
     ;
-    xchg    bx, bx
-    mov     eax, [STATE_BASE + 0x44]
-    cmp     eax, 0xDEADBEEF
+    mov     eax, [INT10_SCRATCH + P_SENTINEL]
+    cmp     eax, INT10_SENTINEL
     jne     bad_params
 
-    mov     eax, [STATE_BASE + 0x00]
-    mov     ebx, [STATE_BASE + 0x04]
-    mov     ecx, [STATE_BASE + 0x08]
-    mov     edx, [STATE_BASE + 0x0C]
-    mov     ebp, [STATE_BASE + 0x10]
-    mov     esi, [STATE_BASE + 0x14]
-    mov     edi, [STATE_BASE + 0x18]
+    mov     eax, [INT10_SCRATCH + P_EAX]
+    mov     ebx, [INT10_SCRATCH + P_EBX]
+    mov     ecx, [INT10_SCRATCH + P_ECX]
+    mov     edx, [INT10_SCRATCH + P_EDX]
+    mov     ebp, [INT10_SCRATCH + P_EBP]
+    mov     esi, [INT10_SCRATCH + P_ESI]
+    mov     edi, [INT10_SCRATCH + P_EDI]
 
     ; Call int 0x10
     int     0x10
 
-    jmp     $                           ; infinite loop
+    ; Save registers back into storage
+    mov     [INT10_SCRATCH + P_EAX], eax
+    mov     [INT10_SCRATCH + P_EBX], ebx
+    mov     [INT10_SCRATCH + P_ECX], ecx
+    mov     [INT10_SCRATCH + P_EDX], edx
+    mov     [INT10_SCRATCH + P_EBP], ebp
+    mov     [INT10_SCRATCH + P_ESI], esi
+    mov     [INT10_SCRATCH + P_EDI], edi
+    pushf
+    xor     eax, eax
+    pop     ax
+    mov     [INT10_SCRATCH + P_EFLAGS], eax
+
+    ; Now, we need to transition back to PM
+    ; Use a temporary GDT, as the old gdt is probably in a paged area
+    lea     ecx, [INT10_SCRATCH + P_GDTR + 2]
+    mov     eax, [ecx]
+    sub     eax, 0xC0000000
+    mov     [ecx], eax
+    lea     eax, [INT10_SCRATCH + P_GDTR]
+    lgdt    [eax]
+
+    mov     eax, cr0
+    or      eax, 0x00000001             ; PE
+    mov     cr0, eax
+
+    ; Assume PE kernel code segment is 0x08
+    jmp     0x08:pmode
 
 bad_params:
     mov     ax, bad_params_str
@@ -96,10 +122,49 @@ debug_write:
     pop si
     ret
 
+pmode:
+    BITS    32
+    mov     ax, 0x10                    ; assume kernel data segment is 0x10
+    mov     ds, ax
+    mov     es, ax
+    mov     fs, ax
+    mov     gs, ax
+    mov     ss, ax
+
+    mov     eax, cr3
+    mov     cr3, eax
+    
+    mov     eax, cr0
+    or      eax, 0x80000000             ; PG
+    mov     cr0, eax
+
+    mov     eax, [INT10_SCRATCH + P_ESP]
+    mov     esp, eax
+
+    xor     eax, eax
+    mov     ax, [INT10_SCRATCH + P_IDTR]
+    mov     ebx, [INT10_SCRATCH + P_IDTR + 2]
+    lea     eax, [INT10_SCRATCH + P_IDTR]
+    lidt    [eax]
+
+    lea     eax, [INT10_SCRATCH + P_RET]
+    jmp     [eax]
+
+    jmp     $                           ; infinite loop
+
 ; Real-mode idt
-idt:
+idt16:
     dw      0x3FF               ; limit (4 bytes * 255 - 1) 
     dd      0x0                 ; base
+
+; PM temporary GDT
+gdt32:
+    dd 0x00000000, 0x00000000       ; NULL selector
+    dd 0x0000FFFF, 0x000F9A00       ; code selector
+    dd 0x0000FFFF, 0x000F9200       ; data selector
+gdt32_ptr:
+    dw (8 * 3) - 1
+    dd gdt32
 
 hello: db "It works!"
 hello_end:

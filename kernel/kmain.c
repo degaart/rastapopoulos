@@ -107,7 +107,7 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
 }
 
 #include "int10_stub.h"
-void int10(uint32_t*);
+void int10(const uint32_t*);
 void test_int10()
 {
     trace("Testing int10 calls");
@@ -117,18 +117,6 @@ void test_int10()
 
     /* call thunk */
 #if 0
-    ; Write message to screen as a celebration
-    xchg    bx, bx
-	mov     ah, 0x13                    ; function
-	mov     al, 1                       ; update cursor
-	mov     bh, 0                       ; page
-	mov     bl, 0x07                    ; attribute
-	mov     cx, (hello_end - hello)
-    mov     dh, 0                       ; row
-    mov     dl, 0                       ; col
-    mov     bp, hello
-	int     0x10
-
     AH = 0Eh
     AL = character to write
     BH = page number
