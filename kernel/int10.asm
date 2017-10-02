@@ -22,7 +22,8 @@ int10:
     push    ebp
     mov     ebp, esp
 
-    pusha                               ; preserve regs
+    pusha                               ; preserve regs for caller
+    push    ebp                         ; preserve ebp for after we return to pmode
 
     ; Save function parameters into a known place
 %macro store 1
@@ -38,6 +39,9 @@ int10:
     store   P_EBP
     store   P_ESI
     store   P_EDI
+    store   P_ES
+    store   P_FS
+    store   P_GS
     pushf
     pop     eax
     mov     [INT10_SCRATCH + P_EFLAGS], eax
@@ -80,11 +84,27 @@ int10:
     jmp     0x30:INT10_ORG
     ret
 
+; 16-bit code will jump here after calling int 0x10
+; Notice that registers aren't preserved
 return_addr:
-    ; BUG after jumping here. The C code bombs out
-    ; Seems there is a stack corruption, but esp is valid
+    ; restore ebp
+    pop     ebp
 
-    ; 16-bit code should return here
+    ; Save back parameters
+%unmacro store 1
+%macro store 1
+    mov     eax, [INT10_SCRATCH + %1]
+    mov     [edi + %1], eax
+%endmacro
+    mov     edi, [ebp + 8]
+    store   P_EAX
+    store   P_EBX
+    store   P_ECX
+    store   P_EDX
+    store   P_EBP
+    store   P_ESI
+    store   P_EDI
+
     popa
     pop     ebp
     ret
