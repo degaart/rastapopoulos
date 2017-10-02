@@ -41,9 +41,14 @@ rmode:
     ; We're now in real mode
     mov     ax, cs
     mov     ds, ax
+
+    mov     eax, [INT10_SCRATCH + P_ES]
     mov     es, ax
+    mov     eax, [INT10_SCRATCH + P_FS]
     mov     fs, ax
+    mov     eax, [INT10_SCRATCH + P_GS]
     mov     gs, ax
+
     mov     ss, ax
     mov     sp, INT10_STACK
 
@@ -69,7 +74,7 @@ rmode:
     mov     ebp, [INT10_SCRATCH + P_EBP]
     mov     esi, [INT10_SCRATCH + P_ESI]
     mov     edi, [INT10_SCRATCH + P_EDI]
-
+    
     ; Call int 0x10
     int     0x10
 
@@ -88,7 +93,6 @@ rmode:
 
     ; Now, we need to transition back to PM
     ; Use a temporary GDT, as the old gdt is probably in a paged area
-    break
     mov     ax, [INT10_SCRATCH + P_GDTR]
     mov     [gdt32.limit], ax
     mov     eax, [INT10_SCRATCH + P_GDTR + 2]
@@ -143,7 +147,6 @@ pmode:
     mov     esp, eax
 
     ; reload gdt to it's virtual address
-    break
     lgdt    [INT10_SCRATCH + P_GDTR]
 
     ; load idt with virtual address

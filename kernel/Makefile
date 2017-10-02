@@ -47,6 +47,8 @@ obj/%.asm.o: %.asm
 	@ echo "[AS] $*.asm"
 	@ $(AS) -f elf32 -o $@ $*.asm
 
+obj/kmain.c.o: int10_stub.h
+
 int10_stub.h: int10.asm16
 	@ echo "[AS] int10_stub.bin"
 	@ $(AS) -f bin -o obj/int10_stub.bin int10.asm16
