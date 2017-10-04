@@ -143,6 +143,7 @@ void kmain(struct multiboot_info* init_multiboot_info)
     
     // test int10
     test_int10();
+    while(1);
 
     // Physical memory manager
     pmm_init(multiboot_get_info());

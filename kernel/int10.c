@@ -1,6 +1,7 @@
 #include "kdebug.h"
 #include "string.h"
 #include "int10_stub.h"
+#include "io.h"
 
 struct int10_regs {
     uint32_t eax, ebx, ecx, edx;
@@ -98,6 +99,26 @@ static void write_string(const char* str, int attribute, int row, int col)
     int10(&regs);
 }
 
+#define VGA_80x25           0x03
+#define VGA_320x200x8       0x13
+
+static void set_video_mode(int mode)
+{
+    struct int10_regs regs = {
+        .eax = (mode & 0xFF)
+    };
+    int10(&regs);
+}
+
+#define VGA_BASE 0xA0000
+static void putpixel(int x, int y, int col)
+{
+    unsigned char* ptr = (unsigned char*)VGA_BASE;
+    int offset = (320 * y) + x;
+    if(offset >= 0 && offset < 320*200)
+        ptr[offset] = col & 0xFF;
+}
+
 void test_int10()
 {
     trace("Testing int10 calls");
@@ -105,10 +126,21 @@ void test_int10()
     /* Copy stub to 0x7C00 */
     memcpy((void*)0x7C00, obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
 
-    struct coord cursor = get_cursor_pos();
-    trace("row: %d, col: %d", cursor.row, cursor.col);
-    write_string("It works!", 2, cursor.row, cursor.col);
-    while(1);
+    /* Set video mode (320x200x8) */
+    set_video_mode(VGA_320x200x8);
+
+    int x = 0, y = 0, col = 0;
+    while(y < 200) {
+        putpixel(x, y, col);
+        col++;
+        if(col >= 256)
+            col = 0;
+        x++;
+        if(x >= 320) {
+            x = 0;
+            y++;
+        }
+    }
 }
 
 
