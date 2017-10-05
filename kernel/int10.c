@@ -359,13 +359,15 @@ static void fillcircle(int x, int y, int radius, int color)
 
 static int random(int lo, int max)
 {
-    int base = (int)(xorshift32(&rng_state) & 0xFFFF);
-
-    int delta = max - lo;
-    int result = lo + ((delta * base) / 0xFFFF);
-    assert(result >= lo);
-    assert(result <= max);
-    return result;
+    int rnd = xorshift32(&rng_state);
+    if(rnd < 0)
+        rnd = -rnd;
+    int delta = max - lo + 1;
+    int ret = (rnd % delta) + lo;
+    if(ret < lo || ret > max)
+        trace("lo: %d, max: %d, ret: %d", lo, max, ret);
+    assert(ret >= lo && ret <= max);
+    return ret;
 }
 
 void test_int10()
