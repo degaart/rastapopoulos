@@ -3,6 +3,8 @@
 #include "int10_stub.h"
 #include "io.h"
 #include "sin_acos.h"
+#include "random.h"
+#include "util.h"
 
 #define VGA_80x25           0x03
 #define VGA_320x200x8       0x13
@@ -37,6 +39,8 @@
             x = max;        \
     } while(0)
 
+static uint32_t rng_state;
+
 
 struct int10_regs {
     uint32_t eax, ebx, ecx, edx;
@@ -44,10 +48,13 @@ struct int10_regs {
     uint32_t es, fs, gs;
     uint32_t reserved;
 } __attribute((packed));
+
 void int10(struct int10_regs*);
+
 struct coord {
     int row, col;
 };
+
 static struct coord get_cursor_pos()
 {
     struct int10_regs regs = { .eax = 0x0300 };
@@ -296,6 +303,9 @@ static void fillrect(int left, int top, int right, int bottom, int color)
 
 static void drawcircle(int x, int y, int radius, int color)
 {
+    if(radius == 0)
+        return;
+
     int32_t n = 0, invradius = (1 * 0x10000) / radius;
     int dx = 0, dy = radius - 1;
     int dxoffset, dyoffset, offset = (y * 320) + x;
@@ -320,6 +330,9 @@ static void drawcircle(int x, int y, int radius, int color)
 
 static void fillcircle(int x, int y, int radius, int color)
 {
+    if(radius == 0)
+        return;
+
     int32_t n = 0, invradius = (1 * 0x10000) / radius;
     int dx = 0, dy = radius - 1;
     int dxoffset, dyoffset, offset = (y * 320) + x;
@@ -344,9 +357,23 @@ static void fillcircle(int x, int y, int radius, int color)
     }
 }
 
+static int random(int lo, int max)
+{
+    int base = (int)(xorshift32(&rng_state) & 0xFFFF);
+
+    int delta = max - lo;
+    int result = lo + ((delta * base) / 0xFFFF);
+    assert(result >= lo);
+    assert(result <= max);
+    return result;
+}
+
 void test_int10()
 {
     trace("Testing int10 calls");
+
+    /* Initialize RNG */
+    rng_state = rdtsc() & 0xFFFFFFFF;
 
     /* Copy stub to 0x7C00 */
     memcpy((void*)0x7C00, obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
@@ -357,31 +384,65 @@ void test_int10()
     /* Clear screen */
     clearscreen(VGA_WHITE);
 
-    /* Put pixel */
-    putpixel(319, 199, VGA_GREEN);
+    /* Draw random shapes */
+    while(1) {
+        int shape = random(0, 6);
+        switch(shape) {
+            case 0:
+                {
+                    for(int i = 0; i < 30; i++) {
+                        putpixel(random(0, 319), random(0, 199), random(0, 255));
+                    }
+                }
+                break;
+            case 1:
+                drawline(random(0, 319), random(0, 199), 
+                         random(0, 319), random(0, 199), 
+                         random(0, 255));
+                break;
+            case 2:
+                {
+                    int vertices[3 * 2];
+                    for(int i = 0; i < 3; i++) {
+                        vertices[i * 2] = random(0, 319);
+                        vertices[(i * 2) + 1] = random(0, 199);
+                    }
+                    drawpolygon(3, vertices, random(0, 255));
+                }
+                break;
+            case 3:
+            case 4:
+                {
+                    int x1 = random(0, 319);
+                    int y1 = random(0, 199);
+                    int x2 = random(0, 319);
+                    int y2 = random(0, 199);
+                    int col1 = random(0, 255);
+                    int col2 = random(0, 255);
 
-    /* draw line */
-    drawline(0, 0, 10, 10, VGA_BLUE);
-    drawline(10, 10, 0, 10, VGA_BLUE);
-    drawline(0, 10, 319, 100, VGA_BLUE);
-    drawline(10, 100, 310, 100, VGA_RED);
-    drawline(100, 10, 100, 190, VGA_RED);
-
-    /* Draw polygon */
-    int vertices[] = {
-        256, 200,
-        0, 140,
-        319, 0
-    };
-    drawpolygon(3, vertices, VGA_MAGENTA);
-
-    /* Draw rect */
-    drawrect(119, 21, 289, 178, VGA_BROWN);
-    fillrect(120, 22, 288, 177, VGA_GREEN);
-
-    /* Draw circle */
-    drawcircle(160, 100, 50, VGA_BLUE);
-    fillcircle(160, 100, 49, VGA_LIGHT_BLUE);
+                    if(shape == 3) {
+                        drawrect(x1, y1, x2, y2, col1);
+                    } else {
+                        fillrect(x1 + 1, y1 + 1, x2 - 1, y2 - 1, col2);
+                    }
+                }
+                break;
+            case 5:
+            case 6:
+                {
+                    int x = random(0, 319);
+                    int y = random(0, 199);
+                    int radius = random(0, 99);
+                    int col = random(0, 255);
+                    if(shape == 5) {
+                        drawcircle(x, y, radius, col);
+                    } else {
+                        fillcircle(x, y, radius, col);
+                    }
+                }
+                break;
+        }
+    }
 }
 
 
