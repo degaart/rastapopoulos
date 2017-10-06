@@ -5,6 +5,8 @@
 #include "sin_acos.h"
 #include "random.h"
 #include "util.h"
+#include "vmm.h"
+#include "kmalloc.h"
 
 #define VGA_80x25           0x03
 #define VGA_320x200x8       0x13
@@ -357,6 +359,118 @@ static void fillcircle(int x, int y, int radius, int color)
     }
 }
 
+/* Start of conventional memory (29Kb) */
+#define LOWMEM_START    0x500
+
+struct svga_info {
+    char signature[4];
+    uint16_t version;
+    uint32_t oem_name;
+    uint32_t capabilities;
+    uint16_t modes[2];
+    uint16_t memsize64k;
+    uint16_t rev;
+    uint32_t vendor;
+    uint32_t product;
+    uint32_t product_rev;
+} __attribute__((packed));
+
+struct svga_modeinfo {
+	uint16_t attributes;		// deprecated, only bit 7 should be of interest to you, and it indicates the mode supports a linear frame buffer.
+	uint8_t window_a;			// deprecated
+	uint8_t window_b;			// deprecated
+	uint16_t granularity;		// deprecated; used while calculating bank numbers
+	uint16_t window_size;
+	uint16_t segment_a;
+	uint16_t segment_b;
+	uint32_t win_func_ptr;		// deprecated; used to switch banks from protected mode without returning to real mode
+	uint16_t pitch;			// number of bytes per horizontal line
+	uint16_t width;			// width in pixels
+	uint16_t height;			// height in pixels
+	uint8_t w_char;			// unused...
+	uint8_t y_char;			// ...
+	uint8_t planes;
+	uint8_t bpp;			// bits per pixel in this mode
+	uint8_t banks;			// deprecated; total number of banks in this mode
+	uint8_t memory_model;
+	uint8_t bank_size;		// deprecated; size of a bank, almost always 64 KB but may be 16 KB...
+	uint8_t image_pages;
+	uint8_t reserved0;
+ 
+	uint8_t red_mask;
+	uint8_t red_position;
+	uint8_t green_mask;
+	uint8_t green_position;
+	uint8_t blue_mask;
+	uint8_t blue_position;
+	uint8_t reserved_mask;
+	uint8_t reserved_position;
+	uint8_t direct_color_attributes;
+ 
+	uint32_t framebuffer;		// physical address of the linear frame buffer; write here to draw to the screen
+	uint32_t off_screen_mem_off;
+	uint16_t off_screen_mem_size;	// size of memory in the framebuffer but not being displayed on the screen
+} __attribute__ ((packed));
+
+static int svga_info(struct svga_info* info)
+{
+    memcpy((void*)LOWMEM_START, info, sizeof(struct svga_info));
+
+    struct int10_regs regs = {
+        .eax = 0x4F00,
+        .es = 0,
+        .edi = LOWMEM_START
+    };
+    int10(&regs);
+
+    int success = regs.eax & 0xFF;
+    int status = (regs.eax >> 8) & 0xFF;
+
+    if(success != 0x4F)
+        return 1;
+
+    memcpy(info, (void*)LOWMEM_START, sizeof(struct svga_info));
+    return status;
+}
+
+
+static int svga_modeinfo(int mode, struct svga_modeinfo* info)
+{
+    struct int10_regs regs = {
+        .eax = 0x4F01,
+        .ecx = mode,
+        .es = 0,
+        .edi = LOWMEM_START,
+    };
+    int10(&regs);
+
+    int success = regs.eax & 0xFF;
+    int status = (regs.eax >> 8) & 0xFF;
+
+    if(success != 0x4f)
+        return 1;
+
+    memcpy(info, (void*)LOWMEM_START, sizeof(struct svga_modeinfo));
+    return 0;
+}
+
+static int svga_setmode(int mode)
+{
+    static const int MODE_MASK = 0x3FFF;
+    static const int MODE_LFB = 1 << 14;
+    struct int10_regs regs = {
+        .eax = 0x4F02,
+        .ebx = (mode & MODE_MASK) | MODE_LFB
+    };
+    assert(regs.es == 0);
+    assert(regs.edi == 0);
+    int10(&regs);
+
+    if(regs.eax != 0x004F)
+        return 1;
+    return 0;
+}
+
 static int random(int lo, int max)
 {
     int rnd = xorshift32(&rng_state);
@@ -364,9 +478,6 @@ static int random(int lo, int max)
         rnd = -rnd;
     int delta = max - lo + 1;
     int ret = (rnd % delta) + lo;
-    if(ret < lo || ret > max)
-        trace("lo: %d, max: %d, ret: %d", lo, max, ret);
-    assert(ret >= lo && ret <= max);
     return ret;
 }
 
@@ -377,74 +488,131 @@ void test_int10()
     /* Initialize RNG */
     rng_state = rdtsc() & 0xFFFFFFFF;
 
+    /* Map conventional memory in because we need it */
+    for(int i = 0; i <= 0x000FFFFF; i += 4096) {
+        vmm_map((void*)i, i, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
+    }
+
     /* Copy stub to 0x7C00 */
     memcpy((void*)0x7C00, obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
 
-    /* Set video mode (320x200x8) */
-    set_video_mode(VGA_320x200x8);
-    
-    /* Clear screen */
-    clearscreen(VGA_WHITE);
+    /* Get vbe info */
+    struct svga_info info = { 0 };
+    memcpy(info.signature, "VBE2", 4);
 
-    /* Draw random shapes */
-    while(1) {
-        int shape = random(0, 6);
-        switch(shape) {
-            case 0:
-                {
-                    for(int i = 0; i < 30; i++) {
-                        putpixel(random(0, 319), random(0, 199), random(0, 255));
-                    }
-                }
-                break;
-            case 1:
-                drawline(random(0, 319), random(0, 199), 
-                         random(0, 319), random(0, 199), 
-                         random(0, 255));
-                break;
-            case 2:
-                {
-                    int vertices[3 * 2];
-                    for(int i = 0; i < 3; i++) {
-                        vertices[i * 2] = random(0, 319);
-                        vertices[(i * 2) + 1] = random(0, 199);
-                    }
-                    drawpolygon(3, vertices, random(0, 255));
-                }
-                break;
-            case 3:
-            case 4:
-                {
-                    int x1 = random(0, 319);
-                    int y1 = random(0, 199);
-                    int x2 = random(0, 319);
-                    int y2 = random(0, 199);
-                    int col1 = random(0, 255);
-                    int col2 = random(0, 255);
+    int selected_mode = -1;
+    int pitch;
+    void* framebuffer;
+    struct svga_modeinfo svga_mode;
 
-                    if(shape == 3) {
-                        drawrect(x1, y1, x2, y2, col1);
-                    } else {
-                        fillrect(x1 + 1, y1 + 1, x2 - 1, y2 - 1, col2);
+    int ret = svga_info(&info);
+    if(ret == 0) {
+        trace("svga info:");
+        if(!memcmp((void*)info.signature, "VBE2", 4)) {
+            trace("    vbe2 supported");
+        } else if(!memcmp((void*)info.signature, "VESA", 4)) {
+            trace("    vesa supported");
+        } else {
+            trace("    vesa/vbe2 not supported");
+        }
+
+        int ver_minor = info.version & 0xFF;
+        int ver_major = (info.version >> 8) & 0xFF;
+        trace("    vbe version: %d.%d", ver_major, ver_minor);
+        trace("    supported modes:");
+
+        /* 
+         * Must copy modes to scratch memory beforehand as 
+         * the buffer is reused between int10 calls 
+         */
+        uint16_t* modes = kmalloc(sizeof(uint32_t)*1024); /* 1024 modes should be enough for everyone */
+        uint16_t* modes_src = (uint16_t*)((uint32_t)info.modes[0] | ((uint32_t)info.modes[1] << 16));
+        assert(modes_src == (uint16_t*)0x522);
+        int mode_count = 0;
+        for(; mode_count < 1024 && (*modes_src != 0xFFFF); mode_count++) {
+            modes[mode_count] = *modes_src;
+            modes_src++;
+        }
+        modes[mode_count] = 0xFFFF;
+
+        uint16_t* mode = modes;
+        while(*mode != 0xFFFF) {
+            struct svga_modeinfo modeinfo;
+            ret = svga_modeinfo(*mode, &modeinfo);
+            if(ret == 0) {
+                int supported = modeinfo.attributes & 1;
+                int lfb = modeinfo.attributes & (1 << 7);
+                int graphics = modeinfo.attributes & (1 << 4);
+                int crtc =  !!(*mode & (1 << 11));
+                if(supported && graphics && lfb) {
+                    trace("        0x%04X: %dx%dx%d lfb: %p crtc: %d model: %d",
+                          (int)*mode,
+                          (int)modeinfo.width,
+                          (int)modeinfo.height,
+                          (int)modeinfo.bpp,
+                          modeinfo.framebuffer,
+                          crtc,
+                          modeinfo.memory_model);
+                    if(modeinfo.width == 640 && modeinfo.height == 480 &&
+                       modeinfo.bpp == 32 && lfb && !crtc && 
+                       (modeinfo.memory_model == 4 || modeinfo.memory_model == 6)) {
+                        selected_mode = *mode;
+                        svga_mode = modeinfo;
+                        pitch = modeinfo.pitch;
+                        framebuffer = (void*)modeinfo.framebuffer;
                     }
                 }
-                break;
-            case 5:
-            case 6:
-                {
-                    int x = random(0, 319);
-                    int y = random(0, 199);
-                    int radius = random(0, 99);
-                    int col = random(0, 255);
-                    if(shape == 5) {
-                        drawcircle(x, y, radius, col);
-                    } else {
-                        fillcircle(x, y, radius, col);
-                    }
-                }
-                break;
+            } 
+
+            mode++;
+        }
+
+        if(selected_mode == -1) {
+            panic("No 640x480x32 mode found!");
+        }
+
+        selected_mode = selected_mode | (1 << 14);
+        trace("Selected mode: 0x%X", selected_mode);
+        trace("Positions: R: %d, G: %d, B: %d",
+              (int)svga_mode.red_position,
+              (int)svga_mode.green_position,
+              (int)svga_mode.blue_position);
+        
+        ret = svga_setmode(selected_mode);
+        if(ret) {
+            panic("Failed to set video mode");
         }
     }
+
+    // Map framebuffer
+    unsigned char* fb = (unsigned char*)0x400000;
+    size_t fb_size = info.memsize64k * 65536;
+    trace("fb_size: %d Kb", fb_size / 1024);
+    for(unsigned char* va = (unsigned char*)0x400000, *pa = framebuffer;
+        va <= fb + fb_size;
+        va += 4096, pa += 4096) {
+        vmm_map(va, (uint32_t)pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    }
+
+    // uint32 pixel_offset = y * pitch + (x * (bpp/8)) + framebuffer;
+    int x = 640/2;
+    int y = 480/2;
+    int offset = (y * pitch) + (x * 4);
+    int r = 0x7F, g = 0x7F, b = 0x7F;
+
+    *((uint32_t*)(fb + offset)) = (r << svga_mode.red_position) |
+                                  (g << svga_mode.green_position) |
+                                  (b << svga_mode.blue_position);
+#if 0
+    for(int i = 0; i < 1000; i++) {
+        int x = random(0, 639);
+        int y = random(0, 479);
+        int col = random(0, 255);
+
+        int offset = (y * pitch) + x;
+        fb[offset] = col & 0xFF;
+    }
+#endif
 }
 
 

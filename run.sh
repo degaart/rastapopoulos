@@ -40,6 +40,7 @@ qemu-system-i386 \
     -boot c \
     -m 128 \
     -debugcon file:/tmp/rastapopoulos.log \
+    -vga std \
     $QFLAGS
 
 
