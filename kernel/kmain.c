@@ -141,10 +141,6 @@ void kmain(struct multiboot_info* init_multiboot_info)
     idt_install(14, pf_handler, true);
     idt_install(13, gpf_handler, true);
     
-    // test int10
-    test_int10();
-    while(1);
-
     // Physical memory manager
     pmm_init(multiboot_get_info());
 
@@ -195,6 +191,11 @@ void kmain(struct multiboot_info* init_multiboot_info)
     // Virtual memory manager
     vmm_init();
     // By this point, multiboot data is not valid anymore
+
+    // test int10
+    test_int10();
+    while(1);
+    reboot();
 
     // PIC
     pic_init();
