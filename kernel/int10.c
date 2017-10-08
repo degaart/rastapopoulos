@@ -359,10 +359,15 @@ static void fillcircle(int x, int y, int radius, int color)
     }
 }
 
+/*********************************************************************
+ * VBE funcs
+ *********************************************************************/
+
 /* Start of conventional memory (29Kb) */
 #define LOWMEM_START    0x500
+#define SVGA_FB         0x400000
 
-struct svga_info {
+struct vbe_info {
     char signature[4];
     uint16_t version;
     uint32_t oem_name;
@@ -375,7 +380,7 @@ struct svga_info {
     uint32_t product_rev;
 } __attribute__((packed));
 
-struct svga_modeinfo {
+struct vbe_modeinfo {
 	uint16_t attributes;		// deprecated, only bit 7 should be of interest to you, and it indicates the mode supports a linear frame buffer.
 	uint8_t window_a;			// deprecated
 	uint8_t window_b;			// deprecated
@@ -412,14 +417,16 @@ struct svga_modeinfo {
 	uint16_t off_screen_mem_size;	// size of memory in the framebuffer but not being displayed on the screen
 } __attribute__ ((packed));
 
-static int svga_info(struct svga_info* info)
+static struct vbe_info* vbe_info()
 {
-    memcpy((void*)LOWMEM_START, info, sizeof(struct svga_info));
+    struct vbe_info* vbeinfo = (struct vbe_info*)LOWMEM_START;
+    memset(vbeinfo, 0, sizeof(struct vbe_info));
+    memcpy(vbeinfo->signature, "VBE2", 4);
 
     struct int10_regs regs = {
         .eax = 0x4F00,
         .es = 0,
-        .edi = LOWMEM_START
+        .edi = (uint32_t)vbeinfo
     };
     int10(&regs);
 
@@ -427,20 +434,19 @@ static int svga_info(struct svga_info* info)
     int status = (regs.eax >> 8) & 0xFF;
 
     if(success != 0x4F)
-        return 1;
+        return NULL;
 
-    memcpy(info, (void*)LOWMEM_START, sizeof(struct svga_info));
-    return status;
+    return vbeinfo;
 }
 
-
-static int svga_modeinfo(int mode, struct svga_modeinfo* info)
+static struct vbe_modeinfo* vbe_modeinfo(int mode)
 {
+    struct vbe_modeinfo* result = (struct vbe_modeinfo*)LOWMEM_START;
     struct int10_regs regs = {
         .eax = 0x4F01,
         .ecx = mode,
         .es = 0,
-        .edi = LOWMEM_START,
+        .edi = (uint32_t)result,
     };
     int10(&regs);
 
@@ -448,13 +454,12 @@ static int svga_modeinfo(int mode, struct svga_modeinfo* info)
     int status = (regs.eax >> 8) & 0xFF;
 
     if(success != 0x4f)
-        return 1;
+        return NULL;
 
-    memcpy(info, (void*)LOWMEM_START, sizeof(struct svga_modeinfo));
-    return 0;
+    return result;
 }
 
-static int svga_setmode(int mode)
+static int vbe_setmode(int mode)
 {
     static const int MODE_MASK = 0x3FFF;
     static const int MODE_LFB = 1 << 14;
@@ -470,6 +475,192 @@ static int svga_setmode(int mode)
         return 1;
     return 0;
 }
+
+static int vbe_current_mode()
+{
+    struct int10_regs regs = {
+        .eax = 0x4F03
+    };
+    int10(&regs);
+
+    if(regs.eax != 0x4F00)
+        return 1;
+
+    return regs.ebx;
+}
+
+/*********************************************************************
+ * SVGA funcs
+ *********************************************************************/
+struct svga_mode {
+    int code;
+    int valid;
+    int pitch;
+    int supported;
+    int lfb;
+    int graphics;
+    int crtc;
+    int width;
+    int height;
+    int bpp;
+    int memory_model;
+    int red_position;
+    int red_mask;
+    int green_position;
+    int green_mask;
+    int blue_position;
+    int blue_mask;
+    uint32_t fb;
+};
+
+struct svga_info {
+    struct svga_mode* modes;
+    int modecount;
+    size_t memsize;
+    int current_mode;
+};
+
+static struct svga_info* svga_info()
+{
+    struct svga_info* info = kmalloc(sizeof(struct svga_info));
+
+    /* Get VBE info */
+    struct vbe_info* vbeinfo = vbe_info();
+    if(!vbeinfo) {
+        kfree(info);
+        return NULL;
+    }
+
+    info->memsize = 65536 * vbeinfo->memsize64k;
+    info->current_mode = vbe_current_mode();
+
+    /* Copy modes into memory as other vbe calls might overwrite it */
+    int modecount = 0;
+    uint16_t* modes_ptr = (uint16_t*)((uint32_t)vbeinfo->modes[0] | ((uint32_t)vbeinfo->modes[1] << 16));
+    for(uint16_t* ptr = modes_ptr; *ptr != 0xFFFF; ptr++, modecount++);
+
+    uint16_t* modes_buffer = kmalloc(modecount * sizeof(uint16_t));
+    memcpy(modes_buffer, modes_ptr, sizeof(uint16_t) * modecount);
+
+    info->modes = kmalloc(sizeof(struct svga_mode) * modecount);
+    info->modecount = modecount;
+
+    for(int i = 0; i < modecount; i++) {
+        int mode = modes_buffer[i];
+        assert(mode != 0xFFFF);
+
+        struct svga_mode* modeinfo = info->modes + i;
+        modeinfo->code = mode;
+
+        struct vbe_modeinfo* vbemodeinfo = vbe_modeinfo(mode);
+        if(!vbemodeinfo) {
+            modeinfo->valid = 0;
+        } else {
+            modeinfo->valid = 1;
+            modeinfo->pitch = vbemodeinfo->pitch;
+            modeinfo->supported = vbemodeinfo->attributes & 1;
+            modeinfo->lfb = vbemodeinfo->attributes & (1 << 7);
+            modeinfo->graphics = vbemodeinfo->attributes & (1 << 4);
+            modeinfo->crtc = !!(mode & (1 << 11));
+            modeinfo->width = vbemodeinfo->width;
+            modeinfo->height = vbemodeinfo->height;
+            modeinfo->bpp = vbemodeinfo->bpp;
+            modeinfo->memory_model = vbemodeinfo->memory_model;
+            modeinfo->fb = vbemodeinfo->framebuffer;
+            modeinfo->red_position = vbemodeinfo->red_position;
+            modeinfo->red_mask = vbemodeinfo->red_mask;
+            modeinfo->green_position = vbemodeinfo->green_position;
+            modeinfo->green_mask = vbemodeinfo->green_mask;
+            modeinfo->blue_position = vbemodeinfo->blue_position;
+            modeinfo->blue_mask = vbemodeinfo->blue_mask;
+        }
+    }
+
+    return info;
+}
+
+static int svga_findmode(const struct svga_info* info, 
+                         int width, int height, int bpp)
+{
+    int selected_mode = -1;
+    int pitch;
+    void* framebuffer;
+    struct vbe_modeinfo svga_mode;
+
+    for(int i = 0; i < info->modecount; i++) {
+        const struct svga_mode* mode = info->modes + i;
+        if(mode->valid &&
+           mode->supported && 
+           mode->graphics && 
+           mode->lfb && 
+           !mode->crtc) {
+            if(mode->width == width &&
+               mode->height == height &&
+               mode->bpp == bpp) {
+                if(mode->red_position == 16 &&
+                   mode->green_position == 8 &&
+                   mode->blue_position == 0) {
+                    return i;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+static int svga_setmode(struct svga_info* info, struct svga_mode* mode)
+{
+    int ret = vbe_setmode(mode->code);
+    if(ret)
+        return ret;
+    info->current_mode = mode->code;
+    return 0;
+}
+
+
+#if 0
+static void svga_putpixel(int x, int y, uint32_t col)
+{
+    int x = 640/2;
+    int y = 480/2;
+    int offset = (y * pitch) + (x * 4);
+    int r = 0x7F, g = 0x7F, b = 0x7F;
+
+    *((uint32_t*)(SVGA_FB + offset)) = col;
+}
+
+static void svga_drawhline(int x1, int x2, int y, uint32_t color)
+{
+}
+
+static void svga_drawvline(int x, int y1, int y2, uint32_t color)
+{
+}
+
+static void svga_drawline(int x1, int y1, int x2, int y2, uint32_t color)
+{
+}
+
+static void svga_drawpolygon(int nvert, const int* vert, uint32_t color)
+{
+}
+
+static void svga_drawrect(int left, int top, int right, int bottom, uint32_t color)
+{
+}
+
+static void svga_fillrect(int left, int top, int right, int bottom, uint32_t color)
+{
+}
+
+static void svga_drawcircle(int x, int y, int radius, uint32_t color)
+{
+}
+
+static void svga_fillcircle(int x, int y, int radius, uint32_t color)
+{
+}
+#endif
 
 static int random(int lo, int max)
 {
@@ -496,123 +687,59 @@ void test_int10()
     /* Copy stub to 0x7C00 */
     memcpy((void*)0x7C00, obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
 
-    /* Get vbe info */
-    struct svga_info info = { 0 };
-    memcpy(info.signature, "VBE2", 4);
+    /* Get svga info */
+    struct svga_info* svgainfo = svga_info();
+    assert(svgainfo != NULL);
 
-    int selected_mode = -1;
-    int pitch;
-    void* framebuffer;
-    struct svga_modeinfo svga_mode;
+    /* Find suitable mode */
+    int mode_idx = svga_findmode(svgainfo, 640, 480, 32);
+    assert(mode_idx != -1);
 
-    int ret = svga_info(&info);
-    if(ret == 0) {
-        trace("svga info:");
-        if(!memcmp((void*)info.signature, "VBE2", 4)) {
-            trace("    vbe2 supported");
-        } else if(!memcmp((void*)info.signature, "VESA", 4)) {
-            trace("    vesa supported");
-        } else {
-            trace("    vesa/vbe2 not supported");
-        }
+    struct svga_mode* mode = svgainfo->modes + mode_idx;
 
-        int ver_minor = info.version & 0xFF;
-        int ver_major = (info.version >> 8) & 0xFF;
-        trace("    vbe version: %d.%d", ver_major, ver_minor);
-        trace("    supported modes:");
-
-        /* 
-         * Must copy modes to scratch memory beforehand as 
-         * the buffer is reused between int10 calls 
-         */
-        uint16_t* modes = kmalloc(sizeof(uint32_t)*1024); /* 1024 modes should be enough for everyone */
-        uint16_t* modes_src = (uint16_t*)((uint32_t)info.modes[0] | ((uint32_t)info.modes[1] << 16));
-        assert(modes_src == (uint16_t*)0x522);
-        int mode_count = 0;
-        for(; mode_count < 1024 && (*modes_src != 0xFFFF); mode_count++) {
-            modes[mode_count] = *modes_src;
-            modes_src++;
-        }
-        modes[mode_count] = 0xFFFF;
-
-        uint16_t* mode = modes;
-        while(*mode != 0xFFFF) {
-            struct svga_modeinfo modeinfo;
-            ret = svga_modeinfo(*mode, &modeinfo);
-            if(ret == 0) {
-                int supported = modeinfo.attributes & 1;
-                int lfb = modeinfo.attributes & (1 << 7);
-                int graphics = modeinfo.attributes & (1 << 4);
-                int crtc =  !!(*mode & (1 << 11));
-                if(supported && graphics && lfb) {
-                    trace("        0x%04X: %dx%dx%d lfb: %p crtc: %d model: %d",
-                          (int)*mode,
-                          (int)modeinfo.width,
-                          (int)modeinfo.height,
-                          (int)modeinfo.bpp,
-                          modeinfo.framebuffer,
-                          crtc,
-                          modeinfo.memory_model);
-                    if(modeinfo.width == 640 && modeinfo.height == 480 &&
-                       modeinfo.bpp == 32 && lfb && !crtc && 
-                       (modeinfo.memory_model == 4 || modeinfo.memory_model == 6)) {
-                        selected_mode = *mode;
-                        svga_mode = modeinfo;
-                        pitch = modeinfo.pitch;
-                        framebuffer = (void*)modeinfo.framebuffer;
-                    }
-                }
-            } 
-
-            mode++;
-        }
-
-        if(selected_mode == -1) {
-            panic("No 640x480x32 mode found!");
-        }
-
-        selected_mode = selected_mode | (1 << 14);
-        trace("Selected mode: 0x%X", selected_mode);
-        trace("Positions: R: %d, G: %d, B: %d",
-              (int)svga_mode.red_position,
-              (int)svga_mode.green_position,
-              (int)svga_mode.blue_position);
-        
-        ret = svga_setmode(selected_mode);
-        if(ret) {
-            panic("Failed to set video mode");
-        }
-    }
+    /* Switch mode */
+    int ret = svga_setmode(svgainfo, mode);
+    assert(ret == 0);
 
     // Map framebuffer
-    unsigned char* fb = (unsigned char*)0x400000;
-    size_t fb_size = info.memsize64k * 65536;
-    trace("fb_size: %d Kb", fb_size / 1024);
-    for(unsigned char* va = (unsigned char*)0x400000, *pa = framebuffer;
-        va <= fb + fb_size;
+    unsigned char* fb = (unsigned char*)SVGA_FB;
+    for(unsigned char* va = (unsigned char*)SVGA_FB, 
+        *pa = (unsigned char*)mode->fb;
+        va <= fb + svgainfo->memsize;
         va += 4096, pa += 4096) {
         vmm_map(va, (uint32_t)pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
     // uint32 pixel_offset = y * pitch + (x * (bpp/8)) + framebuffer;
-    int x = 640/2;
-    int y = 480/2;
-    int offset = (y * pitch) + (x * 4);
-    int r = 0x7F, g = 0x7F, b = 0x7F;
+    int x = 640/2, y = 480/2;
+    int r = random(0, 255), g = random(0, 255), b = random(0, 255);
 
-    *((uint32_t*)(fb + offset)) = (r << svga_mode.red_position) |
-                                  (g << svga_mode.green_position) |
-                                  (b << svga_mode.blue_position);
+    while(1) {
+        int offset = (y * mode->pitch) + (x * 4);
+
+        *((uint32_t*)(fb + offset)) = (r << 16) | (g << 8) | (b);
+
+        x += random(-1, 1);
+        x = abs(x) % 639;
+
+        y += random(-1, 1);
+        y = abs(y) % 479;
+
+        r += random(-1, 1);
+        r = abs(r) % 255;
+
+        g += random(-1, 1);
+        g = abs(g) % 255;
+
+        b += random(-1, 1);
+        b = abs(b) % 255;
+
 #if 0
-    for(int i = 0; i < 1000; i++) {
-        int x = random(0, 639);
-        int y = random(0, 479);
-        int col = random(0, 255);
-
-        int offset = (y * pitch) + x;
-        fb[offset] = col & 0xFF;
-    }
+        for(int i = 0; i < 655; i++) {
+            io_delay();
+        }
 #endif
+    }
 }
 
 
