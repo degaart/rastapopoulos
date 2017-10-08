@@ -359,6 +359,14 @@ static void fillcircle(int x, int y, int radius, int color)
     }
 }
 
+static void delay()
+{
+    for(int i = 0; i < 0xFFFF; i++) {
+        io_delay();
+    }
+}
+
+
 /*********************************************************************
  * VBE funcs
  *********************************************************************/
@@ -629,8 +637,12 @@ static void svga_putpixel(const struct svga_info* info,
 {
     struct svga_mode* mode = info->modes + info->current_mode;
 
-    int offset = (y * mode->pitch) + (x * 4);
-    *((uint32_t*)(SVGA_FB + offset)) = col;
+    if(x >= 0 && x < mode->width) {
+        if(y >= 0 && y < mode->height) {
+            int offset = (y * mode->pitch) + (x * 4);
+            *((uint32_t*)(SVGA_FB + offset)) = col;
+        }
+    }
 }
 
 static void svga_drawhline(struct svga_info* info,
@@ -734,27 +746,141 @@ static void svga_drawline(struct svga_info* info,
 
 }
 
-#if 0
-static void svga_drawpolygon(int nvert, const int* vert, uint32_t color)
+static void svga_drawpolygon(struct svga_info* info,
+                             int nvert, const int* vert, uint32_t color)
 {
+    for(int i = 0; i < nvert - 1; i++) {
+        svga_drawline(info,
+                      vert[i * 2], vert[(i * 2) + 1],
+                      vert[(i + 1) * 2], vert[((i + 1) * 2) + 1],
+                      color);
+    }
+    svga_drawline(info,
+                  vert[0], vert[1],
+                  vert[(nvert - 1) * 2], vert[((nvert - 1) * 2) + 1], 
+                  color);
 }
 
-static void svga_drawrect(int left, int top, int right, int bottom, uint32_t color)
+static void svga_drawrect(struct svga_info* info,
+                          int left, int top, int right, int bottom, uint32_t color)
 {
+    svga_drawline(info, left, top, right, top, color);
+    svga_drawline(info, right, top, right, bottom, color);
+    svga_drawline(info, right, bottom, left, bottom, color);
+    svga_drawline(info, left, bottom, left, top, color);
 }
 
-static void svga_fillrect(int left, int top, int right, int bottom, uint32_t color)
+static void svga_fillrect(struct svga_info* info,
+                          int left, int top, int right, int bottom, uint32_t color)
 {
+    if(top > bottom)
+        swap(top, bottom);
+    if(left > right)
+        swap(left, right);
+
+    struct svga_mode* mode = info->modes + info->current_mode;
+    clamp(left, 0, mode->width);
+    clamp(top, 0, mode->height);
+    clamp(right, 0, mode->width);
+    clamp(bottom, 0, mode->height);
+
+    int top_offset = (top * mode->pitch) + (left * 4);
+    int bottom_offset = (bottom * mode->pitch) + left;
+    int width = right - left + 1;
+
+    for(int i = top_offset; i <= bottom_offset; i += mode->pitch) {
+        uint32_t* ptr = (uint32_t*)(SVGA_FB + i);
+        for(int j = 0; j < width; j++) {
+            *ptr = color;
+            ptr++;
+        }
+    }
 }
 
-static void svga_drawcircle(int x, int y, int radius, uint32_t color)
+static void svga_drawcircle(struct svga_info* info,
+                            int cx, int cy, int radius, uint32_t color)
 {
+    if(radius == 0)
+        return;
+
+    struct svga_mode* mode = info->modes + info->current_mode;
+
+    /* midpoint circle algorithm */
+#define put4(cx, cy, x, y, color) \
+    do { \
+		svga_putpixel(info, (cx) + (x), (cy) + (y), color); \
+		svga_putpixel(info, (cx) - (x), (cy) + (y), color); \
+		svga_putpixel(info, (cx) + (x), (cy) - (y), color); \
+		svga_putpixel(info, (cx) - (x), (cy) - (y), color); \
+    } while(0)
+#define put8(cx, cy, x, y, color) \
+    do { \
+        put4(cx, cy, x, y, color); \
+        put4(cx, cy, y, x, color); \
+    } while(0)
+
+	int error = -radius;
+	int x = radius;
+	int y = 0;
+
+	while (x >= y) {
+		put8(cx, cy, x, y, color);
+
+		error += y;
+		y++;
+		error += y;
+
+		if (error >= 0) {
+			error += -x;
+			x--;
+			error += -x;
+		}
+	}
+#undef put8
+#undef put4
 }
 
-static void svga_fillcircle(int x, int y, int radius, uint32_t color)
+static void svga_fillcircle(struct svga_info* info,
+                            int cx, int cy, int radius, uint32_t color)
 {
+    if(radius == 0)
+        return;
+
+    struct svga_mode* mode = info->modes + info->current_mode;
+
+    /* midpoint circle algorithm */
+#define put4(cx, cy, x, y, color) \
+    do { \
+        svga_drawhline(info, cx + x, cx - x, cy + y, color); \
+        svga_drawhline(info, cx + x, cx - x, cy - y, color); \
+    } while(0)
+#define put8(cx, cy, x, y, color) \
+    do { \
+        put4(cx, cy, x, y, color); \
+        put4(cx, cy, y, x, color); \
+    } while(0)
+
+	int error = -radius;
+	int x = radius;
+	int y = 0;
+
+	while (x >= y) {
+		put8(cx, cy, x, y, color);
+
+		error += y;
+		y++;
+		error += y;
+
+		if (error >= 0) {
+			error += -x;
+			x--;
+			error += -x;
+		}
+	}
+#undef put8
+#undef put4
+
 }
-#endif
 
 static int random(int lo, int max)
 {
@@ -804,10 +930,23 @@ void test_int10()
         vmm_map(va, (uint32_t)pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
-    svga_drawhline(svgainfo, 10, 640 - 10, 480 / 2, 0xFF0000);
-    svga_drawvline(svgainfo, 640 / 2, 10, 480 - 10, 0x00FF00);
+    /* Draw effects */
+    for(int i = 0; i < 10; i++) {
+        svga_putpixel(svgainfo,
+                      random(0, 639),
+                      random(0, 479),
+                      random(0, 0xFFFFFF));
+        delay();
+    }
 
-    while(1) {
+    for(int i = 0; i < 10; i++) {
+        svga_drawhline(svgainfo, random(0, 639), random(0, 639), random(0, 479), random(0, 0xFFFFFF));
+        svga_drawvline(svgainfo, random(0, 639), random(0, 639), random(0, 479), random(0, 0xFFFFFF));
+        delay();
+    }
+
+
+    for(int i = 0; i < 10; i++) {
         int x1 = random(0, 639);
         int x2 = random(0, 639);
         int y1 = random(0, 479);
@@ -819,6 +958,60 @@ void test_int10()
         uint32_t col = (r << 16) | (g << 8) | b;
 
         svga_drawline(svgainfo, x1, y1, x2, y2, col);
+        delay();
+    }
+
+    for(int i = 0; i < 10; i++) {
+        int vertices[6];
+        vertices[0] = random(0, 639);
+        vertices[1] = random(0, 479);
+
+        vertices[2] = random(0, 639);
+        vertices[3] = random(0, 479);
+
+        vertices[4] = random(0, 639);
+        vertices[5] = random(0, 479);
+
+        svga_drawpolygon(svgainfo, 3, vertices, random(0, 0xFFFFFF));
+        delay();
+    }
+
+    for(int i = 0; i < 10; i++) {
+        int left = random(0, 639);
+        int top = random(0, 479);
+        int right = random(0, 639);
+        int bottom = random(0, 479);
+
+        svga_drawrect(svgainfo, left, top, right, bottom, random(0, 0xFFFFFF));
+        delay();
+    }
+
+    for(int i = 0; i < 10; i++) {
+        int left = random(0, 639);
+        int top = random(0, 479);
+        int right = random(0, 639);
+        int bottom = random(0, 479);
+
+        svga_fillrect(svgainfo, left, top, right, bottom, random(0, 0xFFFFFF));
+        delay();
+    }
+
+    for(int i = 0; i < 10; i++) {
+        svga_drawcircle(svgainfo,
+                        random(0, 639),
+                        random(0, 479),
+                        random(10, 480 / 3),
+                        random(0, 0xFFFFFF));
+        delay();
+    }
+
+    for(int i = 0; i < 10; i++) {
+        svga_fillcircle(svgainfo,
+                        random(0, 639),
+                        random(0, 479),
+                        random(10, 480 / 3),
+                        random(0, 0xFFFFFF));
+        delay();
     }
 }
 
