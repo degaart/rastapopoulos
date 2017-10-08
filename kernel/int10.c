@@ -35,10 +35,10 @@
 #define swap(x, y) do { int tmp = y; y = x; x = tmp; } while(0)
 #define clamp(x, min, max)  \
     do {                    \
-        if(x < min)         \
-            x = min;        \
-        if(x > max)         \
-            x = max;        \
+        if((x) < (min))         \
+            (x) = (min);        \
+        if((x) > (max))         \
+            (x) = (max);        \
     } while(0)
 
 static uint32_t rng_state;
@@ -633,19 +633,108 @@ static void svga_putpixel(const struct svga_info* info,
     *((uint32_t*)(SVGA_FB + offset)) = col;
 }
 
+static void svga_drawhline(struct svga_info* info,
+                           int x1, int x2, int y, uint32_t color)
+{
+    if(x1 > x2)
+        swap(x1, x2);
+
+    struct svga_mode* mode = info->modes + info->current_mode;
+    clamp(x1, 0, mode->width - 1);
+    clamp(x2, 0, mode->width - 1);
+    clamp(y, 0, mode->height - 1);
+
+    int offset = (y * mode->pitch) + (x1 * 4);
+    uint32_t* ptr = (uint32_t*)(SVGA_FB + offset);
+    for(int i = x1; i <= x2; i++) {
+        *ptr = color;
+        ptr++;
+    }
+}
+
+static void svga_drawvline(struct svga_info* info,
+                           int x, int y1, int y2, uint32_t color)
+{
+    if(y1 > y2)
+        swap(y1, y2);
+
+    struct svga_mode* mode = info->modes + info->current_mode;
+    clamp(x, 0, mode->width - 1);
+    clamp(y1, 0, mode->height - 1);
+    clamp(y2, 0, mode->height - 1);
+
+    int offset = (y1 * mode->pitch) + (x * 4);
+    unsigned char* ptr = (unsigned char*)(SVGA_FB + offset);
+    for(int i = y1; i <= y2; i++) {
+        *((uint32_t*)ptr) = color;
+        ptr += mode->pitch;
+    }
+}
+
+static void svga_drawline(struct svga_info* info,
+                          int x1, int y1, int x2, int y2, uint32_t color)
+{
+    if(x1 == x2) {
+        svga_drawvline(info, x1, y1, y2, color);
+        return;
+    } else if(y1 == y2) {
+        svga_drawhline(info, x1, x2, y2, color);
+        return;
+    }
+
+    struct svga_mode* mode = info->modes + info->current_mode;
+    clamp(x1, 0, mode->width);
+    clamp(x2, 0, mode->width);
+    clamp(y1, 0, mode->height);
+    clamp(y2, 0, mode->height);
+
+    int i,dx,dy,sdx,sdy,dxabs,dyabs,x,y,px,py;
+
+    dx=x2-x1;      /* the horizontal distance of the line */
+    dy=y2-y1;      /* the vertical distance of the line */
+    dxabs=abs(dx);
+    dyabs=abs(dy);
+    sdx=sgn(dx);
+    sdy=sgn(dy);
+    x=dyabs>>1;
+    y=dxabs>>1;
+    px=x1;
+    py=y1;
+
+    svga_putpixel(info, px, py, color);
+
+    if (dxabs>=dyabs) /* the line is more horizontal than vertical */
+    {
+        for(i=0;i<dxabs;i++)
+        {
+            y+=dyabs;
+            if (y>=dxabs)
+            {
+                y-=dxabs;
+                py+=sdy;
+            }
+            px+=sdx;
+            svga_putpixel(info, px,py,color);
+        }
+    }
+    else /* the line is more vertical than horizontal */
+    {
+        for(i=0;i<dyabs;i++)
+        {
+            x+=dxabs;
+            if (x>=dyabs)
+            {
+                x-=dyabs;
+                px+=sdx;
+            }
+            py+=sdy;
+            svga_putpixel(info, px,py,color);
+        }
+    }
+
+}
+
 #if 0
-static void svga_drawhline(int x1, int x2, int y, uint32_t color)
-{
-}
-
-static void svga_drawvline(int x, int y1, int y2, uint32_t color)
-{
-}
-
-static void svga_drawline(int x1, int y1, int x2, int y2, uint32_t color)
-{
-}
-
 static void svga_drawpolygon(int nvert, const int* vert, uint32_t color)
 {
 }
@@ -715,30 +804,21 @@ void test_int10()
         vmm_map(va, (uint32_t)pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
-    uint32_t col = 0;
-    int offsetx = 0, offsety = 0;
-    while(1) {
-        for(int y = 0; y < 480; y++) {
-            for(int x = 0; x < 640; x++) {
-                svga_putpixel(svgainfo, 
-                              (x + offsetx) % 640, 
-                              (y + offsety) % 480, 
-                              col);
+    svga_drawhline(svgainfo, 10, 640 - 10, 480 / 2, 0xFF0000);
+    svga_drawvline(svgainfo, 640 / 2, 10, 480 - 10, 0x00FF00);
 
-                col++;
-                if(col > 0x00FFFFFF) {
-                    col = 0;
-                }
-            }
-        }
-        offsetx++;
-        if(offsetx > 640) {
-            offsetx = 0;
-            offsety++;
-        }
-        for(int i = 0; i < 655360; i++) {
-            io_delay();
-        }
+    while(1) {
+        int x1 = random(0, 639);
+        int x2 = random(0, 639);
+        int y1 = random(0, 479);
+        int y2 = random(0, 479);
+
+        int r = random(0, 255);
+        int g = random(0, 255);
+        int b = random(0, 255);
+        uint32_t col = (r << 16) | (g << 8) | b;
+
+        svga_drawline(svgainfo, x1, y1, x2, y2, col);
     }
 }
 
