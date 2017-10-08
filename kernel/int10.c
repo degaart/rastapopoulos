@@ -519,6 +519,7 @@ struct svga_mode {
     int blue_position;
     int blue_mask;
     uint32_t fb;
+    unsigned char* fb_ptr;
 };
 
 struct svga_info {
@@ -580,6 +581,7 @@ static struct svga_info* svga_info()
             modeinfo->bpp = vbemodeinfo->bpp;
             modeinfo->memory_model = vbemodeinfo->memory_model;
             modeinfo->fb = vbemodeinfo->framebuffer;
+            modeinfo->fb_ptr = 0;
             modeinfo->red_position = vbemodeinfo->red_position;
             modeinfo->red_mask = vbemodeinfo->red_mask;
             modeinfo->green_position = vbemodeinfo->green_position;
@@ -628,6 +630,7 @@ static int svga_setmode(struct svga_info* info, int mode_idx)
     if(ret)
         return ret;
     info->current_mode = mode_idx;
+    mode->fb_ptr = (unsigned char*)SVGA_FB;
     return 0;
 }
 
@@ -639,13 +642,13 @@ static void svga_putpixel(const struct svga_info* info,
 
     if(x >= 0 && x < mode->width) {
         if(y >= 0 && y < mode->height) {
-            int offset = (y * mode->pitch) + (x * 4);
-            *((uint32_t*)(SVGA_FB + offset)) = col;
+            int offset = (y * mode->pitch) + (x * (mode->bpp / 8));
+            *((uint32_t*)(mode->fb_ptr + offset)) = col;
         }
     }
 }
 
-static void svga_drawhline(struct svga_info* info,
+static void svga_drawhline(const struct svga_info* info,
                            int x1, int x2, int y, uint32_t color)
 {
     if(x1 > x2)
@@ -656,15 +659,15 @@ static void svga_drawhline(struct svga_info* info,
     clamp(x2, 0, mode->width - 1);
     clamp(y, 0, mode->height - 1);
 
-    int offset = (y * mode->pitch) + (x1 * 4);
-    uint32_t* ptr = (uint32_t*)(SVGA_FB + offset);
+    int offset = (y * mode->pitch) + (x1 * (mode->bpp / 8));
+    uint32_t* ptr = (uint32_t*)(mode->fb_ptr + offset);
     for(int i = x1; i <= x2; i++) {
         *ptr = color;
         ptr++;
     }
 }
 
-static void svga_drawvline(struct svga_info* info,
+static void svga_drawvline(const struct svga_info* info,
                            int x, int y1, int y2, uint32_t color)
 {
     if(y1 > y2)
@@ -675,15 +678,15 @@ static void svga_drawvline(struct svga_info* info,
     clamp(y1, 0, mode->height - 1);
     clamp(y2, 0, mode->height - 1);
 
-    int offset = (y1 * mode->pitch) + (x * 4);
-    unsigned char* ptr = (unsigned char*)(SVGA_FB + offset);
+    int offset = (y1 * mode->pitch) + (x * (mode->bpp / 8));
+    unsigned char* ptr = (unsigned char*)(mode->fb_ptr + offset);
     for(int i = y1; i <= y2; i++) {
         *((uint32_t*)ptr) = color;
         ptr += mode->pitch;
     }
 }
 
-static void svga_drawline(struct svga_info* info,
+static void svga_drawline(const struct svga_info* info,
                           int x1, int y1, int x2, int y2, uint32_t color)
 {
     if(x1 == x2) {
@@ -726,7 +729,7 @@ static void svga_drawline(struct svga_info* info,
                 py+=sdy;
             }
             px+=sdx;
-            svga_putpixel(info, px,py,color);
+            svga_putpixel(info, px, py, color);
         }
     }
     else /* the line is more vertical than horizontal */
@@ -740,13 +743,13 @@ static void svga_drawline(struct svga_info* info,
                 px+=sdx;
             }
             py+=sdy;
-            svga_putpixel(info, px,py,color);
+            svga_putpixel(info, px, py, color);
         }
     }
 
 }
 
-static void svga_drawpolygon(struct svga_info* info,
+static void svga_drawpolygon(const struct svga_info* info,
                              int nvert, const int* vert, uint32_t color)
 {
     for(int i = 0; i < nvert - 1; i++) {
@@ -761,7 +764,7 @@ static void svga_drawpolygon(struct svga_info* info,
                   color);
 }
 
-static void svga_drawrect(struct svga_info* info,
+static void svga_drawrect(const struct svga_info* info,
                           int left, int top, int right, int bottom, uint32_t color)
 {
     svga_drawline(info, left, top, right, top, color);
@@ -770,7 +773,7 @@ static void svga_drawrect(struct svga_info* info,
     svga_drawline(info, left, bottom, left, top, color);
 }
 
-static void svga_fillrect(struct svga_info* info,
+static void svga_fillrect(const struct svga_info* info,
                           int left, int top, int right, int bottom, uint32_t color)
 {
     if(top > bottom)
@@ -784,12 +787,12 @@ static void svga_fillrect(struct svga_info* info,
     clamp(right, 0, mode->width);
     clamp(bottom, 0, mode->height);
 
-    int top_offset = (top * mode->pitch) + (left * 4);
+    int top_offset = (top * mode->pitch) + (left * (mode->bpp / 8));
     int bottom_offset = (bottom * mode->pitch) + left;
     int width = right - left + 1;
 
     for(int i = top_offset; i <= bottom_offset; i += mode->pitch) {
-        uint32_t* ptr = (uint32_t*)(SVGA_FB + i);
+        uint32_t* ptr = (uint32_t*)(mode->fb_ptr + i);
         for(int j = 0; j < width; j++) {
             *ptr = color;
             ptr++;
@@ -922,8 +925,8 @@ void test_int10()
     assert(ret == 0);
 
     // Map framebuffer
-    unsigned char* fb = (unsigned char*)SVGA_FB;
-    for(unsigned char* va = (unsigned char*)SVGA_FB, 
+    unsigned char* fb = (unsigned char*)mode->fb_ptr;
+    for(unsigned char* va = (unsigned char*)mode->fb_ptr, 
         *pa = (unsigned char*)mode->fb;
         va <= fb + svgainfo->memsize;
         va += 4096, pa += 4096) {
