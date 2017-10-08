@@ -517,7 +517,7 @@ struct svga_info {
     struct svga_mode* modes;
     int modecount;
     size_t memsize;
-    int current_mode;
+    int current_mode;   /* offset of into modes */
 };
 
 static struct svga_info* svga_info()
@@ -532,7 +532,6 @@ static struct svga_info* svga_info()
     }
 
     info->memsize = 65536 * vbeinfo->memsize64k;
-    info->current_mode = vbe_current_mode();
 
     /* Copy modes into memory as other vbe calls might overwrite it */
     int modecount = 0;
@@ -545,9 +544,15 @@ static struct svga_info* svga_info()
     info->modes = kmalloc(sizeof(struct svga_mode) * modecount);
     info->modecount = modecount;
 
+    int vbemode = vbe_current_mode();
+
     for(int i = 0; i < modecount; i++) {
         int mode = modes_buffer[i];
         assert(mode != 0xFFFF);
+
+        if((mode & 0x1FFF) == (vbemode & 0x1FFF)) {
+            info->current_mode = vbemode;
+        }
 
         struct svga_mode* modeinfo = info->modes + i;
         modeinfo->code = mode;
@@ -608,27 +613,27 @@ static int svga_findmode(const struct svga_info* info,
     return -1;
 }
 
-static int svga_setmode(struct svga_info* info, struct svga_mode* mode)
+static int svga_setmode(struct svga_info* info, int mode_idx)
 {
+    struct svga_mode* mode = info->modes + mode_idx;
     int ret = vbe_setmode(mode->code);
     if(ret)
         return ret;
-    info->current_mode = mode->code;
+    info->current_mode = mode_idx;
     return 0;
 }
 
 
-#if 0
-static void svga_putpixel(int x, int y, uint32_t col)
+static void svga_putpixel(const struct svga_info* info,
+                          int x, int y, uint32_t col)
 {
-    int x = 640/2;
-    int y = 480/2;
-    int offset = (y * pitch) + (x * 4);
-    int r = 0x7F, g = 0x7F, b = 0x7F;
+    struct svga_mode* mode = info->modes + info->current_mode;
 
+    int offset = (y * mode->pitch) + (x * 4);
     *((uint32_t*)(SVGA_FB + offset)) = col;
 }
 
+#if 0
 static void svga_drawhline(int x1, int x2, int y, uint32_t color)
 {
 }
@@ -698,7 +703,7 @@ void test_int10()
     struct svga_mode* mode = svgainfo->modes + mode_idx;
 
     /* Switch mode */
-    int ret = svga_setmode(svgainfo, mode);
+    int ret = svga_setmode(svgainfo, mode_idx);
     assert(ret == 0);
 
     // Map framebuffer
@@ -710,35 +715,30 @@ void test_int10()
         vmm_map(va, (uint32_t)pa, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
     }
 
-    // uint32 pixel_offset = y * pitch + (x * (bpp/8)) + framebuffer;
-    int x = 640/2, y = 480/2;
-    int r = random(0, 255), g = random(0, 255), b = random(0, 255);
-
+    uint32_t col = 0;
+    int offsetx = 0, offsety = 0;
     while(1) {
-        int offset = (y * mode->pitch) + (x * 4);
+        for(int y = 0; y < 480; y++) {
+            for(int x = 0; x < 640; x++) {
+                svga_putpixel(svgainfo, 
+                              (x + offsetx) % 640, 
+                              (y + offsety) % 480, 
+                              col);
 
-        *((uint32_t*)(fb + offset)) = (r << 16) | (g << 8) | (b);
-
-        x += random(-1, 1);
-        x = abs(x) % 639;
-
-        y += random(-1, 1);
-        y = abs(y) % 479;
-
-        r += random(-1, 1);
-        r = abs(r) % 255;
-
-        g += random(-1, 1);
-        g = abs(g) % 255;
-
-        b += random(-1, 1);
-        b = abs(b) % 255;
-
-#if 0
-        for(int i = 0; i < 655; i++) {
+                col++;
+                if(col > 0x00FFFFFF) {
+                    col = 0;
+                }
+            }
+        }
+        offsetx++;
+        if(offsetx > 640) {
+            offsetx = 0;
+            offsety++;
+        }
+        for(int i = 0; i < 655360; i++) {
             io_delay();
         }
-#endif
     }
 }
 
