@@ -56,7 +56,7 @@ void main()
         invalid_code_path();
     }
 
-#if 1
+#if 0
     /* Start block driver */
     int blockdrv_pid = fork();
     if(!blockdrv_pid) {
@@ -72,8 +72,19 @@ void main()
     }
 #endif
 
+#if 1
+    /* Start svga driver */
+    int svga_pid = fork();
+    if(!svga_pid) {
+        exec("svga.elf");
+        invalid_code_path();
+    }
+#endif
+
+#if 0
     /* Run tests */
     run_tests();
+#endif
 }
 
 

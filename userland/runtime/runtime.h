@@ -30,11 +30,20 @@ void exec(const char* filename);
 struct task_info;
 bool get_task_info(int pid, struct task_info* buffer);
 
+struct int10_regs {
+    uint32_t eax, ebx, ecx, edx;
+    uint32_t ebp, esi, edi;
+    uint32_t es, fs, gs;
+    uint32_t reserved;
+} __attribute((packed));
+int int10(struct int10_regs* regs);
+
 #define     PROT_NONE           0x0
 #define     PROT_READ           0x1
 #define     PROT_WRITE          0x2
 #define     PROT_EXEC           0x4
 void* mmap(void* addr, size_t size, uint32_t flags);
+int mmap_phys(uint32_t pa, void* addr, size_t size, uint32_t flags);
 
 #define     O_RDONLY        0x1
 #define     O_WRONLY        0x2
