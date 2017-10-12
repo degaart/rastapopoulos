@@ -56,7 +56,7 @@ void main()
         invalid_code_path();
     }
 
-#if 0
+#if 1
     /* Start block driver */
     int blockdrv_pid = fork();
     if(!blockdrv_pid) {
@@ -81,7 +81,7 @@ void main()
     }
 #endif
 
-#if 0
+#if 1
     /* Run tests */
     run_tests();
 #endif
