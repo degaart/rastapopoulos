@@ -15,9 +15,8 @@
 #define SYSCALL_MMAP            13
 #define SYSCALL_MUNMAP          14
 #define SYSCALL_HWPORTOPEN      15
-
-/* put current task into sleeping queue */
-#define SYSCALL_BLOCK           17
+#define SYSCALL_BLOCK           17      /* put current task into sleeping queue */
+#define SYSCALL_MMAP_PHYS       18
 
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,

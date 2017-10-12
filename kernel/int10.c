@@ -1,12 +1,15 @@
+#include "int10.h"
+#include "int10_stub.h"
 #include "kdebug.h"
 #include "string.h"
-#include "int10_stub.h"
 #include "io.h"
 #include "sin_acos.h"
 #include "random.h"
 #include "util.h"
 #include "vmm.h"
 #include "kmalloc.h"
+#include "kernel.h"
+#include "pmm.h"
 
 #define VGA_80x25           0x03
 #define VGA_320x200x8       0x13
@@ -43,15 +46,6 @@
 
 static uint32_t rng_state;
 
-
-struct int10_regs {
-    uint32_t eax, ebx, ecx, edx;
-    uint32_t ebp, esi, edi;
-    uint32_t es, fs, gs;
-    uint32_t reserved;
-} __attribute((packed));
-
-void int10(struct int10_regs*);
 
 struct coord {
     int row, col;
@@ -372,7 +366,7 @@ static void delay()
  *********************************************************************/
 
 /* Start of conventional memory (29Kb) */
-#define LOWMEM_START    0x500
+#define LOWMEM_START    (KERNEL_BASE_ADDR + 0x500)
 #define SVGA_FB         0x400000
 
 struct vbe_info {
@@ -544,7 +538,8 @@ static struct svga_info* svga_info()
 
     /* Copy modes into memory as other vbe calls might overwrite it */
     int modecount = 0;
-    uint16_t* modes_ptr = (uint16_t*)((uint32_t)vbeinfo->modes[0] | ((uint32_t)vbeinfo->modes[1] << 16));
+    uint16_t* modes_ptr = (uint16_t*)
+        (((uint32_t)vbeinfo->modes[0] | ((uint32_t)vbeinfo->modes[1] << 16)) + KERNEL_BASE_ADDR);
     for(uint16_t* ptr = modes_ptr; *ptr != 0xFFFF; ptr++, modecount++);
 
     uint16_t* modes_buffer = kmalloc(modecount * sizeof(uint16_t));
@@ -902,13 +897,8 @@ void test_int10()
     /* Initialize RNG */
     rng_state = rdtsc() & 0xFFFFFFFF;
 
-    /* Map conventional memory in because we need it */
-    for(int i = 0; i <= 0x000FFFFF; i += 4096) {
-        vmm_map((void*)i, i, VMM_PAGE_PRESENT|VMM_PAGE_WRITABLE);
-    }
-
-    /* Copy stub to 0x7C00 */
-    memcpy((void*)0x7C00, obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
+    /* Initialize int10 stub */
+    int10_init();
 
     /* Get svga info */
     struct svga_info* svgainfo = svga_info();
@@ -1018,4 +1008,51 @@ void test_int10()
     }
 }
 
+void _int10(struct int10_regs*);
+void int10(struct int10_regs* regs)
+{
+    /* 
+     * Save current mappings for conventional memory 
+     * Then, remap it to its needed counterpart
+     */
+    struct mapping {
+        uint32_t frame;
+        uint32_t flags;
+    };
+    size_t mapping_count = 0x100000 / PAGE_SIZE;        /* 256 */
+    struct mapping* mappings = kmalloc(sizeof(struct mapping) * mapping_count);
+    unsigned char* va = 0;
+    for(int i = 0; i < mapping_count; i++, va += PAGE_SIZE) {
+        mappings[i].flags = vmm_get_flags(va);
+        if(mappings[i].flags & VMM_PAGE_PRESENT) {
+            mappings[i].frame = vmm_get_physical(va);
+            vmm_unmap(va);
+        }
+        vmm_map(va, (uint32_t)va, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    }
+
+    /* Copy stub to 0x7C00 */
+    memcpy((void*)(0x7C00 + KERNEL_BASE_ADDR), obj_int10_stub_bin, sizeof(obj_int10_stub_bin));
+
+    /* Call stub */
+    _int10(regs);
+
+    /*
+     * Remap old maps
+     */
+    va = 0;
+    for(int i = 0; i < mapping_count; i++, va += PAGE_SIZE) {
+        vmm_unmap(va);
+        if(mappings[i].flags & VMM_PAGE_PRESENT) {
+            vmm_map(va, mappings[i].frame, mappings[i].flags);
+        }
+    }
+
+    kfree(mappings);
+}
+
+void int10_init()
+{
+
+}
 

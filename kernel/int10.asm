@@ -17,8 +17,8 @@ section .text
 ; gdtr                    0x7D38      [INT10_SCRATCH + 56]   Original GDTR. 12 bytes.
 ; sentinel                0x7D44      [INT10_SCRATCH + 68]   Sentinel. 0xDEADBEEF
 ;
-global int10
-int10:
+global _int10
+_int10:
     push    ebp
     mov     ebp, esp
 

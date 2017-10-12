@@ -1,6 +1,6 @@
 int kernel_get_task_info(int pid, out blob buffer);
 oneway void kernel_reboot();
-
+int kernel_int10(out blob result, blob buffer);
 
 
 

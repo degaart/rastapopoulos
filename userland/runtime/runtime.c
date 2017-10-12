@@ -100,6 +100,17 @@ void* mmap(void* addr, size_t size, uint32_t flags)
     return (void*)result;
 }
 
+int mmap_phys(uint32_t pa, void* addr, size_t size, uint32_t flags)
+{
+    int result = syscall(SYSCALL_MMAP_PHYS,
+                         pa,
+                         (uint32_t)addr,
+                         (uint32_t)size,
+                         (uint32_t)flags,
+                         0);
+    return result;
+}
+
 int munmap(void* addr)
 {
     uint32_t result = syscall(SYSCALL_MUNMAP,

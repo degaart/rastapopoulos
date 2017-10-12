@@ -135,7 +135,7 @@ void pmm_free(uint32_t page)
         }
     }
 
-    trace("Error: page %p not found!");
+    trace("Error: page %p not found!", page);
     abort();
 }
 

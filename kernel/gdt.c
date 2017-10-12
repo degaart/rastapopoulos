@@ -144,18 +144,16 @@ void gdt_init()
 
     set_descriptor(
         6,
-        0x0, 0xFFFFF,
+        0, 0xFFFFF,
         GDT_READABLE|GDT_CODE|GDT_TYPE(1)|GDT_PRESENT,
         GDT_16BIT|GDT_GRAN1B
-    ); /* 16-bit code */
+    ); /* 16-bit code, higher-half */
     set_descriptor(
         7,
-        0x0, 0xFFFFF,
+        0, 0xFFFFF,
         GDT_WRITABLE|GDT_TYPE(1)|GDT_PRESENT,
         GDT_16BIT|GDT_GRAN1B
-    ); /* 16-bit data */
-
-
+    ); /* 16-bit data, higher-half */
 
     gdt_flush(&gdt_ptr);
     tss_flush();

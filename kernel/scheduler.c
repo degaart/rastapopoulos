@@ -551,13 +551,13 @@ static uint32_t syscall_mmap_handler(struct isr_regs* regs)
         page < (unsigned char*)addr + size;
         page += PAGE_SIZE) {
 
-        /* Check if already mapped */
+        /* check if already mapped */
         uint32_t va_flags = vmm_get_flags(page);
         if(va_flags & VMM_PAGE_PRESENT) {
             return 0;
         }
 
-        /* Check if in valid memory area */
+        /* check if in valid memory area */
         if((uint32_t)page < USER_START || (uint32_t)page > USER_END)
             return 0;
     }
@@ -585,6 +585,64 @@ static uint32_t syscall_mmap_handler(struct isr_regs* regs)
     //trace("mmap(%p, %d, %d)", addr, size, flags);
 
     return (uint32_t)addr;
+}
+
+/*
+ * Params:
+ *  ebx         physical address
+ *  ecx         virtual address
+ *  edx         size
+ *  esi         flags
+ * Returns:
+ *  0           Success
+ *  else        Failure
+ */
+static uint32_t syscall_mmap_phys_handler(struct isr_regs* regs)
+{
+    uint32_t pa = regs->ebx;
+    unsigned char* va = (unsigned char*)regs->ecx;
+    size_t size = regs->edx;
+    unsigned flags = regs->esi;
+
+    /* Must be aligned */
+    if(!IS_ALIGNED(pa, PAGE_SIZE) ||
+       !IS_ALIGNED(va, PAGE_SIZE) ||
+       !IS_ALIGNED(size, PAGE_SIZE))
+        return 1;
+    else if(flags == 0)
+        return 2;
+
+    /* Calculate flags */
+    unsigned vmm_flags = VMM_PAGE_PRESENT | VMM_PAGE_USER;
+    if(flags & 0x2)
+        vmm_flags |= VMM_PAGE_WRITABLE;
+
+    /* Check validity */
+    for(unsigned char* page = va;
+        page < (unsigned char*)va + size;
+        page += PAGE_SIZE) {
+
+        /* check if already mapped */
+        uint32_t va_flags = vmm_get_flags(page);
+        if(va_flags & VMM_PAGE_PRESENT) {
+            return 3;
+        }
+
+        /* check if in valid memory area */
+        if((uint32_t)page < USER_START || (uint32_t)page > USER_END)
+            return 4;
+    }
+
+    /* Map */
+    for(unsigned char* page = va;
+        page < (unsigned char*)va + size;
+        page += PAGE_SIZE, pa += PAGE_SIZE) {
+
+        vmm_map(page, pa, vmm_flags);
+    }
+    trace("Mapped %p - %p",
+          va, va + size);
+    return 0;
 }
 
 /*
@@ -677,6 +735,7 @@ void scheduler_start()
     syscall_register(SYSCALL_SLEEP, syscall_sleep_handler);
     syscall_register(SYSCALL_EXEC, syscall_exec_handler);
     syscall_register(SYSCALL_MMAP, syscall_mmap_handler);
+    syscall_register(SYSCALL_MMAP_PHYS, syscall_mmap_phys_handler);
     syscall_register(SYSCALL_BLOCK, syscall_block_handler);
     syscall_register(SYSCALL_HWPORTOPEN, syscall_hwportopen_handler);
 

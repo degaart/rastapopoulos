@@ -153,6 +153,11 @@ void vmm_init()
     assert((uint32_t)pagedir == (((uint32_t)pagedir) & PDE_FRAME));
     pagedir->entries[1023] = (((uint32_t)pagedir) - KERNEL_BASE_ADDR) | PDE_PRESENT | PDE_WRITABLE;
 
+    /* Conventional memory (needed for int10 calls) */
+    for(uint32_t page = 0; page <= 0x000FFFFF; page += PAGE_SIZE) {
+        vmm_map_linear(pagedir, page + KERNEL_BASE_ADDR, page, VMM_PAGE_PRESENT | VMM_PAGE_WRITABLE);
+    }
+
     /* Kernel .text */
     for(uint32_t page = (uint32_t)_TEXT_START_; page < (uint32_t)_TEXT_END_; page += PAGE_SIZE) {
         vmm_map_linear(pagedir, page, page - KERNEL_BASE_ADDR, VMM_PAGE_PRESENT);
@@ -455,7 +460,15 @@ void vmm_destroy_pagedir(struct pagedir* pagedir)
             for(unsigned i = 0; i < 1024; i++) {
                 if(table->entries[i] & PTE_PRESENT) {
                     uint32_t frame = table->entries[i] & PTE_FRAME;
-                    pmm_free(frame);
+
+                    /*
+                     * TODO:
+                     *  The reserved check is here only because of the svga
+                     *  driver. Remove this check once we correctly implement
+                     *  page attributes
+                     */
+                    if(pmm_reserved(frame) && pmm_exists(frame))
+                        pmm_free(frame);
                 }
             }
 

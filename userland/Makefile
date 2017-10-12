@@ -9,6 +9,7 @@ all:
 	@ make -C logger
 	@ make -C vfs
 	@ make -C blk
+	@ make -C svga
 
 clean:
 	@ make -C runtime clean
@@ -16,6 +17,7 @@ clean:
 	@ make -C logger clean
 	@ make -C vfs clean
 	@ make -C blk clean
+	@ make -C svga clean
 
 
 
