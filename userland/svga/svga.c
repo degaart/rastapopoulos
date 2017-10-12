@@ -7,6 +7,7 @@
 #include <util.h>
 #include "vbe.h"
 #include "svga.h"
+#include "bmp.h"
 
 #define FB_BASE 0x1000000
 
@@ -391,6 +392,37 @@ static int random(int lo, int max)
     return ret;
 }
 
+static size_t load_bitmap(const char* filename, void** out_buffer)
+{
+    int fd = open(filename, O_RDONLY, 0);
+    assert(fd != -1);
+
+    size_t buffer_size = 65536;
+    size_t total_read = 0;
+    void* buffer = malloc(buffer_size);
+    unsigned char* ptr = buffer;
+    while(1) {
+        if(total_read + 512 > buffer_size) {
+            buffer_size += 65536;
+            buffer = realloc(buffer, buffer_size);
+            ptr = ((unsigned char*)buffer) + total_read;
+        }
+
+        int read_bytes = read(fd, ptr, 512);
+        if(read_bytes == -1) {
+            panic("Read error");
+        } else if(read_bytes == 0) {
+            break;
+        }
+
+        ptr += read_bytes;
+        total_read += read_bytes;
+    }
+
+    *out_buffer = buffer;
+    return total_read;
+}
+
 int main()
 {
     trace("svga driver started");
@@ -435,91 +467,35 @@ int main()
         panic("mmap_phys failed: %d", ret);
     }
 
-    while(1) {
-    /* Draw effects */
-    trace("test putpixel");
-    for(int i = 0; i < 10; i++) {
-        svga_putpixel(svgainfo,
-                      random(0, 639),
-                      random(0, 479),
-                      random(0, 0xFFFFFF));
+    /* Load bitmap into memory */
+    trace("Loading bitmap");
+    void* bmp_buffer;
+    size_t bmp_size = load_bitmap("burleigh.bmp", &bmp_buffer);
+
+    struct bmpfileheader* fhdr = bmp_buffer;
+    assert(fhdr->signature == 0x4D42);
+
+    struct bmpinfoheader* ihdr = (struct bmpinfoheader*)(((unsigned char*)bmp_buffer) + sizeof(struct bmpfileheader));
+    assert(ihdr->size >= sizeof(struct bmpinfoheader));
+    assert(ihdr->planes == 1);
+    assert(ihdr->bpp == 24);
+    assert(ihdr->compression == 0);
+    assert(ihdr->ncols == 0);
+
+    int bmp_pitch = (((ihdr->bpp * ihdr->width) + 31) / 32) * 4;
+    unsigned char* bmp_data = (unsigned char*)bmp_buffer + fhdr->offset;
+    for(int row = 0; row < ihdr->height; row++) {
+        unsigned char* row_data = bmp_data + ((ihdr->height - row) * bmp_pitch);
+        unsigned char* row_ptr = row_data;
+        for(int col = 0; col < ihdr->width; col++) {
+            int b = *row_ptr++;
+            int g = *row_ptr++;
+            int r = *row_ptr++;
+            uint32_t color = (r << 16) | (g << 8) | b;
+            svga_putpixel(svgainfo, col, row, color);
+        }
     }
-
-    trace("test drawhvline");
-    for(int i = 0; i < 10; i++) {
-        svga_drawhline(svgainfo, random(0, 639), random(0, 639), random(0, 479), random(0, 0xFFFFFF));
-        svga_drawvline(svgainfo, random(0, 639), random(0, 639), random(0, 479), random(0, 0xFFFFFF));
-    }
-
-
-    trace("test drawline");
-    for(int i = 0; i < 10; i++) {
-        int x1 = random(0, 639);
-        int x2 = random(0, 639);
-        int y1 = random(0, 479);
-        int y2 = random(0, 479);
-
-        int r = random(0, 255);
-        int g = random(0, 255);
-        int b = random(0, 255);
-        uint32_t col = (r << 16) | (g << 8) | b;
-
-        svga_drawline(svgainfo, x1, y1, x2, y2, col);
-    }
-
-    trace("test drawpolygon");
-    for(int i = 0; i < 10; i++) {
-        int vertices[6];
-        vertices[0] = random(0, 639);
-        vertices[1] = random(0, 479);
-
-        vertices[2] = random(0, 639);
-        vertices[3] = random(0, 479);
-
-        vertices[4] = random(0, 639);
-        vertices[5] = random(0, 479);
-
-        svga_drawpolygon(svgainfo, 3, vertices, random(0, 0xFFFFFF));
-    }
-
-    trace("test drawrect");
-    for(int i = 0; i < 10; i++) {
-        int left = random(0, 639);
-        int top = random(0, 479);
-        int right = random(0, 639);
-        int bottom = random(0, 479);
-
-        svga_drawrect(svgainfo, left, top, right, bottom, random(0, 0xFFFFFF));
-    }
-
-    trace("test fillrect");
-    for(int i = 0; i < 10; i++) {
-        int left = random(0, 639);
-        int top = random(0, 479);
-        int right = random(0, 639);
-        int bottom = random(0, 479);
-
-        svga_fillrect(svgainfo, left, top, right, bottom, random(0, 0xFFFFFF));
-    }
-
-    trace("test drawcircle");
-    for(int i = 0; i < 10; i++) {
-        svga_drawcircle(svgainfo,
-                        random(0, 639),
-                        random(0, 479),
-                        random(10, 480 / 3),
-                        random(0, 0xFFFFFF));
-    }
-
-    trace("test fillcircle");
-    for(int i = 0; i < 10; i++) {
-        svga_fillcircle(svgainfo,
-                        random(0, 639),
-                        random(0, 479),
-                        random(10, 480 / 3),
-                        random(0, 0xFFFFFF));
-    }
-    }
+    while(1);
 
     return 0;
 }
