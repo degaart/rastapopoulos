@@ -26,23 +26,6 @@
 #define DATA_ICW4_BUF_MASTER    0x0C           /* Buffered mode/master */
 #define DATA_ICW4_SFNM          0x10           /* Special fully nested (not) */
 
-#define IRQ_PIT         0
-#define IRQ_KBD         1
-#define IRQ_CASCADE     2
-#define IRQ_COM2        3
-#define IRQ_COM1        4
-#define IRQ_LPT2        5
-#define IRQ_FDD         6
-#define IRQ_LPT1        7
-#define IRQ_RTC         8
-#define IRQ_FREE1       9
-#define IRQ_FREE2       10
-#define IRQ_FREE3       11
-#define IRQ_PSMOUSE     12
-#define IRQ_FPU         13
-#define IRQ_ATA1        14
-#define IRQ_ATA2        15
-
 static void irq_stub(struct isr_regs* regs);
 
 static irq_handler_t irq_handlers[16];
@@ -161,19 +144,19 @@ static void irq_stub(struct isr_regs* regs)
         // Only warn once about unhandled interrupts
         if(warn_unhandled & (1 << irq)) {
             switch(irq) {
-                X(IRQ_PIT);
-                X(IRQ_KBD);
+                X(IRQ_TIMER);
+                X(IRQ_KEYBOARD);
                 X(IRQ_CASCADE);
-                X(IRQ_COM2);
-                X(IRQ_COM1);
-                X(IRQ_LPT2);
-                X(IRQ_FDD);
-                X(IRQ_LPT1);
-                X(IRQ_RTC);
+                X(IRQ_SERIAL2);
+                X(IRQ_SERIAL1);
+                X(IRQ_PARPORT2);
+                X(IRQ_FDC);
+                X(IRQ_PARPORT1);
+                X(IRQ_CMOSTIMER);
                 X(IRQ_FREE1);
                 X(IRQ_FREE2);
                 X(IRQ_FREE3);
-                X(IRQ_PSMOUSE);
+                X(IRQ_AUX);
                 X(IRQ_FPU);
                 X(IRQ_ATA1);
                 X(IRQ_ATA2);

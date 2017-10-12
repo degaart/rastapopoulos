@@ -106,6 +106,11 @@ static void reboot_timer(void* data, const struct isr_regs* regs)
     reboot();
 }
 
+static void kbd_irq_handler(int irq, const struct isr_regs* regs)
+{
+    reboot();
+}
+
 void kmain(struct multiboot_info* init_multiboot_info)
 {
     /*
@@ -192,6 +197,7 @@ void kmain(struct multiboot_info* init_multiboot_info)
 
     // PIC
     pic_init();
+    pic_install(IRQ_KEYBOARD, kbd_irq_handler);
 
     // System timer
     timer_init();

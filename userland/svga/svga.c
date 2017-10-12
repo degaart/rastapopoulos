@@ -435,6 +435,7 @@ int main()
         panic("mmap_phys failed: %d", ret);
     }
 
+    while(1) {
     /* Draw effects */
     trace("test putpixel");
     for(int i = 0; i < 10; i++) {
@@ -518,8 +519,8 @@ int main()
                         random(10, 480 / 3),
                         random(0, 0xFFFFFF));
     }
+    }
 
-    while(1);
     return 0;
 }
 
