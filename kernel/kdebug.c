@@ -45,6 +45,14 @@ void debug_printf(const char* fmt, ...)
     va_end(args);
 }
 
+void debug_print(const char* str)
+{
+    while(*str) {
+        __log_callback(*str, NULL);
+        str++;
+    }
+}
+
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
 {
     // strip path from file
@@ -65,14 +73,14 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
         ts /= tsc_freq;
     else
         ts = 0;
-    format(__log_callback, NULL, "%06lld [%s:%d][%s] ", ts, basename, line, func);
+    debug_printf("%06lld [%s:%d][%s] ", ts, basename, line, func);
 
     va_list args;
     va_start(args, fmt);
-    formatv(__log_callback, NULL, fmt, args);
+    debug_printv(fmt, args);
     va_end(args);
 
-    __log_callback('\n', NULL);
+    debug_print("\n");
 
     leave_critical_section();
 }
@@ -90,13 +98,10 @@ static uint32_t syscall_trace_handler(struct isr_regs* regs)
 
     const char* task_name = current_task_name();
     int task_pid = current_task_pid();
-    format(__log_callback, NULL, "%06lld [%s/%d] ", ts, task_name, task_pid);
+    debug_printf("%06lld [%s/%d] ", ts, task_name, task_pid);
 
-    while(*str) {
-        __log_callback(*str, NULL);
-        str++;
-    }
-    __log_callback('\n', NULL);
+    debug_print(str);
+    debug_print("\n");
 
     leave_critical_section();
     

@@ -9,8 +9,8 @@
 #include <port.h>
 #include <malloc.h>
 #include <string.h>
-#include "blockdrv.h"
-#include "blockdrv_server.h"
+#include "blk.h"
+#include "blk_server.h"
 
 
 /*

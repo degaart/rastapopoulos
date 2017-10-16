@@ -2,8 +2,8 @@
 #include <runtime.h>
 #include <debug.h>
 #include <limits.h>
-#include "blockdrv_common.h"
-#include "blockdrv_client.h"
+#include "blk_common.h"
+#include "blk_client.h"
 
 uint64_t blk_total_size()
 {

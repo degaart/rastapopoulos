@@ -13,7 +13,7 @@ $rpcgen \
     kernel/kernel_task_server.{h,c} \
     userland/runtime/kernel_task_client.{h,c}
 
-for program in logger vfs blk
+for program in vfs blk vga
 do
     rpc_file="userland/${program}/${program}.rpc"
     

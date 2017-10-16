@@ -2,8 +2,8 @@
 #include <runtime.h>
 #include <debug.h>
 #include <limits.h>
-#include "blockdrv_common.h"
-#include "blockdrv_client.h"
+#include "blk_common.h"
+#include "blk_client.h"
 
 int blk_read_sector(void* buffer, size_t size, uint32_t sector)
 {

@@ -31,6 +31,17 @@ int port_open(int port_number)
     return result;
 }
 
+int port_check(int port_number)
+{
+    int result = syscall(SYSCALL_PORTCHECK,
+                         port_number,
+                         0,
+                         0,
+                         0,
+                         0);
+    return result;
+}
+
 int msgsend(int port, struct message* msg)
 {
     memset(&msg->node, 0, sizeof(msg->node));
