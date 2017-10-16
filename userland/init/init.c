@@ -72,11 +72,18 @@ void main()
     }
 #endif
 
-#if 1
+#if 0
     /* Start svga driver */
     int svga_pid = fork();
     if(!svga_pid) {
         exec("svga.elf");
+        invalid_code_path();
+    }
+#else
+    /* Start vga driver */
+    int vga_pid = fork();
+    if(!vga_pid) {
+        exec("vga.elf");
         invalid_code_path();
     }
 #endif
