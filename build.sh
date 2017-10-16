@@ -23,11 +23,9 @@ fi
 
 # create initrd
 tar -cf initrd.tar -C userland/init/obj init.elf
-tar -uf initrd.tar -C userland/logger/obj logger.elf
 tar -uf initrd.tar -C userland/vfs/obj vfs.elf
 tar -uf initrd.tar -C userland/blk/obj blk.elf
 tar -uf initrd.tar -C userland/init init.c
-tar -uf initrd.tar -C userland/svga/obj svga.elf
 tar -uf initrd.tar -C userland/vga/obj vga.elf
 
 # Copy relevant kernel files
