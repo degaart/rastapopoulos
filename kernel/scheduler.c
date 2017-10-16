@@ -16,6 +16,7 @@
 #include "kdebug.h"
 #include "util.h"
 #include "kernel_task.h"
+#include "io.h"
 
 /************************************************************************************
  * Task state structure
@@ -247,6 +248,7 @@ static struct task* task_create(const char* name)
     bzero(result, sizeof(struct task));
     memset(result->iomap, 0xFF, sizeof(result->iomap));
     task_iomap_set(result, DEBUG_PORT, 1);
+    task_iomap_set(result, IODELAY_PORT, 1);
 
     result->pid = next_pid_value++;
     assert(result->pid < 64);

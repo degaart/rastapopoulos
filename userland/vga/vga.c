@@ -3,6 +3,54 @@
 #include <debug.h>
 #include <string.h>
 #include <malloc.h>
+#include <io.h>
+
+const char* const strings[] = {
+    "This was a triumph\n",
+    "I'm making a note here: \"HUGE SUCCESS\"\n",
+    "It's hard to overstate my satisfaction\n",
+    "Aperture Science\n",
+    "We do what we must because we can\n",
+    "For the good of all of us, except the ones who are dead\n",
+    "\n",
+    "But there's no sense crying over every mistake\n",
+    "You just keep on trying 'til you run out of cake\n",
+    "And the Science gets done\n",
+    "And you make a neat gun\n",
+    "For the people who are still alive\n",
+    "\n",
+    "I'm not even angry\n",
+    "I'm being so sincere right now\n",
+    "Even though you broke my heart\n",
+    "And killed me and tore me to pieces\n",
+    "And threw every piece into a fire\n",
+    "As they burned it hurt because I was so happy for you\n",
+    "\n",
+    "Now these points of data make a beautiful line\n",
+    "And we're out of beta, we're releasing on time\n",
+    "So I'm GLaD I got burned\n",
+    "Think of all the things we learned\n",
+    "For the people who are still alive\n",
+    "\n",
+    "Go ahead and leave me\n",
+    "I think I prefer to stay inside\n",
+    "Maybe you'll find someone else to help you\n",
+    "Maybe Black Mesa\n",
+    "That was a joke, haha, fat chance\n",
+    "Anyway, this cake is great, it's so delicious and moist\n",
+    "\n",
+    "Look at me still talking when there's Science to do. When I look out there, it makes me GLaD I'm not you\n",
+    "I've experiments to run\n",
+    "There is research to be done\n",
+    "On the people who are still alive\n",
+    "\n",
+    "And believe me I am still alive\n",
+    "I'm doing science and I'm still alive\n",
+    "I feel fantastic and I'm still alive\n",
+    "While you're dying I'll be still alive\n",
+    "And when you're dead I will be still alive\n",
+    "Still alive, still alive\n"
+};
 
 #define LOWMEM_START            0x1000
 #define VGA_BASE                0xB8000
@@ -99,24 +147,58 @@ void vga_write_char(int col, int row, int fore, int back, int c)
     backbuffer[row * 80 + col] = (c & 0xFF) | (attrib << 8);
 }
 
+void vga_scroll(int rows)
+{
+    rows %= 25;
+
+    memcpy(backbuffer, backbuffer + (rows * 80), (80 * 25 * 2) - (rows * 80 * 2));
+    for(int i = 0; i < 80; i++) {
+        vga_write_char(i, 24, COLOR_LIGHT_GRAY, COLOR_BLACK,' ');
+    }
+
+    if(cursor.row >= rows)
+        cursor.row -= rows;
+    else
+        cursor.row = 0;
+}
+
+void vga_type(int fore, int back, int c)
+{
+    if(c != '\n') {
+        /* Write at current cursor pos */
+        vga_write_char(cursor.col, cursor.row, fore, back, c);
+
+        /* Advance cursor */
+        cursor.col++;
+
+        /* If cursor > 80, move it lower */
+        if(cursor.col >= 80) {
+            cursor.row++;
+            cursor.col = 0;
+        }
+        
+        /* If cursor goes beyond screen, scroll screen */
+        if(cursor.row >= 25) {
+            vga_scroll(1);
+        }
+    } else {
+        cursor.row++;
+        cursor.col = 0;
+        if(cursor.row >= 25) {
+            vga_scroll(1);
+        }
+    }
+
+    for(int i = 0; i < 65536 * 2; i++) {
+        io_delay();
+    }
+}
+
 void vga_write_string(const char* str, int fore, int back)
 {
     while(*str) {
-        if(*str == '\n') {
-            cursor.row++;
-            assert(cursor.row < 25);
-
-            cursor.col = 0;
-        } else {
-            vga_write_char(cursor.col, cursor.row, fore, back, *str);
-
-            cursor.col++;
-            if(cursor.col > 79) {
-                cursor.col = 0;
-                cursor.row++;
-                assert(cursor.row < 25);
-            }
-        }
+        vga_type(fore, back, *str);
+        vga_flip();
         str++;
     }
 }
@@ -154,8 +236,11 @@ void main()
     memcpy(backbuffer, (const void*)VGA_BASE, 80 * 25 * 2);
 
     /* Write sum good stuff */
-    vga_write_string("It works!\n", COLOR_LIGHT_GRAY, COLOR_BLACK);
-    vga_flip();
+    int line = 0;
+    size_t nlines = sizeof(strings) / sizeof(strings[0]);
+    for(line = 0; line < nlines; line++) {
+        vga_write_string(strings[line], COLOR_LIGHT_GRAY, COLOR_BLACK);
+    }
     while(1);
 }
 
