@@ -21,7 +21,7 @@ obj:
 obj/vga.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
 	@ echo "[LD] $@"
 	@ $(CC) \
-		-T ../userland.ld \
+		-T vga.ld \
 		-o $@ \
 		-Wl,-Map,$@.map \
 		$(LDFLAGS) \

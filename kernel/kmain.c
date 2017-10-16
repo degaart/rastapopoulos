@@ -58,6 +58,9 @@ static void pf_handler(struct isr_regs* regs)
 static void gpf_handler(struct isr_regs* regs)
 {
     const char* function = lookup_function(regs->eip);
+    const char* task_name = current_task_name();
+    if(!task_name)
+        task_name = "";
 
     trace(
         "General protection fault:\n"
@@ -66,13 +69,15 @@ static void gpf_handler(struct isr_regs* regs)
         "\teax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X\n"
         "\tesi: 0x%X edi: 0x%X\n"
         "\tcs:  0x%X eip: 0x%X (%s) eflags: 0x%X\n"
-        "\tss:  0x%X esp: 0x%X\n",
+        "\tss:  0x%X esp: 0x%X\n"
+        "\tcurrent task: %d %s\n",
         regs->err_code,
         regs->ds,
         regs->eax, regs->ebx, regs->ecx, regs->edx,
         regs->esi, regs->edi,
         regs->cs, regs->eip, function ? function : "??", regs->eflags, 
-        regs->ss, regs->esp
+        regs->ss, regs->esp,
+        current_task_pid(), task_name
     );
     abort();
 }

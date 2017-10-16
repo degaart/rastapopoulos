@@ -45,9 +45,10 @@ static inline uint32_t inl(uint16_t port)
 }
 
 // wait for ~1ms by writing to a dummy port
+#define IODELAY_PORT 0x80
 static void io_delay()
 {
-    outb(0x80, 0xFF);
+    outb(IODELAY_PORT, 0xFF);
 }
 
 
