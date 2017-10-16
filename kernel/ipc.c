@@ -277,6 +277,26 @@ static uint32_t syscall_msgpeek_handler(struct isr_regs* regs)
     return result;
 }
 
+/*
+ * Check if specified port is open and is ready to accept messages
+ * Params:
+ *  ebx         Port number
+ * Returns:
+ *  0           Port ready
+ *  else        Port not ready
+ */
+static uint32_t syscall_portcheck_handler(struct isr_regs* regs)
+{
+    int port_number = regs->ebx;
+
+    uint32_t result = -1;
+    struct port* port = port_get(port_number);
+    if(port) {
+        result = 0;
+    }
+    return result;
+}
+
 void ipc_init()
 {
     syscall_register(SYSCALL_PORTOPEN, syscall_portopen_handler);

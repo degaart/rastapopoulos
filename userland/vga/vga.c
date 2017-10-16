@@ -4,53 +4,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <io.h>
-
-const char* const strings[] = {
-    "This was a triumph\n",
-    "I'm making a note here: \"HUGE SUCCESS\"\n",
-    "It's hard to overstate my satisfaction\n",
-    "Aperture Science\n",
-    "We do what we must because we can\n",
-    "For the good of all of us, except the ones who are dead\n",
-    "\n",
-    "But there's no sense crying over every mistake\n",
-    "You just keep on trying 'til you run out of cake\n",
-    "And the Science gets done\n",
-    "And you make a neat gun\n",
-    "For the people who are still alive\n",
-    "\n",
-    "I'm not even angry\n",
-    "I'm being so sincere right now\n",
-    "Even though you broke my heart\n",
-    "And killed me and tore me to pieces\n",
-    "And threw every piece into a fire\n",
-    "As they burned it hurt because I was so happy for you\n",
-    "\n",
-    "Now these points of data make a beautiful line\n",
-    "And we're out of beta, we're releasing on time\n",
-    "So I'm GLaD I got burned\n",
-    "Think of all the things we learned\n",
-    "For the people who are still alive\n",
-    "\n",
-    "Go ahead and leave me\n",
-    "I think I prefer to stay inside\n",
-    "Maybe you'll find someone else to help you\n",
-    "Maybe Black Mesa\n",
-    "That was a joke, haha, fat chance\n",
-    "Anyway, this cake is great, it's so delicious and moist\n",
-    "\n",
-    "Look at me still talking when there's Science to do. When I look out there, it makes me GLaD I'm not you\n",
-    "I've experiments to run\n",
-    "There is research to be done\n",
-    "On the people who are still alive\n",
-    "\n",
-    "And believe me I am still alive\n",
-    "I'm doing science and I'm still alive\n",
-    "I feel fantastic and I'm still alive\n",
-    "While you're dying I'll be still alive\n",
-    "And when you're dead I will be still alive\n",
-    "Still alive, still alive\n"
-};
+#include "vga_server.h"
 
 #define LOWMEM_START            0x1000
 #define VGA_BASE                0xB8000
@@ -203,6 +157,11 @@ void vga_write_string(const char* str, int fore, int back)
     }
 }
 
+void handle_vga_write_string(int sender_pid, const char* str)
+{
+    vga_write_string(str, COLOR_LIGHT_GRAY, COLOR_BLACK);
+}
+
 void main()
 {
     trace("VGA driver started");
@@ -235,13 +194,15 @@ void main()
     backbuffer = malloc(backbuffer_size);
     memcpy(backbuffer, (const void*)VGA_BASE, 80 * 25 * 2);
 
-    /* Write sum good stuff */
-    int line = 0;
-    size_t nlines = sizeof(strings) / sizeof(strings[0]);
-    for(line = 0; line < nlines; line++) {
-        vga_write_string(strings[line], COLOR_LIGHT_GRAY, COLOR_BLACK);
+    /* Handle messages */
+    int port = port_open(VGAPort);
+    if(ret < 0) {
+        panic("Failed to open VGA port");
     }
-    while(1);
+
+    rpc_dispatch(VGAPort);
+
+
 }
 
 

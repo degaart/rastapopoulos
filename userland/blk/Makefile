@@ -21,7 +21,7 @@ obj:
 obj/blk.elf: $(OBJS) $(ASM_OBJS) ../../common/obj/common.a ../runtime/obj/runtime.a
 	@ echo "[LD] $@"
 	@ $(CC) \
-		-T blockdrv.ld \
+		-T ../userland.ld \
 		-o $@ \
 		-Wl,-Map,$@.map \
 		$(LDFLAGS) \

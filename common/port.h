@@ -37,6 +37,7 @@ struct message {
 void msgwait(int port);
 uint32_t message_checksum(const struct message* msg);
 int port_open(int port_number);
+int port_check(int port_number);
 int msgsend(int port, struct message* msg); /* not const because we're modifying checksum */
 int msgrecv(int port, struct message* buffer, unsigned buffer_size, unsigned* outsize);
 bool msgpeek(int port);
@@ -47,5 +48,5 @@ bool msgpeek(int port);
 #define LoggerPort              1
 #define VFSPort                 2
 #define BlkPort                 3
-
+#define VGAPort                 4
 

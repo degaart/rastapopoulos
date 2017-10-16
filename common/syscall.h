@@ -2,22 +2,26 @@
 
 #include <stdint.h>
 
-#define SYSCALL_EXIT            0
-#define SYSCALL_PORTOPEN        1
-#define SYSCALL_MSGSEND         2
-#define SYSCALL_MSGRECV         3
-#define SYSCALL_MSGWAIT         4
-#define SYSCALL_MSGPEEK         5
-#define SYSCALL_YIELD           6
-#define SYSCALL_FORK            7
-#define SYSCALL_SLEEP           9
-#define SYSCALL_EXEC            11
-#define SYSCALL_MMAP            13
-#define SYSCALL_MUNMAP          14
-#define SYSCALL_HWPORTOPEN      15
-#define SYSCALL_BLOCK           17      /* put current task into sleeping queue */
-#define SYSCALL_MMAP_PHYS       18
-#define SYSCALL_TRACE           19
+enum SYSCALLS {
+    SYSCALL_EXIT = 0,
+    SYSCALL_TRACE,
+    SYSCALL_PORTOPEN,
+    SYSCALL_PORTCHECK,
+    SYSCALL_MSGSEND,
+    SYSCALL_MSGRECV,
+    SYSCALL_MSGWAIT,
+    SYSCALL_MSGPEEK,
+    SYSCALL_YIELD,
+    SYSCALL_FORK,
+    SYSCALL_SLEEP,
+    SYSCALL_EXEC,
+    SYSCALL_MMAP,
+    SYSCALL_MUNMAP,
+    SYSCALL_HWPORTOPEN,
+    SYSCALL_BLOCK,
+    SYSCALL_MMAP_PHYS,
+};
+
 
 extern uint32_t syscall(uint32_t eax, uint32_t ebx,
                         uint32_t ecx, uint32_t edx,
