@@ -50,8 +50,6 @@ void syscall_register(unsigned num, syscall_handler_t handler)
 
 void syscall_init()
 {
-    bzero(syscall_handlers, sizeof(syscall_handlers));
-
     /* Install syscall handler */
     idt_install(0x80, syscall_handler, true);
 }

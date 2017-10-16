@@ -1,8 +1,9 @@
-#include "logger_client.h"
 #include "runtime.h"
 #include <stdarg.h>
 #include <string.h>
 #include <port.h>
+#include <syscall.h>
+#include <debug.h>
 
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
 {
@@ -31,12 +32,13 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     vsnprintf(ptr, ptr_size, fmt, args);
     va_end(args);
 
-    int rpc_ret = logger_trace(LoggerPort, pcb.ack_port, buffer);
-    if(rpc_ret != RPC_OK) {
-        debug_write("[emergency log] ");
-        debug_write(buffer);
-        debug_write("\n");
-    }
+    uint32_t ret = syscall(SYSCALL_TRACE,
+                           (uint32_t)buffer,
+                           0,
+                           0,
+                           0,
+                           0);
+    assert(ret == 0);
 }
 
 

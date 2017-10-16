@@ -9,6 +9,9 @@
 #include "kmalloc.h"
 #include "locks.h"
 #include "pmm.h"
+#include "syscall_handler.h"
+#include "syscall.h"
+#include "scheduler.h"
 
 struct debug_sym {
     const char* name;
@@ -72,6 +75,32 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
     __log_callback('\n', NULL);
 
     leave_critical_section();
+}
+
+static uint32_t syscall_trace_handler(struct isr_regs* regs)
+{
+    const char* str = (const char*)regs->ebx;
+
+    enter_critical_section();
+    uint64_t ts = rdtsc() - tsc_start;
+    if(tsc_freq)
+        ts /= tsc_freq;
+    else
+        ts = 0;
+
+    const char* task_name = current_task_name();
+    int task_pid = current_task_pid();
+    format(__log_callback, NULL, "%06lld [%s/%d] ", ts, task_name, task_pid);
+
+    while(*str) {
+        __log_callback(*str, NULL);
+        str++;
+    }
+    __log_callback('\n', NULL);
+
+    leave_critical_section();
+    
+    return 0;
 }
 
 const char* lookup_function(uint32_t address)
@@ -202,6 +231,9 @@ void kdebug_init()
     uint64_t tsc1 = rdtsc();
     tsc_freq = tsc1 - tsc0;
     tsc_start = rdtsc();
+
+    /* Register TRACE syscall */
+    syscall_register(SYSCALL_TRACE, syscall_trace_handler);
 }
 
 

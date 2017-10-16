@@ -49,13 +49,6 @@ static void run_tests()
 
 void main()
 {
-    /* Start logger */
-    int logger_pid = fork();
-    if(!logger_pid) {
-        exec("logger.elf");
-        invalid_code_path();
-    }
-
 #if 1
     /* Start block driver */
     int blockdrv_pid = fork();

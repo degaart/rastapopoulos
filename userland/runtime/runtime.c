@@ -4,7 +4,6 @@
 #include "string.h"
 #include "port.h"
 #include "debug.h"
-#include "../logger/logger.h"
 #include "task_info.h"
 #include "../vfs/vfs.h"
 #include "../../kernel/kernel_task.h"
