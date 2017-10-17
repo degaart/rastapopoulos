@@ -4,7 +4,6 @@
 #include <string.h>
 #include <crc32.h>
 #include <port.h>
-#include "vga_client.h"
 
 static const char* const strings[] = {
     "This was a triumph\n",
@@ -82,16 +81,11 @@ static void test_fat_read()
     }
 }
 
-static void puts(const char* str)
-{
-    int rpc_ret = vga_write_string(VGAPort, pcb.ack_port, str);
-    handle_rpc_ret(rpc_ret);
-}
-
 static void test_log()
 {
     for(int line = 0; line < sizeof(strings) / sizeof(strings[0]); line++) {
-        puts(strings[line]);
+        printf("%s", strings[line]);
+        //puts(strings[line]);
     }
     while(1);
 }

@@ -67,7 +67,6 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
 
     enter_critical_section();
 
-
     uint64_t ts = rdtsc() - tsc_start;
     if(tsc_freq)
         ts /= tsc_freq;

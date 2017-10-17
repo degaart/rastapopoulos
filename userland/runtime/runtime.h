@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include "task_info.h"
 
 extern unsigned char __START__[];
@@ -86,4 +87,9 @@ int blk_read(void* buffer, size_t size, uint64_t offset);
         case RPC_FAIL_RECV: panic("%s: msgrecv() failed", __func__); break; \
     }
         
+
+void puts(const char*);
+int vprintf(const char *format, va_list vlist);
+int printf(const char *format,...);
+
 
