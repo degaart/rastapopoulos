@@ -81,8 +81,6 @@ void vga_set_cursor_pos(int row, int col)
     };
     regs.edx = ((row & 0xFF) << 8) | (col & 0xFF);
     int10(&regs);
-
-    trace("set_cursor_pos(%d, %d)", col, row);
 }
 
 static void vga_flip()
@@ -135,17 +133,22 @@ void vga_type(int fore, int back, int c)
         if(cursor.row >= 25) {
             vga_scroll(1);
         }
+
+        for(int i = 0; i < 65536; i++) {
+            io_delay();
+        }
     } else {
         cursor.row++;
         cursor.col = 0;
         if(cursor.row >= 25) {
             vga_scroll(1);
         }
+
+        for(int i = 0; i < 65536 * 32; i++) {
+            io_delay();
+        }
     }
 
-    for(int i = 0; i < 65536 * 2; i++) {
-        io_delay();
-    }
 }
 
 void vga_write_string(const char* str, int fore, int back)
@@ -187,7 +190,6 @@ void main()
 
     /* init cursor pos */
     cursor = vga_cursor_pos();
-    trace("Cursor pos: (%d, %d)", cursor.col, cursor.row);
 
     /* Init backbuffer */
     size_t backbuffer_size = sizeof(uint16_t) * 80 * 25;
