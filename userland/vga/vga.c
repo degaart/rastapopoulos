@@ -59,28 +59,39 @@ int vga_set_mode(unsigned mode)
     };
 }
 
+/* Get current VGA cursor position */
 struct coords vga_cursor_pos()
 {
-    struct int10_regs regs = {
-        .eax = 0x0300,
-        .ebx = 0
-    };
-    int10(&regs);
+	/* LSB of cursor pos */
+	outb(0x3D4, 0xF);
+	uint8_t pos_lsb = inb(0x3D5);
+	
+	/* MSB of cursor pos */
+	outb(0x3D4, 0xE);
+	uint8_t pos_msb = inb(0x3D5);
+	
+	/* Cursor address: (y*80)+x */
+	uint16_t pos = (pos_lsb|(pos_msb << 8));
 
-    struct coords result;
-    result.row = (regs.edx >> 8) & 0xFF;
-    result.col = regs.edx & 0xFF;
-    return result;
+    struct coords res;
+    res.row = pos / 80;
+    res.col = pos % 80;
+    return res;
 }
 
+/* Set current VGA cursor position */
 void vga_set_cursor_pos(int row, int col)
 {
-    struct int10_regs regs = {
-        .eax = 0x0200,
-        .ebx = 0
-    };
-    regs.edx = ((row & 0xFF) << 8) | (col & 0xFF);
-    int10(&regs);
+	/* Pos: (y*80)+x */
+	uint16_t pos = ((row & 0xff) * 80) + (col & 0xff);
+	
+	/* Set LSB */
+	outb(0x3D4, 0xF);
+	outb(0x3D5, pos & 0x00FF);
+	
+	/* Set MSB */
+	outb(0x3D4, 0xE);
+	outb(0x3D5, (pos & 0xFF00)>>8);
 }
 
 static void vga_flip()
@@ -134,9 +145,11 @@ void vga_type(int fore, int back, int c)
             vga_scroll(1);
         }
 
+#if 0
         for(int i = 0; i < 65536; i++) {
             io_delay();
         }
+#endif
     } else {
         cursor.row++;
         cursor.col = 0;
@@ -144,9 +157,11 @@ void vga_type(int fore, int back, int c)
             vga_scroll(1);
         }
 
+#if 0
         for(int i = 0; i < 65536 * 32; i++) {
             io_delay();
         }
+#endif
     }
 
 }
