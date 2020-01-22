@@ -4,6 +4,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <io.h>
+#include "modes.h"
 #include "vga_server.h"
 
 #define LOWMEM_START            0x1000
@@ -40,24 +41,6 @@ struct coords {
 static struct coords cursor;
 
 static uint16_t* backbuffer;
-
-int vga_current_mode()
-{
-    struct int10_regs regs = {
-        .eax = 0x0F00
-    };
-    int10(&regs);
-    
-    int mode = (regs.eax & 0xFF) & ~(1 << 7);
-    return mode;
-}
-
-int vga_set_mode(unsigned mode)
-{
-    struct int10_regs regs = {
-        .eax = 0x00 | (mode & 0xFF)
-    };
-}
 
 /* Get current VGA cursor position */
 struct coords vga_cursor_pos()
@@ -144,24 +127,12 @@ void vga_type(int fore, int back, int c)
         if(cursor.row >= 25) {
             vga_scroll(1);
         }
-
-#if 0
-        for(int i = 0; i < 65536; i++) {
-            io_delay();
-        }
-#endif
     } else {
         cursor.row++;
         cursor.col = 0;
         if(cursor.row >= 25) {
             vga_scroll(1);
         }
-
-#if 0
-        for(int i = 0; i < 65536 * 32; i++) {
-            io_delay();
-        }
-#endif
     }
 
 }
@@ -193,15 +164,35 @@ void main()
         panic("mmap_phys failed: %d", ret);
     }
 
+    /* Open I/O ports */
+#define X(p) \
+    do { \
+        int ret = hwportopen(p); \
+        if(ret == -1) { \
+            panic("Failed to open port"); \
+        } \
+    } while(0)
+
+    X(VGA_AC_INDEX);
+    X(VGA_AC_WRITE);
+    X(VGA_AC_READ);
+    X(VGA_MISC_WRITE);
+    X(VGA_SEQ_INDEX);
+    X(VGA_SEQ_DATA);
+    X(VGA_DAC_READ_INDEX);
+    X(VGA_DAC_WRITE_INDEX);
+    X(VGA_DAC_DATA);
+    X(VGA_MISC_READ);
+    X(VGA_GC_INDEX);
+    X(VGA_GC_DATA);
+    X(VGA_CRTC_INDEX);
+    X(VGA_CRTC_DATA);
+    X(VGA_INSTAT_READ);
+
+#undef X
+
     /* Get current video mode, and set to mode 3 if not mode 3 */
-    int mode = vga_current_mode();
-    if(mode != 0x03) {
-        trace("Setting vga mode");
-        int ret = vga_set_mode(0x03);
-        if(ret) {
-            panic("vga_set_mode failed");
-        }
-    }
+    set_text_mode(0);
 
     /* init cursor pos */
     cursor = vga_cursor_pos();
@@ -218,7 +209,6 @@ void main()
     }
 
     rpc_dispatch(VGAPort);
-
 
 }
 

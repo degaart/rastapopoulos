@@ -5,6 +5,7 @@
 #include <crc32.h>
 #include <port.h>
 
+
 static void test_fat_read()
 {
     trace("Starting FAT read tests");
