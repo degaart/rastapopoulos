@@ -7,8 +7,6 @@
 #define USER_CODE_SEG       0x18
 #define USER_DATA_SEG       0x20
 #define TSS_SEG             0x28
-#define INT10_CODE_SEG      0x30
-#define INT10_DATA_SEG      0x38
 
 #define RPL0                0x0
 #define RPL1                0x1

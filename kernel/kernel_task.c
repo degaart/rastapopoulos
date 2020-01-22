@@ -13,29 +13,9 @@
 #include "kernel.h"
 #include "kmalloc.h"
 #include "io.h"
-#include "int10.h"
 #include "string.h"
 
 #include "kernel_task_server.h"
-
-int handle_kernel_int10(int sender_pid, 
-                         /* out */ void* result, /* in, out */ size_t* result_size, 
-                         const void* buffer, size_t buffer_size)
-{
-    if(buffer_size < sizeof(struct int10_regs) ||
-       *result_size < sizeof(struct int10_regs))
-        return 1;
-
-    struct int10_regs regs;
-    memcpy(&regs, buffer, buffer_size);
-
-    int10(&regs);
-
-    memcpy(result, &regs, *result_size);
-    *result_size = sizeof(struct int10_regs);
-
-    return 0;
-}
 
 int handle_kernel_get_task_info(int sender_pid, int pid, /* out */ void* buffer, /* in, out */ size_t* buffer_size)
 {
@@ -85,9 +65,6 @@ void kernel_task_entry()
         elf_entry_t entry = load_elf(init_file->data, init_file->size);
         jump_to_usermode(entry);
     }
-
-    // Init int10 subsystem
-    int10_init();
 
     // Dispatch messages
     rpc_dispatch(KernelPort);

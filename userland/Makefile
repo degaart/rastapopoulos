@@ -9,7 +9,6 @@ all:
 	@ make -C vfs
 	@ make -C blk
 	@ make -C vga
-	@ make -C svga
 
 clean:
 	@ make -C runtime clean
@@ -17,7 +16,6 @@ clean:
 	@ make -C vfs clean
 	@ make -C blk clean
 	@ make -C vga clean
-	@ make -C svga clean
 
 
 
