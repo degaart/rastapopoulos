@@ -250,6 +250,10 @@ static struct task* task_create(const char* name)
     task_iomap_set(result, DEBUG_PORT, 1);
     task_iomap_set(result, IODELAY_PORT, 1);
 
+    /* vga ports */
+    task_iomap_set(result, 0x3d4, 1);
+    task_iomap_set(result, 0x3d5, 1);
+
     result->pid = next_pid_value++;
     assert(result->pid < 64);
 

@@ -107,6 +107,7 @@ void main()
 #if 1
     /* Run tests */
     run_tests();
+    while(1);
 #endif
 }
 
