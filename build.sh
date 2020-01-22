@@ -25,13 +25,12 @@ fi
 tar -cf initrd.tar -C userland/init/obj init.elf
 tar -uf initrd.tar -C userland/vfs/obj vfs.elf
 tar -uf initrd.tar -C userland/blk/obj blk.elf
-tar -uf initrd.tar -C userland/init init.c
 tar -uf initrd.tar -C userland/vga/obj vga.elf
 
 # Copy relevant kernel files
 for file in kernel/obj/kernel.elf \
             initrd.tar \
-            userland/init/init.c
+            still-alive.txt
 do
     ./copyfile.sh disk.img "$file" L:/ || {
         echo "copyfile failed"

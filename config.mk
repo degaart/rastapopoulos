@@ -1,9 +1,9 @@
 AS := nasm
-CC := i386-pc-elf-gcc
-LD := i386-pc-elf-ld
-AR := i386-pc-elf-ar
-RANLIB := i386-pc-elf-ranlib
-OBJCOPY := i386-pc-elf-objcopy
+CC := i686-elf-gcc
+LD := i686-elf-ld
+AR := i686-elf-ar
+RANLIB := i686-elf-ranlib
+OBJCOPY := i686-elf-objcopy
 
 
 CFLAGS := -masm=intel \
