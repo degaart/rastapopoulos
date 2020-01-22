@@ -31,14 +31,6 @@ void exec(const char* filename);
 struct task_info;
 bool get_task_info(int pid, struct task_info* buffer);
 
-struct int10_regs {
-    uint32_t eax, ebx, ecx, edx;
-    uint32_t ebp, esi, edi;
-    uint32_t es, fs, gs;
-    uint32_t reserved;
-} __attribute((packed));
-int int10(struct int10_regs* regs);
-
 #define     PROT_NONE           0x0
 #define     PROT_READ           0x1
 #define     PROT_WRITE          0x2
