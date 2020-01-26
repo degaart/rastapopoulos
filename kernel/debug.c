@@ -25,7 +25,7 @@ void __log(const char* func, const char* file, int line, const char* fmt, ...)
 
     va_list args;
     va_start(args, fmt);
-    format(debug_write_char, NULL, fmt, args);
+    formatv(debug_write_char, NULL, fmt, args);
     va_end(args);
 
     debug_write_char('\n', NULL);
