@@ -1,4 +1,4 @@
 #pragma once
 
-extern void halt();
+extern void halt() __attribute__((noreturn));
 

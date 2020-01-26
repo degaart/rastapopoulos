@@ -9,10 +9,12 @@ CFLAGS := \
 	-ffreestanding \
 	-fno-builtin \
 	-fno-strict-aliasing \
+	-fstack-protector-all \
 	-Werror -Wall \
 	-Wno-unused-const-variable \
 	-Wno-unused-variable \
-	-Wno-unused-function
+	-Wno-unused-function \
+	-Wno-unused-but-set-variable
 LDFLAGS := -ffreestanding \
 	-nostdlib \
 	-lgcc
@@ -40,6 +42,7 @@ obj/kernel.elf: $(OBJS) $(ASM_OBJS)
 obj/%.c.o:
 	@echo "[CC] $*.c"
 	@$(CC) -c -o $@ $(CFLAGS) $*.c
+	@$(CC) -c -S -o $@.S $(CFLAGS) $*.c
 
 obj/%.asm.o: %.asm
 	@echo "[ASM] $*.asm"

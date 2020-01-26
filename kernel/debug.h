@@ -17,7 +17,7 @@
     } while(0)
 
 void __log(const char* func, const char* file, int line, const char* fmt, ...);
-void abort();
+void abort() __attribute__((noreturn));
 void debug_write(const char* str);
 
 
