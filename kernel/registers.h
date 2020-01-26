@@ -20,18 +20,23 @@
 #define EFLAGS_VIP      (1 << 20)
 #define EFLAGS_ID       (1 << 21)
 
-static long read_eflags()
+static unsigned long read_eflags()
 {
-    long result;
+    unsigned long result;
     asm volatile("pushf\n"
                  "pop %0"
                  : "=g"(result));
     return result;
 }
 
+static void write_eflags(unsigned long flags)
+{
+    asm ("push %0\n\tpopf" : : "rm"(flags) : "memory","cc");
+}
+
 static inline bool interrupts_enabled()
 {
-    long eflags = read_eflags();
+    unsigned long eflags = read_eflags();
     return (eflags & EFLAGS_IF);
 }
 
