@@ -25,12 +25,7 @@ ASM_OBJS := $(patsubst %.asm,obj/%.asm.o,$(ASM_SRCS))
 all: obj depend obj/kernel.elf
 
 obj:
-	@echo "SRCS: $(SRCS)"
-	@echo "HDRS: $(HDRS)"
-	@echo "OBJS: $(OBJS)"
-	@echo "ASM_SRCS: $(ASM_SRCS)"
-	@echo "ASM_OBJS: $(ASM_OBJS)"
-	mkdir -p obj
+	@mkdir -p obj
 
 depend:
 	@../makedepend.sh *.c
@@ -38,16 +33,19 @@ depend:
 -include obj/Depends.mk
 
 obj/kernel.elf: $(OBJS) $(ASM_OBJS)
-	$(LD) -o $@ -T kernel.ld -Wl,-Map,obj/kernel.map $^ $(LDFLAGS)
+	@echo "[LD] $@"
+	@$(LD) -o $@ -T kernel.ld -Wl,-Map,obj/kernel.map $^ $(LDFLAGS)
 
 obj/%.c.o:
-	$(CC) -c -o $@ $(CFLAGS) $*.c
+	@echo "[CC] $*.c"
+	@$(CC) -c -o $@ $(CFLAGS) $*.c
 
 obj/%.asm.o: %.asm
-	nasm -o $@ -felf32 $*.asm
+	@echo "[ASM] $*.asm"
+	@nasm -o $@ -felf32 $*.asm
 
 clean:
-	rm -rf obj
+	@rm -rf obj
 
 
 
