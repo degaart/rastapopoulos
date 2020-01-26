@@ -1,6 +1,6 @@
 # Roadmap
-- print to qemu debug port
-- implement panic
+- print to qemu debug port [OK]
+- implement panic [OK]
 - implement stack smashing protection
 
 # Implementation details

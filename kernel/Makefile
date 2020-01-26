@@ -11,7 +11,8 @@ CFLAGS := \
 	-fno-strict-aliasing \
 	-Werror -Wall \
 	-Wno-unused-const-variable \
-	-Wno-unused-variable
+	-Wno-unused-variable \
+	-Wno-unused-function
 LDFLAGS := -ffreestanding \
 	-nostdlib \
 	-lgcc
