@@ -1,224 +1,58 @@
-#include "kernel.h"
-#include "io.h"
-#include "string.h"
-#include "kdebug.h"
-#include "registers.h"
-#include "multiboot.h"
-#include "gdt.h"
-#include "idt.h"
-#include "pic.h"
-#include "timer.h"
-#include "pmm.h"
-#include "util.h"
-#include "kmalloc.h"
-#include "vmm.h"
-#include "syscall_handler.h"
-#include "ipc.h"
-#include "list.h"
-#include "heap.h"
-#include "elf.h"
-#include "debug.h"
-#include "initrd.h"
-#include "scheduler.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-static void pf_handler(struct isr_regs* regs)
+enum vga_color {
+    VGA_COLOR_BLACK = 0,
+    VGA_COLOR_BLUE = 1,
+    VGA_COLOR_GREEN = 2,
+    VGA_COLOR_CYAN = 3,
+    VGA_COLOR_RED = 4,
+    VGA_COLOR_MAGENTA = 5,
+    VGA_COLOR_BROWN = 6,
+    VGA_COLOR_LIGHT_GREY = 7,
+    VGA_COLOR_DARK_GREY = 8,
+    VGA_COLOR_LIGHT_BLUE = 9,
+    VGA_COLOR_LIGHT_GREEN = 10,
+    VGA_COLOR_LIGHT_CYAN = 11,
+    VGA_COLOR_LIGHT_RED = 12,
+    VGA_COLOR_LIGHT_MAGENTA = 13,
+    VGA_COLOR_LIGHT_BROWN = 14,
+    VGA_COLOR_WHITE = 15,
+};
+
+static const size_t VGA_WIDTH = 80;
+static const size_t VGA_HEIGHT = 25;
+static int vga_x = 0;
+static int vga_y = 0;
+static uint16_t* const vga_buffer = (uint16_t*)0xB8000;
+
+static void write_char(int ch, int fg, int bg)
 {
-    bool user_mode = regs->err_code & (1 << 2); /* user or supervisor mode */
-    bool write = regs->err_code & (1 << 1);     /* was a read or a write */
-    bool prot_violation = regs->err_code & 1;   /* not-present page or page protection violation */
-    void* address = (void*)read_cr2();
-    const char* function = lookup_function(regs->eip);
+    vga_buffer[(vga_y * VGA_WIDTH) + vga_x] = (ch & 0xFF) | (((fg & 0xF) | ((bg & 0xF) << 4)) << 8);
+    vga_x++;
+    if(vga_x >= VGA_WIDTH) {
+        vga_y++;
+        vga_x = 0;
 
-    trace(
-        "Page fault at address %p: %s %s %s\n"
-        "\tds:  0x%X\n"
-        "\teax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X\n"
-        "\tesi: 0x%X edi: 0x%X\n"
-        "\terr: 0x%X\n"
-        "\tcs:  0x%X eip: 0x%X (%s) eflags: 0x%X\n"
-        "\tss:  0x%X esp: 0x%X\n"
-        "\tcr3: %p\n"
-        "\tcurrent task: %d %s\n",
-        address,
-        user_mode ? "ring3" : "ring0",
-        write ? "write" : "read",
-        prot_violation ? "access-violation" : "page-not-present",
-        regs->ds,
-        regs->eax, regs->ebx, regs->ecx, regs->edx,
-        regs->esi, regs->edi,
-        regs->err_code,
-        regs->cs, regs->eip, function ? function : "??", regs->eflags, 
-        regs->ss, regs->esp,
-        read_cr3(),
-        current_task_pid(), current_task_name() ? current_task_name() : ""
-    );
-    abort();
-}
-
-static void gpf_handler(struct isr_regs* regs)
-{
-    const char* function = lookup_function(regs->eip);
-    const char* task_name = current_task_name();
-    if(!task_name)
-        task_name = "";
-
-    trace(
-        "General protection fault:\n"
-        "\tdescriptor: %p\n"
-        "\tds:  0x%X\n"
-        "\teax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X\n"
-        "\tesi: 0x%X edi: 0x%X\n"
-        "\tcs:  0x%X eip: 0x%X (%s) eflags: 0x%X\n"
-        "\tss:  0x%X esp: 0x%X\n"
-        "\tcurrent task: %d %s\n",
-        regs->err_code,
-        regs->ds,
-        regs->eax, regs->ebx, regs->ecx, regs->edx,
-        regs->esi, regs->edi,
-        regs->cs, regs->eip, function ? function : "??", regs->eflags, 
-        regs->ss, regs->esp,
-        current_task_pid(), task_name
-    );
-    abort();
-}
-
-void reboot()
-{
-    trace("*** Rebooted ***\n\n\n");
-
-    uint8_t good = 0x02;
-    while (good & 0x02)
-        good = inb(0x64);
-    outb(0x64, 0xFE);
-    halt();
-}
-
-void abort()
-{
-    backtrace();
-    reboot();
-}
-
-void halt()
-{
-    cli();
-    hlt();
-}
-
-static void reboot_timer(void* data, const struct isr_regs* regs)
-{
-    trace("*** Rebooting ***\n\n\n");
-    reboot();
-}
-
-static void kbd_irq_handler(int irq, const struct isr_regs* regs)
-{
-    reboot();
-}
-
-void kmain(struct multiboot_info* init_multiboot_info)
-{
-    /*
-     * Init debug/loggin functions
-     */
-    kdebug_init();
-
-    trace("*** Booted ***");
- 
-    /*
-     * This function will adjust multiboot info structure addresses
-     * and return the highest address it uses
-     */
-    unsigned char* multiboot_end = multiboot_init(init_multiboot_info);
-    trace("multiboot_end: %p", multiboot_end);
-    if(multiboot_end >= (unsigned char*)0xC0400000)
-        panic("Multiboot data too large to fit into initial kernel memory");
-
-    // Init kernel heap
-    kmalloc_init(multiboot_end);
-
-    // Load symbols
-    load_symbols(multiboot_get_info());
-    
-    // GDT
-    gdt_init();
-
-    // IDT
-    idt_init();
-    idt_flush();
-    idt_install(14, pf_handler, true);
-    idt_install(13, gpf_handler, true);
-    
-    // Physical memory manager
-    pmm_init(multiboot_get_info());
-
-    // initrd
-    initrd_init(multiboot_get_info());
-
-    /*
-     * Reserve currently used memory
-     * kernel code and data section
-     * initial kernel heap
-     */
-    struct kernel_heap_info heap_info;
-    kernel_heap_info(&heap_info);
-
-    trace("Kernel map:");
-    trace("\t.text   %p - %p", _TEXT_START_, _TEXT_END_);
-    trace("\t.rodata %p - %p", _RODATA_START_, _RODATA_END_);
-    trace("\t.data   %p - %p", _DATA_START_, _DATA_END_);
-    trace("\t.bss    %p - %p", _BSS_START_, _BSS_END_);
-    trace("\theap    %p - %p", heap_info.heap_start, heap_info.heap_start + heap_info.heap_size);
-
-    /*
-     * Reserve entire lower 1MB of memory so we can use vm86/swith to real mode for
-     * video bios calls
-     */
-    for(uint32_t page = 0x00000000; page < 0x100000; page += PAGE_SIZE) {
-        if(pmm_exists(page))
-            pmm_reserve(page);
+        /* TODO: Scroll */
     }
-
-    /* Kernel code+data */
-    for(unsigned char* page = (unsigned char*)TRUNCATE((uint32_t)_KERNEL_START_ - KERNEL_BASE_ADDR, PAGE_SIZE); 
-        page < _KERNEL_END_ - KERNEL_BASE_ADDR; 
-        page += PAGE_SIZE) {
-        if(pmm_exists((uint32_t)page))
-            pmm_reserve((uint32_t)page);
-    }
-
-    /* Kernel heap */
-    for(uint32_t page = TRUNCATE(heap_info.heap_start, PAGE_SIZE) - KERNEL_BASE_ADDR; 
-        page < heap_info.heap_start + heap_info.heap_size - KERNEL_BASE_ADDR; 
-        page += PAGE_SIZE) {
-
-        if(pmm_exists(page) && !pmm_reserved(page))
-            pmm_reserve(page);
-    }
-
-    // Virtual memory manager
-    vmm_init();
-    // By this point, multiboot data is not valid anymore
-
-    // PIC
-    pic_init();
-    pic_install(IRQ_KEYBOARD, kbd_irq_handler);
-
-    // System timer
-    timer_init();
-
-    // Syscall handlers
-    syscall_init();
-
-    // IPC System
-    ipc_init();
-
-    // Start system
-    scheduler_start();
-
-    reboot();
 }
 
+static void write_string(const char* str)
+{
+    int fg = VGA_COLOR_LIGHT_GREY;
+    int bg = VGA_COLOR_BLACK;
+    while(*str) {
+        write_char(*str, fg, bg);
+        str++;
+    }
+}
 
+void kmain()
+{
+    const char* message = "Hello, world!";
+    write_string(message);
+}
 
 

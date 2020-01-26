@@ -1,5 +1,0 @@
-/* 
-    vim: syntax=c 
-*/
-void vga_write_string(string str);
-

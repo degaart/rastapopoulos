@@ -1,52 +1,22 @@
-.SUFFIXES:
 .PHONY: all clean
 
-include ../config.mk
+CC := i686-elf-gcc
+LD := i686-elf-gcc
+CFLAGS := -std=gnu99 -ffreestanding
+LDFLAGS := -ffreestanding -nostdlib -lgcc
 
-CFLAGS += -I ../common -DKERNEL
-
-SRCS := $(wildcard *.c) $(wildcard test/*.c)
-HDRS := $(wildcard *.h) $(wildcard test/*.h)
-OBJS := $(patsubst %.c,obj/%.c.o,$(SRCS))
-ASM_SRCS := $(wildcard *.asm)
-ASM_OBJS := $(patsubst %.asm,obj/%.asm.o,$(ASM_SRCS))
-
-all: obj obj/test obj/kernel.elf
+all: obj obj/kernel.elf
 
 obj:
-	@ mkdir -p obj
+	mkdir -p obj
 
-obj/test: obj
-	@ mkdir -p obj/test
+obj/kernel.elf: obj/kentry.o obj/kmain.o
+	$(LD) -o $@ -T kernel.ld $^ $(LDFLAGS)
 
--include obj/Depends.mk
+obj/kentry.o: kentry.asm
+	nasm -o $@ -felf32 $^
 
-obj/kernel.elf: $(OBJS) $(ASM_OBJS) ../common/obj/common.a
-	@ echo "[LD] $@"
-	@ $(CC) \
-		-T kernel.ld \
-		-o $@ \
-		-Wl,-Map,obj/kernel.map \
-		$(LDFLAGS) \
-		$(OBJS) \
-		$(filter-out obj/kstub.asm.o,$(ASM_OBJS)) \
-		../common/obj/common.a \
-		-lgcc
+obj/kmain.o: kmain.c
+	$(CC) -c -o $@ $(CFLAGS) $^
 
-obj/Depends.mk:
-	@ CC="$(CC)" \
-		CFLAGS="$(CFLAGS)" \
-		../common/makedepend.sh $(SRCS)
-
-obj/%.c.o:
-	@ echo "[CC] $*.c"
-	@ $(CC) -c -o $@ $(CFLAGS) $*.c
-	@ $(CC) -c -S -o $@.S $(CFLAGS) $*.c
-
-obj/%.asm.o: %.asm
-	@ echo "[AS] $*.asm"
-	@ $(AS) -f elf32 -o $@ $*.asm
-
-clean:
-	@ rm -r obj/*
 
