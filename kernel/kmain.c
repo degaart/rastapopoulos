@@ -4,6 +4,7 @@
 #include "io.h"
 #include "halt.h"
 #include "debug.h"
+#include "reboot.h"
 
 enum vga_color {
     VGA_COLOR_BLACK = 0,
@@ -61,7 +62,11 @@ static void write_string(const char* str)
 
 void kmain()
 {
-    panic("DON'T PANIC");
+    char mybuf[64];
+    for(size_t i = 0; i < 512; i++) {
+        mybuf[i] = '\0';
+    }
+    trace("All done, rebooting");
 }
 
 

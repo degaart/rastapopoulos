@@ -1,4 +1,4 @@
 #pragma once
 
-void reboot();
+void reboot() __attribute__((noreturn));
 
