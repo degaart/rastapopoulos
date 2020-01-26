@@ -1,3 +1,9 @@
+# Roadmap
+- print to qemu debug port
+
+# Implementation details
+- I/O port access functions in kernel/io.h. Also bochs debug port defined there
+
 # VGA
 - 80x25 mode 6 VGA buffer: 0xB8000
     - format: (ch & 0xFF) | (color << 8)
@@ -14,6 +20,7 @@
 
 # qemu
 - can boot multiboot kernel with -kernel
+- exit nographic: C-a x
 
 # assembler
 - can mark a symbol as a function with: global _start:function (_start.end - _start)

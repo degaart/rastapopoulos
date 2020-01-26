@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "io.h"
 
 enum vga_color {
     VGA_COLOR_BLACK = 0,
@@ -27,6 +28,7 @@ static int vga_x = 0;
 static int vga_y = 0;
 static uint16_t* const vga_buffer = (uint16_t*)0xB8000;
 
+#if 0
 static void write_char(int ch, int fg, int bg)
 {
     vga_buffer[(vga_y * VGA_WIDTH) + vga_x] = (ch & 0xFF) | (((fg & 0xF) | ((bg & 0xF) << 4)) << 8);
@@ -37,6 +39,12 @@ static void write_char(int ch, int fg, int bg)
 
         /* TODO: Scroll */
     }
+}
+#endif
+
+static void write_char(int ch, int fg, int bg)
+{
+    outb(IOPORT_DEBUG, ch);
 }
 
 static void write_string(const char* str)
@@ -51,7 +59,7 @@ static void write_string(const char* str)
 
 void kmain()
 {
-    const char* message = "Hello, world!";
+    const char* message = "Hello, world!\n";
     write_string(message);
 }
 

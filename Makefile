@@ -1,6 +1,6 @@
-.PHONY: all clean run
+.PHONY: all clean run kernel/obj/kernel.elf
 
-all: PrototypeOS.iso
+all: kernel/obj/kernel.elf
 
 PrototypeOS.iso: build/boot/grub build/boot/grub/grub.cfg build/kernel.elf
 	grub-mkrescue -o $@ build
@@ -21,7 +21,7 @@ clean:
 	make -C kernel clean
 
 run:
-	qemu-system-i386 -kernel kernel/obj/kernel.elf
+	qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -nographic -debugcon file:/tmp/PrototypeOS.log -m 32
 
 
 
