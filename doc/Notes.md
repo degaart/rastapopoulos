@@ -1,7 +1,7 @@
 # Roadmap
 - print to qemu debug port [OK]
 - implement panic [OK]
-- implement stack smashing protection
+- implement stack smashing protection [OK]
 
 # Implementation details
 - I/O port access functions in kernel/io.h. Also bochs debug port defined there
@@ -14,6 +14,8 @@
 # sysv ABI
 - stack must be aligned to 16 bytes
 - args are pushed on the stack from right to left
+- 32-bit code: int is 32-bit, long is 32-bit, long long is 64-bit
+- 64-bit code: int is 32-bit, long is 64-bit, long long is 64-bit
 
 # grub
 - check if file is multiboot compliant: ```grub-file --is-x86-multiboot myos.bin```

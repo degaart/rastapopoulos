@@ -5,6 +5,8 @@
 #include "halt.h"
 #include "debug.h"
 #include "reboot.h"
+#include "string.h"
+#include "registers.h"
 
 enum vga_color {
     VGA_COLOR_BLACK = 0,
@@ -60,13 +62,22 @@ static void write_string(const char* str)
     }
 }
 
+static void debug_write_char(int ch, void* unused)
+{
+    outb(IOPORT_DEBUG, ch);
+}
+
 void kmain()
 {
-    char mybuf[64];
-    for(size_t i = 0; i < 512; i++) {
-        mybuf[i] = '\0';
-    }
+    long eflags = read_eflags();
+    trace("EFLAGS: 0x%X", eflags);
+
+    if(interrupts_enabled())
+        trace("Interrupts enabled");
+    else
+        trace("Interrupts disabled");
     trace("All done, rebooting");
+    reboot();
 }
 
 
