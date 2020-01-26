@@ -23,14 +23,18 @@
 static unsigned long read_eflags()
 {
     unsigned long result;
+
+    /* memory clobber to force ordering */
     asm volatile("pushf\n"
                  "pop %0"
-                 : "=g"(result));
+                 : "=g"(result)
+                 :: "memory");
     return result;
 }
 
 static void write_eflags(unsigned long flags)
 {
+    /* cc clober because we modify condition flags */
     asm ("push %0\n\tpopf" : : "rm"(flags) : "memory","cc");
 }
 

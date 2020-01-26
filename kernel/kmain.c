@@ -7,6 +7,7 @@
 #include "reboot.h"
 #include "string.h"
 #include "registers.h"
+#include "gdt.h"
 
 enum vga_color {
     VGA_COLOR_BLACK = 0,
@@ -69,13 +70,7 @@ static void debug_write_char(int ch, void* unused)
 
 void kmain()
 {
-    long eflags = read_eflags();
-    trace("EFLAGS: 0x%X", eflags);
-
-    if(interrupts_enabled())
-        trace("Interrupts enabled");
-    else
-        trace("Interrupts disabled");
+    gdt_init();
     trace("All done, rebooting");
     reboot();
 }

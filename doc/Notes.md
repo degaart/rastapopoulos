@@ -2,6 +2,10 @@
 - print to qemu debug port [OK]
 - implement panic [OK]
 - implement stack smashing protection [OK]
+- gdt
+- idt
+- paging
+- higher-half
 
 # Implementation details
 - I/O port access functions in kernel/io.h. Also bochs debug port defined there
