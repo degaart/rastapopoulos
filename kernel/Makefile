@@ -2,8 +2,8 @@
 
 CC := i686-elf-gcc
 LD := i686-elf-gcc
-CFLAGS := -DPROTOTYPEOS -std=gnu99 -ffreestanding -fno-builtin -fno-strict-aliasing -Werror -Wall \
-	-Wno-unused-const-variable
+CFLAGS := -DPROTOTYPEOS -std=gnu99 -masm=intel -ffreestanding -fno-builtin -fno-strict-aliasing -Werror -Wall \
+	-Wno-unused-const-variable -Wno-unused-variable
 LDFLAGS := -ffreestanding -nostdlib -lgcc
 
 all: obj depend obj/kernel.elf
