@@ -1,5 +1,7 @@
 # Roadmap
 - print to qemu debug port
+- implement panic
+- implement stack smashing protection
 
 # Implementation details
 - I/O port access functions in kernel/io.h. Also bochs debug port defined there
