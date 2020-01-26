@@ -12,7 +12,13 @@ build/boot/grub/grub.cfg: boot/grub.cfg
 	cp $^ $@
 
 build/kernel.elf: kernel/obj/kernel.elf
+
+kernel/obj/kernel.elf:
 	make -C kernel
+
+clean:
+	rm -rf build PrototypeOS.iso
+	make -C kernel clean
 
 run:
 	qemu-system-i386 -kernel kernel/obj/kernel.elf
