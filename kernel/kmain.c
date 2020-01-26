@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "io.h"
+#include "halt.h"
 
 enum vga_color {
     VGA_COLOR_BLACK = 0,
@@ -61,6 +62,7 @@ void kmain()
 {
     const char* message = "Hello, world!\n";
     write_string(message);
+    halt();
 }
 
 
