@@ -10,6 +10,7 @@
 # grub
 - check if file is multiboot compliant: ```grub-file --is-x86-multiboot myos.bin```
 - check for multiboot2: ```--is-x86-multiboot2```
+- grub will clear the .bss section for us
 
 # qemu
 - can boot multiboot kernel with -kernel
