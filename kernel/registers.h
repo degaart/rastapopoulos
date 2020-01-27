@@ -87,3 +87,14 @@ static inline uint64_t rdmsr(uint32_t msr_id)
     return msr_value;
 }
 
+static inline void cli()
+{
+    asm volatile("cli":::"memory");
+}
+
+static inline void sti()
+{
+    asm volatile("sti":::"memory");
+}
+
+

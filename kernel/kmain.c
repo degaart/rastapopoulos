@@ -8,6 +8,7 @@
 #include "string.h"
 #include "registers.h"
 #include "gdt.h"
+#include "idt.h"
 
 enum vga_color {
     VGA_COLOR_BLACK = 0,
@@ -68,11 +69,23 @@ static void debug_write_char(int ch, void* unused)
     outb(IOPORT_DEBUG, ch);
 }
 
+static void int80_handler(const struct isr_regs* regs)
+{
+    trace("Hello from int80");
+}
+
 void kmain()
 {
     gdt_init();
+    idt_init();
+    idt_install(0x80, int80_handler, true);
     trace("All done, rebooting");
-    reboot();
+
+    asm volatile("int 0x80":::"memory");
+
+    sti();
+    while(1);
+    //reboot();
 }
 
 
