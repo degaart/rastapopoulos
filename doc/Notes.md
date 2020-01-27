@@ -2,13 +2,15 @@
 - print to qemu debug port [OK]
 - implement panic [OK]
 - implement stack smashing protection [OK]
-- gdt
+- gdt [OK]
 - idt
 - paging
 - higher-half
 
 # Implementation details
 - I/O port access functions in kernel/io.h. Also bochs debug port defined there
+- why we need to remap pic in idt_init: https://arjunsreedharan.org/post/99370248137/kernels-201-lets-write-a-kernel-with-keyboard
+
 
 # VGA
 - 80x25 mode 6 VGA buffer: 0xB8000

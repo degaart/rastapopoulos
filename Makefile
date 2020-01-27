@@ -1,4 +1,4 @@
-.PHONY: all clean run kernel/obj/kernel.elf
+.PHONY: all clean run run_graphic kernel/obj/kernel.elf
 
 all: kernel/obj/kernel.elf
 
@@ -24,6 +24,9 @@ clean:
 
 run:
 	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -nographic -debugcon file:/tmp/PrototypeOS.log -m 32
+
+run_graphic:
+	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -debugcon file:/tmp/PrototypeOS.log -m 32
 
 
 
