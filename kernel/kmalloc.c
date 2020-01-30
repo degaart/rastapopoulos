@@ -34,7 +34,7 @@ void* sbrk(ptrdiff_t size)
         heap_ptr += ALIGN(size, 4096);
         return result;
     } else {
-        heap_ptr -= size;
+        heap_ptr += size;
         return heap_ptr;
     }
     return NULL;
