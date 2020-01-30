@@ -39,6 +39,7 @@ _start:
     
     ; setup stack
     mov esp, stack_top
+    mov [esp], ebx
 
     ; call kernel C entry point
     extern kmain
