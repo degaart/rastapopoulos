@@ -2,6 +2,7 @@
 
 #define panic(...) \
     do {                                                                \
+        trace("*** KERNEL PANIC ***");                                  \
         __log(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__);           \
         abort();                                                        \
     } while(0)

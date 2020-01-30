@@ -2,6 +2,8 @@
 
 CC := i686-elf-gcc
 LD := i686-elf-gcc
+
+# -fno-asynchronous-unwind-tables gets rid of the .eh_frame section
 CFLAGS := \
 	-DPROTOTYPEOS \
 	-std=gnu99 \
@@ -10,12 +12,16 @@ CFLAGS := \
 	-fno-builtin \
 	-fno-strict-aliasing \
 	-fstack-protector-all \
+	-fno-asynchronous-unwind-tables \
+	-g \
 	-Werror -Wall \
 	-Wno-unused-const-variable \
 	-Wno-unused-variable \
 	-Wno-unused-function \
 	-Wno-unused-but-set-variable
-LDFLAGS := -ffreestanding \
+LDFLAGS := \
+	-g \
+	-ffreestanding \
 	-nostdlib \
 	-lgcc
 

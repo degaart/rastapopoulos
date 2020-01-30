@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "kernel.h"
 #include "io.h"
 #include "halt.h"
 #include "debug.h"
@@ -9,65 +10,7 @@
 #include "registers.h"
 #include "gdt.h"
 #include "idt.h"
-
-enum vga_color {
-    VGA_COLOR_BLACK = 0,
-    VGA_COLOR_BLUE = 1,
-    VGA_COLOR_GREEN = 2,
-    VGA_COLOR_CYAN = 3,
-    VGA_COLOR_RED = 4,
-    VGA_COLOR_MAGENTA = 5,
-    VGA_COLOR_BROWN = 6,
-    VGA_COLOR_LIGHT_GREY = 7,
-    VGA_COLOR_DARK_GREY = 8,
-    VGA_COLOR_LIGHT_BLUE = 9,
-    VGA_COLOR_LIGHT_GREEN = 10,
-    VGA_COLOR_LIGHT_CYAN = 11,
-    VGA_COLOR_LIGHT_RED = 12,
-    VGA_COLOR_LIGHT_MAGENTA = 13,
-    VGA_COLOR_LIGHT_BROWN = 14,
-    VGA_COLOR_WHITE = 15,
-};
-
-static const size_t VGA_WIDTH = 80;
-static const size_t VGA_HEIGHT = 25;
-static int vga_x = 0;
-static int vga_y = 0;
-static uint16_t* const vga_buffer = (uint16_t*)0xB8000;
-
-#if 0
-static void write_char(int ch, int fg, int bg)
-{
-    vga_buffer[(vga_y * VGA_WIDTH) + vga_x] = (ch & 0xFF) | (((fg & 0xF) | ((bg & 0xF) << 4)) << 8);
-    vga_x++;
-    if(vga_x >= VGA_WIDTH) {
-        vga_y++;
-        vga_x = 0;
-
-        /* TODO: Scroll */
-    }
-}
-#endif
-
-static void write_char(int ch, int fg, int bg)
-{
-    outb(IOPORT_DEBUG, ch);
-}
-
-static void write_string(const char* str)
-{
-    int fg = VGA_COLOR_LIGHT_GREY;
-    int bg = VGA_COLOR_BLACK;
-    while(*str) {
-        write_char(*str, fg, bg);
-        str++;
-    }
-}
-
-static void debug_write_char(int ch, void* unused)
-{
-    outb(IOPORT_DEBUG, ch);
-}
+#include "kmalloc.h"
 
 static void int80_handler(const struct isr_regs* regs)
 {
@@ -76,16 +19,44 @@ static void int80_handler(const struct isr_regs* regs)
 
 void kmain()
 {
+    trace("");
+    trace("*** Started ***");
+
     gdt_init();
     idt_init();
-    idt_install(0x80, int80_handler, true);
-    trace("All done, rebooting");
 
-    asm volatile("int 0x80":::"memory");
+    trace("KERNEL_START: 0x%X", KERNEL_START);
+    trace("KERNEL_END: 0x%X", KERNEL_END);
 
-    sti();
-    while(1);
-    //reboot();
+    kmalloc_init(KERNEL_END);
+
+    trace("Allocating 3 bytes");
+    unsigned char* p0 = kmalloc(3);
+    trace("p0: 0x%X", p0);
+    for(size_t i = 0; i < 9; i++)
+        p0[i] = '-';
+
+
+    trace("Now, allocating 4 bytes");
+    unsigned char* p1 = kmalloc(4);
+    trace("p1: 0x%X", p1);
+
+    trace("Another 4 bytes");
+    unsigned char* p2 = kmalloc(4);
+    trace("p2: 0x%X", p2);
+
+    trace("What about 16 bytes");
+    unsigned char* p3 = kmalloc(4);
+    trace("p3: 0x%X", p3);
+
+    trace("Freeing...");
+    kfree(p3);
+    kfree(p2);
+    kfree(p1);
+    kfree(p0);
+
+    trace("*** Stopped ***");
+    reboot();
 }
 
 
