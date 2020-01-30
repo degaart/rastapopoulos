@@ -3,7 +3,8 @@
 - implement panic [OK]
 - implement stack smashing protection [OK]
 - gdt [OK]
-- idt
+- idt [OK]
+- page frame allocator
 - paging
 - higher-half
 

@@ -2,6 +2,7 @@ ENTRY(_start)
 
 SECTIONS {
     . = 1M;
+    __KERNEL_START__ = .;
 
     .text BLOCK(4K) : ALIGN(4K)
     {
@@ -24,5 +25,7 @@ SECTIONS {
         *(COMMON)
         *(.bss)
     }
+
+    __KERNEL_END__ = .;
 }
 
