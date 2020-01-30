@@ -33,9 +33,6 @@ void kmain()
     trace("Allocating 3 bytes");
     unsigned char* p0 = kmalloc(3);
     trace("p0: 0x%X", p0);
-    for(size_t i = 0; i < 9; i++)
-        p0[i] = '-';
-
 
     trace("Now, allocating 4 bytes");
     unsigned char* p1 = kmalloc(4);
@@ -49,7 +46,12 @@ void kmain()
     unsigned char* p3 = kmalloc(4);
     trace("p3: 0x%X", p3);
 
+    trace("Allocate a big chunk of memory");
+    unsigned char* p4 = kmalloc(65536 * 3);
+    trace("p4: 0x%X", p4);
+
     trace("Freeing...");
+    kfree(p4);
     kfree(p3);
     kfree(p2);
     kfree(p1);
