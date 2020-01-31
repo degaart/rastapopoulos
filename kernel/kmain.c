@@ -12,6 +12,8 @@
 #include "idt.h"
 #include "kmalloc.h"
 #include "multiboot.h"
+#include "pmm.h"
+#include "bitset.h"
 
 static void int80_handler(const struct isr_regs* regs)
 {
@@ -37,13 +39,18 @@ void kmain(void* multiboot_info)
     int mmap_count;
     const struct multiboot_mmap_entry* mmap = multiboot_get_mmap(&mmap_count);
     for(int i = 0; i < mmap_count; i++) {
-        trace("mmap[%d]: 0x%X-0x%X 0x%X 0x%X",
+        trace("mmap[%d]: 0x%llX-0x%llX 0x%llX 0x%X",
               i,
-              (uint32_t)mmap[i].addr,
-              (uint32_t)mmap[i].addr + (uint32_t)mmap[i].len,
-              (uint32_t)mmap[i].len,
+              mmap[i].addr,
+              mmap[i].addr + mmap[i].len - 1,
+              mmap[i].len,
               mmap[i].type);
     }
+
+    pmm_init(mmap, mmap_count);
+    test_pmm();
+
+    test_bitset();
 
     trace("*** Stopped ***");
     reboot();

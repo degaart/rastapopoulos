@@ -23,10 +23,10 @@ clean:
 	@make --no-print-directory -C kernel clean
 
 run:
-	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -nographic -debugcon file:/tmp/PrototypeOS.log -m 32
+	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -nographic -debugcon file:/tmp/PrototypeOS.log -m 8
 
 run_graphic:
-	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -debugcon file:/tmp/PrototypeOS.log -m 32
+	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -debugcon file:/tmp/PrototypeOS.log -m 8
 
 
 
