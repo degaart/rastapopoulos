@@ -32,7 +32,7 @@ struct bitset* bitset_init(struct bitset* bitset, size_t count)
     bitset->cookie = MAGIC;
     bitset->data[bitset->count] = MAGIC;
 
-    assert((bitset->count * BITS_PER_ELEMENT) > count);
+    assert((bitset->count * BITS_PER_ELEMENT) >= count);
     return bitset;
 }
 
@@ -53,6 +53,7 @@ void bitset_set(struct bitset* bitset, size_t offset)
 
     size_t index = offset / BITS_PER_ELEMENT;
     unsigned long mask = 1 << (offset % BITS_PER_ELEMENT);
+    assert(!(bitset->data[index] & mask));
     bitset->data[index] |= mask;
 }
 
@@ -70,6 +71,7 @@ void bitset_clear(struct bitset* bitset, size_t offset)
 
     size_t index = offset / BITS_PER_ELEMENT;
     unsigned long mask = 1 << (offset % BITS_PER_ELEMENT);
+    assert(bitset->data[index] & mask);
     bitset->data[index] &= ~mask;
 }
 
@@ -156,6 +158,19 @@ void test_bitset()
     bitset_set_range(b, 127, 3);
     for(size_t i = 0; i < 130; i++) {
         if(i >= 42 && i <= 100) {
+            assert(bitset_test(b, i));
+        } else if(i >= 127) {
+            assert(bitset_test(b, i));
+        } else {
+            assert(!bitset_test(b, i));
+        }
+    }
+
+    bitset_clear(b, 42);
+    for(size_t i = 0; i < 130; i++) {
+        if(i == 42) {
+            assert(!bitset_test(b, i));
+        } else if(i >= 43 && i <= 100) {
             assert(bitset_test(b, i));
         } else if(i >= 127) {
             assert(bitset_test(b, i));
