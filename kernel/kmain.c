@@ -32,6 +32,7 @@ void kmain(void* multiboot_info)
     trace("KERNEL_END: 0x%X", KERNEL_END);
 
     kmalloc_init(KERNEL_END);
+    test_kmalloc();
 
     trace("multiboot_info: 0x%X", multiboot_info);
     multiboot_init((const struct multiboot_info*)multiboot_info);
