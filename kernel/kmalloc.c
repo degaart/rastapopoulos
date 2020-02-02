@@ -2,6 +2,7 @@
 #include "kmalloc.h"
 #include "util.h"
 #include "debug.h"
+#include "string.h"
 
 extern void* dlmalloc(size_t);
 extern void dlfree(void*);
@@ -17,13 +18,16 @@ void kmalloc_init(void* kernel_end)
 
 void* kmalloc(size_t size)
 {
-    /* TODO: Fill memory with 0xCC for easier spotting in memory dumps */
-    return dlmalloc(size);
+    void* result = dlmalloc(size);
+    memset(result, 0xCC, size);
+    return result;
 }
 
 void kfree(void* ptr)
 {
-    /* TODO: Fill memory with 0xDD for easier spotting in memory dumps */
+    size_t* info_ptr = (size_t*)ptr;
+    size_t size = (info_ptr[-1] & ~(1|2)) - 8;
+    memset(info_ptr, 0xDD, size);
     dlfree(ptr);
 }
 
@@ -42,5 +46,19 @@ void* sbrk(ptrdiff_t size)
     return NULL;
 }
 
+void test_kmalloc()
+{
+    trace(" -= Testing kmalloc =-");
+
+    unsigned long* p0 = kmalloc(4096);
+    unsigned long* p1 = kmalloc(8192);
+    unsigned long* p2 = kmalloc(1);
+
+    kfree(p2);
+    kfree(p1);
+    kfree(p0);
+
+    trace(" -= Done testing kmalloc =-");
+}
 
 
