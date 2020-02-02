@@ -4,7 +4,7 @@
 - implement stack smashing protection [OK]
 - gdt [OK]
 - idt [OK]
-- page frame allocator
+- page frame allocator [ok]
 - paging
 - higher-half
 

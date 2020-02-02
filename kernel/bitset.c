@@ -3,7 +3,7 @@
 #include "string.h"
 #include "debug.h"
 
-#define MAGIC 0xCCCCCCCC
+#define MAGIC 0xAABBCCDD
 
 #define CHECK_OFFSET(bitset,offset) \
     do { \
@@ -96,8 +96,8 @@ void test_bitset()
     struct bitset* b = bitset_alloc(130);
     assert(b->bitcount == 130);
     assert(b->count == 5);
-    assert(b->cookie == 0xCCCCCCCC);
-    assert(b->data[5] == 0xCCCCCCCC);
+    assert(b->cookie == MAGIC);
+    assert(b->data[5] == MAGIC);
 
     for(size_t i = 0; i < 130; i++) {
         assert(!bitset_test(b, i));

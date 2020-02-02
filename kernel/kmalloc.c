@@ -17,11 +17,13 @@ void kmalloc_init(void* kernel_end)
 
 void* kmalloc(size_t size)
 {
+    /* TODO: Fill memory with 0xCC for easier spotting in memory dumps */
     return dlmalloc(size);
 }
 
 void kfree(void* ptr)
 {
+    /* TODO: Fill memory with 0xDD for easier spotting in memory dumps */
     dlfree(ptr);
 }
 
