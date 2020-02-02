@@ -122,11 +122,11 @@ void pmm_free(unsigned long page)
 }
 
 static
-unsigned long real_pmm_find(size_t count)
+unsigned long real_pmm_find(size_t length)
 {
-    assert2((count % PAGE_SIZE) == 0, "Invalid count: 0x%X", count);
+    assert2((length % PAGE_SIZE) == 0, "Invalid length: 0x%X", length);
 
-    size_t page_count = count / PAGE_SIZE;
+    size_t page_count = length / PAGE_SIZE;
     struct bitmap_node* node;
     TAILQ_FOREACH(node, &bitmaps, next) {
         for(size_t index = 0; index < node->bitset->bitcount; index++) {
@@ -146,15 +146,14 @@ unsigned long real_pmm_find(size_t count)
     return INVALID_PAGE;
 }
 
-/* TODO: Rename count to length */
-unsigned long pmm_find(size_t count)
+unsigned long pmm_find(size_t length)
 {
-    unsigned long result = real_pmm_find(count);
+    unsigned long result = real_pmm_find(length);
     if(result == INVALID_PAGE)
         return result;
 
     assert2((result % PAGE_SIZE) == 0, "Invalid result: %p", result);
-    for(size_t page = result; page < result + count; page += PAGE_SIZE) {
+    for(size_t page = result; page < result + length; page += PAGE_SIZE) {
         assert(!pmm_reserved(page));
     }
     return result;
