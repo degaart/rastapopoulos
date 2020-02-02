@@ -86,21 +86,16 @@ void pmm_reserve(unsigned long page)
 
 bool pmm_exists(unsigned long page)
 {
-    if(page % PAGE_SIZE)
-        panic("Invalid page: %p", page);
-    
+    assert2((page % PAGE_SIZE) == 0, "Invalid page: %p", page);
     struct bitset_entry entry = get_bitset(page);
     return entry.bitset != NULL;
 }
 
 bool pmm_reserved(unsigned long page)
 {
-    if(page % PAGE_SIZE)
-        panic("Invalid page: %p", page);
-
+    assert2((page % PAGE_SIZE) == 0, "Invalid page: %p", page);
     struct bitset_entry entry = get_bitset(page);
-    if(!entry.bitset)
-        panic("Page not found: %p", page);
+    assert2(entry.bitset, "Page not found: %p", page);
     return bitset_test(entry.bitset, entry.index);
 }
 
@@ -124,6 +119,45 @@ void pmm_free_range(unsigned long page, size_t length)
 void pmm_free(unsigned long page)
 {
     pmm_free_range(page, PAGE_SIZE);
+}
+
+static
+unsigned long real_pmm_find(size_t count)
+{
+    assert2((count % PAGE_SIZE) == 0, "Invalid count: 0x%X", count);
+
+    size_t page_count = count / PAGE_SIZE;
+    struct bitmap_node* node;
+    TAILQ_FOREACH(node, &bitmaps, next) {
+        for(size_t index = 0; index < node->bitset->bitcount; index++) {
+            if(!bitset_test(node->bitset, index)) {
+                size_t index_end = index;
+                size_t run = 0;
+                for(; run < page_count && index_end < index + page_count; index_end++, run++) {
+                    if(bitset_test(node->bitset, index_end))
+                        break;
+                }
+                if(run >= page_count) {
+                    return (unsigned long)(node->base + (index * PAGE_SIZE));
+                }
+            }
+        }
+    }
+    return INVALID_PAGE;
+}
+
+/* TODO: Rename count to length */
+unsigned long pmm_find(size_t count)
+{
+    unsigned long result = real_pmm_find(count);
+    if(result == INVALID_PAGE)
+        return result;
+
+    assert2((result % PAGE_SIZE) == 0, "Invalid result: %p", result);
+    for(size_t page = result; page < result + count; page += PAGE_SIZE) {
+        assert(!pmm_reserved(page));
+    }
+    return result;
 }
 
 void test_pmm()
@@ -188,6 +222,46 @@ void test_pmm()
     pmm_reserve(0x5000);
     pmm_reserve(0x9E000);
     pmm_free_range(0, 0x9F000);
+
+    /* Reset pmm */
+    //pmm_free(0x100000);
+
+    /* Test pmm_find */
+    unsigned long free_range = pmm_find(PAGE_SIZE);
+    assert(free_range == 0x0);
+
+    free_range = pmm_find(2 * PAGE_SIZE);
+    assert(free_range == 0x0);
+
+    /*
+     * Target layout
+     * 1100001
+     */
+    pmm_reserve_range(0x0, 0x2000);
+    pmm_reserve(0x6000);
+
+    assert(pmm_reserved(0x0));
+    assert(pmm_reserved(0x1000));
+    assert(!pmm_reserved(0x2000));
+    assert(!pmm_reserved(0x3000));
+    assert(!pmm_reserved(0x4000));
+    assert(!pmm_reserved(0x5000));
+    assert(pmm_reserved(0x6000));
+    assert(!pmm_reserved(0x7000));
+
+    free_range = pmm_find(4 * PAGE_SIZE);
+    assert(free_range == 0x2000);
+
+    free_range = pmm_find(5 * PAGE_SIZE);
+    assert(free_range == 0x7000);
+
+    /* Reserve all, so we can test for pmm_find failure */
+    pmm_reserve_range(0x2000, 4 * PAGE_SIZE);
+    pmm_reserve_range(0x7000, 0x9F000 - 0x7000);
+    pmm_reserve_range(0x101000, 0x6E0000 - 0x1000);
+
+    free_range = pmm_find(PAGE_SIZE);
+    assert(free_range == INVALID_PAGE);
 
     trace(" -= Done testing pmm =-");
 }
