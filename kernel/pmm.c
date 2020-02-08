@@ -152,7 +152,10 @@ unsigned long real_pmm_find(size_t length)
             if(!bitset_test(node->bitset, index)) {
                 size_t index_end = index;
                 size_t run = 0;
-                for(; run < page_count && index_end < index + page_count; index_end++, run++) {
+                for(;
+                    run < page_count && index_end < index + page_count && index_end < node->bitset->bitcount;
+                    index_end++, run++) {
+
                     if(bitset_test(node->bitset, index_end))
                         break;
                 }
