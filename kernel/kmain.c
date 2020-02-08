@@ -14,6 +14,7 @@
 #include "multiboot.h"
 #include "pmm.h"
 #include "bitset.h"
+#include "vmm.h"
 
 static void int80_handler(const struct isr_regs* regs)
 {
@@ -28,8 +29,10 @@ void kmain(void* multiboot_info)
     gdt_init();
     idt_init();
 
-    trace("KERNEL_START: 0x%X", KERNEL_START);
-    trace("KERNEL_END: 0x%X", KERNEL_END);
+    trace("    .text    %p - %p", TEXT_START, TEXT_END);
+    trace("    .rodata  %p - %p", RODATA_START, RODATA_END);
+    trace("    .data    %p - %p", DATA_START, DATA_END);
+    trace("    .bss     %p - %p", BSS_START, BSS_END);
 
     kmalloc_init(KERNEL_END);
     test_kmalloc();
@@ -48,10 +51,32 @@ void kmain(void* multiboot_info)
               mmap[i].type);
     }
 
+    test_bitset();
+
     pmm_init(mmap, mmap_count);
     test_pmm();
 
-    test_bitset();
+    /*
+     * Mark all kernel memory as reserved
+     */
+    for(unsigned long page = (unsigned long)KERNEL_START;
+        page < ALIGN((unsigned long)kmalloc_brk(), PAGE_SIZE);
+        page += PAGE_SIZE) {
+
+        pmm_reserve(page);
+    }
+    trace("Kernel break: %p", kmalloc_brk());
+
+    vmm_init();
+    trace("Kernel area: %p - %p", KERNEL_START, kmalloc_brk());
+
+    test_vmm();
+
+    for(int i = 0; i < 100; i++) {
+        unsigned char* ptr = kmalloc(PAGE_SIZE * i);
+        bzero(ptr, PAGE_SIZE * i);
+        kfree(ptr);
+    }
 
     trace("*** Stopped ***");
     reboot();

@@ -23,10 +23,21 @@ clean:
 	@make --no-print-directory -C kernel clean
 
 run:
-	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -nographic -debugcon file:/tmp/PrototypeOS.log -m 8
+	@qemu-system-i386 \
+		-kernel kernel/obj/kernel.elf \
+		-no-reboot \
+		-nographic \
+		-debugcon file:/tmp/PrototypeOS.log \
+		-m 8 \
+		-monitor telnet:127.0.0.1:55555,server,nowait
 
 run_graphic:
-	@qemu-system-i386 -kernel kernel/obj/kernel.elf -no-reboot -debugcon file:/tmp/PrototypeOS.log -m 8
+	@qemu-system-i386 \
+		-kernel kernel/obj/kernel.elf \
+		-no-reboot \
+		-debugcon file:/tmp/PrototypeOS.log \
+		-m 8 \
+		-monitor telnet:127.0.0.1:55555,server,nowait
 
 
 

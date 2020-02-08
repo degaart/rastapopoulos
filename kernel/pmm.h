@@ -7,6 +7,8 @@
 #define INVALID_PAGE 0xFFFFFFFF
 
 void pmm_init(const struct multiboot_mmap_entry* memmap, int count);
+bool pmm_initialized();
+void pmm_reset();
 void pmm_reserve_range(unsigned long page, size_t length);          /* length: bytes, must be a multiple of PAGE_SIZE */
 void pmm_reserve(unsigned long page);
 bool pmm_exists(unsigned long page);

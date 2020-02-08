@@ -36,6 +36,11 @@ struct bitset* bitset_init(struct bitset* bitset, size_t count)
     return bitset;
 }
 
+void bitset_free(struct bitset* bitset)
+{
+    kfree(bitset);
+}
+
 bool bitset_test(const struct bitset* bitset, size_t offset)
 {
     CHECK_OFFSET(bitset, offset);
@@ -178,6 +183,7 @@ void test_bitset()
             assert(!bitset_test(b, i));
         }
     }
+    bitset_free(b);
 
     trace(" -= Done testing bitset =-");
 }

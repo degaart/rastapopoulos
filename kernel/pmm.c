@@ -9,6 +9,7 @@
 #include "string.h"
 #include "debug.h"
 #include "bitset.h"
+#include "kernel.h"
 
 struct bitmap_node {
     unsigned long long base;
@@ -22,6 +23,8 @@ struct bitset_entry {
     struct bitset* bitset;
     size_t index;
 };
+
+static bool is_initialized = false;
 
 static struct bitset_entry get_bitset(unsigned long page)
 {
@@ -59,6 +62,22 @@ void pmm_init(const struct multiboot_mmap_entry* map, int count)
             node->bitset = bitset_alloc(count);
             TAILQ_INSERT_TAIL(&bitmaps, node, next);
         }
+    }
+
+
+    is_initialized = true;
+}
+
+bool pmm_initialized()
+{
+    return is_initialized;
+}
+
+void pmm_reset()
+{
+    struct bitmap_node* node;
+    TAILQ_FOREACH(node, &bitmaps, next) {
+        bitset_clear_all(node->bitset);
     }
 }
 
@@ -159,6 +178,9 @@ unsigned long pmm_find(size_t length)
     return result;
 }
 
+/*
+ * WARNING: Do not call kmalloc in this unit test file
+ */
 void test_pmm()
 {
     trace(" -= Testing pmm =-");
@@ -261,6 +283,9 @@ void test_pmm()
 
     free_range = pmm_find(PAGE_SIZE);
     assert(free_range == INVALID_PAGE);
+
+    /* reset */
+    pmm_reset();
 
     trace(" -= Done testing pmm =-");
 }
