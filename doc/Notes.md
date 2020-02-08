@@ -6,11 +6,23 @@
 - idt [OK]
 - page frame allocator [ok]
 - paging
+    - vmm
+    - integration between pmm and vmm
 - higher-half
 
 # Implementation details
 - I/O port access functions in kernel/io.h. Also bochs debug port defined there
-- why we need to remap pic in idt_init: https://arjunsreedharan.org/post/99370248137/kernels-201-lets-write-a-kernel-with-keyboard
+- why we need to remap pic in idt\_init: https://arjunsreedharan.org/post/99370248137/kernels-201-lets-write-a-kernel-with-keyboard
+- Virtual memory map
+
+```
+    0x00000000 - 0x0009EFFF     Conventional memory
+    0x0009F000 - 0x00100000     Reserved bios area
+    0x00100000 - 0x003FFFFF     Kernel area (4mb)
+    0x00400000 - 0xFF7FFFFF     User area
+    0xFF800000 - 0xFFBFFFFF     Temporary mappings
+    0xFFC00000 - 0xFFFFFFFF     Recursive PDE
+```
 
 
 # VGA

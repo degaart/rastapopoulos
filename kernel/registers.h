@@ -62,17 +62,52 @@ static inline uint64_t rdtsc()
     return ret;
 }
 
-static inline unsigned long read_cr0(void)
+static inline unsigned long read_cr0()
 {
-    unsigned long val;
-    asm volatile ( "mov %%cr0, %0" : "=r"(val) );
-    return val;
+    unsigned long result;
+    asm volatile("mov %0, cr0"
+            : "=r"(result));
+    return result;
+}
+
+static inline void write_cr0(unsigned long value)
+{
+    asm volatile("mov cr0, %0"
+            :
+            : "a"(value)
+            : "memory"
+    );
+}
+
+static inline unsigned long read_cr2()
+{
+    unsigned long result;
+    asm volatile("mov %0, cr2"
+            : "=r"(result));
+    return result;
+}
+
+static inline void write_cr3(unsigned long value)
+{
+    asm volatile("mov cr3, %0"
+            :
+            : "a"(value)
+            : "memory"
+    );
+}
+
+static inline unsigned long read_cr3()
+{
+    unsigned long result;
+    asm volatile("mov %0, cr3"
+            : "=r"(result));
+    return result;
 }
 
 static inline void invlpg(void* m)
 {
     /* Clobber memory to avoid optimizer re-ordering access before invlpg, which may cause nasty bugs. */
-    asm volatile ( "invlpg (%0)" : : "b"(m) : "memory" );
+    asm volatile ( "invlpg [%0]" : : "b"(m) : "memory" );
 }
 
 static inline void wrmsr(uint32_t msr_id, uint64_t msr_value)
