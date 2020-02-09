@@ -15,10 +15,17 @@
 #include "pmm.h"
 #include "bitset.h"
 #include "vmm.h"
+#include "pic.h"
 
 static void int80_handler(const struct isr_regs* regs)
 {
     trace("Hello from int80");
+}
+
+static
+void keyboard_handler(int irq, const struct isr_regs* regs)
+{
+    trace("keyboard_handler");
 }
 
 extern uint32_t initial_pagedir[];
@@ -98,14 +105,14 @@ void kmain(const struct multiboot_info* multiboot_info)
 
     test_vmm();
 
-#if 0
-    for(int i = 0; i < 100; i++) {
-        trace("Allocating %p pages (order %d)", PAGE_SIZE * i, i);
-        unsigned char* ptr = kmalloc(PAGE_SIZE * i);
-        bzero(ptr, PAGE_SIZE * i);
-        kfree(ptr);
-    }
-#endif
+    trace("Initializing pic");
+    pic_init();
+
+    pic_install(IRQ_KEYBOARD, keyboard_handler);
+    irq_unmask(IRQ_KEYBOARD);
+
+    sti();
+    while(1);
 
     trace("*** Stopped ***");
     reboot();
