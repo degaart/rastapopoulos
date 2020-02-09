@@ -136,3 +136,49 @@ _start:
 
 .end:
 
+global switch_to_usermode:function
+switch_to_usermode:
+    xchg bx, bx
+    cli                         ; just in case
+    mov eax, 0x20|0x3           ; user data segment | 0x3
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    mov eax, [esp+4]            ; user stack, save 'cause we're going to change the stack pointer
+    push DWORD 0x23             ; ss
+    push eax                    ; esp
+    pushf
+    pop eax
+    or  eax, 0x200              ; IF
+    pushf                       ; EFLAGS|IF
+    push DWORD 0x18|0x3         ; user code seg
+    push DWORD usermode_entry   ; eip
+    iret
+
+section .user
+
+global usermode_entry:function
+usermode_entry:
+.hang:
+    mov al, 'U'
+    out 0xE9, al
+    mov al, 's'
+    out 0xE9, al
+    mov al, 'e'
+    out 0xE9, al
+    mov al, 'r'
+    out 0xE9, al
+    mov al, 10
+    out 0xE9, al
+
+    mov ecx, 1000000
+.delay:
+    xor al, al
+    out 0x80, al
+    dec ecx
+    cmp ecx, 0
+    jne .delay
+    jmp .hang
+

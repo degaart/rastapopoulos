@@ -131,7 +131,7 @@ void vmm_init()
 
         if(!(pagedir[pde_index] & PDE_PRESENT)) {
             uint32_t* pagetable = vmm_create_pagetable();
-            pagedir[pde_index] = ENTRY(PDE_PRESENT|PDE_WRITABLE, (unsigned char*)pagetable - KERNEL_BASE);
+            pagedir[pde_index] = ENTRY(PDE_PRESENT|PDE_WRITABLE|PDE_USER, (unsigned char*)pagetable - KERNEL_BASE);
         }
 
         uint32_t* pagetable = (uint32_t*)((pagedir[pde_index] & PDE_FRAME) + KERNEL_BASE);
@@ -162,7 +162,7 @@ void vmm_map(void* page, unsigned long frame, unsigned flags)
 {
     if(!(get_pde(page) & PDE_PRESENT)) {
         uint32_t* pagetable = vmm_create_pagetable();
-        uint32_t pde = ENTRY(PDE_PRESENT|PDE_WRITABLE, vmm_get_frame(pagetable));
+        uint32_t pde = ENTRY(PDE_PRESENT|PDE_WRITABLE|PDE_USER, vmm_get_frame(pagetable));
         set_pde(page, pde);
     }
 

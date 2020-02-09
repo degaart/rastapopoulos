@@ -11,7 +11,6 @@ static uint64_t ticks;
 static
 void timer_handler(int irq, const struct isr_regs* regs)
 {
-    trace("Timer handler called");
     ticks++;
 }
 

@@ -98,6 +98,9 @@ void kmain(const struct multiboot_info* multiboot_info)
     for(unsigned char* page = RODATA_START; page < RODATA_END; page += PAGE_SIZE) {
         vmm_remap(page, 0);
     }
+    for(unsigned char* page = USER_START; page < USER_END; page += PAGE_SIZE) {
+        vmm_remap(page, VMM_PAGE_USER);
+    }
 
     /* This should throw a page fault */
     // ((char*)"aaa")[0] = '-';
@@ -112,8 +115,11 @@ void kmain(const struct multiboot_info* multiboot_info)
     trace("Initializing pit");
     pit_init();
 
-    sti();
-    while(1);
+    trace("Entering usermode");
+    unsigned char* userstack = kmalloc_aligned(PAGE_SIZE, PAGE_SIZE);
+    vmm_remap(userstack, VMM_PAGE_USER);
+    switch_to_usermode(userstack + PAGE_SIZE - sizeof(uint32_t));
+    trace("Here????");
 
     trace("*** Stopped ***");
     reboot();
