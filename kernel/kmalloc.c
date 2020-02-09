@@ -53,7 +53,13 @@ void* sbrk(ptrdiff_t size)
 
             unsigned char* page = heap_ptr;
             while(remaining) {
+                if(page >= (unsigned char*)USER_AREA_START && page <= (unsigned char*)USER_AREA_END)
+                    panic("Kernel memory space exhausted");
+
                 unsigned long frame = pmm_find(size);
+                if(frame == INVALID_PAGE)
+                    panic("Kernel memory exhausted");
+
                 pmm_reserve(frame);
                 vmm_map(page, frame, VMM_PAGE_WRITABLE);
 

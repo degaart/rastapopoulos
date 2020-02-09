@@ -72,7 +72,8 @@ void kmain(void* multiboot_info)
 
     test_vmm();
 
-    for(int i = 0; i < 100; i++) {
+    for(int i = 0; i < 1000000; i++) {
+        trace("Allocating %p pages (order %d)", PAGE_SIZE * i, i);
         unsigned char* ptr = kmalloc(PAGE_SIZE * i);
         bzero(ptr, PAGE_SIZE * i);
         kfree(ptr);

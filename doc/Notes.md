@@ -5,7 +5,7 @@
 - gdt [OK]
 - idt [OK]
 - page frame allocator [ok]
-- paging
+- paging [OK]
     - vmm
     - integration between pmm and vmm
 - higher-half
@@ -47,6 +47,13 @@
 
 # assembler
 - can mark a symbol as a function with: global _start:function (_start.end - _start)
+
+# debugger
+- ```--disable-debug --disable-dependency-tracking --target=i686-elf --without-python --disable-binutils MAKEINFO=false```
+
+# bochs
+- ```--disable-static --enable-debugger --enable-disasm --enable-debugger-gui --enable-readline --enable-x86-debugger --enable-clgd54xx --with-nogui```
+
 
 
 
