@@ -67,7 +67,8 @@ struct multiboot_mod_entry {
 };
 
 
-void multiboot_init(const struct multiboot_info* init_mi);
+const unsigned char* multiboot_init(const struct multiboot_info* init_mi);
+void multiboot_fix(const struct multiboot_info* init_mi);
 const struct multiboot_mmap_entry* multiboot_get_mmap(int* count);
 
 

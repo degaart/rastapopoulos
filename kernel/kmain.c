@@ -22,7 +22,7 @@ static void int80_handler(const struct isr_regs* regs)
 }
 
 extern uint32_t initial_pagedir[];
-void kmain(void* multiboot_info)
+void kmain(const struct multiboot_info* multiboot_info)
 {
     trace("");
     trace("*** Started ***");
@@ -35,23 +35,19 @@ void kmain(void* multiboot_info)
     trace("    .data    %p - %p", DATA_START, DATA_END);
     trace("    .bss     %p - %p", BSS_START, BSS_END);
 
-    kmalloc_init(KERNEL_END);
+    const unsigned char* multiboot_end = multiboot_init(multiboot_info);
+    trace("Multiboot end: %p", multiboot_end);
+
+    kmalloc_init(multiboot_end + sizeof(uint32_t));
     test_kmalloc();
 
-    /*
-     * Check that memory at 0xC0000000 is the same as that at 0x00000000
-     */
-    for(unsigned long* ptr = (unsigned long*)0xC0000000; ptr < (unsigned long*)0xC000F000; ptr++) {
-        unsigned long* counterpart = (unsigned long*)((unsigned char*)ptr - 0xC0000000);
-        assert2(*ptr == *counterpart, "%p != %p", ptr, counterpart);
-    }
+    multiboot_fix(multiboot_info);
 
     /* And 0xFFFFF000 points to initial_pagedir */
     trace("initial_pagedir: %p", initial_pagedir);
     trace("0xFFFFF000: %p", *((unsigned long*)0xFFFFF000));
 
-    trace("multiboot_info: 0x%X", multiboot_info);
-    multiboot_init((const struct multiboot_info*)multiboot_info);
+    //trace("multiboot_info: 0x%X", multiboot_info);
 
     int mmap_count;
     const struct multiboot_mmap_entry* mmap = multiboot_get_mmap(&mmap_count);
@@ -72,8 +68,8 @@ void kmain(void* multiboot_info)
     /*
      * Mark all kernel memory as reserved
      */
-    for(unsigned long page = (unsigned long)KERNEL_START;
-        page < ALIGN((unsigned long)kmalloc_brk(), PAGE_SIZE);
+    for(unsigned long page = (unsigned long)KERNEL_START - KERNEL_BASE;
+        page < ALIGN((unsigned long)kmalloc_brk() - KERNEL_BASE, PAGE_SIZE);
         page += PAGE_SIZE) {
 
         pmm_reserve(page);
@@ -85,15 +81,12 @@ void kmain(void* multiboot_info)
 
     test_vmm();
 
-
-#if 0
     for(int i = 0; i < 100; i++) {
         trace("Allocating %p pages (order %d)", PAGE_SIZE * i, i);
         unsigned char* ptr = kmalloc(PAGE_SIZE * i);
         bzero(ptr, PAGE_SIZE * i);
         kfree(ptr);
     }
-#endif
 
     trace("*** Stopped ***");
     reboot();

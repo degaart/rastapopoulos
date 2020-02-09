@@ -11,10 +11,10 @@
 
 
 /* Inclusive */
-#define KERNEL_AREA_START    0x00100000
-#define KERNEL_AREA_END      0x003FFFFF
-#define USER_AREA_START      0x00400000
-#define USER_AREA_END        0xFF7FFFFF
+#define KERNEL_AREA_START    0xC0100000
+#define KERNEL_AREA_END      0xCFFFFFFF
+#define USER_AREA_START      0x00000000
+#define USER_AREA_END        0xBFFFFFFF
 
 /* flags */
 #define VMM_PAGE_WRITABLE       0x1

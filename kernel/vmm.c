@@ -131,22 +131,22 @@ void vmm_init()
 
         if(!(pagedir[pde_index] & PDE_PRESENT)) {
             uint32_t* pagetable = vmm_create_pagetable();
-            pagedir[pde_index] = ENTRY(PDE_PRESENT|PDE_WRITABLE, pagetable);
+            pagedir[pde_index] = ENTRY(PDE_PRESENT|PDE_WRITABLE, (unsigned char*)pagetable - KERNEL_BASE);
         }
 
-        uint32_t* pagetable = (uint32_t*)(pagedir[pde_index] & PDE_FRAME);
+        uint32_t* pagetable = (uint32_t*)((pagedir[pde_index] & PDE_FRAME) + KERNEL_BASE);
         assert(pagetable[pte_index] == 0);
 
-        pagetable[pte_index] = ENTRY(PTE_PRESENT|PTE_WRITABLE, page);
+        pagetable[pte_index] = ENTRY(PTE_PRESENT|PTE_WRITABLE, page - KERNEL_BASE);
     }
 
     /* Recursive mapping */
-    pagedir[1023] = ENTRY(PDE_PRESENT|PDE_WRITABLE, pagedir);
+    pagedir[1023] = ENTRY(PDE_PRESENT|PDE_WRITABLE, (unsigned char*)pagedir - KERNEL_BASE);
 
-    /* Enable paging */
-    write_cr3((unsigned long)pagedir);
-    unsigned long cr3 = read_cr3();
-    assert2(cr3 == (unsigned long)pagedir, "pagedir: %p, cr3: %p", pagedir, cr3);
+    /* Re-enable paging */
+    trace("Here");
+    write_cr3((unsigned long)pagedir - KERNEL_BASE);
+    trace("Here2");
 
     unsigned long cr0 = read_cr0();
     cr0 |= CR0_PG | CR0_WP;

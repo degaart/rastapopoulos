@@ -54,7 +54,7 @@ _start:
     ;   - undefined gdt
 
     ; save multiboot info
-    mov [multiboot_info], ebx
+    mov [multiboot_info - KERNEL_BASE], ebx
     
     ; setup initial pagedir
     ; Identity map 0x00000000 - 0x003FFFFF
@@ -62,29 +62,29 @@ _start:
     ; Finally, put recursive directory entry
 
     ; initial_pagedir[0] = (initial_pagetable & 0xFFFFF000)|(PDE_PRESENT|PDE_WRITABLE)
-    mov eax, initial_pagetable
+    mov eax, initial_pagetable - KERNEL_BASE
     and eax, 0xFFFFF000
     or  eax, 1 | (1 << 1)
-    mov DWORD [initial_pagedir], eax    ; initial_pagedir[0] = eax
+    mov DWORD [initial_pagedir - KERNEL_BASE], eax    ; initial_pagedir[0] = eax
 
     ; initial_pagedir[0xC0000000>>22] = eax
     mov ecx, 0xC0000000
     shr ecx, 22
     shl ecx, 2                      ; ecx *= 2
-    add ecx, initial_pagedir
+    add ecx, initial_pagedir - KERNEL_BASE
     mov DWORD [ecx], eax
 
     ; initial_pagedir[1023] = initial_pagedir|(1|(1<<1))
-    mov eax, initial_pagedir
+    mov eax, initial_pagedir - KERNEL_BASE
     and eax, 0xFFFFF000
     or  eax, 1 | (1 << 1)
     mov ecx, 1023
     shl ecx, 2
-    add ecx, initial_pagedir
+    add ecx, initial_pagedir - KERNEL_BASE
     mov DWORD [ecx], eax
 
-    ; pagetables
-    mov esi, initial_pagetable
+    ; setup pagetable
+    mov esi, initial_pagetable - KERNEL_BASE
     mov ebx, 0                          ; current_page
 
 .loop:
@@ -100,15 +100,27 @@ _start:
     jb  .loop
 
     ; enable paging
-    mov eax, initial_pagedir
+    mov eax, initial_pagedir - KERNEL_BASE
     mov cr3, eax
     mov eax, cr0
     or  eax, (1 << 31)
     mov cr0, eax
 
+    ; far jump to higher half
+    lea eax, [.higher_half]
+    jmp eax
+
+.higher_half:
     ; setup stack
     mov esp, stack_top
     sub esp, 16
+
+    ; Remove low 4Mb mapping
+    ; initial_pagedir[0] = 0
+    xor eax, eax
+    mov DWORD [initial_pagedir], eax
+    mov eax, cr3
+    mov cr3, eax
 
     ; call kernel C entry point
     mov eax, [multiboot_info]

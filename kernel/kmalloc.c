@@ -13,9 +13,9 @@ extern void* dlmemalign(size_t, size_t);
 
 static unsigned char* heap_ptr;
 
-void kmalloc_init(void* kernel_end)
+void kmalloc_init(const void* kernel_end)
 {
-    heap_ptr = ALIGN(kernel_end, 4096);
+    heap_ptr = (unsigned char*)ALIGN(kernel_end, 4096);
 }
 
 void* kmalloc(size_t size)
@@ -67,7 +67,7 @@ void* sbrk(ptrdiff_t size)
                 page += PAGE_SIZE;
             }
         } else if(pmm_initialized()) {
-            pmm_reserve_range((unsigned long)heap_ptr, size);
+            pmm_reserve_range((unsigned long)heap_ptr - KERNEL_BASE, size);
         }
         heap_ptr += size;
         return result;

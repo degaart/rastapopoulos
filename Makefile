@@ -26,6 +26,8 @@ clean:
 run:
 	@qemu-system-i386 \
 		-kernel kernel/obj/kernel.elf \
+		-append "Hello, world!" \
+		-initrd build/initrd.img \
 		-no-reboot \
 		-nographic \
 		-debugcon file:/tmp/PrototypeOS.log \
