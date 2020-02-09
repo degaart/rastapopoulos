@@ -171,8 +171,9 @@ unsigned long real_pmm_find(size_t length)
 unsigned long pmm_find(size_t length)
 {
     unsigned long result = real_pmm_find(length);
-    if(result == INVALID_PAGE)
+    if(result == INVALID_PAGE) {
         return result;
+    }
 
     assert2((result % PAGE_SIZE) == 0, "Invalid result: %p", result);
     for(size_t page = result; page < result + length; page += PAGE_SIZE) {

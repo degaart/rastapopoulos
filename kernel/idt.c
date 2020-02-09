@@ -52,12 +52,17 @@ void isr_handler(const struct isr_regs* regs)
         isr_handlers[regs->int_no](regs);
     } else {
         trace("Unhandled int 0x%lX:\n"
-              "ds: 0x%X cs: 0x%X eip: 0x%X eflags: 0x%X\n"
-              "eax: 0x%X ebx: 0x%X ecx: 0x%X edx: 0x%X ebp: 0x%X esi: 0x%X edi: 0x%X\n"
-              "error: 0x%X",
+              "\tds: 0x%X cs: 0x%X eip: 0x%X eflags: 0x%X\n"
+              "\teax: 0x%X ebx: 0x%X\n"
+              "\tecx: 0x%X edx: 0x%X\n"
+              "\tebp: 0x%X esi: 0x%X\n"
+              "\tedi: 0x%X\n"
+              "\tcr0: %p cr2: %p cr3: %p\n"
+              "\terror: 0x%X",
               regs->int_no,
               regs->ds, regs->cs, regs->eip, regs->eflags,
               regs->eax, regs->ebx, regs->ecx, regs->edx, regs->ebp, regs->esi, regs->edi,
+              read_cr0(), read_cr2(), read_cr3(),
               regs->err_code);
     }
 }

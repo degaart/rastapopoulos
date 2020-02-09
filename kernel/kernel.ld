@@ -1,7 +1,9 @@
 ENTRY(_start)
 
 SECTIONS {
+    //. = 0xC0100000;
     . = 1M;
+
     __KERNEL_START__ = .;
 
     .text BLOCK(4K) : ALIGN(4K)

@@ -9,20 +9,36 @@ FLAGS    equ  MBALIGN | MEMINFO ; this is the Multiboot 'flag' field
 MAGIC    equ  0x1BADB002        ; 'magic number' lets bootloader find the header
 CHECKSUM equ -(MAGIC + FLAGS)   ; checksum of above, to prove we are multiboot
 
+KERNEL_BASE equ 0xC0000000
+
 section .multiboot
 align 4
     dd MAGIC
     dd FLAGS
     dd CHECKSUM
 
+section .bss
+
 ; stack
 ; marked as nobits in linker file so is not stored in kernel image
 ; must be 16-bytes aligned due to sysv abi
-section .bss
 align 16
-stack_bottom:
-    resb 16384                  ; 16kb
+stack_bottom: resb 16384                  ; 16kb
 stack_top:
+
+; initial pagedir and pagetable
+; kernel should reside at 0xC0100000
+align 4096
+initial_pagedir: resd 1024
+initial_pagetable: resd 1024
+
+; store multiboot_info pointer here
+multiboot_info: resd 1
+
+global stack_bottom:data
+global stack_top:data
+global initial_pagetable:data
+global initial_pagedir:data
 
 section .text
 
@@ -36,12 +52,55 @@ _start:
     ;   - paging disabled
     ;   - undefined stack
     ;   - undefined gdt
+
+    ; save multiboot info
+    mov [multiboot_info], ebx
+
     
+    ; setup initial pagedir
+    ; Identity map 0x00000000 - 0x003FFFFF
+    ; Then map     0xC0000000 - 0xC03FFFFF to 0x00000000 - 0x003FFFFF
+    ; Finally, put recursive directory entry
+
+
+    ; pagedir entry
+    mov eax, initial_pagetable          ; eax = (initial_pagetable & 0xFFFFF000)|(PDE_PRESENT|PDE_WRITABLE)
+    and eax, 0xFFFFF000
+    or  eax, 1 | (1 << 1)
+    
+    mov DWORD [initial_pagedir], eax    ; initial_pagedir[0] = eax
+
+    ; pagetables
+    mov esi, initial_pagetable
+    mov ebx, 0                          ; current_page
+
+.loop:
+    mov eax, ebx
+    and eax, 0xFFFFF000
+    or  eax, 1 | (1 << 1)
+    mov DWORD [esi], eax
+
+    add ebx, 0x1000
+    add esi, 4
+
+    cmp ebx, 0x400000
+    jb  .loop
+
+    ; enable paging
+    mov eax, initial_pagedir
+    mov cr3, eax
+    mov eax, cr0
+    or  eax, (1 << 31)
+    xchg bx, bx
+    mov cr0, eax
+
     ; setup stack
     mov esp, stack_top
-    mov [esp], ebx
+    sub esp, 16
 
     ; call kernel C entry point
+    mov eax, [multiboot_info]
+    mov [esp], eax
     extern kmain
     call kmain
 
