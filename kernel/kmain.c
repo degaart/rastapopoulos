@@ -21,6 +21,7 @@ static void int80_handler(const struct isr_regs* regs)
     trace("Hello from int80");
 }
 
+extern uint32_t initial_pagedir[];
 void kmain(void* multiboot_info)
 {
     trace("");
@@ -36,6 +37,18 @@ void kmain(void* multiboot_info)
 
     kmalloc_init(KERNEL_END);
     test_kmalloc();
+
+    /*
+     * Check that memory at 0xC0000000 is the same as that at 0x00000000
+     */
+    for(unsigned long* ptr = (unsigned long*)0xC0000000; ptr < (unsigned long*)0xC000F000; ptr++) {
+        unsigned long* counterpart = (unsigned long*)((unsigned char*)ptr - 0xC0000000);
+        assert2(*ptr == *counterpart, "%p != %p", ptr, counterpart);
+    }
+
+    /* And 0xFFFFF000 points to initial_pagedir */
+    trace("initial_pagedir: %p", initial_pagedir);
+    trace("0xFFFFF000: %p", *((unsigned long*)0xFFFFF000));
 
     trace("multiboot_info: 0x%X", multiboot_info);
     multiboot_init((const struct multiboot_info*)multiboot_info);
@@ -72,12 +85,15 @@ void kmain(void* multiboot_info)
 
     test_vmm();
 
-    for(int i = 0; i < 1000000; i++) {
+
+#if 0
+    for(int i = 0; i < 100; i++) {
         trace("Allocating %p pages (order %d)", PAGE_SIZE * i, i);
         unsigned char* ptr = kmalloc(PAGE_SIZE * i);
         bzero(ptr, PAGE_SIZE * i);
         kfree(ptr);
     }
+#endif
 
     trace("*** Stopped ***");
     reboot();

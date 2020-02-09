@@ -2,7 +2,7 @@
 
 all: kernel/obj/kernel.elf
 
-PrototypeOS.iso: build/boot/grub build/boot/grub/grub.cfg build/boot/kernel.elf
+PrototypeOS.iso: build/boot/grub build/boot/grub/grub.cfg build/boot/kernel.elf kernel/obj/kernel.elf
 	@echo "[BLD] $@"
 	@grub-mkrescue -o $@ build
 
