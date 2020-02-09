@@ -51,7 +51,7 @@ void isr_handler(const struct isr_regs* regs)
     if(isr_handlers[regs->int_no]) {
         isr_handlers[regs->int_no](regs);
     } else {
-        trace("Unhandled int 0x%lX:\n"
+        panic("Unhandled int 0x%lX:\n"
               "\tds: 0x%X cs: 0x%X eip: 0x%X eflags: 0x%X\n"
               "\teax: 0x%X ebx: 0x%X\n"
               "\tecx: 0x%X edx: 0x%X\n"

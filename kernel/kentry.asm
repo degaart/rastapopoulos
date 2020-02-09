@@ -55,20 +55,33 @@ _start:
 
     ; save multiboot info
     mov [multiboot_info], ebx
-
     
     ; setup initial pagedir
     ; Identity map 0x00000000 - 0x003FFFFF
     ; Then map     0xC0000000 - 0xC03FFFFF to 0x00000000 - 0x003FFFFF
     ; Finally, put recursive directory entry
 
-
-    ; pagedir entry
-    mov eax, initial_pagetable          ; eax = (initial_pagetable & 0xFFFFF000)|(PDE_PRESENT|PDE_WRITABLE)
+    ; initial_pagedir[0] = (initial_pagetable & 0xFFFFF000)|(PDE_PRESENT|PDE_WRITABLE)
+    mov eax, initial_pagetable
     and eax, 0xFFFFF000
     or  eax, 1 | (1 << 1)
-    
     mov DWORD [initial_pagedir], eax    ; initial_pagedir[0] = eax
+
+    ; initial_pagedir[0xC0000000>>22] = eax
+    mov ecx, 0xC0000000
+    shr ecx, 22
+    shl ecx, 2                      ; ecx *= 2
+    add ecx, initial_pagedir
+    mov DWORD [ecx], eax
+
+    ; initial_pagedir[1023] = initial_pagedir|(1|(1<<1))
+    mov eax, initial_pagedir
+    and eax, 0xFFFFF000
+    or  eax, 1 | (1 << 1)
+    mov ecx, 1023
+    shl ecx, 2
+    add ecx, initial_pagedir
+    mov DWORD [ecx], eax
 
     ; pagetables
     mov esi, initial_pagetable
@@ -91,7 +104,6 @@ _start:
     mov cr3, eax
     mov eax, cr0
     or  eax, (1 << 31)
-    xchg bx, bx
     mov cr0, eax
 
     ; setup stack
