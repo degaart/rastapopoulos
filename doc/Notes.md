@@ -8,7 +8,7 @@
 - paging [OK]
     - vmm
     - integration between pmm and vmm
-- higher-half
+- higher-half [ok]
 
 # Implementation details
 - I/O port access functions in kernel/io.h. Also bochs debug port defined there

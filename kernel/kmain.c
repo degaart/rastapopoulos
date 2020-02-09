@@ -76,17 +76,36 @@ void kmain(const struct multiboot_info* multiboot_info)
     }
     trace("Kernel break: %p", kmalloc_brk());
 
+    /* TODO: Mark initial modules storage as free */
+
     vmm_init();
     trace("Kernel area: %p - %p", KERNEL_START, kmalloc_brk());
 
+    /*
+     * Now, remap each sections of kernel with appropriate permissions
+     */
+    for(unsigned char* page = TEXT_START; page < TEXT_END; page += PAGE_SIZE) {
+        vmm_remap(page, 0);
+    }
+    for(unsigned char* page = RODATA_START; page < RODATA_END; page += PAGE_SIZE) {
+        vmm_remap(page, 0);
+    }
+
+    /* This should throw a page fault */
+    // ((char*)"aaa")[0] = '-';
+    // *((unsigned char*)0xC0100000) = '-';
+    // while(1);
+
     test_vmm();
 
+#if 0
     for(int i = 0; i < 100; i++) {
         trace("Allocating %p pages (order %d)", PAGE_SIZE * i, i);
         unsigned char* ptr = kmalloc(PAGE_SIZE * i);
         bzero(ptr, PAGE_SIZE * i);
         kfree(ptr);
     }
+#endif
 
     trace("*** Stopped ***");
     reboot();

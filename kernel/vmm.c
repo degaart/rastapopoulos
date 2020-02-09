@@ -144,9 +144,7 @@ void vmm_init()
     pagedir[1023] = ENTRY(PDE_PRESENT|PDE_WRITABLE, (unsigned char*)pagedir - KERNEL_BASE);
 
     /* Re-enable paging */
-    trace("Here");
     write_cr3((unsigned long)pagedir - KERNEL_BASE);
-    trace("Here2");
 
     unsigned long cr0 = read_cr0();
     cr0 |= CR0_PG | CR0_WP;
@@ -203,7 +201,7 @@ void vmm_remap(void* page, unsigned flags)
         pte_flags |= PTE_WRITABLE;
     if(flags & VMM_PAGE_USER)
         pte_flags |= PTE_USER;
-    set_pte(page, pte | pte_flags);
+    set_pte(page, ENTRY(pte_flags, pte));
     invlpg(page);
 }
 
