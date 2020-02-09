@@ -16,6 +16,7 @@
 #include "bitset.h"
 #include "vmm.h"
 #include "pic.h"
+#include "pit.h"
 
 static void int80_handler(const struct isr_regs* regs)
 {
@@ -108,8 +109,8 @@ void kmain(const struct multiboot_info* multiboot_info)
     trace("Initializing pic");
     pic_init();
 
-    pic_install(IRQ_KEYBOARD, keyboard_handler);
-    irq_unmask(IRQ_KEYBOARD);
+    trace("Initializing pit");
+    pit_init();
 
     sti();
     while(1);
