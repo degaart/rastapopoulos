@@ -24,3 +24,5 @@ extern unsigned char __DATA_END__;
 extern unsigned char __BSS_START__;
 extern unsigned char __BSS_END__;
 
+#define KERNEL_BASE 0xC0000000
+
