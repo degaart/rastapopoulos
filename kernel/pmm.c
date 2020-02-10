@@ -182,6 +182,22 @@ unsigned long pmm_find(size_t length)
     return result;
 }
 
+unsigned long pmm_alloc_range(size_t length)
+{
+    unsigned long frame = pmm_find(length);
+    if(frame == INVALID_PAGE)
+        return INVALID_PAGE;
+    if(frame == 0x400000)
+        trace("Here");
+    pmm_reserve_range(frame, length);
+    return frame;
+}
+
+unsigned long pmm_alloc()
+{
+    return pmm_alloc_range(PAGE_SIZE);
+}
+
 /*
  * WARNING: Do not call kmalloc in this unit test file
  */

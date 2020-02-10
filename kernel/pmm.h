@@ -16,5 +16,7 @@ bool pmm_reserved(unsigned long page);
 void pmm_free_range(unsigned long page, size_t length);             /* length: bytes, multiple of PAGE_SIZE */
 void pmm_free(unsigned long page);
 unsigned long pmm_find(size_t length);                              /* length: bytes, multiple of page size. Returns INVALID_PAGE if not found */
+unsigned long pmm_alloc_range(size_t length);                             /* length: bytes, multiple of page size. Returns INVALID_PAGE if not found */
+unsigned long pmm_alloc();                                          /* alloc one single frame */
 void test_pmm();
 

@@ -8,7 +8,8 @@ extern main
 global _start:function
 _start:
     ; align stack
-    and     esp, 0xFFFFFF0
+    xchg    bx, bx
+    and     esp, 0xFFFFFFF0
     call    main
 
     ; We don't know what to do here, so just write something to debug port

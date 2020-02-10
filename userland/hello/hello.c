@@ -25,7 +25,7 @@ static void puts(const char* str)
 int main()
 {
     while(1) {
-        puts("Hello from userspace");
+        puts("Hello from userspace\n");
         for(size_t i = 0; i < 1000000; i++) {
             io_wait();
         }

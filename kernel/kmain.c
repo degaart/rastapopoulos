@@ -18,6 +18,7 @@
 #include "pic.h"
 #include "pit.h"
 #include "initrd.h"
+#include "elf.h"
 
 static void int80_handler(const struct isr_regs* regs)
 {
@@ -99,9 +100,6 @@ void kmain(const struct multiboot_info* multiboot_info)
     for(unsigned char* page = RODATA_START; page < RODATA_END; page += PAGE_SIZE) {
         vmm_remap(page, 0);
     }
-    for(unsigned char* page = USER_START; page < USER_END; page += PAGE_SIZE) {
-        vmm_remap(page, VMM_PAGE_USER);
-    }
 
     /* This should throw a page fault */
     // ((char*)"aaa")[0] = '-';
@@ -118,20 +116,31 @@ void kmain(const struct multiboot_info* multiboot_info)
 
     size_t initrd_size;
     const void* initrd_data = multiboot_get_initrd(&initrd_size);
-    if(initrd_data) {
-        trace("Loading initrd");
-        initrd_init(initrd_data, initrd_size);
+    if(!initrd_data) {
+        panic("No initrd found");
     }
 
-#if 0
-    trace("Entering usermode");
-    unsigned char* userstack = kmalloc_aligned(PAGE_SIZE, PAGE_SIZE);
-    vmm_remap(userstack, VMM_PAGE_USER);
-    switch_to_usermode(userstack + PAGE_SIZE - sizeof(uint32_t));
-    trace("Here????");
-#endif
+    trace("Loading initrd");
+    initrd_init(initrd_data, initrd_size);
 
-    trace("*** Stopped ***");
+    trace("Loading hello.elf");
+    const struct initrd_file* hello_elf = initrd_get_file("hello.elf");
+    if(!hello_elf)
+        panic("hello.elf not found");
+
+    elf_entry_t hello_entry = load_elf(hello_elf->data, hello_elf->size);
+    trace("hello_entry: %p", hello_entry);
+    assert((unsigned char*)hello_entry == (unsigned char*)0x1000A0);
+
+    unsigned char* userstack = kmalloc_aligned(PAGE_SIZE, PAGE_SIZE);
+    trace("hello_stack: %p", userstack);
+    vmm_remap(userstack, VMM_PAGE_USER|VMM_PAGE_WRITABLE);
+
+    trace("Entering usermode");
+    switch_to_usermode(userstack + PAGE_SIZE - sizeof(uint32_t), hello_entry);
+    trace("Here????");
+
+    trace("*** Rebooting ***");
     reboot();
 }
 
