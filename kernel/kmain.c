@@ -17,6 +17,7 @@
 #include "vmm.h"
 #include "pic.h"
 #include "pit.h"
+#include "initrd.h"
 
 static void int80_handler(const struct isr_regs* regs)
 {
@@ -115,11 +116,20 @@ void kmain(const struct multiboot_info* multiboot_info)
     trace("Initializing pit");
     pit_init();
 
+    size_t initrd_size;
+    const void* initrd_data = multiboot_get_initrd(&initrd_size);
+    if(initrd_data) {
+        trace("Loading initrd");
+        initrd_init(initrd_data, initrd_size);
+    }
+
+#if 0
     trace("Entering usermode");
     unsigned char* userstack = kmalloc_aligned(PAGE_SIZE, PAGE_SIZE);
     vmm_remap(userstack, VMM_PAGE_USER);
     switch_to_usermode(userstack + PAGE_SIZE - sizeof(uint32_t));
     trace("Here????");
+#endif
 
     trace("*** Stopped ***");
     reboot();

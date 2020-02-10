@@ -130,3 +130,16 @@ const struct multiboot_mmap_entry* multiboot_get_mmap(int* count)
     return multiboot_info->mmap_addr;
 }
 
+const void* multiboot_get_initrd(size_t* size)
+{
+    if((multiboot_info->flags & MULTIBOOT_FLAG_MODINFO) && multiboot_info->mods_count) {
+        const struct multiboot_mod_entry* mod = (struct multiboot_mod_entry*)multiboot_info->mods_addr;
+        size_t initrd_size = mod->end - mod->start;
+        const void* initrd_data = mod->start;
+        *size = initrd_size;
+        return initrd_data;
+    }
+    return NULL;
+}
+
+
