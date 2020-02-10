@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 struct multiboot_info {
     uint32_t flags;
@@ -66,11 +67,8 @@ struct multiboot_mod_entry {
     uint32_t reserved;
 };
 
-
 const unsigned char* multiboot_init(const struct multiboot_info* init_mi);
 void multiboot_fix(const struct multiboot_info* init_mi);
 const struct multiboot_mmap_entry* multiboot_get_mmap(int* count);
-
-
-
+const void* multiboot_get_initrd(size_t* size);
 
