@@ -241,6 +241,7 @@ void test_vmm()
     for(size_t i = 0; i < 1024; i++) {
         ptr[i] = 0xDEADBEEF;
     }
+    vmm_unmap(ptr);
 
     //*((unsigned long*)0x401000) = 0xAABBCCDD;                    /* page fault */
 
@@ -256,14 +257,12 @@ void test_vmm()
     //*ptr = 'a';    /* page fault */
     vmm_remap(ptr, VMM_PAGE_WRITABLE);
     *ptr = 'A';
+    vmm_unmap(ptr);
 
     /* Alloc a big block to test kmalloc integration */
     ptr = kmalloc(PAGE_SIZE * 16);
     bzero(ptr, PAGE_SIZE * 16);
     kfree(ptr);
-
-    /* Reset */
-
 
     trace(" -= Done testing vmm =-");
 }

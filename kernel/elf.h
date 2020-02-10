@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
 typedef void* Elf32_Addr;
 typedef uint16_t Elf32_Half;
@@ -164,6 +165,6 @@ typedef struct {
 #define PF_MASKPROC             0xf0000000
 
 typedef void (*elf_entry_t)(void);
-elf_entry_t load_elf(const void* data, unsigned size);
+elf_entry_t load_elf(const void* data, size_t size);
 
 

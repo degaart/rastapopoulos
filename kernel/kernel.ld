@@ -14,13 +14,6 @@ SECTIONS {
         __TEXT_END__ = .;
     }
 
-    .user BLOCK(4K) : AT (ADDR (.user) - 0xC0000000)
-    {
-        __USER_START__ = .;
-        *(.user)
-        __USER_END__ = .;
-    }
-
     .rodata BLOCK(4K) : AT (ADDR (.rodata) - 0xC0000000)
     {
         __RODATA_START__ = .;

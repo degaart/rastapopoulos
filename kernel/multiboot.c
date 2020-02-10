@@ -96,7 +96,8 @@ void multiboot_fix(const struct multiboot_info* mi)
     if((mi->flags & MULTIBOOT_FLAG_MODINFO) && mi->mods_count) {
         /* we only support one module */
         multiboot_info->mods_count = 1;
-        multiboot_info->mods_addr = (struct multiboot_mod_entry*)((unsigned char*)mi->mods_addr + KERNEL_BASE);
+        multiboot_info->mods_addr = kmalloc(sizeof(struct multiboot_mod_entry));
+        memcpy(multiboot_info->mods_addr, (unsigned char*)mi->mods_addr + KERNEL_BASE, sizeof(struct multiboot_mod_entry));
 
         struct multiboot_mod_entry* entry = multiboot_info->mods_addr;
         const unsigned char* entry_start = entry->start + KERNEL_BASE;
@@ -133,6 +134,7 @@ const struct multiboot_mmap_entry* multiboot_get_mmap(int* count)
 const void* multiboot_get_initrd(size_t* size)
 {
     if((multiboot_info->flags & MULTIBOOT_FLAG_MODINFO) && multiboot_info->mods_count) {
+        trace("multiboot_info->mods_addr: %p", multiboot_info->mods_addr);
         const struct multiboot_mod_entry* mod = (struct multiboot_mod_entry*)multiboot_info->mods_addr;
         size_t initrd_size = mod->end - mod->start;
         const void* initrd_data = mod->start;

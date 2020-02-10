@@ -2,7 +2,6 @@ section .text
 
 %macro ISR_NOERRCODE 1  ; define a macro, taking one parameter
     isr_stub_%1:
-        xchg    bx, bx
         push    dword 0
         push    dword %1
         jmp     isr_common_stub
@@ -10,7 +9,6 @@ section .text
 
 %macro ISR_ERRCODE 1
     isr_stub_%1:
-        xchg    bx, bx
         push    dword %1
         jmp     isr_common_stub
 %endmacro
