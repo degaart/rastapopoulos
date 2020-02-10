@@ -83,6 +83,7 @@ static struct gdt_entry gdt[6];
 static struct tss_entry tss;
 static struct gdt_ptr gdt_ptr;
 extern unsigned char stack_bottom[];
+extern unsigned char stack_top[];
 
 void gdt_flush(struct gdt_ptr*);
 
@@ -112,7 +113,7 @@ void gdt_init()
 
     bzero(&tss, sizeof(tss));
     tss.ss0 = KERNEL_DATA_SEG;
-    tss.esp0 = ((unsigned long)&stack_bottom - sizeof(uint32_t)) & 0xFFFFFFF0;
+    tss.esp0 = ((unsigned long)&stack_top - sizeof(uint32_t)) & 0xFFFFFFF0;
     tss.cs = KERNEL_CODE_SEG | 3;
     tss.ss = tss.es = tss.ds = tss.fs = tss.gs = KERNEL_DATA_SEG | 3;
     tss.iomap_base = tss.iomap - (unsigned char*)&tss;
