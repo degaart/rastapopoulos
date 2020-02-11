@@ -60,7 +60,7 @@
 
 
 static bool is_initialized = false;
-static uint32_t* initial_vmm_pagedir;
+static uint32_t* current_pagedir;           /* virtual address of current pagedir */
 
 static
 uint32_t get_pde(void* page)
@@ -123,7 +123,7 @@ void vmm_init()
      * Create initial pagedir: just identity-map kernel memory
      */
     uint32_t* pagedir = vmm_create_pagedir();
-    initial_vmm_pagedir = pagedir;
+    current_pagedir = pagedir;
     for(unsigned char* page = (unsigned char*)KERNEL_START;
             page < (unsigned char*)kmalloc_brk();
             page += PAGE_SIZE) {
@@ -219,6 +219,11 @@ uint32_t* vmm_create_pagedir()
     uint32_t* pagedir = kmalloc_aligned(sizeof(uint32_t) * 1024, PAGE_SIZE);
     assert((((unsigned long)pagedir) % PAGE_SIZE) == 0);
     bzero(pagedir, sizeof(uint32_t) * 1024);
+
+    if(is_initialized) {
+        unsigned long frame = vmm_get_frame(pagedir);
+        pagedir[1023] = ENTRY(PDE_PRESENT|PDE_WRITABLE, frame);
+    }
     return pagedir;
 }
 
@@ -230,9 +235,19 @@ uint32_t* vmm_create_pagetable()
     return pagetable;
 }
 
-uint32_t* vmm_get_initial_pagedir()
+uint32_t* vmm_current_pagedir()
 {
-    return initial_vmm_pagedir;
+    return current_pagedir;
+}
+
+/*
+ * Copy current kernel mappings into specified pagedir
+ */
+void vmm_copy_kernel_mappings(uint32_t* pagedir)
+{
+    for(size_t i = PDE_INDEX(KERNEL_BASE); i < 1023; i++) {
+        pagedir[i] = ((uint32_t*)CURRENT_PAGEDIR)[i];
+    }
 }
 
 void test_vmm()
