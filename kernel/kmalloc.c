@@ -27,7 +27,7 @@ void* kmalloc(size_t size)
 
 void* kmalloc_aligned(size_t size, size_t alignment)
 {
-    void* result = dlmemalign(size, alignment);
+    void* result = dlmemalign(alignment, size);
     memset(result, 0xCC, size);
     return result;
 }
