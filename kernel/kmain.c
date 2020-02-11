@@ -49,7 +49,15 @@ struct task {
 struct task* current_task;
 struct task* tasks[2];
 extern unsigned char stack_bottom[];
-extern void task_switch(struct task* next);
+
+static void task_switch(struct task* next)
+{
+    extern void real_task_switch(struct task* next);
+    vmm_copy_kernel_mappings(next->pagedir);
+
+    /* TODO: update tss */
+    real_task_switch(next);
+}
 
 static
 void init_multitasking()
