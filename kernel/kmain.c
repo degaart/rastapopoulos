@@ -181,6 +181,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     init_multitasking();
     struct task* task2 = task_create("task2", task2_entry);
     tasks[1] = task2;
+    sti();
     task1_entry();
 
 #if 0
