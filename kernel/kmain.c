@@ -31,6 +31,70 @@ void keyboard_handler(int irq, const struct isr_regs* regs)
     trace("keyboard_handler");
 }
 
+/* task control block */
+struct task {
+    unsigned char* esp;
+    unsigned char* stack_bottom;
+    uint32_t* pagedir;
+    struct process* next;
+    unsigned state;
+    char name[64];
+};
+struct task* current_task;
+struct task* tasks[2];
+extern unsigned char stack_bottom[];
+extern void task_switch(struct task* next);
+
+static
+void init_multitasking()
+{
+    current_task = kmalloc(sizeof(struct task));
+    bzero(current_task, sizeof(struct task));
+    strlcpy(current_task->name, "KERNEL_TASK", sizeof(current_task->name));
+    current_task->esp = 0;          /* will be filled by task_switch */
+    current_task->stack_bottom = stack_bottom;
+    current_task->pagedir = vmm_get_initial_pagedir();
+
+    tasks[0] = current_task;
+}
+
+static struct task* task_create(const char* name, void (*entry)())
+{
+    struct task* task = kmalloc(sizeof(struct task));
+    bzero(task, sizeof(struct task));
+    strlcpy(task->name, name, sizeof(task->name));
+    task->stack_bottom = kmalloc_aligned(PAGE_SIZE, 16);
+
+    uint32_t* stack = (uint32_t*)task->stack_bottom;
+    stack[1023] = (uint32_t)entry;
+    stack[1022] = 0xABCD0001;       /* ebp */
+    stack[1021] = 0xABCD0002;       /* ebx */
+    stack[1020] = 0xABCD0003;       /* esi */
+    stack[1019] = 0xABCD0004;       /* edi */
+    task->esp = (unsigned char*)&stack[1019];
+    trace("Alleged esp: %p", task->esp);
+    
+    return task;
+}
+
+static
+void task1_entry()
+{
+    while(1) {
+        trace("task1 running");
+        task_switch(tasks[1]);
+    }
+}
+
+static
+void task2_entry()
+{
+    while(1) {
+        trace("task2 running");
+        task_switch(tasks[0]);
+    }
+}
+
 extern uint32_t initial_pagedir[];
 void kmain(const struct multiboot_info* multiboot_info)
 {
@@ -114,6 +178,12 @@ void kmain(const struct multiboot_info* multiboot_info)
     trace("Initializing pit");
     pit_init();
 
+    init_multitasking();
+    struct task* task2 = task_create("task2", task2_entry);
+    tasks[1] = task2;
+    task1_entry();
+
+#if 0
     size_t initrd_size;
     const void* initrd_data = multiboot_get_initrd(&initrd_size);
     if(!initrd_data) {
@@ -139,6 +209,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     trace("Entering usermode");
     switch_to_usermode(userstack + PAGE_SIZE - sizeof(uint32_t), hello_entry);
     trace("Here????");
+#endif
 
     trace("*** Rebooting ***");
     reboot();
