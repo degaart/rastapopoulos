@@ -60,6 +60,7 @@
 
 
 static bool is_initialized = false;
+static uint32_t* initial_vmm_pagedir;
 
 static
 uint32_t get_pde(void* page)
@@ -122,6 +123,7 @@ void vmm_init()
      * Create initial pagedir: just identity-map kernel memory
      */
     uint32_t* pagedir = vmm_create_pagedir();
+    initial_vmm_pagedir = pagedir;
     for(unsigned char* page = (unsigned char*)KERNEL_START;
             page < (unsigned char*)kmalloc_brk();
             page += PAGE_SIZE) {
@@ -226,6 +228,11 @@ uint32_t* vmm_create_pagetable()
     assert((((unsigned long)pagetable) % PAGE_SIZE) == 0);
     bzero(pagetable, sizeof(uint32_t) * 1024);
     return pagetable;
+}
+
+uint32_t* vmm_get_initial_pagedir()
+{
+    return initial_vmm_pagedir;
 }
 
 void test_vmm()

@@ -28,6 +28,7 @@ void vmm_remap(void* page, unsigned flags);
 uint32_t vmm_get_frame(void* page);
 uint32_t* vmm_create_pagedir();
 uint32_t* vmm_create_pagetable();
+uint32_t* vmm_get_initial_pagedir();
 
 void test_vmm();
 
