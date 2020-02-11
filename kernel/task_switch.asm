@@ -10,8 +10,8 @@ extern abort
 
 ; void task_switch(struct task* next);
 ; interrupts are assumed to be disabled
-global task_switch:function
-task_switch:
+global real_task_switch:function
+real_task_switch:
     push    ebp
     mov     ebp, esp
 
@@ -29,15 +29,13 @@ task_switch:
     mov     esi, [current_task]
     mov     [esi], esp
 
-    ; load next task's state
-    ; TODO: TSS
-
-    ; esp
+    ; load esp
     mov     ebx, [ebp+8]
     mov     [current_task], ebx
     mov     eax, [ebx]
     mov     esp, eax
 
+    ; load cr3 if needed
     mov     eax, [ebx+4]
     mov     ecx, cr3
     cmp     eax, ecx
