@@ -30,12 +30,21 @@ task_switch:
     mov     [esi], esp
 
     ; load next task's state
-    ; TODO: TSS, cr3
+    ; TODO: TSS
+
+    ; esp
     mov     ebx, [ebp+8]
     mov     [current_task], ebx
     mov     eax, [ebx]
     mov     esp, eax
-    
+
+    mov     eax, [ebx+4]
+    mov     ecx, cr3
+    cmp     eax, ecx
+    je      .nocr3
+    mov     cr3, eax
+
+.nocr3:
     pop     edi
     pop     esi
     pop     ebx
