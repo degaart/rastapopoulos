@@ -135,4 +135,8 @@ void gdt_init()
     write_eflags(eflags);
 }
 
+void tss_set_esp0(void* esp0)
+{
+    tss.esp0 = (unsigned long)esp0;
+}
 

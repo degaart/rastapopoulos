@@ -113,7 +113,6 @@ _start:
 .higher_half:
     ; setup stack
     mov esp, stack_top
-    sub esp, 16
 
     ; Remove low 4Mb mapping
     ; initial_pagedir[0] = 0
@@ -123,6 +122,9 @@ _start:
     mov cr3, eax
 
     ; call kernel C entry point
+    xchg bx, bx
+    sub esp, 4
+    and esp, 0xfffffff0
     mov eax, [multiboot_info]
     mov [esp], eax
     extern kmain
@@ -141,7 +143,6 @@ global switch_to_usermode:function
 ;                    void* entry        esp + 8
 ;)
 switch_to_usermode:
-    ; xchg    bx, bx
     cli                         ; just in case
 
     mov     ebp, esp
@@ -155,10 +156,9 @@ switch_to_usermode:
     push    DWORD 0x20|0x3          ; ss
     mov     eax, [ebp+4]            ; user stack
     push    eax                     ; esp
-    ; xchg    bx, bx
     pushf
     pop     eax
-    or      eax, 0x200              ; IF
+    ;or      eax, 0x200              ; IF
     push    eax                     ; EFLAGS|IF
     push    DWORD 0x18|0x3          ; user code seg
     mov     eax, [ebp+8]            ;

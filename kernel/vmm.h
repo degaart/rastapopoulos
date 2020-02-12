@@ -25,7 +25,7 @@ bool vmm_initialized();
 void vmm_map(void* page, unsigned long frame, unsigned flags);
 void vmm_unmap(void* page);
 void vmm_remap(void* page, unsigned flags);
-uint32_t vmm_get_frame(void* page);
+uint32_t vmm_get_frame(void* page);             /* Get physical frame address (without flags) */
 uint32_t* vmm_create_pagedir();
 uint32_t* vmm_create_pagetable();
 uint32_t* vmm_current_pagedir();
