@@ -19,12 +19,18 @@
 #include "pit.h"
 #include "initrd.h"
 #include "elf.h"
+#include "queue.h"
 
 static
 void keyboard_handler(int irq, const struct isr_regs* regs)
 {
     trace("keyboard_handler");
 }
+
+enum task_state {
+    TASK_STATE_READY,              /* Ready to run, but is not running */
+    TASK_STATE_RUNNING,            /* Currently running */
+};
 
 /*
  * task control block
@@ -38,10 +44,16 @@ struct task {
     uint32_t* pagedir;
     void* esp0;
     void* stack;
-    unsigned state;
+    enum task_state state;
     char name[64];
-    struct task* next;
+
+    TAILQ_ENTRY(task) rnext;    /* node for ready_tasks */
+    TAILQ_ENTRY(task) tnext;    /* node for tasks */
 };
+
+TAILQ_HEAD(ready_tasks, task) ready_tasks;
+TAILQ_HEAD(tasks, task) tasks;
+
 struct task* current_task;
 extern unsigned char stack_bottom[];
 
@@ -50,9 +62,15 @@ void task_switch(struct task* next)
 {
     extern void real_task_switch(struct task* next);
 
-    trace("Switching to %s (esp: %p, cr3: %p, esp0: %p",
-          next->name, next->esp, next->cr3, next->esp0);
+    //trace("Switching to %s (esp: %p, cr3: %p, esp0: %p",
+    //      next->name, next->esp, next->cr3, next->esp0);
 
+    if(current_task->state == TASK_STATE_RUNNING) {
+        current_task->state = TASK_STATE_READY;
+        TAILQ_INSERT_TAIL(&ready_tasks, current_task, rnext);
+    }
+
+    next->state = TASK_STATE_RUNNING;
     vmm_copy_kernel_mappings(next->pagedir);
     tss_set_esp0(next->esp0);
     real_task_switch(next);
@@ -61,14 +79,20 @@ void task_switch(struct task* next)
 static
 void schedule()
 {
+#if 1
     static int counter = 0;
     counter++;
-    // if(counter == 15) {
-    //     trace("*** Done ***");
-    //     reboot();
-    // }
+    if(counter == 15) {
+        trace("*** Done ***");
+        reboot();
+    }
+#endif
 
-    task_switch(current_task->next);
+    if(!TAILQ_EMPTY(&ready_tasks)) {
+        struct task* next = TAILQ_FIRST(&ready_tasks);
+        TAILQ_REMOVE(&ready_tasks, next, rnext);
+        task_switch(next);
+    }
 }
 
 static
@@ -81,6 +105,10 @@ void int80_handler(const struct isr_regs* regs)
 static
 void init_multitasking()
 {
+    TAILQ_INIT(&ready_tasks);
+    TAILQ_INIT(&tasks);
+
+    /* Create initial task */
     current_task = kmalloc(sizeof(struct task));
     bzero(current_task, sizeof(struct task));
     strlcpy(current_task->name, "task1", sizeof(current_task->name));
@@ -89,8 +117,11 @@ void init_multitasking()
     current_task->esp0 = (unsigned char*)current_task->stack + PAGE_SIZE;
     current_task->pagedir = vmm_current_pagedir();
     current_task->cr3 = vmm_get_frame(current_task->pagedir);
-    current_task->next = current_task;
     trace("task1->cr3: %p", current_task->cr3);
+
+    TAILQ_INSERT_TAIL(&tasks, current_task, tnext);
+
+    current_task->state = TASK_STATE_RUNNING;
 }
 
 static
@@ -113,9 +144,10 @@ struct task* task_create(const char* name, void (*entry)())
     task->cr3 = vmm_get_frame(task->pagedir);
     trace("task[1]->cr3: %p", task->cr3);
 
-    struct task* oldnext = current_task->next;
-    current_task->next = task;
-    task->next = oldnext;
+    TAILQ_INSERT_TAIL(&tasks, task, tnext);
+
+    task->state = TASK_STATE_READY;
+    TAILQ_INSERT_TAIL(&ready_tasks, task, rnext);
 
     return task;
 }
@@ -150,6 +182,7 @@ void task2_entry()
     }
 }
 
+#if 0
 static
 void task1_entry()
 {
@@ -188,7 +221,17 @@ void task1_entry()
     //     schedule();
     // }
 }
-
+#else
+static
+void task1_entry()
+{
+    task_create("task2", task2_entry);
+    while(1) {
+        trace("task1 running");
+        schedule();
+    }
+}
+#endif
 
 extern uint32_t initial_pagedir[];
 void kmain(const struct multiboot_info* multiboot_info)
