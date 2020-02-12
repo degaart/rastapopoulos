@@ -42,15 +42,15 @@ struct task {
 
     uint32_t* pagedir;
     unsigned char* stack_bottom;
-    struct process* next;
+    struct task* next;
     unsigned state;
     char name[64];
 };
 struct task* current_task;
-struct task* tasks[2];
 extern unsigned char stack_bottom[];
 
-static void task_switch(struct task* next)
+static
+void task_switch(struct task* next)
 {
     extern void real_task_switch(struct task* next);
     vmm_copy_kernel_mappings(next->pagedir);
@@ -60,21 +60,27 @@ static void task_switch(struct task* next)
 }
 
 static
+void schedule()
+{
+    task_switch(current_task->next);
+}
+
+static
 void init_multitasking()
 {
     current_task = kmalloc(sizeof(struct task));
     bzero(current_task, sizeof(struct task));
-    strlcpy(current_task->name, "KERNEL_TASK", sizeof(current_task->name));
+    strlcpy(current_task->name, "task1", sizeof(current_task->name));
     current_task->esp = 0;          /* will be filled by task_switch */
     current_task->stack_bottom = stack_bottom;
     current_task->pagedir = vmm_current_pagedir();
     current_task->cr3 = vmm_get_frame(current_task->pagedir);
-    trace("task[0]->cr3: %p", current_task->cr3);
-
-    tasks[0] = current_task;
+    current_task->next = current_task;
+    trace("task1->cr3: %p", current_task->cr3);
 }
 
-static struct task* task_create(const char* name, void (*entry)())
+static
+struct task* task_create(const char* name, void (*entry)())
 {
     struct task* task = kmalloc(sizeof(struct task));
     bzero(task, sizeof(struct task));
@@ -91,26 +97,51 @@ static struct task* task_create(const char* name, void (*entry)())
     task->pagedir = vmm_create_pagedir();
     task->cr3 = vmm_get_frame(task->pagedir);
     trace("task[1]->cr3: %p", task->cr3);
+
+    struct task* oldnext = current_task->next;
+    current_task->next = task;
+    task->next = oldnext;
+
     return task;
+}
+
+static
+void task4_entry()
+{
+    while(1) {
+        trace("task4 running");
+        schedule();
+    }
+}
+
+static
+void task3_entry()
+{
+    task_create("task4", task4_entry);
+    while(1) {
+        trace("task3 running");
+        schedule();
+    }
+}
+
+
+static
+void task2_entry()
+{
+    task_create("task3", task3_entry);
+    while(1) {
+        trace("task2 running");
+        schedule();
+    }
 }
 
 static
 void task1_entry()
 {
+    task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
-        vmm_copy_kernel_mappings(tasks[1]->pagedir);
-        task_switch(tasks[1]);
-    }
-}
-
-static
-void task2_entry()
-{
-    while(1) {
-        trace("task2 running");
-        vmm_copy_kernel_mappings(tasks[0]->pagedir);
-        task_switch(tasks[0]);
+        schedule();
     }
 }
 
@@ -198,8 +229,6 @@ void kmain(const struct multiboot_info* multiboot_info)
     pit_init();
 
     init_multitasking();
-    struct task* task2 = task_create("task2", task2_entry);
-    tasks[1] = task2;
     task1_entry();
 
 #if 0
