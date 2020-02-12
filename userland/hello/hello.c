@@ -25,10 +25,8 @@ static void puts(const char* str)
 int main()
 {
     while(1) {
-        puts("Hello from userspace\n");
-        for(size_t i = 0; i < 1000000; i++) {
-            io_wait();
-        }
+        puts("hello.elf running\n");
+        asm volatile("\tint 0x80\n":::"memory");
     }
         
     return 0;

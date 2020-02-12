@@ -15,6 +15,8 @@
 #define IOMAP_SIZE          ((65536 / 8) + 1)
 
 void gdt_init();
+void tss_set_esp0(void* esp0);
 extern void tss_flush();
 extern void switch_to_usermode(void* user_stack, void* entry);
+
 

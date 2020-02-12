@@ -20,11 +20,6 @@
 #include "initrd.h"
 #include "elf.h"
 
-static void int80_handler(const struct isr_regs* regs)
-{
-    trace("Hello from int80");
-}
-
 static
 void keyboard_handler(int irq, const struct isr_regs* regs)
 {
@@ -41,10 +36,11 @@ struct task {
     unsigned long cr3;
 
     uint32_t* pagedir;
-    unsigned char* stack_bottom;
-    struct task* next;
+    void* esp0;
+    void* stack;
     unsigned state;
     char name[64];
+    struct task* next;
 };
 struct task* current_task;
 extern unsigned char stack_bottom[];
@@ -53,16 +49,33 @@ static
 void task_switch(struct task* next)
 {
     extern void real_task_switch(struct task* next);
-    vmm_copy_kernel_mappings(next->pagedir);
 
-    /* TODO: update tss */
+    trace("Switching to %s (esp: %p, cr3: %p, esp0: %p",
+          next->name, next->esp, next->cr3, next->esp0);
+
+    vmm_copy_kernel_mappings(next->pagedir);
+    tss_set_esp0(next->esp0);
     real_task_switch(next);
 }
 
 static
 void schedule()
 {
+    static int counter = 0;
+    counter++;
+    // if(counter == 15) {
+    //     trace("*** Done ***");
+    //     reboot();
+    // }
+
     task_switch(current_task->next);
+}
+
+static
+void int80_handler(const struct isr_regs* regs)
+{
+    trace("%s called int80", current_task->name);
+    schedule();
 }
 
 static
@@ -72,7 +85,8 @@ void init_multitasking()
     bzero(current_task, sizeof(struct task));
     strlcpy(current_task->name, "task1", sizeof(current_task->name));
     current_task->esp = 0;          /* will be filled by task_switch */
-    current_task->stack_bottom = stack_bottom;
+    current_task->stack = kmalloc_aligned(PAGE_SIZE, 16);
+    current_task->esp0 = (unsigned char*)current_task->stack + PAGE_SIZE;
     current_task->pagedir = vmm_current_pagedir();
     current_task->cr3 = vmm_get_frame(current_task->pagedir);
     current_task->next = current_task;
@@ -85,15 +99,16 @@ struct task* task_create(const char* name, void (*entry)())
     struct task* task = kmalloc(sizeof(struct task));
     bzero(task, sizeof(struct task));
     strlcpy(task->name, name, sizeof(task->name));
-    task->stack_bottom = kmalloc_aligned(PAGE_SIZE, 16);
+    task->stack = kmalloc_aligned(PAGE_SIZE, 16);
 
-    uint32_t* stack = (uint32_t*)task->stack_bottom;
+    uint32_t* stack = (uint32_t*)task->stack;
     stack[1023] = (uint32_t)entry;
     stack[1022] = 0xABCD0001;       /* ebp */
     stack[1021] = 0xABCD0002;       /* ebx */
     stack[1020] = 0xABCD0003;       /* esi */
     stack[1019] = 0xABCD0004;       /* edi */
     task->esp = (unsigned char*)&stack[1019];
+    task->esp0 = (unsigned char*)task->stack + PAGE_SIZE;
     task->pagedir = vmm_create_pagedir();
     task->cr3 = vmm_get_frame(task->pagedir);
     trace("task[1]->cr3: %p", task->cr3);
@@ -128,7 +143,7 @@ void task3_entry()
 static
 void task2_entry()
 {
-    task_create("task3", task3_entry);
+    //task_create("task3", task3_entry);
     while(1) {
         trace("task2 running");
         schedule();
@@ -139,11 +154,41 @@ static
 void task1_entry()
 {
     task_create("task2", task2_entry);
-    while(1) {
-        trace("task1 running");
-        schedule();
+
+    size_t initrd_size;
+    const void* initrd_data = multiboot_get_initrd(&initrd_size);
+    if(!initrd_data) {
+        panic("No initrd found");
     }
+
+    trace("Loading initrd");
+    initrd_init(initrd_data, initrd_size);
+
+    trace("Loading hello.elf");
+    const struct initrd_file* hello_elf = initrd_get_file("hello.elf");
+    if(!hello_elf)
+        panic("hello.elf not found");
+
+    elf_entry_t hello_entry = load_elf(hello_elf->data, hello_elf->size);
+    trace("hello_entry: %p", hello_entry);
+    assert((unsigned char*)hello_entry == (unsigned char*)0x100070);
+
+    unsigned char* userstack = kmalloc_aligned(PAGE_SIZE, PAGE_SIZE);
+    trace("hello_stack: %p", userstack);
+    vmm_remap(userstack, VMM_PAGE_USER|VMM_PAGE_WRITABLE);
+
+    idt_install(0x80, int80_handler, true);
+
+    trace("Entering usermode");
+    switch_to_usermode(userstack + PAGE_SIZE - sizeof(uint32_t), hello_entry);
+    panic("Invalid code path");
+
+    // while(1) {
+    //     trace("task1 running");
+    //     schedule();
+    // }
 }
+
 
 extern uint32_t initial_pagedir[];
 void kmain(const struct multiboot_info* multiboot_info)
@@ -226,7 +271,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     pic_init();
 
     trace("Initializing pit");
-    pit_init();
+    //pit_init();
 
     init_multitasking();
     task1_entry();
