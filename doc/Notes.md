@@ -35,10 +35,17 @@
 - args are pushed on the stack from right to left
 - 32-bit code: int is 32-bit, long is 32-bit, long long is 64-bit
 - 64-bit code: int is 32-bit, long is 64-bit, long long is 64-bit
+- push aligned arguments into the stack:
+    ```
+    sub esp, 8 ; 4 * nargs
+    mov [esp+4], arg1
+    mov [esp], arg
+    call func
+    ```
 
 # grub
-- check if file is multiboot compliant: ```grub-file --is-x86-multiboot myos.bin```
-- check for multiboot2: ```--is-x86-multiboot2```
+- check if file is multiboot compliant: `grub-file --is-x86-multiboot myos.bin`
+- check for multiboot2: `--is-x86-multiboot2`
 - grub will clear the .bss section for us
 
 # qemu
@@ -47,12 +54,14 @@
 
 # assembler
 - can mark a symbol as a function with: global _start:function (_start.end - _start)
+- push: decrease esp then move value into current esp
+- Initially, esp points to stack top -> highest address -> one past end of stack
 
 # debugger
-- ```--disable-debug --disable-dependency-tracking --target=i686-elf --without-python --disable-binutils MAKEINFO=false```
+- `--disable-debug --disable-dependency-tracking --target=i686-elf --without-python --disable-binutils MAKEINFO=false`
 
 # bochs
-- ```--disable-static --enable-debugger --enable-disasm --enable-debugger-gui --enable-readline --enable-x86-debugger --enable-clgd54xx --with-nogui```
+- `--disable-static --enable-debugger --enable-disasm --enable-debugger-gui --enable-readline --enable-x86-debugger --enable-clgd54xx --with-nogui`
 
 
 

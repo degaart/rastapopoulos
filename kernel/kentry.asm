@@ -122,7 +122,6 @@ _start:
     mov cr3, eax
 
     ; call kernel C entry point
-    xchg bx, bx
     sub esp, 4
     and esp, 0xfffffff0
     mov eax, [multiboot_info]
@@ -158,7 +157,7 @@ switch_to_usermode:
     push    eax                     ; esp
     pushf
     pop     eax
-    ;or      eax, 0x200              ; IF
+    or      eax, 0x200              ; IF
     push    eax                     ; EFLAGS|IF
     push    DWORD 0x18|0x3          ; user code seg
     mov     eax, [ebp+8]            ;

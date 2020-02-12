@@ -271,7 +271,7 @@ void kmain(const struct multiboot_info* multiboot_info)
     pic_init();
 
     trace("Initializing pit");
-    //pit_init();
+    pit_init();
 
     init_multitasking();
     task1_entry();

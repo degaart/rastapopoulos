@@ -22,13 +22,17 @@ static void puts(const char* str)
     }
 }
 
+static inline void yield()
+{
+    asm volatile("\tint 0x80\n":::"memory");
+}
+
 int main()
 {
     while(1) {
         puts("hello.elf running\n");
-        asm volatile("\tint 0x80\n":::"memory");
+        yield();
     }
-        
     return 0;
 }
 
