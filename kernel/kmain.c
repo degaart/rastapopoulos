@@ -153,7 +153,7 @@ void task_switch(struct task* next)
 static
 void schedule()
 {
-#if 1
+#if 0
     static int counter = 0;
     counter++;
     if(counter == 15) {
@@ -232,10 +232,14 @@ struct task* task_create(const char* name, void (*entry)())
     task->cr3 = vmm_get_frame(task->pagedir);
     //trace("task[1]->cr3: %p", task->cr3);
 
+    scheduler_lock();
+
     TAILQ_INSERT_TAIL(&tasks, task, tnext);
 
     task->state = TASK_STATE_READY;
     TAILQ_INSERT_TAIL(&ready_tasks, task, rnext);
+
+    scheduler_unlock();
 
     return task;
 }
@@ -323,6 +327,8 @@ void task1_entry()
 static
 void task1_entry()
 {
+    sti();
+
     task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
