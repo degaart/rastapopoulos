@@ -56,8 +56,9 @@ void keyboard_handler(int irq, const struct isr_regs* regs)
 }
 
 enum task_state {
-    TASK_STATE_READY,              /* Ready to run, but is not running */
-    TASK_STATE_RUNNING,            /* Currently running */
+    TASK_STATE_READY,               /* Ready to run, but is not running */
+    TASK_STATE_RUNNING,             /* Currently running */
+    TASK_STATE_PAUSED,              /* Blocked until another task unblocks it */
 };
 
 /*
@@ -86,6 +87,9 @@ struct task* current_task;
 static struct lock _scheduler_lock = {0};
 extern unsigned char stack_bottom[];
 
+static void schedule();
+static void task_switch(struct task* next);
+
 static
 void scheduler_lock()
 {
@@ -98,6 +102,32 @@ void scheduler_unlock()
     unlock(&_scheduler_lock);
 }
 
+static
+void task_block(enum task_state new_state)
+{
+    assert(new_state != TASK_STATE_READY && new_state != TASK_STATE_RUNNING);
+    scheduler_lock();
+    current_task->state = new_state;
+    schedule();
+    scheduler_unlock();
+}
+
+static
+void task_unblock(struct task* task)
+{
+    scheduler_lock();
+    if(TAILQ_EMPTY(&ready_tasks)) {
+        task_switch(task);
+    } else {
+        /* TODO: Remove it from whatever list it was */
+        TAILQ_INSERT_TAIL(&ready_tasks, task, rnext);
+    }
+    scheduler_unlock();
+}
+
+/*
+ * WARNING: Lock scheduler before calling
+ */
 static
 void task_switch(struct task* next)
 {
@@ -117,6 +147,9 @@ void task_switch(struct task* next)
     real_task_switch(next);
 }
 
+/*
+ * WARNING: Lock scheduler before calling
+ */
 static
 void schedule()
 {
@@ -210,6 +243,14 @@ struct task* task_create(const char* name, void (*entry)())
 static
 void task4_entry()
 {
+    struct task* t;
+    TAILQ_FOREACH(t, &tasks, tnext) {
+        if(!strcmp(t->name, "task3")) {
+            task_unblock(t);
+            break;
+        }
+    }
+
     while(1) {
         trace("task4 running");
         scheduler_lock();
@@ -224,9 +265,10 @@ void task3_entry()
     task_create("task4", task4_entry);
     while(1) {
         trace("task3 running");
-        scheduler_lock();
-        schedule();
-        scheduler_unlock();
+        task_block(TASK_STATE_PAUSED);
+        //scheduler_lock();
+        //schedule();
+        //scheduler_unlock();
     }
 }
 
