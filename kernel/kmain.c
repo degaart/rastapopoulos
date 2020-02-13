@@ -21,6 +21,34 @@
 #include "elf.h"
 #include "queue.h"
 
+struct lock {
+    int c;
+    unsigned long v;
+};
+
+void lock(struct lock* lock)
+{
+    int eflags_if = read_eflags() & EFLAGS_IF;
+    cli();
+    lock->c++;
+    lock->v = eflags_if;
+    //trace("lock: lock->c: %d", lock->c);
+}
+
+void unlock(struct lock* lock)
+{
+    assert(lock->c > 0);
+    lock->c--;
+    //trace("unlock: lock->c: %d", lock->c);
+    if(!lock->c) {
+        //trace("Unlocking scheduler");
+        if(lock->v) {
+            //trace("Enabling interrupts");
+            sti();
+        }
+    }
+}
+
 static
 void keyboard_handler(int irq, const struct isr_regs* regs)
 {
@@ -55,7 +83,20 @@ TAILQ_HEAD(ready_tasks, task) ready_tasks;
 TAILQ_HEAD(tasks, task) tasks;
 
 struct task* current_task;
+static struct lock _scheduler_lock = {0};
 extern unsigned char stack_bottom[];
+
+static
+void scheduler_lock()
+{
+    lock(&_scheduler_lock);
+}
+
+static
+void scheduler_unlock()
+{
+    unlock(&_scheduler_lock);
+}
 
 static
 void task_switch(struct task* next)
@@ -95,11 +136,22 @@ void schedule()
     }
 }
 
+/*
+ * Called before each new task gets cpu time
+ */
+__attribute__((force_align_arg_pointer))
+void task_startup()
+{
+    scheduler_unlock();
+}
+
 static
 void int80_handler(const struct isr_regs* regs)
 {
     trace("%s called int80", current_task->name);
+    scheduler_lock();
     schedule();
+    scheduler_unlock();
 }
 
 static
@@ -117,7 +169,7 @@ void init_multitasking()
     current_task->esp0 = (unsigned char*)current_task->stack + PAGE_SIZE;
     current_task->pagedir = vmm_current_pagedir();
     current_task->cr3 = vmm_get_frame(current_task->pagedir);
-    trace("task1->cr3: %p", current_task->cr3);
+    //trace("task1->cr3: %p", current_task->cr3);
 
     TAILQ_INSERT_TAIL(&tasks, current_task, tnext);
 
@@ -133,16 +185,19 @@ struct task* task_create(const char* name, void (*entry)())
     task->stack = kmalloc_aligned(PAGE_SIZE, 16);
 
     uint32_t* stack = (uint32_t*)task->stack;
+
+    /* TODO: Propertly align the stack */
     stack[1023] = (uint32_t)entry;
-    stack[1022] = 0xABCD0001;       /* ebp */
-    stack[1021] = 0xABCD0002;       /* ebx */
-    stack[1020] = 0xABCD0003;       /* esi */
-    stack[1019] = 0xABCD0004;       /* edi */
-    task->esp = (unsigned char*)&stack[1019];
+    stack[1022] = (uint32_t)task_startup;
+    stack[1021] = 0xABCD0001;       /* ebp */
+    stack[1020] = 0xABCD0002;       /* ebx */
+    stack[1019] = 0xABCD0003;       /* esi */
+    stack[1018] = 0xABCD0004;       /* edi */
+    task->esp = (unsigned char*)&stack[1018];
     task->esp0 = (unsigned char*)task->stack + PAGE_SIZE;
     task->pagedir = vmm_create_pagedir();
     task->cr3 = vmm_get_frame(task->pagedir);
-    trace("task[1]->cr3: %p", task->cr3);
+    //trace("task[1]->cr3: %p", task->cr3);
 
     TAILQ_INSERT_TAIL(&tasks, task, tnext);
 
@@ -157,7 +212,9 @@ void task4_entry()
 {
     while(1) {
         trace("task4 running");
+        scheduler_lock();
         schedule();
+        scheduler_unlock();
     }
 }
 
@@ -167,7 +224,9 @@ void task3_entry()
     task_create("task4", task4_entry);
     while(1) {
         trace("task3 running");
+        scheduler_lock();
         schedule();
+        scheduler_unlock();
     }
 }
 
@@ -175,10 +234,12 @@ void task3_entry()
 static
 void task2_entry()
 {
-    //task_create("task3", task3_entry);
+    task_create("task3", task3_entry);
     while(1) {
         trace("task2 running");
+        scheduler_lock();
         schedule();
+        scheduler_unlock();
     }
 }
 
@@ -215,11 +276,6 @@ void task1_entry()
     trace("Entering usermode");
     switch_to_usermode(userstack + PAGE_SIZE - sizeof(uint32_t), hello_entry);
     panic("Invalid code path");
-
-    // while(1) {
-    //     trace("task1 running");
-    //     schedule();
-    // }
 }
 #else
 static
@@ -228,7 +284,9 @@ void task1_entry()
     task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
+        scheduler_lock();
         schedule();
+        scheduler_unlock();
     }
 }
 #endif

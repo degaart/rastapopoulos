@@ -56,6 +56,7 @@
 - can mark a symbol as a function with: global _start:function (_start.end - _start)
 - push: decrease esp then move value into current esp
 - Initially, esp points to stack top -> highest address -> one past end of stack
+- -mstackrealign realigns the stack when needed, but keeps it 16-byte aligned on function output
 
 # debugger
 - `--disable-debug --disable-dependency-tracking --target=i686-elf --without-python --disable-binutils MAKEINFO=false`
