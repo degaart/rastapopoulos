@@ -237,6 +237,16 @@ void usleep_until(uint64_t deadline)
     task_block(TASK_STATE_SLEEPING);
 }
 
+void usleep(uint64_t ms)
+{
+    usleep_until(pit_get_clock() + ms);
+}
+
+void sleep(int secs)
+{
+    usleep((uint64_t)secs * 1000000LL);
+}
+
 static
 void int80_handler(const struct isr_regs* regs)
 {
@@ -398,7 +408,7 @@ void task1_entry()
     task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
-        usleep_until(pit_get_clock() + 100);
+        usleep(100);
         //scheduler_lock();
         //schedule();
         //scheduler_unlock();
