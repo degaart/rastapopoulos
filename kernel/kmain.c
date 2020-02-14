@@ -20,34 +20,7 @@
 #include "initrd.h"
 #include "elf.h"
 #include "queue.h"
-
-struct lock {
-    int c;
-    unsigned long v;
-};
-
-void lock(struct lock* lock)
-{
-    int eflags_if = read_eflags() & EFLAGS_IF;
-    cli();
-    lock->c++;
-    lock->v = eflags_if;
-    //trace("lock: lock->c: %d", lock->c);
-}
-
-void unlock(struct lock* lock)
-{
-    assert(lock->c > 0);
-    lock->c--;
-    //trace("unlock: lock->c: %d", lock->c);
-    if(!lock->c) {
-        //trace("Unlocking scheduler");
-        if(lock->v) {
-            //trace("Enabling interrupts");
-            sti();
-        }
-    }
-}
+#include "lock.h"
 
 static
 void keyboard_handler(int irq, const struct isr_regs* regs)
@@ -59,6 +32,7 @@ enum task_state {
     TASK_STATE_READY,               /* Ready to run, but is not running */
     TASK_STATE_RUNNING,             /* Currently running */
     TASK_STATE_PAUSED,              /* Blocked until another task unblocks it */
+    TASK_STATE_SLEEPING,
 };
 
 /*
@@ -75,31 +49,62 @@ struct task {
     void* stack;
     enum task_state state;
     char name[64];
+    uint64_t deadline;          /* if task is sleeping, when to unblock it */
 
     TAILQ_ENTRY(task) rnext;    /* node for ready_tasks */
     TAILQ_ENTRY(task) tnext;    /* node for tasks */
+    TAILQ_ENTRY(task) snext;    /* not for sleeping_tasks */
 };
 
 TAILQ_HEAD(ready_tasks, task) ready_tasks;
 TAILQ_HEAD(tasks, task) tasks;
+TAILQ_HEAD(sleeping_tasks, task) sleeping_tasks;
 
 struct task* current_task;
 static struct lock _scheduler_lock = {0};
+static struct lock _scheduler_enable_lock = {0};
+static int _scheduler_enable_counter;
+static bool _scheduler_called;                      /* has schedule() been called after scheduler_disable()? */
 extern unsigned char stack_bottom[];
 
 static void schedule();
 static void task_switch(struct task* next);
 
+/*
+ * Postpone schedule() and task_switch() until scheduler_enable()
+ * has been called
+ */
+static
+void scheduler_disable()
+{
+    lock_lock(&_scheduler_enable_lock);
+    _scheduler_enable_counter++;
+}
+
+static
+void scheduler_enable()
+{
+    assert(_scheduler_enable_counter > 0);
+    _scheduler_enable_counter--;
+    if(_scheduler_enable_counter == 0) {
+        if(_scheduler_called) {
+            _scheduler_called = false;
+            schedule();
+        }
+    }
+    lock_unlock(&_scheduler_enable_lock);
+}
+
 static
 void scheduler_lock()
 {
-    lock(&_scheduler_lock);
+    lock_lock(&_scheduler_lock);
 }
 
 static
 void scheduler_unlock()
 {
-    unlock(&_scheduler_lock);
+    lock_unlock(&_scheduler_lock);
 }
 
 static
@@ -116,12 +121,16 @@ static
 void task_unblock(struct task* task)
 {
     scheduler_lock();
-    if(TAILQ_EMPTY(&ready_tasks)) {
-        task_switch(task);
-    } else {
-        /* TODO: Remove it from whatever list it was */
+    
+    /*
+     * See bug in scheduler_timer()
+     */
+    //if(TAILQ_EMPTY(&ready_tasks)) {
+    //    task_switch(task);
+    //} else {
+        /* TODO: Remove it from whatever list it was? (is this true???) */
         TAILQ_INSERT_TAIL(&ready_tasks, task, rnext);
-    }
+    //}
     scheduler_unlock();
 }
 
@@ -133,6 +142,12 @@ void task_switch(struct task* next)
 {
     extern void real_task_switch(struct task* next);
 
+    if(_scheduler_enable_counter != 0) {
+        _scheduler_called = true;
+        return;
+    }
+
+    assert2(_scheduler_lock.v > 0, "_scheduler_lock.v: %d", _scheduler_lock.v);
     //trace("Switching to %s (esp: %p, cr3: %p, esp0: %p",
     //      next->name, next->esp, next->cr3, next->esp0);
 
@@ -162,6 +177,12 @@ void schedule()
     }
 #endif
 
+    if(_scheduler_enable_counter != 0) {
+        _scheduler_called = true;
+        return;
+    }
+
+    //assert(_scheduler_lock.v > 0);
     if(!TAILQ_EMPTY(&ready_tasks)) {
         struct task* next = TAILQ_FIRST(&ready_tasks);
         TAILQ_REMOVE(&ready_tasks, next, rnext);
@@ -179,6 +200,44 @@ void task_startup()
 }
 
 static
+void scheduler_timer(void* unused)
+{
+    trace("Here");
+    scheduler_disable();
+
+    uint64_t now = pit_get_clock();
+    struct task* task, *tmp;
+    TAILQ_FOREACH_SAFE(task, &sleeping_tasks, snext, tmp) {
+        if(task->state == TASK_STATE_SLEEPING && task->deadline <= now) {
+            /*
+             * BUG: task_unblock() calls task_switch() directly here, because ready queue is empty
+             * Because scheduler has been disabled, task_switch() does nothing
+             * And because task_switch did nothing, task does not get sent to ready task list
+             * Then task1 never gets cpu time again
+             * Why is ready queue empty? Where is task2? -> task2 is current_task
+             */
+            task_unblock(task);
+            TAILQ_REMOVE(&sleeping_tasks, task, snext);
+        }
+    }
+
+    scheduler_enable();
+}
+
+void usleep_until(uint64_t deadline)
+{
+    scheduler_disable();
+    if(deadline < pit_get_clock()) {
+        scheduler_enable();
+        return;
+    }
+    current_task->deadline = deadline;
+    TAILQ_INSERT_HEAD(&sleeping_tasks, current_task, snext);
+    scheduler_enable();
+    task_block(TASK_STATE_SLEEPING);
+}
+
+static
 void int80_handler(const struct isr_regs* regs)
 {
     trace("%s called int80", current_task->name);
@@ -192,6 +251,7 @@ void init_multitasking()
 {
     TAILQ_INIT(&ready_tasks);
     TAILQ_INIT(&tasks);
+    TAILQ_INIT(&sleeping_tasks);
 
     /* Create initial task */
     current_task = kmalloc(sizeof(struct task));
@@ -207,6 +267,8 @@ void init_multitasking()
     TAILQ_INSERT_TAIL(&tasks, current_task, tnext);
 
     current_task->state = TASK_STATE_RUNNING;
+
+    pit_add_timer(18, scheduler_timer, NULL);
 }
 
 static
@@ -280,9 +342,13 @@ void task3_entry()
 static
 void task2_entry()
 {
-    task_create("task3", task3_entry);
+    //task_create("task3", task3_entry);
     while(1) {
         trace("task2 running");
+        for(int i = 0; i < 10000; i++)
+            io_wait();
+
+        /* we're still a cooperative scheduler */
         scheduler_lock();
         schedule();
         scheduler_unlock();
@@ -332,9 +398,10 @@ void task1_entry()
     task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
-        scheduler_lock();
-        schedule();
-        scheduler_unlock();
+        usleep_until(pit_get_clock() + 100);
+        //scheduler_lock();
+        //schedule();
+        //scheduler_unlock();
     }
 }
 #endif

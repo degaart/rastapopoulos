@@ -13,7 +13,7 @@ for file in $*
 do
     if [ -f "$file" ]; then
         filebase="$(basename "$file")"
-        echo "[DEP] $filebase"
+        #echo "[DEP] $filebase"
         $CC -E $CPPFLAGS $CFLAGS -MM $file | sed -E "s/.*: /obj\/${filebase/\//\\/}.o: /" >> "$dest_file" || exit 1
     fi
 done
