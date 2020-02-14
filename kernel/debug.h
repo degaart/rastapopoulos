@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>
+
 #define panic(...) \
     do {                                                                \
         trace("*** KERNEL PANIC ***");                                  \

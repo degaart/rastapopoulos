@@ -27,8 +27,8 @@
 
 # VGA
 - 80x25 mode 6 VGA buffer: 0xB8000
-    - format: (ch & 0xFF) | (color << 8)
-        - color: (fg & 0xF)|((bf & 0xF) << 4)
+    - format: `(ch & 0xFF) | (color << 8)`
+        - color: `(fg & 0xF)|((bf & 0xF) << 4)`
 
 # sysv ABI
 - stack must be aligned to 16 bytes
@@ -57,12 +57,24 @@
 - push: decrease esp then move value into current esp
 - Initially, esp points to stack top -> highest address -> one past end of stack
 - -mstackrealign realigns the stack when needed, but keeps it 16-byte aligned on function output
+- Generate nasm output with gcc: https://stackoverflow.com/questions/35102193/how-to-generate-assembly-code-with-gcc-that-can-be-compiled-with-nasm
+    ```
+    cc -fno-asynchronous-unwind-tables -s -c simp.c -o simp.obj
+    objconv -fnasm simp.obj
+    dos2unix simp.asm 
+    sed -i -e 's/align=1//g' -e 's/[a-z]*execute//g' -e 's/: *function//g' -e '/default *rel/d' simp.asm 
+    ```
 
 # debugger
 - `--disable-debug --disable-dependency-tracking --target=i686-elf --without-python --disable-binutils MAKEINFO=false`
 
 # bochs
 - `--disable-static --enable-debugger --enable-disasm --enable-debugger-gui --enable-readline --enable-x86-debugger --enable-clgd54xx --with-nogui`
+
+# Documentation
+- entering v8086
+    - https://stackoverflow.com/questions/54845547/problem-switching-to-v8086-mode-from-32-bit-protected-mode-by-setting-eflags-vm
+    - https://forum.osdev.org/viewtopic.php?f=1&t=36451
 
 
 

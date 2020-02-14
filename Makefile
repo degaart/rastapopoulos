@@ -56,6 +56,7 @@ debug:
 		-no-reboot \
 		-debugcon file:/tmp/PrototypeOS.log \
 		-m 8 \
+		-monitor telnet:127.0.0.1:55555,server,nowait \
 		-s -S
 
 

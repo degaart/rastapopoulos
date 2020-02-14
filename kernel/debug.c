@@ -3,6 +3,9 @@
 #include "string.h"
 #include "io.h"
 #include "reboot.h"
+#include "lock.h"
+
+static struct lock _log_lock = {0};
 
 static void debug_write_char(int ch, void* unused)
 {
@@ -21,9 +24,12 @@ static
 void __logv(const char* func, const char* file, int line, const char* fmt, va_list args)
 {
     const char* bname = basename(file);
+
+    lock_lock(&_log_lock);
     format(debug_write_char, NULL, "[%s:%d][%s] ", bname, line, func);
     formatv(debug_write_char, NULL, fmt, args);
     debug_write_char('\n', NULL);
+    lock_unlock(&_log_lock);
 }
 
 void __log(const char* func, const char* file, int line, const char* fmt, ...)
