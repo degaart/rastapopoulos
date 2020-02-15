@@ -67,6 +67,9 @@ static int _scheduler_enable_counter;
 static bool _scheduler_called;                      /* has schedule() been called after scheduler_disable()? */
 extern unsigned char stack_bottom[];
 
+#define QUANTUM 100
+static uint64_t _time_slice_remaining;
+
 static void schedule();
 static void task_switch(struct task* next);
 
@@ -156,6 +159,12 @@ void task_switch(struct task* next)
         TAILQ_INSERT_TAIL(&ready_tasks, current_task, rnext);
     }
 
+    if(!strcmp(next->name, "IDLE_TASK")) {
+        _time_slice_remaining = 0;
+    } else {
+        _time_slice_remaining = QUANTUM;
+    }
+
     next->state = TASK_STATE_RUNNING;
     vmm_copy_kernel_mappings(next->pagedir);
     tss_set_esp0(next->esp0);
@@ -202,7 +211,7 @@ void task_startup()
 static
 void scheduler_timer(void* unused)
 {
-    trace("Here");
+    //trace("Here");
     scheduler_disable();
 
     uint64_t now = pit_get_clock();
@@ -218,6 +227,14 @@ void scheduler_timer(void* unused)
              */
             task_unblock(task);
             TAILQ_REMOVE(&sleeping_tasks, task, snext);
+        }
+    }
+
+    if(_time_slice_remaining != 0) {
+        if(_time_slice_remaining <= pit_tick_length()) {
+            schedule();
+        } else {
+            _time_slice_remaining -= pit_tick_length();
         }
     }
 
@@ -365,6 +382,17 @@ void task2_entry()
     }
 }
 
+static void idle_task_entry()
+{
+    while(1) {
+        trace("IDLE_TASK running");
+        hlt();
+        //scheduler_lock();
+        //schedule();
+        //scheduler_unlock();
+    }
+}
+
 #if 0
 static
 void task1_entry()
@@ -405,6 +433,7 @@ void task1_entry()
 {
     sti();
 
+    task_create("IDLE_TASK", idle_task_entry);
     task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
