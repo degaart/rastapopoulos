@@ -79,6 +79,8 @@ void* pit_add_timer(uint64_t period, timer_handler_t handler, void* param)
     return node;
 }
 
-
-
+uint64_t pit_tick_length()
+{
+    return 1000 / FREQUENCY;
+}
 
