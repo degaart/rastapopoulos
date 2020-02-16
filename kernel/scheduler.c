@@ -77,11 +77,7 @@ struct task* task_create(const char* name, void(*entry)())
     /* TODO: Propertly align the stack */
     stack[1023] = (uint32_t)entry;
     stack[1022] = (uint32_t)task_startup;
-    stack[1021] = 0xABCD0001;       /* ebp */
-    stack[1020] = 0xABCD0002;       /* ebx */
-    stack[1019] = 0xABCD0003;       /* esi */
-    stack[1018] = 0xABCD0004;       /* edi */
-    task->esp = (unsigned char*)&stack[1022];
+    task->esp = (unsigned char*)&stack[1021];
     task->esp0 = (unsigned char*)task->stack + PAGE_SIZE;
     task->pagedir = vmm_create_pagedir();
     task->cr3 = vmm_get_frame(task->pagedir);
