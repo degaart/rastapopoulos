@@ -38,8 +38,6 @@ void task_startup()
 void task_switch(struct task* next)
 {
     assert(_current_task != NULL);
-    assert2(_current_task->state == TASK_STATE_RUNNING,
-            "current_task->state: %d", _current_task->state);
     assert(next != _current_task);
 
     /* Load new pagedir */
@@ -52,8 +50,11 @@ void task_switch(struct task* next)
     tss_set_esp0(next->esp0);
 
     /* Set tasks state */
-    _current_task->state = TASK_STATE_READY;
-    TAILQ_INSERT_TAIL(&_ready_queue, _current_task, rnext);
+    if(_current_task->state == TASK_STATE_RUNNING) {        /* Not blocked by task_block() */
+        _current_task->state = TASK_STATE_READY;
+        TAILQ_INSERT_TAIL(&_ready_queue, _current_task, rnext);
+    }
+
     next->state = TASK_STATE_RUNNING;
 
     /* 
@@ -72,9 +73,35 @@ void schedule()
     check();
 
     if(!TAILQ_EMPTY(&_ready_queue)) {
+#if 0
+        struct task* t;
+        trace("Ready queue:");
+        TAILQ_FOREACH(t, &_ready_queue, rnext) {
+            trace("\t%s", t->name);
+        }
+#endif
+
         struct task* next = TAILQ_FIRST(&_ready_queue);
         TAILQ_REMOVE(&_ready_queue, next, rnext);
         task_switch(next);
+    }
+}
+
+void task_block(enum task_state state)
+{
+    assert(state != TASK_STATE_READY && state != TASK_STATE_RUNNING);
+    check();
+
+    _current_task->state = state;
+    schedule();
+}
+
+void task_unblock(struct task* task)
+{
+    if(TAILQ_EMPTY(&_ready_queue)) {
+        task_switch(task);
+    } else {
+        TAILQ_INSERT_TAIL(&_ready_queue, task, rnext);
     }
 }
 
@@ -135,22 +162,28 @@ void scheduler_init()
 /************************************************************************************************
  * TESTS                                                                                        *
  ************************************************************************************************/
+static int counter;
+
 static
 void task2_entry()
 {
     while(1) {
         trace("task2 running");
-        schedule();
+        //schedule();
+        task_block(TASK_STATE_PAUSED);
     }
 }
 
 static
 void task1_entry()
 {
-    task_create("task2", task2_entry);
+    struct task* task2 = task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
+        counter++;
         schedule();
+        if(((counter % 3) == 0) && task2->state == TASK_STATE_PAUSED)
+            task_unblock(task2);
     }
 }
 
