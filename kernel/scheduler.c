@@ -14,7 +14,8 @@ struct task_list _ready_queue;
 struct task_list _sleeping_tasks;
 
 struct task* _current_task;
-struct task* _idle_task;
+static struct task* _idle_task;
+static uint64_t _time_slice_remaining;
 extern void context_switch(struct task* next);
 
 /*
@@ -59,6 +60,8 @@ void task_switch(struct task* next)
     }
 
     next->state = TASK_STATE_RUNNING;
+
+    _time_slice_remaining = 10;
 
     /* 
      * switch stack 
@@ -157,6 +160,15 @@ struct task* task_create(const char* name, void(*entry)())
 }
 
 static
+void idle_task_entry()
+{
+    while(1) {
+        sti();
+        hlt();
+    }
+}
+
+static
 void scheduler_timer(void* unused)
 {
     check();
@@ -168,6 +180,12 @@ void scheduler_timer(void* unused)
             TAILQ_REMOVE(&_sleeping_tasks, task, snext);
             task_unblock(task, false);
         }
+    }
+
+    if(_time_slice_remaining <= pit_tick_length()) {
+        schedule();
+    } else {
+        _time_slice_remaining -= pit_tick_length();
     }
 }
 
@@ -189,6 +207,8 @@ void scheduler_init()
     _current_task->state = TASK_STATE_RUNNING;
     TAILQ_INSERT_TAIL(&_tasks, _current_task, tnext);
 
+    _idle_task = task_create("IDLE_TASK", idle_task_entry);
+
     pit_add_timer(18, scheduler_timer, NULL);
 }
 
@@ -203,8 +223,6 @@ void task2_entry()
     while(1) {
         sti();
         trace("task2 running");
-        cli();
-        msleep(500);
     }
 }
 
@@ -215,8 +233,6 @@ void task1_entry()
     while(1) {
         sti();
         trace("task1 running");
-        cli();
-        schedule();
     }
 }
 

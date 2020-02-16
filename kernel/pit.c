@@ -10,7 +10,7 @@
 #define PIT_OCW_COUNTER_1   0x40
 
 /* Timer frequency in Hz */
-#define FREQUENCY 100
+#define FREQUENCY 1000
 
 struct timer_node {
     uint64_t period;
