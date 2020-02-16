@@ -8,8 +8,11 @@
 #include "pmm.h"
 #include "pit.h"
 
-TAILQ_HEAD(tasks, task) _tasks;
-TAILQ_HEAD(rtasks, task) _ready_queue;
+TAILQ_HEAD(task_list, task);
+struct task_list _tasks;
+struct task_list _ready_queue;
+struct task_list _sleeping_tasks;
+
 struct task* _current_task;
 struct task* _idle_task;
 extern void context_switch(struct task* next);
@@ -96,13 +99,34 @@ void task_block(enum task_state state)
     schedule();
 }
 
-void task_unblock(struct task* task)
+void task_unblock(struct task* task, bool immediate)
 {
-    if(TAILQ_EMPTY(&_ready_queue)) {
+    if(immediate && TAILQ_EMPTY(&_ready_queue)) {
         task_switch(task);
     } else {
+        task->state = TASK_STATE_READY;
         TAILQ_INSERT_TAIL(&_ready_queue, task, rnext);
     }
+}
+
+void msleep_until(uint64_t deadline)
+{
+    if(deadline < pit_get_clock())
+        return;
+
+    _current_task->deadline = deadline;
+    TAILQ_INSERT_HEAD(&_sleeping_tasks, _current_task, snext);
+    task_block(TASK_STATE_SLEEPING);
+}
+
+void msleep(uint64_t ms)
+{
+    msleep_until(pit_get_clock() + ms);
+}
+
+void sleep(int secs)
+{
+    msleep((uint64_t)secs * 1000LL);
 }
 
 struct task* task_create(const char* name, void(*entry)())
@@ -136,13 +160,22 @@ static
 void scheduler_timer(void* unused)
 {
     check();
-    trace("Scheduler timer");
+
+    uint64_t now = pit_get_clock();
+    struct task* task, *tmp;
+    TAILQ_FOREACH_SAFE(task, &_sleeping_tasks, snext, tmp) {
+        if(task->state == TASK_STATE_SLEEPING && task->deadline <= now) {
+            TAILQ_REMOVE(&_sleeping_tasks, task, snext);
+            task_unblock(task, false);
+        }
+    }
 }
 
 void scheduler_init()
 {
     TAILQ_INIT(&_tasks);
     TAILQ_INIT(&_ready_queue);
+    TAILQ_INIT(&_sleeping_tasks);
 
     /* Create initial task */
     _current_task = kmalloc(sizeof(struct task));
@@ -168,22 +201,22 @@ static
 void task2_entry()
 {
     while(1) {
+        sti();
         trace("task2 running");
-        //schedule();
-        task_block(TASK_STATE_PAUSED);
+        cli();
+        msleep(500);
     }
 }
 
 static
 void task1_entry()
 {
-    struct task* task2 = task_create("task2", task2_entry);
+    task_create("task2", task2_entry);
     while(1) {
+        sti();
         trace("task1 running");
-        counter++;
+        cli();
         schedule();
-        if(((counter % 3) == 0) && task2->state == TASK_STATE_PAUSED)
-            task_unblock(task2);
     }
 }
 

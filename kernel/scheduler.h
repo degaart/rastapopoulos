@@ -61,6 +61,11 @@ void task_switch(struct task* next);
 void schedule();
 struct task* task_create(const char* name, void(*entry)());
 void test_scheduler();
+void msleep_until(uint64_t deadline);
+void msleep(uint64_t ms);
+void sleep(int secs);
+void task_block(enum task_state state);
+void task_unblock(struct task* task, bool immediate);
 
 #define TASK_ENTRY __attribute__((force_align_arg_pointer))
 
