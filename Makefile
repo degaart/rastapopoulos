@@ -4,7 +4,7 @@ all: kernel/obj/kernel.elf build/initrd.tar
 
 PrototypeOS.iso: build/boot/grub build/boot/grub/grub.cfg build/boot/kernel.elf kernel/obj/kernel.elf build/initrd.tar
 	@echo "[BLD] $@"
-	@grub-mkrescue -o $@ build
+	@grub-mkrescue -o $@ build > /dev/null
 
 build/boot/grub:
 	@mkdir -p $@

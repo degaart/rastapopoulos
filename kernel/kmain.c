@@ -21,6 +21,7 @@
 #include "elf.h"
 #include "queue.h"
 #include "lock.h"
+#include "scheduler.h"
 
 static
 void keyboard_handler(int irq, const struct isr_regs* regs)
@@ -28,6 +29,7 @@ void keyboard_handler(int irq, const struct isr_regs* regs)
     trace("keyboard_handler");
 }
 
+#if 0
 enum task_state {
     TASK_STATE_READY,               /* Ready to run, but is not running */
     TASK_STATE_RUNNING,             /* Currently running */
@@ -211,7 +213,6 @@ void task_startup()
 static
 void scheduler_timer(void* unused)
 {
-    //trace("Here");
     scheduler_disable();
 
     uint64_t now = pit_get_clock();
@@ -236,6 +237,8 @@ void scheduler_timer(void* unused)
         } else {
             _time_slice_remaining -= pit_tick_length();
         }
+    } else {
+        schedule();
     }
 
     scheduler_enable();
@@ -444,6 +447,7 @@ void task1_entry()
     }
 }
 #endif
+#endif
 
 extern uint32_t initial_pagedir[];
 void kmain(const struct multiboot_info* multiboot_info)
@@ -528,8 +532,12 @@ void kmain(const struct multiboot_info* multiboot_info)
     trace("Initializing pit");
     pit_init();
 
+    test_scheduler();
+
+#if 0
     init_multitasking();
     task1_entry();
+#endif
 
 #if 0
     size_t initrd_size;
