@@ -58,6 +58,7 @@ struct task {
 
 void scheduler_init();
 void task_switch(struct task* next);
+void schedule();
 struct task* task_create(const char* name, void(*entry)());
 void test_scheduler();
 

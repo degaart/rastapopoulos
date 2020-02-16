@@ -63,6 +63,21 @@ void task_switch(struct task* next)
     context_switch(next);
 }
 
+/*
+ * Chooses another task and switches to it
+ */
+void schedule()
+{
+    assert(!interrupts_enabled());
+    check();
+
+    if(!TAILQ_EMPTY(&_ready_queue)) {
+        struct task* next = TAILQ_FIRST(&_ready_queue);
+        TAILQ_REMOVE(&_ready_queue, next, rnext);
+        task_switch(next);
+    }
+}
+
 struct task* task_create(const char* name, void(*entry)())
 {
     check();
@@ -120,27 +135,22 @@ void scheduler_init()
 /************************************************************************************************
  * TESTS                                                                                        *
  ************************************************************************************************/
-struct task* task1;
-struct task* task2;
-
 static
 void task2_entry()
 {
     while(1) {
         trace("task2 running");
-        task_switch(task1);
+        schedule();
     }
 }
 
 static
 void task1_entry()
 {
-    task1 = _current_task;
-    task2 = task_create("task2", task2_entry);
-
+    task_create("task2", task2_entry);
     while(1) {
         trace("task1 running");
-        task_switch(task2);
+        schedule();
     }
 }
 
