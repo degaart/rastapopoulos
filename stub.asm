@@ -15,17 +15,21 @@ section .multiboot
 
 section .text
 global _start
+extern kmain
 _start:
+    mov esp, _stacktop
+    call kmain
+
     mov dx, 0x3f8
     mov al, '*'
-    out dx, al
-    mov al, '-'
-    out dx, al
-    mov al, '/'
     out dx, al
 loop:
     cli
     hlt
     jmp loop
+
+section .bss
+    resb 4096
+_stacktop:
 
     

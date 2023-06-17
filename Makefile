@@ -13,11 +13,14 @@ all: obj/kernel.elf
 obj:
 	mkdir -p obj
 
-obj/kernel.elf: obj/stub.asm.o
-	$(CC) $(LDFLAGS) -o $@ $<
+obj/kernel.elf: obj/stub.asm.o obj/main.c.o
+	$(CC) $(LDFLAGS) -o $@ $^
+
+obj/main.c.o: main.c | obj
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/stub.asm.o: stub.asm | obj
-	$(AS) $(ASFLAGS) -o $@ $^
+	$(AS) $(ASFLAGS) -o $@ $<
 
 run: obj/kernel.elf
 	# C-a x to exit qemu
