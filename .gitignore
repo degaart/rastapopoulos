@@ -1,8 +1,1 @@
-build
-*.o
-obj
-*.iso
-
-
-
-.DS_Store
+/obj

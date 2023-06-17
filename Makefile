@@ -1,63 +1,29 @@
-.PHONY: all clean run run_graphic kernel/obj/kernel.elf build/initrd.tar
+.PHONY: all clean run
+.SUFFIXES:
 
-all: kernel/obj/kernel.elf build/initrd.tar
+AS := nasm
+CC := i686-elf-gcc
 
-PrototypeOS.iso: build/boot/grub build/boot/grub/grub.cfg build/boot/kernel.elf kernel/obj/kernel.elf build/initrd.tar
-	@echo "[BLD] $@"
-	@grub-mkrescue -o $@ build > /dev/null
+ASFLAGS := -f elf32
+CFLAGS :=
+LDFLAGS := -ffreestanding -nostdlib -T kernel.ld
 
-build/boot/grub:
-	@mkdir -p $@
+all: obj/kernel.elf
 
-build/boot/grub/grub.cfg: boot/grub.cfg
-	@cp $^ $@
+obj:
+	mkdir -p obj
 
-build/boot/kernel.elf: kernel/obj/kernel.elf
-	@cp $^ $@
+obj/kernel.elf: obj/stub.asm.o
+	$(CC) $(LDFLAGS) -o $@ $<
 
-build/initrd.tar:
-	@echo "[TAR] initrd.tar"
-	@make --no-print-directory -C userland
-	@cp userland/hello/obj/hello.elf build/
-	@tar cf build/initrd.tar -C build hello.elf message.txt
+obj/stub.asm.o: stub.asm | obj
+	$(AS) $(ASFLAGS) -o $@ $^
 
-kernel/obj/kernel.elf:
-	@echo "[MK] kernel"
-	@make --no-print-directory -C kernel
+run: obj/kernel.elf
+	# C-a x to exit qemu
+	# C-a h for help
+	qemu-system-i386 -nographic -no-reboot -kernel obj/kernel.elf
 
 clean:
-	@rm -rf build PrototypeOS.iso
-	@make --no-print-directory -C kernel clean
-
-run:
-	@qemu-system-i386 \
-		-kernel kernel/obj/kernel.elf \
-		-append "Hello, world!" \
-		-initrd build/initrd.tar \
-		-no-reboot \
-		-nographic \
-		-debugcon file:/tmp/PrototypeOS.log \
-		-m 8 \
-		-monitor telnet:127.0.0.1:55555,server,nowait
-
-run_graphic:
-	@qemu-system-i386 \
-		-kernel kernel/obj/kernel.elf \
-		-initrd build/initrd.tar \
-		-no-reboot \
-		-debugcon file:/tmp/PrototypeOS.log \
-		-m 8 \
-		-monitor telnet:127.0.0.1:55555,server,nowait
-
-debug:
-	@qemu-system-i386 \
-		-kernel kernel/obj/kernel.elf \
-		-initrd build/initrd.tar \
-		-no-reboot \
-		-debugcon file:/tmp/PrototypeOS.log \
-		-m 8 \
-		-monitor telnet:127.0.0.1:55555,server,nowait \
-		-s -S
-
-
+	rm -rf obj
 
