@@ -21,12 +21,21 @@ _start:
     call kmain
 
     mov dx, 0x3f8
-    mov al, '*'
+    mov esi, message
+show_message:
+    mov al, [esi]
+    test al, al
+    jz loop
     out dx, al
+    inc esi
+    jmp show_message
 loop:
     cli
     hlt
     jmp loop
+
+section .rodata
+    message: db "Back to stub.asm", 10, 0
 
 section .bss
     resb 4096
