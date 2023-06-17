@@ -1,13 +1,6 @@
-#define PORT_COM1 0x3F8
+#include "util.h"
 
-static inline void outb(unsigned short port, unsigned char val)
-{
-    asm volatile(
-            "outb %0, %1"
-            :
-            : "a"(val), "Nd"(port)
-            : "memory");
-}
+#define PORT_COM1 0x3F8
 
 static void serial_write_string(const char* s)
 {

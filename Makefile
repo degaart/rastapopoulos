@@ -16,8 +16,8 @@ obj:
 obj/kernel.elf: obj/stub.asm.o obj/main.c.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
-obj/main.c.o: main.c | obj
-	$(CC) $(CFLAGS) -c -o $@ $<
+obj/main.c.o: main.c Makefile | obj
+	$(CC) $(CFLAGS) -c -o $@ -MMD -MP $<
 
 obj/stub.asm.o: stub.asm | obj
 	$(AS) $(ASFLAGS) -o $@ $<
@@ -29,4 +29,6 @@ run: obj/kernel.elf
 
 clean:
 	rm -rf obj
+
+-include obj/main.c.d
 
