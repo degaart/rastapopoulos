@@ -17,7 +17,15 @@ section .text
 global _start
 extern kmain
 _start:
+    ; multiboot state:
+    ; eax   magic value 0x2BADB002
+    ; ebx   physical address of multiboot information structure
+    ; cr0   PE enabled, PG disabled
+    ; gdtr  undefined, so must set GDT
+    ; idtr  undefined, so must set IDT
     mov esp, _stacktop
+    push eax
+    push ebx
     call kmain
 
     mov dx, 0x3f8
@@ -35,7 +43,7 @@ loop:
     jmp loop
 
 section .rodata
-    message: db "Back to stub.asm", 10, 0
+    message: db "Kernel terminated", 10, 0
 
 section .bss
     resb 4096
