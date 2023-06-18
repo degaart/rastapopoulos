@@ -13,7 +13,14 @@ all: obj/kernel.elf
 obj:
 	mkdir -p obj
 
-obj/kernel.elf: obj/stub.asm.o obj/main.c.o obj/gdt.c.o obj/debug.c.o
+obj/kernel.elf: \
+	obj/stub.asm.o \
+	obj/idt.asm.o \
+	obj/main.c.o \
+	obj/gdt.c.o \
+	obj/idt.c.o \
+	obj/debug.c.o \
+	obj/string.c.o
 	$(CC) $(LDFLAGS) -o $@ $^
 
 obj/main.c.o: main.c Makefile | obj
@@ -23,10 +30,20 @@ obj/gdt.c.o: gdt.c Makefile | obj
 	$(CC) $(CFLAGS) -c -S -o $@.S $<
 	$(CC) $(CFLAGS) -c -o $@ -MMD -MP $<
 
+obj/idt.c.o: idt.c Makefile | obj
+	$(CC) $(CFLAGS) -c -S -o $@.S $<
+	$(CC) $(CFLAGS) -c -o $@ -MMD -MP $<
+
 obj/debug.c.o: debug.c Makefile | obj
 	$(CC) $(CFLAGS) -c -o $@ -MMD -MP $<
 
+obj/string.c.o: string.c Makefile | obj
+	$(CC) $(CFLAGS) -c -o $@ -MMD -MP $<
+
 obj/stub.asm.o: stub.asm | obj
+	$(AS) $(ASFLAGS) -o $@ $<
+
+obj/idt.asm.o: idt.asm | obj
 	$(AS) $(ASFLAGS) -o $@ $<
 
 run: obj/kernel.elf

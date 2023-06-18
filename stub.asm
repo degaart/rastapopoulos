@@ -23,7 +23,7 @@ _start:
     ; cr0   PE enabled, PG disabled
     ; gdtr  undefined, so must set GDT
     ; idtr  undefined, so must set IDT
-    mov esp, _stacktop
+    mov esp, stacktop
     push eax
     push ebx
     call kmain
@@ -58,73 +58,10 @@ gdt_flush:
 .return:
     ret
 
-; void test_idt()
-extern serial_write_string
-global test_idt
-test_idt:
-    push esp
-    push idt_message1
-    call serial_write_string
-    add esp, 4
-
-    mov eax, int80_handler
-    mov word [idt + (8*80)], ax
-    mov word [idt + (8*80) + 2], 0x08
-    mov word [idt + (8*80) + 4], 0x8E00
-    shr eax, 16
-    mov word [idt + (8*80) + 6], ax
-
-    lidt [idtr]
-
-    int 80
-
-    pop esp
-    ret
-
-int80_handler:
-    pusha
-
-    ; save segment registers
-    push ds
-    push es
-    push fs
-    push gs
-
-    ; set data segments to kernel data segment descriptor
-    mov ax, 0x10
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    ; and what about ss?
-
-    push idt_message2
-    call serial_write_string
-    add esp, 4
-
-    ; restore data segments
-    pop gs
-    pop fs
-    pop es
-    pop ds
-
-    popa
-    iret
-
 section .rodata
     message: db "Kernel terminated", 10, 0
-    idt_message1: db "Testing IDT", 10, 0
-    idt_message2: db "Inside int 3 handler", 10, 0
-
-    align 8
-    idt:
-        times 255 dq 0
-
-    idtr:
-        .limit      dw (8 * 255) - 1
-        .base       dd idt
 
 section .bss
     resb 4096
-_stacktop:
+stacktop:
 
