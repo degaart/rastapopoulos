@@ -1,0 +1,40 @@
+# Build grub on osx
+../configure --prefix=/opt/grub --disable-dependency-tracking --disable-nls --disable-werror  --target=i686-elf
+
+# create an image on osx
+fdisk -e disk.img
+ 
+ 
+The signature for this MBR is invalid.
+Would you like to initialize the partition table? [y]           Yes
+fdisk:*1>                                                       disk
+Disk: disk.img	geometry: 650/4/63 [16340 sectors]
+Change disk geometry? [n]                                       No
+ 
+ 
+ 
+fdisk:*1>                                                       edit 1
+Partition id ('0' to disable)  [0 - FF]: [B] (? for help)       0B
+Do you wish to edit in CHS mode? [n]                            No
+Partition offset [0 - 163840]: [63]                             2047
+Partition size [1 - 161793]: [161793]                           <Enter>
+ 
+ 
+fdisk:*1>                                                       write
+fdisk:*1>                                                       quit
+
+# Install grub on osx
+/opt/grub/sbin/grub-install --target=i386-pc --modules="part_msdos biosdisk fat multiboot configfile" --root-directory=/Volumes/
+
+# /boot/grub/grub.cfg
+set timeout=15
+set default=0 # Set the default menu entry
+ 
+menuentry "OS Name" {
+   multiboot /boot/kernel-file   # The multiboot command replaces the kernel command
+   boot
+}
+
+
+
+
