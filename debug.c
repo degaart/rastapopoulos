@@ -19,37 +19,6 @@ void serial_write_string(const char* s)
     }
 }
 
-static void itox(char* buffer, size_t size, unsigned value)
-{
-    char tmp[12];
-    char* p = tmp;
-    while(value) {
-        int digit = value % 16;
-        *(p++) = digit + (digit < 10 ? '0' : 'A' - 10);
-        value /= 16;
-    }
-
-    for(--p; p>=tmp && size > 1; size--) {
-        *(buffer++) = *(p--);
-    }
-    *buffer = '\0';
-}
-
-static void itoa(char* buffer, size_t size, unsigned value)
-{
-    char tmp[9];
-    char* p = tmp;
-    while(value) {
-        *(p++) = (value % 10) + '0';
-        value /= 10;
-    }
-
-    for(--p; p>=tmp && size > 1; size--) {
-        *(buffer++) = *(p--);
-    }
-    *buffer = '\0';
-}
-
 void trace_init()
 {
     serial_write_char('\n');
@@ -132,5 +101,6 @@ void trace(const char* file, int line, const char* fn, const char* fmt, ...)
         }
         fmt++;
     }
+    serial_write_char('\n');
 }
 

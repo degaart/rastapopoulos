@@ -1,11 +1,8 @@
 #pragma once
 #include <stddef.h>
 
-static inline size_t strlen(const char* str)
-{
-    size_t len = 0;
-    while (*(str++))
-        len++;
-    return len;
-}
+size_t strlen(const char* str);
+void itox(char* buffer, size_t size, unsigned value);
+void itoa(char* buffer, size_t size, unsigned value);
+
 
