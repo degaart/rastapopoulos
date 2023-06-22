@@ -5,7 +5,7 @@ AS := nasm
 CC := i686-elf-gcc
 
 ASFLAGS := -f elf32 -g
-CFLAGS := -std=gnu99 -ffreestanding -Werror -g
+CFLAGS := -std=gnu99 -ffreestanding -Werror -g -march=i386 -mpreferred-stack-boundary=2
 LDFLAGS := -g -ffreestanding -nostdlib -T kernel.ld
 
 all: obj/kernel.elf
