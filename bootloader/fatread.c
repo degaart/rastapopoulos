@@ -88,7 +88,7 @@ static ssize_t read_all(int fd, void* buffer, size_t len)
     return result;
 }
 
-int main(int argc, char** argv)
+int main0(int argc, char** argv)
 {
     assert(sizeof(struct bpb) == 62);
     assert(sizeof(struct fat_entry) == 32);
@@ -245,4 +245,35 @@ int main(int argc, char** argv)
     return 0;
 }
 
+int main()
+{
+    int fd = open("boot.img", O_RDONLY);
+    if(fd == -1) {
+        perror("open");
+        return 1;
+    }
+
+    void* buffer = malloc(1440 * 1024);
+    ssize_t ret = read_all(fd, buffer, 1440 * 1024);
+    if(ret == -1) {
+        fprintf(stderr, "I/O error\n");
+        return 1;
+    }
+    close(fd);
+
+    const struct bpb* bpb = buffer;
+    printf("fat_size16: %u\n", bpb->fat_size16);
+
+    const unsigned char* fat = (unsigned char*)buffer + 512;
+    for(int i = 0; i < 16; i++) {
+        unsigned fat_offset = i + (i / 2);
+        unsigned value = *((uint16_t*)(fat + fat_offset));
+        if(i & 0x01)
+            value = value >> 4;
+        else
+            value = value & 0x0FFF;
+        printf("0x%04X\n", value);
+    }
+    return 0;
+}
 
