@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define FILENAME "MAKE_B~1   "
+#define FILENAME "BOOT1    BIN"
 
 struct bpb {
     char jmp_boot[3];
@@ -46,6 +46,29 @@ struct fat_entry {
     uint16_t first_cluster_lo;
     uint32_t size;              /* in bytes */
 } __attribute__((packed));
+
+struct chs {
+    unsigned c;
+    unsigned h;
+    unsigned s;
+};
+
+static struct chs get_chs(unsigned sector, const struct bpb* bpb)
+{
+    /*
+     * Formula:
+     *  tmp = lba / spt
+     *  sect = (lba % spt) + 1
+     *  head = tmp % heads
+     *  cyl = tmp / heads
+     */
+    struct chs result;
+    unsigned tmp = sector / bpb->sect_per_track;
+    result.s = (sector % bpb->sect_per_track) + 1;
+    result.h = tmp % bpb->num_heads;
+    result.c = tmp / bpb->num_heads;
+    return result;
+}
 
 static ssize_t read_all(int fd, void* buffer, size_t len)
 {
@@ -119,6 +142,10 @@ int main(int argc, char** argv)
     size_t root_dir_sects = 
         ((bpb->root_ent_count * 32) + (bpb->bytes_per_sect - 1)) /
         bpb->bytes_per_sect;
+    printf("bpb->root_ent_count: %u\n"
+            "root_dir_sects: %zu\n",
+            bpb->root_ent_count,
+            root_dir_sects);
 
     size_t first_data_sector = 
         bpb->rsvd_sect_count + 
@@ -129,9 +156,18 @@ int main(int argc, char** argv)
            first_data_sector * bpb->bytes_per_sect);
 
     size_t first_root_dir_sect = first_data_sector - root_dir_sects;
-    printf("first_root_dir_sect: 0x%zu (offset %zu)\n",
+    printf("first_root_dir_sect: %zu (offset %zu)\n",
            first_root_dir_sect,
            first_root_dir_sect * bpb->bytes_per_sect);
+
+    /*
+     * Calculate CHS values for first root dir sect
+     */
+    struct chs root_dir_chs = get_chs((unsigned)first_root_dir_sect, bpb);
+    printf("root dir cyl: %u, h: %u, s: %u\n",
+           root_dir_chs.c,
+           root_dir_chs.h,
+           root_dir_chs.s);
 
     /* Find file in root directory */
     int found = 1;
@@ -182,7 +218,7 @@ int main(int argc, char** argv)
         size_t entry_offset = fat_offset % bpb->bytes_per_sect;
         const unsigned char* fat_buffer = (const unsigned char*)buffer +
             (bpb->rsvd_sect_count * bpb->bytes_per_sect);
-        uint16_t fat_value = *((uint16_t*)(fat_buffer + entry_offset));
+        uint16_t fat_value = *((uint16_t*)(fat_buffer + entry_offset)); /* This calculation is wrong because it does not take fat_sector into account */
         if(next_cluster & 0x01)
             fat_value = fat_value >> 4;
         else
