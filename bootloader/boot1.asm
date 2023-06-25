@@ -3,6 +3,9 @@ org  0x7e00
 
     mov  si, message
     mov  ah, 0x0E
+    jmp  write_char
+
+    times 512 db 0x90
 
 write_char:
     mov  al, [si]
@@ -20,5 +23,4 @@ halt:
     jmp halt
 
 message: db "It works!", 13, 10, 0
-
-    
+ 

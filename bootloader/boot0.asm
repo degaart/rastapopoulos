@@ -213,7 +213,6 @@ load_file:
 
 .eof:
     ; jump into it
-    breakpoint
     jmp  0x7e00
 
 halt:
@@ -341,8 +340,9 @@ load_sector:
 ;   bp + 4          cluster
 ;   bp + 2          return address
 ;   bp              old bp
+;   bx              fat_value
 ;   cx              fat_offset
-;   dx              entry_offset
+;   dx              cluster
 ; TODO: Omit frame pointer
 next_cluster:
     push bp
@@ -350,9 +350,10 @@ next_cluster:
     push bx
 
     ; fat_offset = cluster + (cluster / 2)
-    mov  ax, [bp + 4]
+    mov  dx, [bp + 4]
+    mov  ax, dx
     shr  ax, 1
-    add  ax, [bp + 4]
+    add  ax, dx
     mov  cx, ax
 
     ; fat_value =
@@ -362,11 +363,11 @@ next_cluster:
     mov  ax, [bx]
     
     ; fat_value =
-    ;   fat_value & 0x1 ?
+    ;   cluster & 0x1 ?
     ;       fat_value >> 4 :
     ;       fat_value & 0xFFF
-    test ax, 0x1
-    jnz  .odd
+    test dx, 0x1
+    jz   .odd
 
     shr  ax, 4
     jmp  .return
@@ -381,8 +382,8 @@ next_cluster:
     ret 4
 
 ; data
-io_error_message: db "E", 0
-not_found_message: db "N", 0
+io_error_message: db "ERR", 0
+not_found_message: db "NOTFOUND", 0
 
 filename: db "BOOT1   BIN"
 
