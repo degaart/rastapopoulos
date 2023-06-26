@@ -1,26 +1,23 @@
 bits 16
-org  0x7e00
+section .text
 
-    mov  si, message
-    mov  ah, 0x0E
-    jmp  write_char
+entry:
+    xchg bx, bx
+    cli
+    cld
+    xor  ax, ax
+    mov  ds, ax
+    mov  es, ax
+    mov  ss, ax
+    mov  sp, 0x7DFF
+    jmp  0x0:entry2
 
-    times 512 db 0x90
-
-write_char:
-    mov  al, [si]
-    test al, al
-    je   halt
-    mov  bh, 0
-    mov  bl, 0x07
-    int  0x10
-    inc  si
-    jmp  write_char
+entry2:
+    extern start
+    call start
 
 halt:
     cli
     hlt
-    jmp halt
+    jmp  halt
 
-message: db "It works!", 13, 10, 0
- 
