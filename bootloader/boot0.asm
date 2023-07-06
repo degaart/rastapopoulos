@@ -63,7 +63,10 @@ start2:
 
     ; setup stack
     mov  ss, ax
-    mov  sp, 0x7BFF
+    mov  sp, 0x7B00
+
+    ; save dl (boot drive number)
+    mov  [bpb.drive_num], dl
 
     ; usable conventional memory: 0x0500 - 0x7BFF (~29kb)
     ; calculate sector for root dir
@@ -112,8 +115,7 @@ walk_root:
     repe cmpsb
     pop  bx
 
-    test cx, cx
-    jz   .found
+    jcxz .found
 
     ; advance
     add  bx, dir_entry_size
@@ -224,7 +226,6 @@ halt:
 ;   bp - 4      str
 ;   bp - 2      return address
 ;   bp          old bp
-; TODO: Omit frame pointer
 trace:
     push bp
     mov  bp, sp
@@ -255,7 +256,6 @@ trace:
 
     pop  si
     pop  bx
-    mov  sp, bp
     pop  bp
     ret  2
 
@@ -276,9 +276,8 @@ trace:
 ;   bp - 6          head
 ;   bp - 8          cyl
 ;   bp - 10         retry count
-
 load_sector:
-    push bp
+push bp
     mov  bp, sp
     sub  sp, 10
     push bx
@@ -311,7 +310,7 @@ load_sector:
     mov  ch, [bp - 8]        ; cyl
     mov  cl, [bp - 4]        ; sector
     mov  dh, [bp - 6]        ; head
-    xor  dl, dl              ; drive
+    mov  dl, [bpb.drive_num] ; drive
     mov  bx, [bp + 4]        ; es:buffer
     int  0x13
     test ah, ah
@@ -343,7 +342,6 @@ load_sector:
 ;   bx              fat_value
 ;   cx              fat_offset
 ;   dx              cluster
-; TODO: Omit frame pointer
 next_cluster:
     push bp
     mov  bp, sp
@@ -383,7 +381,7 @@ next_cluster:
 
 ; data
 io_error_message: db "ERR", 0
-not_found_message: db "NOTFOUND", 0
+not_found_message: db "NTFND", 0
 
 filename: db "BOOT1   BIN"
 

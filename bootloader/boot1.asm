@@ -6,6 +6,22 @@ section .text
 VGA_BASE equ 0xB8000
 VGA_WIDTH equ 80
 VGA_HEIGHT equ 25
+SEG_CODE32 equ 0x08
+SEG_DATA32 equ 0x10
+SEG_CODE16 equ 0x18
+SEG_DATA16 equ 0x20
+
+struc rmode_regs
+    .ax:        resw 1
+    .bx:        resw 1
+    .cx:        resw 1
+    .dx:        resw 1
+    .si:        resw 1
+    .di:        resw 1
+    .bp:        resw 1
+    .es:        resw 1
+    .flags:     resw 1
+endstruc
 
 entry:
     cli
@@ -14,7 +30,7 @@ entry:
     mov  ds, ax
     mov  es, ax
     mov  ss, ax
-    mov  sp, 0x7DFF
+    mov  sp, 0x7C00
     jmp  0x0:entry2
 
 entry2:
@@ -99,7 +115,7 @@ setup_gdt:
     mov  eax, cr0
     or   al, 1
     mov  cr0, eax
-    jmp  0x08:entry32
+    jmp  SEG_CODE32:entry32
 
 halt:
     cli
@@ -224,6 +240,67 @@ kbd_send_data:
     pop  bp
     ret  2
 
+real_mode_thunk:
+    mov  ax, SEG_DATA16
+    mov  ds, ax
+    mov  es, ax
+    mov  fs, ax
+    mov  gs, ax
+    mov  ss, ax
+
+    mov  eax, cr0
+    and  eax, ~1
+    mov  cr0, eax
+
+    mov  ax, 0
+    mov  ds, ax
+    mov  es, ax
+    mov  fs, ax
+    mov  gs, ax
+    mov  ss, ax
+    jmp  0x00:.real_mode_entry
+
+.real_mode_entry:
+    push ebp
+    mov  ebp, esp
+    push ebx
+    push esi
+    push edi
+
+    mov  bp, [bp + 8]
+    mov  ax, [bp + rmode_regs.ax]
+    mov  bx, [bp + rmode_regs.bx]
+    mov  cx, [bp + rmode_regs.cx]
+    mov  dx, [bp + rmode_regs.dx]
+    mov  si, [bp + rmode_regs.si]
+    mov  di, [bp + rmode_regs.di]
+    mov  es, [bp + rmode_regs.es]
+
+    push ebp
+    mov  bp, [bp + rmode_regs.bp]
+    int  0x13
+    pop  ebp
+
+    mov  [bp + rmode_regs.ax], ax
+    mov  [bp + rmode_regs.bx], bx
+    mov  [bp + rmode_regs.cx], cx
+    mov  [bp + rmode_regs.dx], dx
+    mov  [bp + rmode_regs.si], si
+    mov  [bp + rmode_regs.di], di
+    pushf
+    pop  word [bp + rmode_regs.flags]
+
+    pop  edi
+    pop  esi
+    pop  ebx
+    pop  ebp
+
+    ; restore protected mode
+    mov  eax, cr0
+    or   al, 1
+    mov  cr0, eax
+    jmp  SEG_CODE32:int13.return
+
 ;=========================================================================
 ; 32-bit code
 ;=========================================================================
@@ -231,13 +308,13 @@ section .text
 bits 32
 entry32:
     ; setup segment registers and stack
-    mov  ax, 0x10   ; data segment
+    mov  ax, SEG_DATA32   ; data segment
     mov  ds, ax
     mov  es, ax
     mov  fs, ax
     mov  gs, ax
     mov  ss, ax
-    mov  esp, 0x7DFF
+    mov  esp, 0x7C00
 
     ; init text-mode cursor
     call cursor_pos32
@@ -247,6 +324,27 @@ entry32:
     ; print a message
     push pmode_message
     call print32
+
+    ; ; get back to real mode
+    ; sub  esp, rmode_regs_size
+    ; mov  ebx, esp
+    ; mov  [ebx + rmode_regs.ax], word 0x1301
+    ; mov  [ebx + rmode_regs.bx], word 0x0007
+    ; mov  [ebx + rmode_regs.cx], word 25
+    ; mov  [ebx + rmode_regs.dx], word 0x0102
+    ; mov  [ebx + rmode_regs.si], word 0
+    ; mov  [ebx + rmode_regs.di], word 0
+    ; mov  [ebx + rmode_regs.bp], word rmode_message
+    ; mov  [ebx + rmode_regs.es], word 0
+    ; push ebx
+    ; mov  esi, 0xDEADBEEF
+    ; mov  edi, 0xBADB00B5
+    ; call int13
+    ; add  esp, rmode_regs_size
+
+    ; call C entry point
+    extern start
+    call start
 
 halt32:
     cli
@@ -348,6 +446,7 @@ putchar32:
 ;       ebp + 8     char
 ;       esp + 4     cursor_x
 ;       esp + 8     cursor_y
+global writechar32
 writechar32:
     push ebp
     mov  ebp, esp
@@ -420,6 +519,7 @@ writechar32:
     ret 8
 
 ; void print32(void* s)
+global print32
 print32:
     push ebp
     mov  ebp, esp
@@ -485,6 +585,20 @@ scroll32:
     call memcpy32
     ret
 
+; void int13(struct regs* regs)
+;   Deactivates protected mode then calls int13 with the specified parameters
+global int13
+int13:
+    jmp  SEG_CODE16:real_mode_thunk
+.return:
+    mov  ax, SEG_DATA32
+    mov  ds, ax
+    mov  es, ax
+    mov  fs, ax
+    mov  gs, ax
+    mov  ss, ax
+    ret  4
+
 section .rodata
 cursor_x: dd 0
 cursor_y: dd 0
@@ -494,6 +608,7 @@ gdt_message: db "Creating initial GDT", 13, 10, 0
 a20_kbd_message: db "Enabling A20 (kbd method)", 13, 10, 0
 a20_fast_message: db "Enabling A20 (fast method)", 13, 10, 0
 pmode_message: db "Entered 32-bit protected mode", 13, 10, 0
+rmode_message: db "Back to real-mode again", 13, 10, 0
 
 gdt:
     dw gdt_entries.end - gdt_entries -1
@@ -525,22 +640,37 @@ gdt:
     %endmacro
 
 gdt_entries:
-    ; null segment
+    ; 0x00 null segment
     dd 0, 0
 
-    ; code segment
+    ; 0x08 code segment
     gdt_entry 0, \
         0xFFFFF, \
         GDT_ACCESS_PRESENT|GDT_ACCESS_DPL0|GDT_ACCESS_TYPE_NORMAL| \
         GDT_ACCESS_EXEC|GDT_ACCESS_READABLE, \
         GDT_FLAG_GRAN4K|GDT_FLAG_SIZE32
 
-    ; data segment
+    ; 0x10 data segment
     gdt_entry 0, \
         0xFFFFF, \
         GDT_ACCESS_PRESENT|GDT_ACCESS_DPL0|GDT_ACCESS_TYPE_NORMAL| \
         GDT_ACCESS_WRITABLE, \
         GDT_FLAG_GRAN4K|GDT_FLAG_SIZE32
+
+    ; 0x18 16-bit code segment
+    gdt_entry 0, \
+        0xFFFFF, \
+        GDT_ACCESS_PRESENT|GDT_ACCESS_DPL0|GDT_ACCESS_TYPE_NORMAL| \
+        GDT_ACCESS_EXEC|GDT_ACCESS_READABLE, \
+        GDT_FLAG_SIZE16
+
+    ; 0x20 16-bit data segment
+    gdt_entry 0, \
+        0xFFFFF, \
+        GDT_ACCESS_PRESENT|GDT_ACCESS_DPL0|GDT_ACCESS_TYPE_NORMAL| \
+        GDT_ACCESS_WRITABLE, \
+        GDT_FLAG_SIZE16
+
 .end:
 
 

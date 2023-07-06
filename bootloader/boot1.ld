@@ -1,5 +1,4 @@
 OUTPUT_FORMAT(binary)
-STARTUP(boot1.o)
 SECTIONS
 {
     . = 0x07E00;
@@ -13,6 +12,6 @@ SECTIONS
         *(.bss);
         *(.rodata);
     }
-    _heap = ALIGN(4);
+    __heap__ = ALIGN(4);
 }
 
