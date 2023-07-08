@@ -1,4 +1,5 @@
 #include "elf.h"
+#include "multiboot.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -86,7 +87,52 @@ struct dir_entry {
     uint32_t size;
 } __attribute__((packed));
 
+#define IDT_PRESENT        (1 << 7)
+#define IDT_DPL0           (0)
+#define IDT_DPL1           (1 << 5)
+#define IDT_DPL2           (2 << 5)
+#define IDT_DPL3           (3 << 5)
+#define IDT_TASK_GATE      (5)
+#define IDT_TSS_32_AVL     (9)
+#define IDT_TSS_32_BUSY    (11)
+#define IDT_INT_GATE_32    (14)
+#define IDT_TRAP_GATE_32   (15)
+
+struct idt_entry {
+    uint16_t offset_lowerbits;
+    uint16_t selector;
+    uint8_t zero;
+    uint8_t type_attr;
+    uint16_t offset_higherbits;
+} __attribute__((packed));
+static struct idt_entry idt_entries[18];
+
+struct idt_ptr {
+    uint16_t limit;
+    struct idt_entry* base;
+} __attribute__((packed));
+static struct idt_ptr idtr __attribute__((aligned(8)));
+
 static void trace(const char* file, int line, const char* fn, const char* fmt, ...);
+void isr0_stub(void);
+void isr1_stub(void);
+void isr2_stub(void);
+void isr3_stub(void);
+void isr4_stub(void);
+void isr5_stub(void);
+void isr6_stub(void);
+void isr7_stub(void);
+void isr8_stub(void);
+void isr9_stub(void);
+void isr10_stub(void);
+void isr11_stub(void);
+void isr12_stub(void);
+void isr13_stub(void);
+void isr14_stub(void);
+void isr15_stub(void);
+void isr16_stub(void);
+void isr17_stub(void);
+void isr18_stub(void);
 
 #define CRC32_INITIAL 0xFFFFFFFF
 
@@ -332,12 +378,29 @@ static void trace(const char* file, int line, const char* fn, const char* fmt, .
     serial_write_char('\n');
 }
 
-static unsigned disk_status()
+static unsigned bios_read_sector(void* buffer, size_t len, unsigned drive,
+        unsigned c, unsigned h, unsigned s)
+{
+    ASSERT((uintptr_t)buffer <= 0xFFFF);
+
+    struct rmode_regs regs = {0};
+    regs.ax = 0x0201;
+    regs.cx = (s & 0xFF)|((c & 0xFF) << 8);
+    regs.dx = (drive & 0xFF)|((h & 0xFF) << 8);
+    regs.es = 0;
+    ASSERT((uintptr_t)buffer < 0xFFFF);
+    regs.bx = (uint32_t)(uintptr_t)buffer;
+    int13(&regs);
+    asm volatile("lidt %0" :: "m"(idtr));
+    return (regs.ax >> 8) & 0xFF;
+}
+
+static void bios_reset_disk()
 {
     struct rmode_regs regs = {0};
-    regs.ax = 0x0100;
+    regs.ax = 0;
     int13(&regs);
-    return (regs.ax >> 8) & 0xFF;
+    asm volatile("lidt %0" :: "m"(idtr));
 }
 
 static bool load_sector_chs(
@@ -346,25 +409,14 @@ static bool load_sector_chs(
 {
     struct rmode_regs regs = {0};
     for(unsigned i = 0; i < 9; i++) {
-        /* BIOS read sector */
-        regs.ax = 0x0201;
-        regs.cx = (s & 0xFF)|((c & 0xFF) << 8);
-        regs.dx = (drive & 0xFF)|((h & 0xFF) << 8);
-        regs.es = 0;
-        ASSERT((uintptr_t)buffer < 0xFFFF);
-        regs.bx = (uint32_t)(uintptr_t)buffer;
-        int13(&regs);
-        if(!(regs.flags & 0x1)) {
+        unsigned ret = bios_read_sector(buffer, len, drive, c, h, s);
+        if(!ret) {
             return true;
         }
-
-        unsigned status = (regs.ax >> 8) & 0xFF;
-        TRACE("Disk read failed with status %d", status);
-
-        /* BIOS reset disk */
-        regs.ax = 0;
-        int13(&regs);
+        TRACE("Disk read failed with status %d", ret);
+        bios_reset_disk();
     }
+    PANIC("I/O error reading C %u, H %u, S %u", c, h, s);
     return false;
 }
 
@@ -523,6 +575,45 @@ void read_file(const struct bpb* bpb, const struct dir_entry* dirent,
 
 void start()
 {
+#define SETSTUB(idx, handler) \
+    do { \
+        idt_entries[idx].offset_lowerbits = ((uintptr_t)handler & 0xFFFF); \
+        idt_entries[idx].offset_higherbits = ((uintptr_t)handler >> 16) & 0xFFFF; \
+    } while(0)
+
+    /* Setup an IDT for debug purposes */
+    for(size_t i = 0; i < sizeof(idt_entries)/sizeof(idt_entries[0]); i++) {
+        //idt_entries[i].offset_lowerbits = ((uintptr_t)isr_stub32 & 0xFFFF);
+        //idt_entries[i].offset_higherbits = ((uintptr_t)isr_stub32 >> 16) & 0xFFFF;
+        idt_entries[i].selector = 0x08; /* kernel code segment */
+        idt_entries[i].zero = 0;
+        idt_entries[i].type_attr = IDT_PRESENT|IDT_DPL0|IDT_INT_GATE_32;
+    }
+    SETSTUB(0, isr0_stub);
+    SETSTUB(1, isr1_stub);
+    SETSTUB(2, isr2_stub);
+    SETSTUB(3, isr3_stub);
+    SETSTUB(4, isr4_stub);
+    SETSTUB(5, isr5_stub);
+    SETSTUB(6, isr6_stub);
+    SETSTUB(7, isr7_stub);
+    SETSTUB(8, isr8_stub);
+    SETSTUB(9, isr9_stub);
+    SETSTUB(10, isr10_stub);
+    SETSTUB(11, isr11_stub);
+    SETSTUB(12, isr12_stub);
+    SETSTUB(13, isr13_stub);
+    SETSTUB(14, isr14_stub);
+    SETSTUB(15, isr15_stub);
+    SETSTUB(16, isr16_stub);
+    SETSTUB(17, isr17_stub);
+    SETSTUB(18, isr18_stub);
+
+    idtr.limit = sizeof(idt_entries) - 1;
+    idtr.base = idt_entries;
+    asm volatile("lidt %0" :: "m"(idtr));
+
+    /* Bios parameter block */
     const struct bpb* bpb = (const struct bpb*)0x7C00;
     ASSERT(bpb->drive_num == 0);
     ASSERT(bpb->bytes_per_sect == 512);
@@ -641,7 +732,7 @@ void start()
     asm volatile(
               "jmp %0"
             :
-            : "r"(elf_hdr.e_entry)
+            : "r"(elf_hdr.e_entry), "a"(MULTIBOOT_BOOTLOADER_MAGIC)
             : "memory");
     TRACE("SYSTEM HALTED");
     while(1);
