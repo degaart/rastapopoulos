@@ -39,32 +39,6 @@ entry2:
     test ax, ax
     jnz  setup_gdt
 
-    ; query bios A20 support
-    mov  ax, 0x2403
-    int  0x15
-    jb   enable_a20_kbd
-    test ah, ah
-    jnz  enable_a20_kbd
-
-    ; query A20 status
-    mov  ax, 0x2402
-    int  0x15
-    jb   enable_a20_kbd
-    test ah, ah
-    jnz  enable_a20_kbd
-
-    ; try enabling it using bios function
-    mov  ax, 0x2401
-    int  0x15
-
-    call a20_enabled
-    test ax, ax
-    jnz  setup_gdt
-
-enable_a20_kbd:
-    push a20_kbd_message
-    call print
-
     call kbd_wait
     push 0xAD               ; disable
     call kbd_send_command
@@ -95,17 +69,9 @@ enable_a20_kbd:
     test ax, ax
     jnz  setup_gdt
 
-    push a20_fast_message
+    push a20_error_message
     call print
 
-    ; enable via fast method
-    in   al, 0x92
-    or   al, 2
-    out  0x92, al
-    call a20_enabled
-    test ax, ax
-    jnz  setup_gdt
-    
     jmp  halt
 
 setup_gdt:
@@ -113,7 +79,7 @@ setup_gdt:
     call print
     lgdt [gdt]
     mov  eax, cr0
-    or   al, 1
+    or   eax, 1
     mov  cr0, eax
     jmp  SEG_CODE32:entry32
 
@@ -261,11 +227,20 @@ real_mode_thunk:
     jmp  0x00:.real_mode_entry
 
 .real_mode_entry:
+    lidt [rm_idt]
+
     push ebp
     mov  ebp, esp
     push ebx
     push esi
     push edi
+
+    ; ; debuggging
+    ; mov  ax, VGA_BASE / 16
+    ; mov  es, ax
+    ; mov  bx, (80*4)
+    ; mov  [es:bx], byte 'X'
+    ; mov  [es:bx+1], byte 0x1E
 
     mov  bp, [bp + 8]
     mov  ax, [bp + rmode_regs.ax]
@@ -279,6 +254,8 @@ real_mode_thunk:
     push ebp
     mov  bp, [bp + rmode_regs.bp]
     int  0x13
+    cli                 ; pcem/86box reenable interrupts after int 0x13
+    cld                 ; just to be sure
     pop  ebp
 
     mov  [bp + rmode_regs.ax], ax
@@ -295,9 +272,9 @@ real_mode_thunk:
     pop  ebx
     pop  ebp
 
-    ; restore protected mode
+    lgdt [gdt]
     mov  eax, cr0
-    or   al, 1
+    or   eax, 1
     mov  cr0, eax
     jmp  SEG_CODE32:int13.return
 
@@ -324,23 +301,6 @@ entry32:
     ; print a message
     push pmode_message
     call print32
-
-    ; ; get back to real mode
-    ; sub  esp, rmode_regs_size
-    ; mov  ebx, esp
-    ; mov  [ebx + rmode_regs.ax], word 0x1301
-    ; mov  [ebx + rmode_regs.bx], word 0x0007
-    ; mov  [ebx + rmode_regs.cx], word 25
-    ; mov  [ebx + rmode_regs.dx], word 0x0102
-    ; mov  [ebx + rmode_regs.si], word 0
-    ; mov  [ebx + rmode_regs.di], word 0
-    ; mov  [ebx + rmode_regs.bp], word rmode_message
-    ; mov  [ebx + rmode_regs.es], word 0
-    ; push ebx
-    ; mov  esi, 0xDEADBEEF
-    ; mov  edi, 0xBADB00B5
-    ; call int13
-    ; add  esp, rmode_regs_size
 
     ; call C entry point
     extern start
@@ -599,16 +559,358 @@ int13:
     mov  ss, ax
     ret  4
 
+; Interrupt handlers
+global isr0_stub
+isr0_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '0'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr1_stub
+isr1_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr2_stub
+isr2_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '2'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr3_stub
+isr3_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '3'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr4_stub
+isr4_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '4'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr5_stub
+isr5_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '5'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr6_stub
+isr6_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '6'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr7_stub
+isr7_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '7'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr8_stub
+isr8_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '8'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr9_stub
+isr9_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '9'
+    mov  [edi+1], byte 0x1F
+    jmp  halt32
+
+global isr10_stub
+isr10_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '0'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr11_stub
+isr11_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '1'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr12_stub
+isr12_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '2'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr13_stub
+isr13_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '3'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr14_stub
+isr14_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '4'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr15_stub
+isr15_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '5'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr16_stub
+isr16_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '6'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr17_stub
+isr17_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '7'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
+global isr18_stub
+isr18_stub:
+    mov  edi, VGA_BASE
+    mov  esi, isr_stub_message
+.loop:
+    mov  al, [esi]
+    mov  [edi], al
+    mov  [edi+1], byte 0x1F
+    add  edi, 2
+    inc  esi
+    test al, al
+    jnz  .loop
+
+    mov  [edi], byte '1'
+    mov  [edi+1], byte 0x1F
+    mov  [edi+2], byte '8'
+    mov  [edi+3], byte 0x1F
+    jmp  halt32
+
 section .rodata
 cursor_x: dd 0
 cursor_y: dd 0
-enabled_message: db "A20 gate is enabled", 13, 10, 0
-disabled_message: db "A20 gate is disabled", 13, 10, 0
 gdt_message: db "Creating initial GDT", 13, 10, 0
-a20_kbd_message: db "Enabling A20 (kbd method)", 13, 10, 0
-a20_fast_message: db "Enabling A20 (fast method)", 13, 10, 0
+a20_error_message: db "Failed to enable A20 line", 13, 10
 pmode_message: db "Entered 32-bit protected mode", 13, 10, 0
-rmode_message: db "Back to real-mode again", 13, 10, 0
+isr_stub_message: db "INT ", 0
+rm_idt:
+    dw 0x03FF
+    dd 0
 
 gdt:
     dw gdt_entries.end - gdt_entries -1

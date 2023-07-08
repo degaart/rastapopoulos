@@ -1,6 +1,8 @@
 .PHONY: all clean run debug bochs disasm disasm1
 
-CFLAGS = -masm=intel -Os -std=gnu99 -ffreestanding -Werror -g -march=i386 -mpreferred-stack-boundary=2 
+CFLAGS = -masm=intel -Os -std=gnu99 -ffreestanding -Werror -g -march=i386 \
+		 -mpreferred-stack-boundary=2 -fno-delete-null-pointer-checks \
+		 -fno-finite-loops -fno-strict-aliasing
 LDFLAGS = -Tboot1.ld -nostdlib
 
 all: boot.img
@@ -20,8 +22,8 @@ clean:
 	rm -rf *.o *.S *.bin *.log *.img *.dSYM make_bootsect fatread crc32 t001 t002
 
 run: boot.img
-	#qemu-system-i386 -drive file=boot.img,if=floppy,format=raw -boot a -no-reboot -serial stdio -nographic
-	qemu-system-i386 -drive file=boot.img,if=floppy,format=raw -boot a -no-reboot -nographic
+	qemu-system-i386 -drive file=boot.img,if=floppy,format=raw -boot a -no-reboot -serial stdio
+	#qemu-system-i386 -drive file=boot.img,if=floppy,format=raw -boot a -no-reboot -nographic -d int
 
 debug: boot.img
 	# gdb commands
