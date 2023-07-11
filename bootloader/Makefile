@@ -1,68 +1,89 @@
-.PHONY: all clean run debug bochs disasm disasm1
+.PHONY: all clean run debug disasm
+.SUFFIXES:
 
-CFLAGS = -masm=intel -Os -std=gnu99 -ffreestanding -Werror -g -march=i386 \
-		 -mpreferred-stack-boundary=2 -fno-delete-null-pointer-checks \
-		 -fno-finite-loops -fno-strict-aliasing
-LDFLAGS = -Tboot1.ld -nostdlib
+include ../common/common.mk
 
-all: boot.img
+HOST_CC := cc
+ASFLAGS16 := -f bin
+CFLAGS := $(CFLAGS)
+LDFLAGS := $(LDFLAGS) -T boot1.ld
+HOST_CFLAGS := -g -fno-omit-frame-pointer -fsanitize=address
+HOST_LDFLAGS :=
 
-boot.img: boot0.bin boot1.bin make_bootsect ../obj/kernel.elf
+SRCS := \
+	boot1.c
+
+COMMON_SRCS := \
+	../common/crc32.c \
+	../common/serial.c \
+	../common/string.c \
+	../common/vga.c
+
+all: obj/boot.img
+
+obj:
+	mkdir -p obj obj/common
+
+obj/boot.img: obj/boot0.bin obj/boot1.bin obj/make_bootsect ../kernel/obj/kernel.elf
 	mformat -C -f 1440 -i $@
-	mcopy -i boot.img -Do boot0.bin boot1.bin ../obj/kernel.elf ::/
-	./make_bootsect boot0.bin boot.img
+	mcopy -i $@ -Do obj/boot0.bin obj/boot1.bin ../kernel/obj/kernel.elf ::/
+	./obj/make_bootsect obj/boot0.bin $@
 
-boot0.bin: boot0.asm
-	nasm -o $@ -f bin $<
+obj/boot0.bin: boot0.asm | obj
+	$(AS) -o $@ $(ASFLAGS16) $<
 
-make_bootsect: make_bootsect.c
-	cc -o $@ $<
+obj/make_bootsect: make_bootsect.c | obj
+	$(HOST_CC) -o $@ $(HOST_CFLAGS) $(HOST_LDFLAGS) $<
 
-clean:
-	rm -rf *.o *.S *.bin *.log *.img *.dSYM make_bootsect fatread crc32 t001 t002
-
-run: boot.img
-	qemu-system-i386 -drive file=boot.img,if=floppy,format=raw -boot a -no-reboot -serial stdio
-	#qemu-system-i386 -drive file=boot.img,if=floppy,format=raw -boot a -no-reboot -nographic -d int
-
-debug: boot.img
-	# gdb commands
-	# set architecture i8086
-	# target remote localhost:1234
-	# b *0x7C00
-	# tui layout asm
-	# tui layout split
-	qemu-system-i386 -drive file=boot.img,if=floppy,format=raw -boot a -s -S -nographic -no-reboot
-
-bochs: boot.img
-	bochs -f bochsrc -rc bochsinit
-
-fatread: fatread.c
-	cc -o $@ $< -g -fno-omit-frame-pointer -fsanitize=address
-
-disasm: boot0.bin
-	ndisasm -b16 -k 3,59 boot0.bin
+obj/fatread: fatread.c | obj
+	$(HOST_CC) -o $@ $(HOST_CFLAGS) $(HOST_LDFLAGS) $<
 
 # boot1.o must be the first dependency
-boot1.bin: boot1.o boot1.c.o
-	i686-elf-gcc -o $@ $(LDFLAGS) $^
+obj/boot1.bin: obj/boot1.o $(addprefix obj/,$(addsuffix .o,$(SRCS))) $(addprefix obj/common/,$(addsuffix .o,$(notdir $(COMMON_SRCS))))
+	$(CC) -o $@ $(LDFLAGS) $^
 
-boot1.o: boot1.asm
-	nasm -o $@ -f elf32 $<
+obj/boot1.o: boot1.asm | obj
+	$(AS) -o $@ $(ASFLAGS) $<
 
-boot1.c.o: boot1.c
-	i686-elf-gcc -c -S -o $@.S $(CFLAGS) $<
-	i686-elf-gcc -c -o $@ $(CFLAGS) $<
+obj/%.c.o: %.c | obj
+	$(CC) -c -S -o $@.S $(CFLAGS) $<
+	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d $<
 
-disasm1: boot1.c.o
-	i686-elf-objdump -Mi8086,intel -S $^
+obj/common/%.c.o: ../common/%.c | obj
+	$(CC) -c -S -o $@.S $(CFLAGS) $<
+	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d $<
 
-crc32: crc32.c
-	cc -o $@ $< -g
+obj/crc32: crc32.c | obj
+	$(HOST_CC) -o $@ $(HOST_CFLAGS) $(HOST_LDFLAGS) $<
 
-t001: t001.c
-	cc -o $@ $< -g -fno-omit-frame-pointer -fsanitize=address
+obj/t001: t001.c | obj
+	$(HOST_CC) -o $@ $(HOST_CFLAGS) $(HOST_LDFLAGS) $<
 
-t002: t002.c
-	cc -o $@ $< -g -fno-omit-frame-pointer -fsanitize=address
+obj/t002: t002.c | obj
+	$(HOST_CC) -o $@ $(HOST_CFLAGS) $(HOST_LDFLAGS) $<
+
+DEPFILES := $(addprefix obj/,$(notdir $(SRCS:%.c=%.c.d)))
+DEPFILES := $(DEPFILES) $(addprefix obj/common/,$(notdir $(COMMON_SRCS:%.c=%.c.d)))
+include $(wildcard $(DEPFILES))
+
+debug_make:
+	@echo $(DEPFILES)
+	@echo $(wildcard $(DEPFILES))
+	@echo $(addprefix obj/,$(addsuffix .o,$(SRCS))) $(addprefix obj/common/,$(addsuffix .o,$(notdir $(COMMON_SRCS))))
+
+clean:
+	rm -rf obj
+
+disasm: obj/boot0.bin
+	ndisasm -b16 -k 3,59 $<
+
+run: obj/boot.img
+	qemu-system-i386 -drive file=obj/boot.img,if=floppy,format=raw -boot a -no-reboot -serial stdio
+	#qemu-system-i386 -drive file=obj/boot.img,if=floppy,format=raw -boot a -no-reboot -nographic -d int
+
+debug: obj/boot.img
+	bochs -f bochsrc -rc bochsinit
+
+
+
 

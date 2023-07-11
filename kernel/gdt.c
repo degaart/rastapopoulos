@@ -40,6 +40,19 @@ static struct gdt_ptr   gdt_ptr;
 
 void gdt_flush(void* gdtr);
 
+static inline void and_eflags(uint32_t mask)
+{
+    asm volatile(
+            "pushf\n"
+            "pop %%eax\n"
+            "and %%eax, %0\n"
+            "push %%eax\n"
+            "popf\n"
+            : "=r"(mask)
+            :
+            : "eax", "memory");
+}
+
 static void set_descriptor(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t gran)
 {
     gdt_entries[num].base_low    = (base & 0xFFFF);

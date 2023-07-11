@@ -23,6 +23,7 @@ _start:
     ; cr0   PE enabled, PG disabled
     ; gdtr  undefined, so must set GDT
     ; idtr  undefined, so must set IDT
+    cli
     mov esp, stacktop
     push eax
     push ebx
