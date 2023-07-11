@@ -19,6 +19,7 @@ section .text
 ; and finally restores the stack frame.
 extern isr_handler
 isr_common_stub:
+    cli
     pusha                       ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
 
     xor     eax, eax

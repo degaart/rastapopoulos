@@ -1,32 +1,15 @@
-#include "elf.h"
-#include "multiboot.h"
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
+#include <debug.h>
+#include <elf.h>
+#include <multiboot.h>
+#include <serial.h>
+#include <string.h>
+#include <util.h>
+#include <vga.h>
+
 #include <stdarg.h>
-
-#define TRACE(...) trace(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__)
-#define DUMP(var) TRACE(#var ": %u", var)
-#define DUMPX(var) TRACE(#var ": 0x%X", var);
-#define PANIC(...) do { TRACE("*** PANIC ***"); TRACE(__VA_ARGS__); while(1); } while(0)
-#define ASSERT(cond) if(!(cond)) { PANIC("Assertion failed: " #cond); }
-
-#define COLOR_BLACK         0x00
-#define COLOR_BLUE          0x01
-#define COLOR_GREEN         0x02
-#define COLOR_CYAN          0x03
-#define COLOR_RED           0x04
-#define COLOR_MAGENTA       0x05
-#define COLOR_BROWN         0x06
-#define COLOR_LIGHTGRAY     0x07
-#define COLOR_DARKGRAY      0x08
-#define COLOR_LIGHBLUE      0x09
-#define COLOR_LIGHTGREEN    0x0A
-#define COLOR_LIGHCYAN      0x0B
-#define COLOR_LIGHRED       0x0C
-#define COLOR_LIGHTMAGENTA  0x0D
-#define COLOR_YELLOW        0x0E
-#define COLOR_WHITE         0x0F
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 struct rmode_regs {
     uint16_t ax;
@@ -63,10 +46,10 @@ struct bpb {
     char fstype[8];
 } __attribute__((packed));
 
-extern void __attribute__((stdcall)) writechar32(uint32_t, uint32_t);
 extern void __attribute__((stdcall)) int13(struct rmode_regs*);
 extern unsigned char __heap__;
 static unsigned char* _heap_start = &__heap__;
+extern uint32_t isr_stub_table[];
 
 #define SECTOR_CACHE_SIZE 8
 #define INVALID_LBA 0xFFFFFFFF
@@ -105,7 +88,7 @@ struct idt_entry {
     uint8_t type_attr;
     uint16_t offset_higherbits;
 } __attribute__((packed));
-static struct idt_entry idt_entries[18];
+static struct idt_entry idt_entries[33];
 
 struct idt_ptr {
     uint16_t limit;
@@ -113,165 +96,22 @@ struct idt_ptr {
 } __attribute__((packed));
 static struct idt_ptr idtr __attribute__((aligned(8)));
 
-static void trace(const char* file, int line, const char* fn, const char* fmt, ...);
-void isr0_stub(void);
-void isr1_stub(void);
-void isr2_stub(void);
-void isr3_stub(void);
-void isr4_stub(void);
-void isr5_stub(void);
-void isr6_stub(void);
-void isr7_stub(void);
-void isr8_stub(void);
-void isr9_stub(void);
-void isr10_stub(void);
-void isr11_stub(void);
-void isr12_stub(void);
-void isr13_stub(void);
-void isr14_stub(void);
-void isr15_stub(void);
-void isr16_stub(void);
-void isr17_stub(void);
-void isr18_stub(void);
-
-#define CRC32_INITIAL 0xFFFFFFFF
-
-/*
- * WARNING: The final crc value must be negated (1's complement)
- * i.e. final_crc = ~crc;
- */
-static uint32_t crc32(uint32_t state, const void* buffer, size_t size)
+static bool debug_write(char ch, void*)
 {
-    uint32_t r = state;
-    const unsigned char* data = buffer;
-    while(size--) {
-        r ^= *data++;
-
-        for(int i = 0; i < 8; i++) {
-            uint32_t t = ~((r&1) - 1);
-            r = (r>>1) ^ (0xEDB88320 & t);
-        }
-    }
-
-    return r;
+    serial_write_char(ch);
+    vga_write_char(ch, COLOR_LIGHTGRAY);
+    return true;
 }
 
-static size_t strlen(const char* s)
+void panic(const char* file, int line, const char* fn, const char* fmt, ...)
 {
-    size_t ret = 0;
-    while(*(s++))
-        ret++;
-    return ret;
-}
+    trace(file, line, fn, "*** BOOTLOADER PANIC ***");
 
-static void* memcpy(void* restrict dst, const void* restrict src, size_t len)
-{
-    unsigned char* d = dst;
-    const unsigned char* s = src;
-    while(len--) {
-        *d++ = *s++;
-    }
-    return dst;
-}
-
-static int memcmp(const void* ptr0, const void* ptr1, size_t len)
-{
-    const char* p0 = ptr0;
-    const char* p1 = ptr1;
-    while(len) {
-        if(*p0 != *p1) {
-            return *p0 - *p1;
-        }
-        p0++;
-        p1++;
-        len--;
-    }
-    return 0;
-}
-
-static void* memset(void* dst, int ch, size_t len)
-{
-    unsigned char* ptr = dst;
-    while(len--) {
-        *ptr++ = ch;
-    }
-    return dst;
-}
-
-static void itox(char* buffer, size_t size, unsigned value)
-{
-    if(!value) {
-        buffer[0] = '0';
-        buffer[1] = '\0';
-        return;
-    }
-
-    char tmp[12];
-    char* p = tmp;
-    while(value) {
-        int digit = value % 16;
-        *(p++) = digit + (digit < 10 ? '0' : 'A' - 10);
-        value /= 16;
-    }
-
-    for(--p; p>=tmp && size > 1; size--) {
-        *(buffer++) = *(p--);
-    }
-    *buffer = '\0';
-}
-
-static void itoa(char* buffer, size_t size, unsigned value)
-{
-    if(value == 0) {
-        buffer[0] = '0';
-        buffer[1] = '\0';
-        return;
-    }
-
-    char tmp[9];
-    char* p = tmp;
-    while(value) {
-        *(p++) = (value % 10) + '0';
-        value /= 10;
-    }
-
-    for(--p; p>=tmp && size > 1; size--) {
-        *(buffer++) = *(p--);
-    }
-
-    *buffer = '\0';
-}
-
-static void writestring32(const char* s)
-{
-    while(*s) {
-        writechar32(*s, COLOR_LIGHTGRAY);
-        s++;
-    }
-}
-
-static inline void outb(uint16_t port, uint8_t val)
-{
-    asm volatile(
-            "outb %1, %0"
-            :
-            : "a"(val), "Nd"(port)
-            : "memory");
-}
-
-#define PORT_COM1 0x3F8
-
-void serial_write_char(char ch)
-{
-    outb(PORT_COM1, ch);
-}
-
-void serial_write_string(const char* s)
-{
-    while(*s) {
-        serial_write_char(*s);
-        s++;
-    }
+    va_list args;
+    va_start(args, fmt);
+    formatv(debug_write, NULL, fmt, args);
+    va_end(args);
+    HALT();
 }
 
 void trace_init()
@@ -279,103 +119,20 @@ void trace_init()
     serial_write_char('\n');
 }
 
-static void trace(const char* file, int line, const char* fn, const char* fmt, ...)
+void trace(const char* file, int line, const char* fn, const char* fmt, ...)
 {
-    writechar32('[', COLOR_LIGHTGRAY);
-    serial_write_char('[');
-    writestring32(file);
-    serial_write_string(file);
-    writechar32(':', COLOR_LIGHTGRAY);
-    serial_write_char(':');
-
-    writestring32(fn);
-    serial_write_string(fn);
-    writechar32(':', COLOR_LIGHTGRAY);
-    serial_write_char(':');
-    
-    char line_buffer[16];
-    itoa(line_buffer, sizeof(line_buffer), line);
-    writestring32(line_buffer);
-    serial_write_string(line_buffer);
-    writestring32("] ");
-    serial_write_string("] ");
+    char buf[128];
+    snprintf(buf, sizeof(buf), "[%s:%s:%d] ", basename(file), fn, line);
+    serial_write_string(buf);
+    vga_write_string(buf, COLOR_LIGHTGRAY);
 
     va_list args;
     va_start(args, fmt);
-    while(*fmt) {
-        switch(*fmt) {
-            case '%':
-                switch(*(fmt+1)) {
-                    case 's':
-                    {
-                        const char* s = va_arg(args, const char*);
-                        writestring32(s);
-                        serial_write_string(s);
-                        fmt++;
-                        break;
-                    }
-                    case 'u':
-                    case 'd':
-                    {
-                        unsigned value = va_arg(args, unsigned);
-                        char buffer[16];
-                        itoa(buffer, sizeof(buffer), value);
-                        writestring32(buffer);
-                        serial_write_string(buffer);
-                        fmt++;
-                        break;
-                    }
-                    case 'x':
-                    case 'X':
-                    {
-                        unsigned value = va_arg(args, unsigned);
-                        char buffer[16];
-                        itox(buffer, sizeof(buffer), value);
-                        writestring32(buffer);
-                        serial_write_string(buffer);
-                        fmt++;
-                        break;
-                    }
-                    case 'p':
-                    case 'P':
-                    {
-                        unsigned value = va_arg(args, unsigned);
-                        char buffer[16];
-                        itox(buffer, sizeof(buffer), value);
-                        int pad = 8 - strlen(buffer);
-                        writestring32("0x");
-                        serial_write_string("0x");
-                        for(int i = 0; i < pad; i++) {
-                            writechar32('0', COLOR_LIGHTGRAY);
-                            serial_write_char('0');
-                        }
-                        writestring32(buffer);
-                        serial_write_string(buffer);
-                        fmt++;
-                        break;
-                    }
-                    case '%':
-                    {
-                        fmt++;
-                        writechar32('%', COLOR_LIGHTGRAY);
-                        serial_write_char('%');
-                        break;
-                    }
-                }
-                break;
-            case '\0':
-                break;
-            default:
-                writechar32(*fmt, COLOR_LIGHTGRAY);
-                serial_write_char(*fmt);
-                break;
-        }
-        fmt++;
-    }
-    writechar32('\r', COLOR_LIGHTGRAY);
-    serial_write_char('\r');
-    writechar32('\n', COLOR_LIGHTGRAY);
-    serial_write_char('\n');
+    formatv(debug_write, NULL, fmt, args);
+    va_end(args);
+
+    serial_write_string("\n");
+    vga_write_string("\n", COLOR_LIGHTGRAY);
 }
 
 static unsigned bios_read_sector(void* buffer, size_t len, unsigned drive,
@@ -573,45 +330,29 @@ void read_file(const struct bpb* bpb, const struct dir_entry* dirent,
     }
 }
 
-void start()
+static void setup_idt()
 {
-#define SETSTUB(idx, handler) \
-    do { \
-        idt_entries[idx].offset_lowerbits = ((uintptr_t)handler & 0xFFFF); \
-        idt_entries[idx].offset_higherbits = ((uintptr_t)handler >> 16) & 0xFFFF; \
-    } while(0)
-
+    TRACE("Setting up IDT");
     /* Setup an IDT for debug purposes */
     for(size_t i = 0; i < sizeof(idt_entries)/sizeof(idt_entries[0]); i++) {
-        //idt_entries[i].offset_lowerbits = ((uintptr_t)isr_stub32 & 0xFFFF);
-        //idt_entries[i].offset_higherbits = ((uintptr_t)isr_stub32 >> 16) & 0xFFFF;
+        idt_entries[i].offset_lowerbits = (isr_stub_table[i] & 0xFFFF); \
+        idt_entries[i].offset_higherbits = (isr_stub_table[i] >> 16) & 0xFFFF; \
         idt_entries[i].selector = 0x08; /* kernel code segment */
         idt_entries[i].zero = 0;
         idt_entries[i].type_attr = IDT_PRESENT|IDT_DPL0|IDT_INT_GATE_32;
     }
-    SETSTUB(0, isr0_stub);
-    SETSTUB(1, isr1_stub);
-    SETSTUB(2, isr2_stub);
-    SETSTUB(3, isr3_stub);
-    SETSTUB(4, isr4_stub);
-    SETSTUB(5, isr5_stub);
-    SETSTUB(6, isr6_stub);
-    SETSTUB(7, isr7_stub);
-    SETSTUB(8, isr8_stub);
-    SETSTUB(9, isr9_stub);
-    SETSTUB(10, isr10_stub);
-    SETSTUB(11, isr11_stub);
-    SETSTUB(12, isr12_stub);
-    SETSTUB(13, isr13_stub);
-    SETSTUB(14, isr14_stub);
-    SETSTUB(15, isr15_stub);
-    SETSTUB(16, isr16_stub);
-    SETSTUB(17, isr17_stub);
-    SETSTUB(18, isr18_stub);
-
     idtr.limit = sizeof(idt_entries) - 1;
     idtr.base = idt_entries;
     asm volatile("lidt %0" :: "m"(idtr));
+}
+
+void start()
+{
+    vga_init();
+    trace_init();
+    TRACE("BOOTLOADER STARTED");
+
+    setup_idt();
 
     /* Bios parameter block */
     const struct bpb* bpb = (const struct bpb*)0x7C00;
@@ -636,6 +377,7 @@ void start()
     ASSERT(buffer[2] == 0x90);
     ASSERT(buffer[510] == 0x55);
     ASSERT(buffer[511] == 0xAA);
+
 
     /*
      * Disk structure
@@ -665,7 +407,7 @@ void start()
         if(kernel_dir_entry.name[0])
             break;
     }
-    TRACE("Kernel image found at cluster 0x%X (%d bytes)", kernel_dir_entry.first_cluster, kernel_dir_entry.size);
+    TRACE("Kernel image found at cluster 0x%X (%d bytes)", kernel_dir_entry.first_cluster, kernel_dir_entry.size);        
 
     /*
      * Elf structure
@@ -729,12 +471,14 @@ void start()
     }
 
     /* Jump to kernel */
+    TRACE("Jumping to kernel at %p", elf_hdr.e_entry);
     asm volatile(
               "jmp %0"
             :
             : "r"(elf_hdr.e_entry), "a"(MULTIBOOT_BOOTLOADER_MAGIC)
             : "memory");
+
     TRACE("SYSTEM HALTED");
-    while(1);
+    HALT();
 }
 

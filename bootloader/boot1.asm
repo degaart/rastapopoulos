@@ -10,6 +10,7 @@ SEG_CODE32 equ 0x08
 SEG_DATA32 equ 0x10
 SEG_CODE16 equ 0x18
 SEG_DATA16 equ 0x20
+STACKTOP equ 0x7C00
 
 struc rmode_regs
     .ax:        resw 1
@@ -30,7 +31,7 @@ entry:
     mov  ds, ax
     mov  es, ax
     mov  ss, ax
-    mov  sp, 0x7C00
+    mov  esp, STACKTOP
     jmp  0x0:entry2
 
 entry2:
@@ -75,7 +76,7 @@ entry2:
     jmp  halt
 
 setup_gdt:
-    push gdt_message
+    push start_message
     call print
     lgdt [gdt]
     mov  eax, cr0
@@ -291,16 +292,7 @@ entry32:
     mov  fs, ax
     mov  gs, ax
     mov  ss, ax
-    mov  esp, 0x7C00
-
-    ; init text-mode cursor
-    call cursor_pos32
-    mov  [cursor_x], edx
-    mov  [cursor_y], eax
-
-    ; print a message
-    push pmode_message
-    call print32
+    mov  esp, STACKTOP
 
     ; call C entry point
     extern start
@@ -310,240 +302,6 @@ halt32:
     cli
     hlt
     jmp halt32
-
-; long long cursor_pos32()
-;   eax -> y
-;   edx -> x
-cursor_pos32:
-    mov  dx, 0x03D4
-    mov  al, 0x0F
-    out  dx, al
-    mov  dx, 0x03D5
-    in   al, dx
-    mov  cl, al                 ; cl -> x
-
-    mov  dx, 0x03D4
-    mov  al, 0x0E
-    out  dx, al
-    mov  dx, 0x03D5
-    in   al, dx
-    mov  ch, al                 ; ch -> y
-
-    xor  dx, dx
-    mov  ax, cx
-    mov  cx, VGA_WIDTH
-    div  cx                     ; ax: y, dx: x
-    and  eax, 0xFFFF
-    and  edx, 0xFFFF
-    ret
-
-; void set_cursor_pos32(unsigned x, unsigned y)
-set_cursor_pos32:
-    push ebp
-    mov  ebp, esp
-
-    ; uint16_t pos = y * VGA_WIDTH + x;
-    xor  dx, dx
-    mov  ax, [ebp + 12]
-    mov  cx, VGA_WIDTH
-    mul  cx
-    add  ax, [ebp + 8]
-    mov  cx, ax
-
-    ; outb(0x3D4, 0x0F);
-    mov  dx, 0x3D4
-    mov  al, 0x0F
-    out  dx, al
-
-    ; outb(0x3D5, (uint8_t) (pos & 0xFF));
-    mov  dx, 0x3D5
-    mov  ax, cx
-    and  ax, 0xFF
-    out  dx, al
-
-    ; outb(0x3D4, 0x0E);
-    mov  dx, 0x3D4
-    mov  al, 0x0E
-    out  dx, ax
-
-    ; outb(0x3D5, (uint8_t) ((pos >> 8) & 0xFF));
-    mov  dx, 0x3D5
-    mov  ax, cx
-    shr  ax, 8
-    out  dx, al
-
-    pop  ebp
-    ret  8
-
-; void putchar32(dword x, dword y, dword char, dword attr)
-;   write char at particular position, without updating cursor position
-putchar32:
-    push ebp
-    mov  ebp, esp
-
-    mov  edx, [ebp + 12]                ; y
-    shl  edx, 6
-    mov  eax, [ebp + 12]                ; y
-    shl  eax, 4
-    add  eax, edx
-    add  eax, [ebp + 8]                 ; x
-    shl  eax, 1
-    add  eax, VGA_BASE
-
-    mov  dl, [ebp + 16]                 ; char
-    mov  dh, [ebp + 20]                 ; attr
-
-    mov  [eax], dl
-    mov  [eax+1], dh
-
-    mov  esp, ebp
-    pop  ebp
-    ret 16
-
-; void writechar32(dword char, dword attr)
-;   write char at current cursor position, and advance cursor by 1 char
-;       ebp + 12    attr
-;       ebp + 8     char
-;       esp + 4     cursor_x
-;       esp + 8     cursor_y
-global writechar32
-writechar32:
-    push ebp
-    mov  ebp, esp
-
-    ; handle CR/LF
-    mov  al, [ebp + 8]
-    cmp  al, 13
-    je   .cr
-    cmp  al, 10
-    je   .lf
-
-    ; write char at that position
-    push dword [ebp + 12]               ; attr
-    push dword [ebp + 8]                ; char
-    push dword [cursor_y]               ; y
-    push dword [cursor_x]               ; x
-    call putchar32
-
-    ; advance cursor right
-    inc  dword [cursor_x]
-    cmp  dword [cursor_x], VGA_WIDTH
-    jb   .setpos
-
-    ; advance cursor next line
-    ; if(cursor_y < VGA_HEIGHT - 1)
-    ;   cursor_y++
-    ; else
-    ;   scroll32
-    mov  dword [cursor_x], 0
-    cmp  dword [cursor_y], VGA_HEIGHT - 1
-    jae  .scroll1
-
-    inc  dword [cursor_y]
-    jmp  .setpos
-
-    ; scroll
-.scroll1:
-    call scroll32
-    jmp  .setpos
-
-.cr:
-    ; move cursor to start of line
-    mov  dword [cursor_x], 0
-    jmp  .setpos
-
-.lf:
-    ; move cursor to next line
-    ; if(cursor_y < VGA_HEIGHT - 1)
-    ;   cursor_y++
-    ; else
-    ;   scroll32
-    cmp  dword [cursor_y], VGA_HEIGHT - 1
-    jae  .scroll2
-
-    inc  dword [cursor_y]
-    jmp  .setpos
-
-    ; scroll
-.scroll2:
-    call scroll32
-
-.setpos:
-    push dword [cursor_y]
-    push dword [cursor_x]
-    call set_cursor_pos32
-
-.return:
-    mov  esp, ebp
-    pop  ebp
-    ret 8
-
-; void print32(void* s)
-global print32
-print32:
-    push ebp
-    mov  ebp, esp
-    push esi
-
-    mov  esi, [ebp + 8]
-
-.next_char:
-    xor  eax, eax
-    mov  al, [esi]
-    test al, al
-    jz   .return
-
-    push dword 0x07
-    push eax
-    call writechar32
-
-    inc  esi
-    jmp  .next_char
-
-.return:
-    pop  esi
-    pop  ebp
-    ret 4
-
-; void memcpy32(dword dst, dword src, dword len)
-memcpy32:
-    push esi
-    push edi
-    mov  ecx, [esp + 20]
-    mov  esi, [esp + 16]
-    mov  edi, [esp + 12]
-    rep  movsb
-    pop  edi
-    pop  esi
-    ret 12
-
-; void delay32(dword amount)
-delay32:
-    mov  ecx, [esp + 4]
-    xor  al, al
-    mov  dx, 0x80
-.repeat:
-    out  dx, al
-    loop .repeat
-    ret  4
-
-; void scroll32()
-;   memcpy(VGA_BASE, VGA_BASE + (VGA_WIDTH * 2), VGA_WIDTH * VGA_HEIGHT * 2)
-scroll32:
-    mov  eax, VGA_WIDTH
-    mov  ecx, VGA_HEIGHT
-    mul  ecx
-    shl  eax, 1
-    push eax                    ; len
-    
-    mov  eax, VGA_WIDTH
-    shl  eax, 1
-    add  eax, VGA_BASE
-    push eax                    ; src
-
-    push dword VGA_BASE         ; dst
-    call memcpy32
-    ret
 
 ; void int13(struct regs* regs)
 ;   Deactivates protected mode then calls int13 with the specified parameters
@@ -560,8 +318,15 @@ int13:
     ret  4
 
 ; Interrupt handlers
-global isr0_stub
-isr0_stub:
+%assign isr_index 0
+%rep 33
+    isr_stub_ %+ isr_index:
+        mov  ebx, isr_index
+        jmp  isr_common_stub
+    %assign isr_index isr_index+1
+%endrep
+
+isr_common_stub:
     mov  edi, VGA_BASE
     mov  esi, isr_stub_message
 .loop:
@@ -573,344 +338,43 @@ isr0_stub:
     test al, al
     jnz  .loop
 
-    mov  [edi], byte '0'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
+    cmp  ebx, 10
+    jb   .onedigit
 
-global isr1_stub
-isr1_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
+    xor  edx, edx
+    mov  eax, ebx
+    mov  ecx, 10
+    div  ecx                ; eax: first digit, edx: second digit
+
+    add  al, '0'
     mov  [edi], al
     mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr2_stub
-isr2_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '2'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr3_stub
-isr3_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '3'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr4_stub
-isr4_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '4'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr5_stub
-isr5_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '5'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr6_stub
-isr6_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '6'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr7_stub
-isr7_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '7'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr8_stub
-isr8_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '8'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr9_stub
-isr9_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '9'
-    mov  [edi+1], byte 0x1F
-    jmp  halt32
-
-global isr10_stub
-isr10_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '0'
+    add  dl, '0'
+    mov  [edi+2], dl
     mov  [edi+3], byte 0x1F
     jmp  halt32
 
-global isr11_stub
-isr11_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
+.onedigit:
+    add  bl, '0'
+    mov  [edi], bl
     mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '1'
-    mov  [edi+3], byte 0x1F
-    jmp  halt32
-
-global isr12_stub
-isr12_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '2'
-    mov  [edi+3], byte 0x1F
-    jmp  halt32
-
-global isr13_stub
-isr13_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '3'
-    mov  [edi+3], byte 0x1F
-    jmp  halt32
-
-global isr14_stub
-isr14_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '4'
-    mov  [edi+3], byte 0x1F
-    jmp  halt32
-
-global isr15_stub
-isr15_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '5'
-    mov  [edi+3], byte 0x1F
-    jmp  halt32
-
-global isr16_stub
-isr16_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '6'
-    mov  [edi+3], byte 0x1F
-    jmp  halt32
-
-global isr17_stub
-isr17_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '7'
-    mov  [edi+3], byte 0x1F
-    jmp  halt32
-
-global isr18_stub
-isr18_stub:
-    mov  edi, VGA_BASE
-    mov  esi, isr_stub_message
-.loop:
-    mov  al, [esi]
-    mov  [edi], al
-    mov  [edi+1], byte 0x1F
-    add  edi, 2
-    inc  esi
-    test al, al
-    jnz  .loop
-
-    mov  [edi], byte '1'
-    mov  [edi+1], byte 0x1F
-    mov  [edi+2], byte '8'
-    mov  [edi+3], byte 0x1F
     jmp  halt32
 
 section .rodata
-cursor_x: dd 0
-cursor_y: dd 0
-gdt_message: db "Creating initial GDT", 13, 10, 0
+start_message: db "RastapopoulOS 2nd stage bootloader", 13, 10, 0
 a20_error_message: db "Failed to enable A20 line", 13, 10
-pmode_message: db "Entered 32-bit protected mode", 13, 10, 0
-isr_stub_message: db "INT ", 0
+isr_stub_message: db "UNHANDLED INTERRUPT ", 0
 rm_idt:
     dw 0x03FF
     dd 0
+
+global isr_stub_table
+isr_stub_table:
+    %assign isr_index 0
+    %rep 33
+        dd isr_stub_ %+ isr_index
+        %assign isr_index isr_index+1
+    %endrep
 
 gdt:
     dw gdt_entries.end - gdt_entries -1
