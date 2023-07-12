@@ -11,6 +11,7 @@ SEG_DATA32 equ 0x10
 SEG_CODE16 equ 0x18
 SEG_DATA16 equ 0x20
 STACKTOP equ 0x7C00
+HEAP_START equ 0x500
 
 struc rmode_regs
     .ax:        resw 1
@@ -24,6 +25,13 @@ struc rmode_regs
     .flags:     resw 1
 endstruc
 
+struc memmap
+    .base:      resq 1
+    .length:    resq 1
+    .type:      resd 1
+    .attr:      resd 1
+endstruc
+
 entry:
     cli
     cld
@@ -35,6 +43,149 @@ entry:
     jmp  0x0:entry2
 
 entry2:
+    mov  ax, VGA_BASE / 16
+    mov  fs, ax
+
+%macro DEBUG 1
+    mov  [fs:0], byte %1
+    mov  [fs:1], byte 0x1F
+%endmacro
+    ; detect memory using int 0x15, eax=0xE820
+    ; this call returns invalid values for Packard Bell PB520R (Pentium)
+    xor  ebx, ebx
+get_memmap_E820:
+    mov  eax, 0xE820
+    mov  edi, [heap_start]
+    mov  [edi+memmap.attr], dword 1
+    mov  ecx, memmap_size
+    add  [heap_start], dword memmap_size
+    mov  edx, 'PAMS'
+    clc
+    int  0x15
+    cli                                 ; this is needed or it hangs
+    jc   .done
+    DEBUG '0'
+
+    cmp  eax, 'PAMS'
+    jne  get_memmap_E801
+    cmp  ebx, 0
+    je   .done
+    jmp  get_memmap_E820
+
+.done:
+    DEBUG '1'
+    cmp  edi, HEAP_START            ; did we really get memmap?
+    je   get_memmap_E801
+
+    mov  [edi+memmap.base], dword 0
+    mov  [edi+memmap.base+4], dword 0
+    mov  [edi+memmap.length], dword 0
+    mov  [edi+memmap.length+4], dword 0
+    jmp  enable_a20
+
+; get memmap using int 0X15, eax = 0xE801
+; works on pentiums, but they all support get_memmap_E801 so this is unused
+get_memmap_E801:
+    DEBUG '2'
+    
+    mov  [heap_start], dword HEAP_START       ; reset heap
+    mov  eax, 0xE801
+    clc
+    int  0x15
+    cli
+    jc   get_memmap_88
+    DEBUG '3'
+
+    ; first region: 0 - 0x9FC00 (640kb)
+    mov  edi, [heap_start]
+    mov  [edi+memmap.base], dword 0
+    mov  [edi+memmap.base+4], dword 0
+    mov  [edi+memmap.length], dword 0x9FC00
+    mov  [edi+memmap.length+4], dword 0
+    mov  [edi+memmap.type], dword 1
+    mov  [edi+memmap.attr], dword 1
+    add  edi, memmap_size
+
+    ; second region: 1MB - AX * 1KB
+    mov  [edi+memmap.base], dword 0x100000
+    mov  [edi+memmap.base+4], dword 0
+    and  eax, 0xFFFF
+    shl  eax, 10                        ; eax *= 1024
+    mov  [edi+memmap.length], eax
+    mov  [edi+memmap.length+4], dword 0
+    mov  [edi+memmap.type], dword 1
+    mov  [edi+memmap.attr], dword 1
+    add  edi, memmap_size
+
+    ; third region: 16MB - BX * 64KB
+    mov  [edi+memmap.base], dword 0x1000000
+    mov  [edi+memmap.base+4], dword 0
+    and  ebx, 0xFFFF
+    shl  ebx, 16                        ; ebx *= 65536
+    mov  [edi+memmap.length], ebx
+    mov  [edi+memmap.length+4], dword 0
+    mov  [edi+memmap.type], dword 1
+    mov  [edi+memmap.attr], dword 1
+    add  edi, memmap_size
+
+    ; terminating block
+    mov  [edi+memmap.base], dword 0
+    mov  [edi+memmap.base], dword 0
+    mov  [edi+memmap.length], dword 0
+    mov  [edi+memmap.length+4], dword 0
+    mov  [edi+memmap.type], dword 0
+    mov  [edi+memmap.attr], dword 0
+    add  edi, memmap_size
+    jmp  enable_a20
+
+; get memmap using int 0x15, ah=0x88
+; this does not work after calling the other options :(
+get_memmap_88:
+    DEBUG '4'
+    mov  [heap_start], dword HEAP_START
+    mov  ah, 0x88
+    clc                     ; some BIOS are really stupid and don't update
+    int  0x15               ; carry flag... However, this call should never
+    cli                     ; fail on 386+ machines
+    jc   .error
+    DEBUG '5'
+
+    ; first region: 0 - 0x9FC00 (640kb)
+    mov  edi, [heap_start]
+    mov  [edi+memmap.base], dword 0
+    mov  [edi+memmap.base+4], dword 0
+    mov  [edi+memmap.length], dword 0x9FC00
+    mov  [edi+memmap.length+4], dword 0
+    mov  [edi+memmap.type], dword 1
+    mov  [edi+memmap.attr], dword 1
+    add  edi, memmap_size
+
+    ; second region: 1MB - AX * 1KB
+    mov  [edi+memmap.base], dword 0x100000
+    mov  [edi+memmap.base+4], dword 0
+    and  eax, 0xFFFF
+    shl  eax, 10                        ; eax *= 1024
+    mov  [edi+memmap.length], eax
+    mov  [edi+memmap.length+4], dword 0
+    mov  [edi+memmap.type], dword 1
+    mov  [edi+memmap.attr], dword 1
+    add  edi, memmap_size
+
+    ; terminating block
+    mov  [edi+memmap.base], dword 0
+    mov  [edi+memmap.base], dword 0
+    mov  [edi+memmap.length], dword 0
+    mov  [edi+memmap.length+4], dword 0
+    mov  [edi+memmap.type], dword 0
+    mov  [edi+memmap.attr], dword 0
+    add  edi, memmap_size
+    jmp  enable_a20
+
+.error:
+    DEBUG '6'
+    jmp  halt
+
+enable_a20:
     ; Check A20 enabled
     call a20_enabled
     test ax, ax
@@ -76,6 +227,7 @@ entry2:
     jmp  halt
 
 setup_gdt:
+    cli             ; some bios calls we did re-enabled interrupts
     push start_message
     call print
     lgdt [gdt]
@@ -286,7 +438,7 @@ section .text
 bits 32
 entry32:
     ; setup segment registers and stack
-    mov  ax, SEG_DATA32   ; data segment
+    mov  ax, SEG_DATA32     ; data segment
     mov  ds, ax
     mov  es, ax
     mov  fs, ax
@@ -295,8 +447,10 @@ entry32:
     mov  esp, STACKTOP
 
     ; call C entry point
+    push dword HEAP_START
     extern start
     call start
+    add  esp, 4
 
 halt32:
     cli
@@ -367,6 +521,13 @@ isr_stub_message: db "UNHANDLED INTERRUPT ", 0
 rm_idt:
     dw 0x03FF
     dd 0
+memmap_head: dd 0
+memmap_err_message1: db "Memory detection failed (CF set)", 13, 10, 0
+memmap_err_message2: db "Memory detection failed (EAX != 'SMAP')", 13, 10, 0
+memmap_err_message3: db "Memory detection 0xE801 failed", 13, 10, 0
+memmap_err_message4: db "Memory detection 0x88 failed", 13, 10, 0
+memmap_ok_message1: db "Memory detection OK", 13, 10, 0
+heap_start: dd HEAP_START
 
 global isr_stub_table
 isr_stub_table:

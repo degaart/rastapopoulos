@@ -46,12 +46,10 @@ obj/boot1.o: boot1.asm | obj
 	$(AS) -o $@ $(ASFLAGS) $<
 
 obj/%.c.o: %.c | obj
-	$(CC) -c -S -o $@.S $(CFLAGS) $<
-	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d $<
+	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
 
 obj/common/%.c.o: ../common/%.c | obj
-	$(CC) -c -S -o $@.S $(CFLAGS) $<
-	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d $<
+	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
 
 obj/crc32: crc32.c | obj
 	$(HOST_CC) -o $@ $(HOST_CFLAGS) $(HOST_LDFLAGS) $<
@@ -79,7 +77,7 @@ disasm: obj/boot0.bin
 
 run: obj/boot.img
 	qemu-system-i386 -drive file=obj/boot.img,if=floppy,format=raw -boot a -no-reboot -serial stdio
-	#qemu-system-i386 -drive file=obj/boot.img,if=floppy,format=raw -boot a -no-reboot -nographic -d int
+	#qemu-system-i386 -drive file=obj/boot.img,if=floppy,format=raw -boot a -no-reboot -nographic
 
 debug: obj/boot.img
 	bochs -f bochsrc -rc bochsinit

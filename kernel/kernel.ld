@@ -24,6 +24,8 @@ SECTIONS
     {
         *(.bss)
     }
+
+    _heap_start = ALIGN(4096);
 }
 
 

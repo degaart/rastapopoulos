@@ -1,6 +1,7 @@
 #include "gdt.h"
 #include "idt.h"
 #include <debug.h>
+#include <multiboot.h>
 #include <serial.h>
 #include <string.h>
 #include <util.h>
@@ -9,6 +10,17 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdarg.h>
+
+extern unsigned char _heap_start;
+static unsigned char* _heap = &_heap_start;
+static struct multiboot_info multiboot_info;
+
+static void* early_kmalloc(size_t size)
+{
+    unsigned char* result = (unsigned char*)ALIGN((uintptr_t)_heap, 16);
+    _heap += size;
+    return result;
+}
 
 static void handle_int80(struct isr_regs* regs)
 {
@@ -52,18 +64,41 @@ void panic(const char* file, int line, const char* fn, const char* fmt, ...)
     HALT();
 }
 
-void kmain(const void* multiboot_info, uint32_t multiboot_magic)
+void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 {
     vga_init();
     trace_init();
+    gdt_init();
 
-    if(multiboot_magic != 0x2BADB002) {
+    /* Save multiboot information elsewhere before we manage to overwrite it */
+    if(multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         TRACE("PANIC: Bad multiboot magic");
     }
+    memcpy(&multiboot_info, multiboot, sizeof(multiboot_info));
+    if(multiboot_info.flags & MULTIBOOT_INFO_MEM_MAP) {
+        struct multiboot_mmap_entry* mmap_entries = early_kmalloc(multiboot_info.mmap_length);
+        memcpy(mmap_entries,
+               multiboot_info.mmap_addr,
+               multiboot_info.mmap_length);
+        multiboot_info.mmap_addr = mmap_entries;
+    }
 
-    /* setup GDT */
-    TRACE("Setting up GDT");
-    gdt_init();
+    /*
+     * Display memory map
+     * multiboot_mmap_entry->size does not include the `size` member,
+     * so we must add the size of an uint32_t while skipping to the next
+     * entry
+     */
+    TRACE("Memory map:");
+    TRACE("     ADDR       LEN        TYPE");
+    for(const struct multiboot_mmap_entry* e = multiboot_info.mmap_addr;
+        (uintptr_t)e < (uintptr_t)multiboot_info.mmap_addr + multiboot_info.mmap_length;
+        e = (const struct multiboot_mmap_entry*)((uintptr_t)e + e->size + sizeof(uint32_t)))
+    {
+        uint32_t addr = e->addr & 0xFFFFFFFF;
+        uint32_t len = e->len & 0xFFFFFFFF;
+        TRACE("    %p %p %p", addr, len, e->type);
+    }
 
     /* setup IDT */
     idt_init();

@@ -48,7 +48,7 @@ struct bpb {
 
 extern void __attribute__((stdcall)) int13(struct rmode_regs*);
 extern unsigned char __heap__;
-static unsigned char* _heap_start = &__heap__;
+unsigned char* _heap_start = &__heap__;
 extern uint32_t isr_stub_table[];
 
 #define SECTOR_CACHE_SIZE 8
@@ -346,13 +346,30 @@ static void setup_idt()
     asm volatile("lidt %0" :: "m"(idtr));
 }
 
-void start()
+struct memmap {
+    uint64_t base;
+    uint64_t len;
+    uint32_t type;
+    uint32_t attrs;
+};
+
+void start(const struct memmap* memmap)
 {
     vga_init();
     trace_init();
-    TRACE("BOOTLOADER STARTED");
-
     setup_idt();
+
+    TRACE("BOOTLOADER STARTED");
+    unsigned mmap_count = 0;
+    for(size_t i = 0; memmap[i].len && memmap[i].type; i++) {
+        TRACE("memmap[%d]: %p %p %p %p",
+              i,
+              (uint32_t)memmap[i].base,
+              (uint32_t)memmap[i].len,
+              memmap[i].type,
+              memmap[i].attrs);
+        mmap_count++;
+    }
 
     /* Bios parameter block */
     const struct bpb* bpb = (const struct bpb*)0x7C00;
@@ -377,7 +394,6 @@ void start()
     ASSERT(buffer[2] == 0x90);
     ASSERT(buffer[510] == 0x55);
     ASSERT(buffer[511] == 0xAA);
-
 
     /*
      * Disk structure
@@ -470,12 +486,32 @@ void start()
         }
     }
 
+    /* Construct multiboot info */
+    struct multiboot_info* multiboot_info = malloc(sizeof(struct multiboot_info));
+    memset(multiboot_info, 0, sizeof(struct multiboot_info));
+    multiboot_info->flags =
+        MULTIBOOT_INFO_BOOTDEV |
+        MULTIBOOT_INFO_MEM_MAP |
+        MULTIBOOT_INFO_BOOT_LOADER_NAME;
+    multiboot_info->boot_device = bpb->drive_num;
+    multiboot_info->boot_loader_name = 'R'|('A' << 8)|('S' << 16)|('T' << 24);
+    multiboot_info->mmap_length = sizeof(struct multiboot_mmap_entry) * mmap_count;
+    multiboot_info->mmap_addr = malloc(multiboot_info->mmap_length);
+    for(unsigned i = 0; i < mmap_count; i++) {
+        multiboot_info->mmap_addr[i].size = sizeof(struct multiboot_mmap_entry) - sizeof(uint32_t);
+        multiboot_info->mmap_addr[i].addr = memmap[i].base;
+        multiboot_info->mmap_addr[i].len = memmap[i].len;
+        multiboot_info->mmap_addr[i].type = memmap[i].type;
+    }
+
     /* Jump to kernel */
     TRACE("Jumping to kernel at %p", elf_hdr.e_entry);
     asm volatile(
               "jmp %0"
             :
-            : "r"(elf_hdr.e_entry), "a"(MULTIBOOT_BOOTLOADER_MAGIC)
+            : "r"(elf_hdr.e_entry),
+              "a"(MULTIBOOT_BOOTLOADER_MAGIC),
+              "b"(multiboot_info)
             : "memory");
 
     TRACE("SYSTEM HALTED");
