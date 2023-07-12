@@ -51,12 +51,10 @@ obj/%.asm.o: %.asm Makefile | obj
 	$(AS) -o $@ $(ASFLAGS) $<
 
 obj/%.c.o: %.c Makefile | obj
-	$(CC) -c -S -o $@.S $(CFLAGS) $<
-	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d $<
+	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
 
 obj/common/%.c.o: ../common/%.c Makefile | obj
-	$(CC) -c -S -o $@.S $(CFLAGS) $<
-	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d $<	
+	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
 
 run: obj/kernel.elf
 	# C-a x to exit qemu

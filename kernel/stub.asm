@@ -28,16 +28,16 @@ _start:
     push eax
     push ebx
     call kmain
+    add  esp, 8
 
-    mov dx, 0x3F8
-    mov esi, message
-show_message:
-    mov al, [esi]
-    test al, al
-    jz loop
-    out dx, al
-    inc esi
-    jmp show_message
+    ; void trace(const char* file, int line, const char* fn, const char* fmt, ...)
+    push halted_message
+    push start_fn
+    push dword __LINE__
+    push current_file
+    extern trace
+    call trace
+    add  esp, 16
 loop:
     cli
     hlt
@@ -60,7 +60,9 @@ gdt_flush:
     ret
 
 section .rodata
-    message: db "Kernel terminated", 10, 0
+    halted_message: db "SYSTEM HALTED", 10, 0
+    start_fn: db "_start", 0
+    current_file: db "stub.asm", 0
 
 section .bss
     resb 4096
