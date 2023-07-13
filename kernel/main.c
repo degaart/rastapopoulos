@@ -1,5 +1,6 @@
 #include "gdt.h"
 #include "idt.h"
+#include "pic.h"
 #include <debug.h>
 #include <multiboot.h>
 #include <serial.h>
@@ -14,6 +15,7 @@
 extern unsigned char _heap_start;
 static unsigned char* _heap = &_heap_start;
 static struct multiboot_info multiboot_info;
+static uint64_t timer_ticks;
 
 static void* early_kmalloc(size_t size)
 {
@@ -25,6 +27,15 @@ static void* early_kmalloc(size_t size)
 static void handle_int80(struct isr_regs* regs)
 {
     TRACE("int 0x80 called");
+}
+
+static void timer_handler()
+{
+    timer_ticks++;
+    uint32_t truncated = timer_ticks & 0xFFFFFFFF;
+    if((truncated % 10) == 0) {
+        TRACE("timer_ticks: %u", truncated);
+    }
 }
 
 void trace_init()
@@ -61,6 +72,7 @@ void panic(const char* file, int line, const char* fn, const char* fmt, ...)
     va_start(args, fmt);
     formatv(debug_write, NULL, fmt, args);
     va_end(args);
+    debug_write('\n', NULL);
     HALT();
 }
 
@@ -102,9 +114,19 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
     /* setup IDT */
     idt_init();
-    idt_add_handler(0x80, handle_int80, IDT_DPL0);
+    idt_add_handler(0x80, handle_int80, 3);
     TRACE("After setting up IDT");
     asm volatile("int 0x80\n":::"memory");
     TRACE("After calling int 80");
+
+    /* Setup PIC */
+    pic_init();
+    pic_set_irq_handler(0, timer_handler); 
+
+    /* Enable interrupts and wait for one */
+    asm volatile("sti":::"memory");
+    while(1) {
+        asm volatile("hlt":::"memory");
+    }
 }
 
