@@ -21,3 +21,9 @@ static inline uint8_t inb(uint16_t port)
             : "memory");
     return result;
 }
+
+static inline void io_wait()
+{
+    outb(0x80, 0);
+}
+

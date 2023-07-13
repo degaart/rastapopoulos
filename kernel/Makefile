@@ -10,6 +10,7 @@ LDFLAGS := $(LDFLAGS) -g -T kernel.ld
 SRCS := \
 	gdt.c \
 	idt.c \
+	pic.c \
 	main.c
 
 COMMON_SRCS := \
