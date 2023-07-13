@@ -11,6 +11,7 @@ SRCS := \
 	gdt.c \
 	idt.c \
 	pic.c \
+	pit.c \
 	main.c
 
 COMMON_SRCS := \

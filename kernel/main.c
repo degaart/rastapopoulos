@@ -1,6 +1,7 @@
 #include "gdt.h"
 #include "idt.h"
 #include "pic.h"
+#include "pit.h"
 #include <debug.h>
 #include <multiboot.h>
 #include <serial.h>
@@ -121,7 +122,10 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
     /* Setup PIC */
     pic_init();
-    pic_set_irq_handler(0, timer_handler); 
+    //pic_set_irq_handler(0, timer_handler); 
+
+    /* Setup PIT */
+    pit_init();
 
     /* Enable interrupts and wait for one */
     asm volatile("sti":::"memory");
