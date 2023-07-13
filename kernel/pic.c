@@ -156,8 +156,23 @@ static void isr_handler(struct isr_regs* regs)
     assert(regs->int_no >= 0x20);
     assert(regs->int_no - 0x20 < sizeof(irq_handlers)/sizeof(irq_handlers[0]));
     unsigned irq = regs->int_no - 0x20;
+
+    /* handle spurious IRQs */
+    if(irq == 7) {
+        if(!(pic_isr() & (1 << irq))) {
+            TRACE("Spurious IRQ7 detected");
+        }
+    } else if(irq == 15) {
+        if(!(pic_isr() & (1 << irq))) {
+            TRACE("Spurious IRQ15 detected");
+            outb(PIC1_COMMAND, PIC_EOI);
+        }
+    }
+
     if(irq_handlers[irq]) {
         irq_handlers[irq]();
+    } else {
+        TRACE("Unhandled IRQ%d", irq);
     }
     pic_eoi(irq);
 }
