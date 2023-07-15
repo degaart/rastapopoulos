@@ -1,7 +1,9 @@
 #include "gdt.h"
 #include "idt.h"
+#include "kbd.h"
 #include "pic.h"
 #include "pit.h"
+#include "pmm.h"
 #include <debug.h>
 #include <multiboot.h>
 #include <serial.h>
@@ -16,27 +18,17 @@
 extern unsigned char _heap_start;
 static unsigned char* _heap = &_heap_start;
 static struct multiboot_info multiboot_info;
-static uint64_t timer_ticks;
 
-static void* early_kmalloc(size_t size)
+void* early_kmalloc(size_t size)
 {
     unsigned char* result = (unsigned char*)ALIGN((uintptr_t)_heap, 16);
-    _heap += size;
+    _heap = result + size;
     return result;
 }
 
 static void handle_int80(struct isr_regs* regs)
 {
     TRACE("int 0x80 called");
-}
-
-static void timer_handler()
-{
-    timer_ticks++;
-    uint32_t truncated = timer_ticks & 0xFFFFFFFF;
-    if((truncated % 10) == 0) {
-        TRACE("timer_ticks: %u", truncated);
-    }
 }
 
 void trace_init()
@@ -104,12 +96,14 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
      */
     TRACE("Memory map:");
     TRACE("     ADDR       LEN        TYPE");
+    size_t mmap_count = 0;
     for(const struct multiboot_mmap_entry* e = multiboot_info.mmap_addr;
         (uintptr_t)e < (uintptr_t)multiboot_info.mmap_addr + multiboot_info.mmap_length;
         e = (const struct multiboot_mmap_entry*)((uintptr_t)e + e->size + sizeof(uint32_t)))
     {
         uint32_t addr = e->addr & 0xFFFFFFFF;
         uint32_t len = e->len & 0xFFFFFFFF;
+        mmap_count++;
         TRACE("    %p %p %p", addr, len, e->type);
     }
 
@@ -120,15 +114,30 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     asm volatile("int 0x80\n":::"memory");
     TRACE("After calling int 80");
 
+    /* Init PMM */
+    pmm_init(multiboot_info.mmap_addr, mmap_count);
+
     /* Setup PIC */
     pic_init();
-    //pic_set_irq_handler(0, timer_handler); 
 
     /* Setup PIT */
     pit_init();
 
-    /* Enable interrupts and wait for one */
+    /* Add keyboard handler */
+    kbd_init();
+
+#ifdef UNIT_TESTS
+    /* Run unit tests */
+    void bitset_run_tests();
+    add_test("bitset", bitset_run_tests);
+    run_tests();
+#endif
+
+    /* Enable interrupts */
+    TRACE("Waiting for an interrupt");
     asm volatile("sti":::"memory");
+
+    /* Wait for an interrupt */
     while(1) {
         asm volatile("hlt":::"memory");
     }

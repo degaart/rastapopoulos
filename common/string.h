@@ -5,6 +5,8 @@
 #include <stddef.h>
 
 size_t strlen(const char* s);
+size_t strlcpy(char* restrict dst, const char* restrict src, size_t dstsize);
+size_t strlcat(char* restrict dst, const char* restrict src, size_t dstsize);
 void* memcpy(void* restrict dst, const void* restrict src, size_t len);
 int memcmp(const void* ptr0, const void* ptr1, size_t len);
 void* memset(void* dst, int ch, size_t len);

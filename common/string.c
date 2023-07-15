@@ -8,6 +8,54 @@ size_t strlen(const char* s)
     return ret;
 }
 
+size_t strlcpy(char* restrict dst, const char* restrict src, size_t dstsize)
+{
+    char *d = dst;
+    const char *s = src;
+    size_t n = dstsize;
+
+    if(n) {
+        while(--n != 0) {
+            if((*d++ = *s++) == '\0')
+                break;
+        }
+    }
+
+    if(!n) {
+        if(dstsize)
+            *d = '\0';
+        while(*s++);
+    }
+
+    return s - src - 1;
+}
+
+size_t strlcat(char* restrict dst, const char* restrict src, size_t dstsize)
+{
+    char *d = dst;
+    const char *s = src;
+    size_t n = dstsize;
+    size_t dlen;
+
+    while(n-- && *d)
+        d++;
+    dlen = d - dst;
+    n = dstsize - dlen;
+
+    if(!n)
+        return dlen + strlen(s);
+    while(*s) {
+        if(n != 1) {
+            *d++ = *s;
+            n--;
+        }
+        s++;
+    }
+    *d = '\0';
+
+    return dlen + (s - src);
+}
+
 void* memcpy(void* restrict dst, const void* restrict src, size_t len)
 {
     unsigned char* d = dst;
@@ -72,7 +120,7 @@ void itoa(char* buffer, size_t size, unsigned value)
         return;
     }
 
-    char tmp[9];
+    char tmp[16];
     char* p = tmp;
     while(value) {
         *(p++) = (value % 10) + '0';

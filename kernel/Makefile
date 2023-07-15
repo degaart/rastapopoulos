@@ -3,8 +3,9 @@
 
 include ../common/common.mk
 
+UNIT_TEST_FLAGS := -DUNIT_TESTS
 ASFLAGS := $(ASFLAGS) -g
-CFLAGS := $(CFLAGS) -g
+CFLAGS := $(CFLAGS) $(UNIT_TEST_FLAGS) -g
 LDFLAGS := $(LDFLAGS) -g -T kernel.ld
 
 SRCS := \
@@ -12,13 +13,17 @@ SRCS := \
 	idt.c \
 	pic.c \
 	pit.c \
+	kbd.c \
+	pmm.c \
+	debug.c \
 	main.c
 
 COMMON_SRCS := \
 	../common/crc32.c \
 	../common/serial.c \
 	../common/string.c \
-	../common/vga.c
+	../common/vga.c \
+	../common/bitset.c
 
 ASM_SRCS := \
 	stub.asm \

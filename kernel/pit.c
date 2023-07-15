@@ -15,10 +15,6 @@ static uint64_t ticks = 0;
 static void irq_handler()
 {
     ticks++;
-    uint32_t truncated = ticks & 0xFFFFFFFF;
-    if((truncated % 100) == 0) {
-        TRACE("ticks: %u", truncated);
-    }
 }
 
 void pit_init()

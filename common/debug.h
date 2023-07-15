@@ -12,3 +12,7 @@ void trace_init();
 void trace(const char* file, int line, const char* fn, const char* fmt, ...) __attribute__((format(printf, 4, 5)));
 void panic(const char* file, int line, const char* fn, const char* fmt, ...) __attribute__((format(printf, 4, 5)));
 
+typedef void (*testfn_t)();
+void add_test(const char* name, testfn_t testfn);
+void run_tests();
+
