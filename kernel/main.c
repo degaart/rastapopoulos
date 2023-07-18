@@ -131,6 +131,15 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     trace_init();
     gdt_init();
 
+    /* Processor detection */
+    if(is_386()) {
+        TRACE("CPU: 80386");
+    } else if(is_486()) {
+        TRACE("CPU: 80486");
+    } else {
+        TRACE("CPU: Pentium+");
+    }
+
     /* Save multiboot information elsewhere before we manage to overwrite it */
     if(multiboot_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         TRACE("PANIC: Bad multiboot magic");
