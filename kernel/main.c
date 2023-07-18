@@ -41,11 +41,6 @@ void* early_kmalloc(size_t size)
     return early_kmalloc_aligned(size, 16);
 }
 
-static void handle_int80(struct isr_regs* regs)
-{
-    TRACE("int 0x80 called");
-}
-
 static void handle_page_fault(struct isr_regs* regs)
 {
     uint32_t cr2 = read_cr2();
@@ -167,10 +162,6 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     idt_init();
     idt_add_handler(0x0C, handle_gpf, 3);
     idt_add_handler(0x0E, handle_page_fault, 3);
-    idt_add_handler(0x80, handle_int80, 3);
-    TRACE("After setting up IDT");
-    asm volatile("int 0x80\n":::"memory");
-    TRACE("After calling int 80");
 
     /* Init PMM */
     pmm_init(multiboot_info.mmap_addr, multiboot_info.mmap_length);
@@ -217,8 +208,8 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
      * Most notably, writing beyond ALIGN(_heap, VMM_PAGESIZE) will corrupt
      * pagetables and lead to strange bugs
      */
-#define CURRENT_TEST 5
-#if CURRENT_TEST == 0
+#define CURRENT_TEST 0
+#if CURRENT_TEST == 1
     // Write into read-only page
     TRACE("Testing write into read-only page at 0x00103D00");
     uint32_t* ptr = (uint32_t*)0x00103D00;
@@ -269,6 +260,8 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     void bitset_run_tests();
     add_test("bitset", bitset_run_tests);
     run_tests();
+    TRACE("All tests done. Kernel Halted.");
+    HALT();
 #endif
 
     /* Enable interrupts */
