@@ -28,11 +28,17 @@ void vmm_flush()
     write_cr3(read_cr3());
 }
 
-void vmm_vaddrinfo(const void* vaddr, size_t* pde_index, size_t* pte_index)
+void vmm_vaddrinfo(struct vaddrinfo* info, const void* vaddr)
 {
     uintptr_t aligned_vaddr = (uintptr_t)vaddr & ~(VMM_PAGESIZE - 1);
-    *pde_index = aligned_vaddr / (VMM_PAGESIZE * VMM_ENTRY_COUNT);
-    *pte_index = (aligned_vaddr % (VMM_PAGESIZE * VMM_ENTRY_COUNT)) / VMM_PAGESIZE;
+    info->pde_index = aligned_vaddr / (VMM_PAGESIZE * VMM_ENTRY_COUNT);
+    info->pte_index = (aligned_vaddr % (VMM_PAGESIZE * VMM_ENTRY_COUNT)) / VMM_PAGESIZE;
+    info->pde = &pagedirs->entries[info->pde_index];
+    if(*info->pde & VMM_PRESENT) {
+        info->pte = &pagetables[info->pde_index].entries[info->pte_index];
+    } else {
+        info->pte = NULL;
+    }
 }
 
 bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
@@ -45,26 +51,21 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
         return false;
     }
 
-    size_t pde_index, pte_index;
-    vmm_vaddrinfo(vaddr, &pde_index, &pte_index);
-    if(pagedirs->entries[pde_index] & VMM_PRESENT) {
-        if(pagetables[pde_index].entries[pte_index] & VMM_PRESENT) {
+    struct vaddrinfo vi;
+    vmm_vaddrinfo(&vi, vaddr);
+    if(*vi.pde & VMM_PRESENT) {
+        if(*vi.pte & VMM_PRESENT) {
             return false;
         } else {
-            pagetables[pde_index].entries[pte_index] = 
-                frame | VMM_PRESENT | flags;
+            *vi.pte = frame | VMM_PRESENT | flags;
             vmm_flush();
             return true;
         }
     } else {
-        pagedirs->entries[pde_index] =
-            pmm_alloc() |
-            VMM_PRESENT |
-            VMM_WRITABLE |
-            VMM_USER;
+        *vi.pde = pmm_alloc() | VMM_PRESENT | VMM_WRITABLE | VMM_USER;
         vmm_flush();
-        memset(pagetables[pde_index].entries, 0, VMM_PAGESIZE);
-        pagetables[pde_index].entries[pte_index] =
+        memset(pagetables[vi.pde_index].entries, 0, VMM_PAGESIZE);
+        pagetables[vi.pde_index].entries[vi.pte_index] =
             frame | VMM_PRESENT | flags;
         vmm_flush();
         return true;
@@ -78,30 +79,30 @@ bool vmm_unmap(const void* vaddr)
         return false;
     }
 
-    size_t pde_index, pte_index;
-    vmm_vaddrinfo(vaddr, &pde_index, &pte_index);
-    if(!(pagedirs->entries[pde_index] & VMM_PRESENT)) {
+    struct vaddrinfo vi;
+    vmm_vaddrinfo(&vi, vaddr);
+    if(!(pagedirs->entries[vi.pde_index] & VMM_PRESENT)) {
         TRACE("vaddr %p: pagedir not present", vaddr);
         return false;
-    } else if(!(pagetables[pde_index].entries[pte_index] & VMM_PRESENT)) {
+    } else if(!(pagetables[vi.pde_index].entries[vi.pte_index] & VMM_PRESENT)) {
         TRACE("vaddr %p already unmapped", vaddr);
         return false;
     } else {
-        pagetables[pde_index].entries[pte_index] = 0;
+        pagetables[vi.pde_index].entries[vi.pte_index] = 0;
 
         /*
          * If no more pages are present in this PDE, free it
          */
         size_t i;
         for(i = 0; i < VMM_ENTRY_COUNT; i++) {
-            if(pagetables[pde_index].entries[i] & VMM_PRESENT) {
+            if(pagetables[vi.pde_index].entries[i] & VMM_PRESENT) {
                 break;
             }
         }
 
         if(i == VMM_ENTRY_COUNT) {
-            pmm_free(pagedirs->entries[pde_index] & VMM_FRAME);
-            pagedirs->entries[pde_index] = 0;
+            pmm_free(pagedirs->entries[vi.pde_index] & VMM_FRAME);
+            pagedirs->entries[vi.pde_index] = 0;
         }
         vmm_flush();
         return true;

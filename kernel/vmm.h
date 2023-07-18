@@ -25,10 +25,16 @@ struct pagetable {
     uint32_t entries[VMM_ENTRY_COUNT];
 };
 
-void vmm_set_pagedir(const struct pagedir* pagedir);
-
 struct multiboot_mmap_entry;
-void vmm_vaddrinfo(const void* vaddr, size_t* pde_index, size_t* pte_index);
+
+struct vaddrinfo {
+    size_t pde_index;
+    size_t pte_index;
+    uint32_t* pde;
+    uint32_t* pte;
+};
+
+void vmm_vaddrinfo(struct vaddrinfo* info, const void* vaddr);
 bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags) __attribute__((warn_unused_result));
 bool vmm_unmap(const void* vaddr) __attribute__((warn_unused_result));
 void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_length);
