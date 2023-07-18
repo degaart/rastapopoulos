@@ -8,6 +8,8 @@
 #define ROUND(P,A) (((P) / (A)) * (A))
 #define IS_ALIGNED(P, A)  (((P) & ((A) - 1)) == 0)
 
+#define EFLAGS_IF 0x0200
+#define EFLAGS_AC 0x00040000
 static inline uint32_t read_eflags(void)
 {
     uint32_t result;
@@ -16,10 +18,17 @@ static inline uint32_t read_eflags(void)
     return result;
 }
 
+static void write_eflags(uint32_t eflags)
+{
+    asm volatile("push %0\npopfd"
+                 :
+                 : "r"(eflags));
+}
+
 static inline bool interrupts_enabled(void)
 {
     uint32_t eflags = read_eflags();
-    return eflags & 0x200;
+    return eflags & EFLAGS_IF;
 }
 
 static inline void disable_interrupts(void)
@@ -79,8 +88,5 @@ static inline void write_cr3(uint32_t cr3)
     if(if_enabled) \
         enable_interrupts()
 
-
-
-
-
+bool is_386();
 

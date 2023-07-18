@@ -1,6 +1,7 @@
+#include "idt.h"
 #include "kmalloc.h"
-#include "vmm.h"
 #include "pmm.h"
+#include "vmm.h"
 #include <debug.h>
 #include <string.h>
 #include <util.h>
@@ -107,10 +108,96 @@ bool vmm_unmap(const void* vaddr)
     }
 }
 
-static void vmm_test()
+static unsigned pf_count = 0;
+static void* pf_new_eip = NULL;
+static void pf_handler(struct isr_regs* regs)
 {
+    pf_count++;
+    if(pf_new_eip)
+        regs->eip = (uint32_t)pf_new_eip;
+}
 
 
+/*
+ * Testing write into RO page (int 0x0E page fault, only with CR0.WP)
+ * Should trigger an int 0x0E page fault
+ * But only works with CR0.WP and 486+
+ */
+static void vmm_test_ro_page()
+{
+    idt_add_handler(0x0E, pf_handler, 3);
+    pf_count = 0;
+    pf_new_eip = &&label1;          /* this is a gcc extension */
+
+    uint32_t cr0 = read_cr0();
+    assert((cr0 && CR0_WP) != 0);
+    static const unsigned char* str = "ALL YOUR BASE ARE BELONG TO US";
+    uint32_t* ptr = (uint32_t*)str;
+    *ptr = 0xDEADBEEF;
+label1:
+    assert(pf_count == 1);
+}
+
+/*
+ * Test writes into a non-present page
+ */
+static void vmm_test_non_present_page()
+{
+    idt_add_handler(0x0E, pf_handler, 3);
+    pf_count = 0;
+    pf_new_eip = &&next;
+
+    uint32_t* ptr = (uint32_t*)0xBADAB000;
+    *ptr = 0xDEADBEEF;
+next:
+    assert(pf_count == 1);
+}
+
+/*
+ * Test vmm_map
+ */
+static void vmm_test_map()
+{
+    idt_add_handler(0x0E, pf_handler, 3);
+    pf_count = 0;
+    pf_new_eip = &&failed;
+
+    uint32_t* ptr = (uint32_t*)0xBADAB000;
+    uint32_t frame = pmm_alloc();
+    if(!vmm_map(ptr, frame, VMM_WRITABLE))
+        PANIC("vmm_map failed");
+    *ptr = 0xDEADBEEF;
+    if(!vmm_unmap(ptr))
+        PANIC("vmm_unmap failed");
+    assert(pf_count == 0);
+    return;
+failed:
+    PANIC("Test failed");
+}
+
+/*
+ * Test vmm_unmap
+ */
+static void vmm_test_unmap()
+{
+    idt_add_handler(0x0E, pf_handler, 3);
+    pf_count = 0;
+    pf_new_eip = &&failed;
+
+    uint32_t* ptr = (uint32_t*)0xBADAB000;
+    uint32_t frame = pmm_alloc();
+    if(!vmm_map(ptr, frame, VMM_WRITABLE))
+        PANIC("vmm_map failed");
+    *ptr = 0xDEADBEEF;
+    if(!vmm_unmap(ptr))
+        PANIC("vmm_unmap failed");
+    pf_new_eip = &&next;
+    *ptr = 0x0BADCAFE;
+next:
+    assert(pf_count == 1);
+    return;
+failed:
+    PANIC("Test failed");
 }
 
 void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_length)
@@ -200,6 +287,12 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     uint32_t cr0 = read_cr0();
     cr0 |= CR0_PG | CR0_WP;
     write_cr0(cr0);
-    add_test("vmm", vmm_test);
+
+    /* Tests (some are only run on a 486+ */
+    if(is_386())
+        ADD_TEST(vmm_test_ro_page);
+    ADD_TEST(vmm_test_non_present_page);
+    ADD_TEST(vmm_test_map);
+    ADD_TEST(vmm_test_unmap);
 }
 
