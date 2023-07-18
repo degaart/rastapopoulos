@@ -8,6 +8,9 @@ ASFLAGS := $(ASFLAGS) -g
 CFLAGS := $(CFLAGS) $(UNIT_TEST_FLAGS) -g
 LDFLAGS := $(LDFLAGS) -g -T kernel.ld -Xlinker -Map=obj/kernel.map
 
+QEMU_INT_FLAGS := -d int -M smm=off
+QEMU_FLAGS := -no-reboot -kernel obj/kernel.elf
+
 SRCS := \
 	gdt.c \
 	idt.c \
@@ -68,10 +71,10 @@ obj/common/%.c.o: ../common/%.c Makefile | obj
 run: obj/kernel.elf
 	# C-a x to exit qemu
 	# C-a h for help
-	qemu-system-i386 -nographic -no-reboot -kernel obj/kernel.elf -d int -M smm=off
+	qemu-system-i386 $(QEMU_FLAGS) -nographic
 
 run_graphic: obj/kernel.elf
-	qemu-system-i386 -serial stdio -no-reboot -kernel obj/kernel.elf -d int -M smm=off
+	qemu-system-i386 $(QEMU_FLAGS) -serial stdio
 
 debug: obj/kernel.elf
 	# make debug
@@ -79,7 +82,7 @@ debug: obj/kernel.elf
 	# target remote localhost:1234
 	# b kmain
 	# c
-	qemu-system-i386 -nographic -no-reboot -kernel obj/kernel.elf -s -S
+	qemu-system-i386 $(QEMU_FLAGS) -nographic -s -S
 
 clean:
 	rm -rf obj
