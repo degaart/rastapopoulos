@@ -5,13 +5,12 @@
 
 #define HALT() while(1) { asm volatile("cli\nhlt\n":::"memory"); }
 
-#define ALIGN_UINTPTR(P,A) ((((P) + ((A) - 1)) / (A)) * (A))
-#define ALIGN(P,A) ((typeof(P))ALIGN_UINTPTR((uintptr_t)(P), (A)))
-
-#define ROUND_UINTPTR(P,A) (((P) / (A)) * (A))
-#define ROUND(P,A) ((typeof(P))ROUND_UINTPTR((uintptr_t)(P), (A)))
-
-#define IS_ALIGNED(P, A)  (((P) & ((A) - 1)) == 0)
+/* The following helper macros only work on powers of two */
+#define ALIGN(X, A)         (((X) + ((typeof(X))(A) - 1)) & ~((typeof(X))(A) - 1))
+#define ROUND(X, A)         ((X) & ~(((typeof(X))(A) - 1)))
+#define ALIGN_PTR(P, A)     ((typeof(P))ALIGN((uintptr_t)(P), (A)))
+#define ROUND_PTR(P, A)     ((typeof(P))ROUND((uintptr_t)(P), (A)))
+#define IS_ALIGNED(X, A)    (((X) & ((typeof(X))(A) - 1)) == 0)
 
 #define EFLAGS_IF 0x0200
 #define EFLAGS_AC 0x00040000
