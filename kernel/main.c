@@ -31,7 +31,7 @@ void* early_kmalloc_aligned(size_t size, size_t alignment)
     if(!early_kmalloc_enabled) {
         PANIC("Invalid call to ealy_kmalloc");
     }
-    uintptr_t result = ALIGN((uintptr_t)_heap, alignment);
+    uintptr_t result = (uintptr_t)ALIGN(_heap, alignment);
     _heap = (unsigned char*)(result + size);
     return (void*)result;
 }

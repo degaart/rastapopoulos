@@ -4,8 +4,13 @@
 #include <stdbool.h>
 
 #define HALT() while(1) { asm volatile("cli\nhlt\n":::"memory"); }
-#define ALIGN(P,A) ((((P) + ((A) - 1)) / (A)) * (A))
-#define ROUND(P,A) (((P) / (A)) * (A))
+
+#define ALIGN_UINTPTR(P,A) ((((P) + ((A) - 1)) / (A)) * (A))
+#define ALIGN(P,A) ((typeof(P))ALIGN_UINTPTR((uintptr_t)(P), (A)))
+
+#define ROUND_UINTPTR(P,A) (((P) / (A)) * (A))
+#define ROUND(P,A) ((typeof(P))ROUND_UINTPTR((uintptr_t)(P), (A)))
+
 #define IS_ALIGNED(P, A)  (((P) & ((A) - 1)) == 0)
 
 #define EFLAGS_IF 0x0200
