@@ -221,7 +221,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
 
     TRACE("Kernel mappings:");
 
-    uint32_t start = ROUND((uintptr_t)_text_start, VMM_PAGESIZE);
+    uint32_t start = ROUND((uint32_t)_text_start, VMM_PAGESIZE);
     uint32_t end = (uint32_t)_text_end;
     TRACE("    .text   %p - %p [R]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
@@ -230,7 +230,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
         pagetable->entries[index] = frame | VMM_PRESENT;
     }
 
-    start = ROUND((uintptr_t)_rodata_start, VMM_PAGESIZE);
+    start = ROUND((uint32_t)_rodata_start, VMM_PAGESIZE);
     end = (uint32_t)_rodata_end;
     TRACE("    .rodata %p - %p [R]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
@@ -239,7 +239,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
         pagetable->entries[index] = frame | VMM_PRESENT;
     }
 
-    start = ROUND((uintptr_t)_data_start, VMM_PAGESIZE);
+    start = ROUND((uint32_t)_data_start, VMM_PAGESIZE);
     end = (uint32_t)_data_end;
     TRACE("    .data   %p - %p [RW]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
@@ -248,7 +248,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
         pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
     }
 
-    start = ROUND((uintptr_t)_bss_start, VMM_PAGESIZE);
+    start = ROUND((uint32_t)_bss_start, VMM_PAGESIZE);
     end = (uint32_t)_bss_end;
     uint32_t stack_guard = (uintptr_t)_stacktop - (VMM_PAGESIZE * 2);
     TRACE("    .bss    %p - %p [RW]", start, end);
@@ -260,7 +260,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
         }
     }
 
-    start = ROUND((uintptr_t)_heap_start, VMM_PAGESIZE);
+    start = ROUND((uint32_t)_heap_start, VMM_PAGESIZE);
     end = (uint32_t)early_kmalloc_get_heap();
     TRACE("     heap   %p - %p [RW]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
