@@ -24,7 +24,8 @@ COMMON_SRCS := \
 	../common/serial.c \
 	../common/string.c \
 	../common/vga.c \
-	../common/bitset.c
+	../common/bitset.c \
+	../common/util.c
 
 ASM_SRCS := \
 	stub.asm \

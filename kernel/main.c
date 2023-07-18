@@ -208,43 +208,6 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
      * Most notably, writing beyond ALIGN(_heap, VMM_PAGESIZE) will corrupt
      * pagetables and lead to strange bugs
      */
-#define CURRENT_TEST 0
-#if CURRENT_TEST == 1
-    // Write into read-only page
-    TRACE("Testing write into read-only page at 0x00103D00");
-    uint32_t* ptr = (uint32_t*)0x00103D00;
-    *ptr = 0xDEADBEEF;
-#elif CURRENT_TEST == 2
-    // Write into non-present page
-    TRACE("Testing write into non-present page");
-    uint32_t* ptr = (uint32_t*)ALIGN((uintptr_t)_heap, VMM_PAGESIZE);
-    DUMPP(ptr);
-    *ptr = 0xDEADBEEF;
-#elif CURRENT_TEST == 3
-    // Map non-present page and write into it
-    TRACE("Testing vmm_map");
-    uint32_t* ptr = (uint32_t*)ALIGN((uintptr_t)_heap, VMM_PAGESIZE);
-    uint32_t frame = pmm_alloc();
-    TRACE("ptr: %p, frame: %p", ptr, frame);
-    if(!vmm_map(ptr, frame, VMM_WRITABLE))
-        PANIC("vmm_map failed");
-    TRACE("*ptr: %p", *ptr);
-#elif CURRENT_TEST == 4
-    // Unmap normally-present page and write to it
-    TRACE("Testing vmm unmap");
-    uint32_t* ptr = (uint32_t*)0xDEADB000;
-    uint32_t frame = pmm_alloc();
-    TRACE("ptr: %p, frame: %p", ptr, frame);
-    if(!vmm_map(ptr, frame, VMM_WRITABLE))
-        PANIC("vmm_map failed");
-    *ptr = 0xDEADBEEF;
-    if(!vmm_unmap(ptr))
-        PANIC("vmm_unmap failed");
-    *ptr = 0xDEADBEEF;
-#elif CURRENT_TEST == 5
-    TRACE("Testing kernel stack overflow protection");
-    stack_overflow(40);
-#endif
 
     /* Setup PIC */
     pic_init();
