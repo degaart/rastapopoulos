@@ -53,7 +53,7 @@ void idt_init()
     idtr.base = idt_entries;
     asm volatile("lidt %0" :: "m"(idtr));
 
-    add_test("idt", idt_test);
+    ADD_TEST(idt_test);
 }
 
 void isr_handler(struct isr_regs* regs)

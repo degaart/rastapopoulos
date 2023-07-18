@@ -220,8 +220,6 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
 #ifdef UNIT_TESTS
     /* Run unit tests */
-    void bitset_run_tests();
-    add_test("bitset", bitset_run_tests);
     run_tests();
     TRACE("All tests done. Kernel Halted.");
     HALT();
