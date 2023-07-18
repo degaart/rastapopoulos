@@ -289,7 +289,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     write_cr0(cr0);
 
     /* Tests (some are only run on a 486+ */
-    if(is_386())
+    if(!is_386())
         ADD_TEST(vmm_test_ro_page);
     ADD_TEST(vmm_test_non_present_page);
     ADD_TEST(vmm_test_map);

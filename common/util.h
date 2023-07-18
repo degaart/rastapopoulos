@@ -10,6 +10,7 @@
 
 #define EFLAGS_IF 0x0200
 #define EFLAGS_AC 0x00040000
+#define EFLAGS_ID 0x00200000
 static inline uint32_t read_eflags(void)
 {
     uint32_t result;
@@ -89,4 +90,6 @@ static inline void write_cr3(uint32_t cr3)
         enable_interrupts()
 
 bool is_386();
+bool is_486();
+
 
