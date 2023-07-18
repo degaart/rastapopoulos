@@ -196,8 +196,13 @@ void pmm_init(const struct multiboot_mmap_entry* entries, size_t length)
         }
     }
 
+
+    void bitset_test();
+    ADD_TEST(bitset_test);
+
 #if defined(UNIT_TESTS) && defined(TEST_PMM)
-    add_test("pmm", pmm_test);
+    ADD_TEST(pmm_test);
 #endif
+
 }
 

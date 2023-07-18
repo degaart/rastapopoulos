@@ -79,8 +79,7 @@ size_t bitset_find(struct bitset* bitset)
     return BITSET_INVALID;
 }
 
-#ifdef UNIT_TESTS
-void bitset_run_tests()
+void bitset_test()
 {
     /* Test bitset_get_size */
     assert(bitset_get_size(0) == sizeof(struct bitset));
@@ -150,6 +149,5 @@ void bitset_run_tests()
 
     assert(bitset_find(bs3) == BITSET_INVALID);
 }
-#endif
 
 
