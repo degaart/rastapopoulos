@@ -2,7 +2,7 @@
 #include "pic.h"
 #include <io.h>
 
-#define TIMER_FREQUENCY     100
+#define TIMER_FREQUENCY     20
 #define REG_CHAN0_DATA      0x40
 #define REG_CHAN1_DATA      0x41
 #define REG_CHAN2_DATA      0x42

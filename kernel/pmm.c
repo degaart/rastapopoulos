@@ -23,7 +23,9 @@ uint32_t pmm_alloc()
     for(size_t i = 0; i < zone_count; i++) {
         size_t frame_index = bitset_find(zones[i]->bitmap);
         if(frame_index != BITSET_INVALID) {
-            return zones[i]->start + (frame_index * PAGESIZE);
+            uint32_t result = zones[i]->start + (frame_index * PAGESIZE);
+            pmm_set(result);
+            return result;
         }
     }
     return INVALID_FRAME;
@@ -148,25 +150,25 @@ static void pmm_test()
     assert(frame == INVALID_FRAME);
 }
 
-void pmm_init(const struct multiboot_mmap_entry* entries, size_t count)
+void pmm_init(const struct multiboot_mmap_entry* entries, size_t length)
 {
 #if defined(UNIT_TESTS) && defined(TEST_PMM)
     static struct multiboot_mmap_entry test_entries[] = {
-        { 0, 0x00000000, 0x0009FC00, 0x00000001 },
-        { 0, 0x0009FC00, 0x00000400, 0x00000002 },
-        { 0, 0x000F0000, 0x00010000, 0x00000002 },
-        { 0, 0x00100001, 0x00400000, 0x00000001 },
-        { 0, 0x00400000, 0x00020000, 0x00000002 },
-        { 0, 0xFFFC0000, 0x00040000, 0x00000002 },
+        { 20, 0x00000000, 0x0009FC00, 0x00000001 },
+        { 20, 0x0009FC00, 0x00000400, 0x00000002 },
+        { 20, 0x000F0000, 0x00010000, 0x00000002 },
+        { 20, 0x00100001, 0x00400000, 0x00000001 },
+        { 20, 0x00400000, 0x00020000, 0x00000002 },
+        { 20, 0xFFFC0000, 0x00040000, 0x00000002 },
     };
     entries = test_entries;
     count = sizeof(test_entries) / sizeof(test_entries[0]);
 #endif
 
-    /* Determine the true count */
+    /* Determine the count of available zones */
     zone_count = 0;
-    for(size_t i = 0; i < count; i++) {
-        if(entries[i].type == MULTIBOOT_MEMORY_AVAILABLE) {
+    MULTIBOOT_MMAP_ITERATE(entries, entry, length) {
+        if(entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
             zone_count++;
         }
     }
@@ -174,24 +176,23 @@ void pmm_init(const struct multiboot_mmap_entry* entries, size_t count)
     zones = early_kmalloc(sizeof(struct zone*) * zone_count);
     memset(zones, 0, sizeof(struct zone*) * zone_count);
 
-    size_t zi = 0;  /* zone index */
-    for(size_t ei = 0; ei < count; ei++) {
-        const struct multiboot_mmap_entry* entry = &entries[ei];
+    size_t i = 0;  /* zone index */
+    MULTIBOOT_MMAP_ITERATE(entries, entry, length) {
         if(entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
-            uint32_t start = entries[ei].addr & 0xFFFFFFFF;
-            uint32_t size = entries[ei].len & 0xFFFFFFFF;
+            uint32_t start = entry->addr & 0xFFFFFFFF;
+            uint32_t size = entry->len & 0xFFFFFFFF;
             uint32_t aligned_start = ALIGN(start, PAGESIZE);
             uint32_t aligned_size = ROUND(size - (aligned_start - start), PAGESIZE);
             size_t frame_count = aligned_size / PAGESIZE;
 
             size_t bitmap_size = bitset_get_size(frame_count);
-            zones[zi] = early_kmalloc(sizeof(struct zone));
-            zones[zi]->start = aligned_start;
-            zones[zi]->size = aligned_size;
-            zones[zi]->frame_count = frame_count;
-            zones[zi]->bitmap = early_kmalloc(bitmap_size);
-            bitset_init(zones[zi]->bitmap, bitmap_size, frame_count);
-            zi++;
+            zones[i] = early_kmalloc(sizeof(struct zone));
+            zones[i]->start = aligned_start;
+            zones[i]->size = aligned_size;
+            zones[i]->frame_count = frame_count;
+            zones[i]->bitmap = early_kmalloc(bitmap_size);
+            bitset_init(zones[i]->bitmap, bitmap_size, frame_count);
+            i++;
         }
     }
 

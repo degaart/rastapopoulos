@@ -21,11 +21,11 @@
 #define VGA_WIDTH           80
 #define VGA_HEIGHT          25
 
-void vga_init();
+void vga_init(void);
 void vga_cursor_pos(unsigned* x, unsigned* y);
 void vga_set_cursor_pos(unsigned x, unsigned y);
 void vga_put_char(unsigned x, unsigned y, unsigned ch, unsigned attr);
 void vga_write_char(unsigned ch, unsigned attr);
 void vga_write_string(const char* s, unsigned attr);
-void vga_scroll();
+void vga_scroll(void);
 

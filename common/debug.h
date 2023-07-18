@@ -7,12 +7,13 @@
 #define DUMP(var) TRACE(#var ": %u", var)
 #define DUMPX(var) TRACE(#var ": 0x%X", var)
 #define DUMPP(var) TRACE(#var ": %p", var)
+#define BREAKPOINT() asm volatile("xchg bx, bx":::"memory")
 
-void trace_init();
+void trace_init(void);
 void trace(const char* file, int line, const char* fn, const char* fmt, ...) __attribute__((format(printf, 4, 5)));
 void panic(const char* file, int line, const char* fn, const char* fmt, ...) __attribute__((format(printf, 4, 5)));
 
-typedef void (*testfn_t)();
+typedef void (*testfn_t)(void);
 void add_test(const char* name, testfn_t testfn);
-void run_tests();
+void run_tests(void);
 
