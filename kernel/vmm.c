@@ -46,25 +46,25 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
 
     size_t pde_index, pte_index;
     vmm_vaddrinfo(vaddr, &pde_index, &pte_index);
-    if(pagedirs->entries[pde_index] & VMM_PDE_PRESENT) {
-        if(pagetables[pde_index].entries[pte_index] & VMM_PTE_PRESENT) {
+    if(pagedirs->entries[pde_index] & VMM_PRESENT) {
+        if(pagetables[pde_index].entries[pte_index] & VMM_PRESENT) {
             return false;
         } else {
             pagetables[pde_index].entries[pte_index] = 
-                frame | VMM_PTE_PRESENT | flags;
+                frame | VMM_PRESENT | flags;
             vmm_flush();
             return true;
         }
     } else {
         pagedirs->entries[pde_index] =
             pmm_alloc() |
-            VMM_PDE_PRESENT |
-            VMM_PDE_WRITABLE |
-            VMM_PDE_USER;
+            VMM_PRESENT |
+            VMM_WRITABLE |
+            VMM_USER;
         vmm_flush();
         memset(pagetables[pde_index].entries, 0, VMM_PAGESIZE);
         pagetables[pde_index].entries[pte_index] =
-            frame | VMM_PTE_PRESENT | flags;
+            frame | VMM_PRESENT | flags;
         vmm_flush();
         return true;
     }
@@ -79,10 +79,10 @@ bool vmm_unmap(const void* vaddr)
 
     size_t pde_index, pte_index;
     vmm_vaddrinfo(vaddr, &pde_index, &pte_index);
-    if(!(pagedirs->entries[pde_index] & VMM_PDE_PRESENT)) {
+    if(!(pagedirs->entries[pde_index] & VMM_PRESENT)) {
         TRACE("vaddr %p: pagedir not present", vaddr);
         return false;
-    } else if(!(pagetables[pde_index].entries[pte_index] & VMM_PTE_PRESENT)) {
+    } else if(!(pagetables[pde_index].entries[pte_index] & VMM_PRESENT)) {
         TRACE("vaddr %p already unmapped", vaddr);
         return false;
     } else {
@@ -93,13 +93,13 @@ bool vmm_unmap(const void* vaddr)
          */
         size_t i;
         for(i = 0; i < VMM_ENTRY_COUNT; i++) {
-            if(pagetables[pde_index].entries[i] & VMM_PTE_PRESENT) {
+            if(pagetables[pde_index].entries[i] & VMM_PRESENT) {
                 break;
             }
         }
 
         if(i == VMM_ENTRY_COUNT) {
-            pmm_free(pagedirs->entries[pde_index] & VMM_PDE_PTE);
+            pmm_free(pagedirs->entries[pde_index] & VMM_FRAME);
             pagedirs->entries[pde_index] = 0;
         }
         vmm_flush();
@@ -138,8 +138,8 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     TRACE("    .text   %p - %p [R]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_PTE_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PTE_PRESENT;
+        assert((frame & ~VMM_FRAME) == 0);
+        pagetable->entries[index] = frame | VMM_PRESENT;
     }
 
     start = ROUND((uint32_t)_rodata_start, VMM_PAGESIZE);
@@ -147,8 +147,8 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     TRACE("    .rodata %p - %p [R]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_PTE_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PTE_PRESENT;
+        assert((frame & ~VMM_FRAME) == 0);
+        pagetable->entries[index] = frame | VMM_PRESENT;
     }
 
     start = ROUND((uint32_t)_data_start, VMM_PAGESIZE);
@@ -156,8 +156,8 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     TRACE("    .data   %p - %p [RW]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_PTE_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PTE_PRESENT | VMM_PTE_WRITABLE;
+        assert((frame & ~VMM_FRAME) == 0);
+        pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
     }
 
     start = ROUND((uint32_t)_bss_start, VMM_PAGESIZE);
@@ -167,8 +167,8 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         if(frame != stack_guard) {
             size_t index = frame / VMM_PAGESIZE;
-            assert((frame & ~VMM_PTE_FRAME) == 0);
-            pagetable->entries[index] = frame | VMM_PTE_PRESENT | VMM_PTE_WRITABLE;
+            assert((frame & ~VMM_FRAME) == 0);
+            pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
         }
     }
 
@@ -177,24 +177,24 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     TRACE("     heap   %p - %p [RW]", start, end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_PTE_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PTE_PRESENT | VMM_PTE_WRITABLE;
+        assert((frame & ~VMM_FRAME) == 0);
+        pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
     }
     TRACE("     stack guard: %p []", stack_guard);
 
     /* Map VGA_BASE as we need it for debugging */
-    pagetable->entries[0xB8000/VMM_PAGESIZE] = 0xB8000 | VMM_PTE_PRESENT | VMM_PTE_WRITABLE;
+    pagetable->entries[0xB8000/VMM_PAGESIZE] = 0xB8000 | VMM_PRESENT | VMM_WRITABLE;
 
 
-    assert(((uint32_t)pagetable & ~VMM_PDE_PTE) == 0);
-    pagedir->entries[0] = ((uint32_t)pagetable & VMM_PDE_PTE) |
-                          VMM_PDE_PRESENT |
-                          VMM_PDE_WRITABLE;
+    assert(((uint32_t)pagetable & ~VMM_FRAME) == 0);
+    pagedir->entries[0] = ((uint32_t)pagetable & VMM_FRAME) |
+                          VMM_PRESENT |
+                          VMM_WRITABLE;
 
     /* Last entry on pagedir should point to itself */
-    pagedir->entries[VMM_ENTRY_COUNT-1] = ((uint32_t)pagedir & VMM_PDE_PTE) |
-                                          VMM_PDE_PRESENT |
-                                          VMM_PDE_WRITABLE;
+    pagedir->entries[VMM_ENTRY_COUNT-1] = ((uint32_t)pagedir & VMM_FRAME) |
+                                          VMM_PRESENT |
+                                          VMM_WRITABLE;
     write_cr3((uint32_t)pagedir);
 
     uint32_t cr0 = read_cr0();
