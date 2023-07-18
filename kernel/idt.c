@@ -1,5 +1,5 @@
 #include "idt.h"
-#include "debug.h"
+#include <debug.h>
 #include <stddef.h>
 
 struct idt_entry {
@@ -19,6 +19,26 @@ extern uint32_t isr_stub_table[];
 static isr_t isr_handlers[256];
 static struct idt_entry idt_entries[256];
 static struct idt_ptr idtr __attribute__((aligned(8)));
+static unsigned int29_called;
+
+static void int29_handler(struct isr_regs* regs)
+{
+    int29_called++;
+}
+
+static void idt_test()
+{
+    idt_add_handler(0x29, int29_handler, 3);
+
+    unsigned dpl;
+    isr_t handler = idt_handler(0x29, &dpl);
+    assert(handler == int29_handler);
+    assert(dpl == 3);
+
+    int29_called = 0;
+    asm volatile("int 0x29":::"memory");
+    assert(int29_called == 1);
+}
 
 void idt_init()
 {
@@ -32,6 +52,8 @@ void idt_init()
     idtr.limit = sizeof(idt_entries) - 1;
     idtr.base = idt_entries;
     asm volatile("lidt %0" :: "m"(idtr));
+
+    add_test("idt", idt_test);
 }
 
 void isr_handler(struct isr_regs* regs)
@@ -51,4 +73,14 @@ void idt_add_handler(int number, isr_t handler, unsigned dpl)
     idt_entries[number].type_attr = IDT_PRESENT|IDT_INT_GATE_32|(dpl << 5);
     asm volatile("lidt %0" :: "m"(idtr));
 }
+
+isr_t idt_handler(int number, unsigned* dpl)
+{
+    assert(number >= 0);
+    assert(number < 256);
+    if(dpl)
+        *dpl = (idt_entries[number].type_attr >> 5) & 0x03;
+    return isr_handlers[number];
+}
+
 
