@@ -1,4 +1,4 @@
 #pragma once
 
-void pit_init();
+void pit_init(void);
 

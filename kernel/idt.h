@@ -24,6 +24,6 @@ struct isr_regs {
 
 typedef void (*isr_t)(struct isr_regs*);
 
-void idt_init();
+void idt_init(void);
 void idt_add_handler(int number, isr_t handler, unsigned dpl);
 

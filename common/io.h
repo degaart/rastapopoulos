@@ -22,7 +22,7 @@ static inline uint8_t inb(uint16_t port)
     return result;
 }
 
-static inline void io_wait()
+static inline void io_wait(void)
 {
     outb(0x80, 0);
 }

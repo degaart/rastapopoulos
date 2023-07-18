@@ -3,6 +3,7 @@ section .text
 
 %macro ISR_NOERRCODE 1
     isr_stub_%1:
+        cli
         push    dword 0             ; push fake error code
         push    dword %1
         jmp     isr_common_stub
@@ -10,6 +11,7 @@ section .text
 
 %macro ISR_ERRCODE 1
     isr_stub_%1:
+        cli
         push    dword %1
         jmp     isr_common_stub
 %endmacro
@@ -19,7 +21,6 @@ section .text
 ; and finally restores the stack frame.
 extern isr_handler
 isr_common_stub:
-    cli
     pusha                       ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
 
     xor     eax, eax
@@ -53,11 +54,18 @@ isr_common_stub:
 ; Generate the ISR thunks
 %assign isr_index 0
 %rep 256
-    %if (isr_index == 8) || ((isr_index>=10) && (isr_index<=14)) || (isr_index==17) || (isr_index==30)
-        ISR_ERRCODE isr_index
-    %else
-        ISR_NOERRCODE isr_index
+    isr_stub_ %+ isr_index:
+        cli
+    %if (isr_index != 8) && \
+          (isr_index != 10) && \
+          (isr_index != 14) && \
+          (isr_index != 17) && \
+          (isr_index != 30)
+        push    dword 0             ; push fake error code
     %endif
+    .continue:
+        push    dword isr_index
+        jmp     isr_common_stub
 
     %assign isr_index isr_index+1
 %endrep

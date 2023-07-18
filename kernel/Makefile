@@ -6,7 +6,7 @@ include ../common/common.mk
 UNIT_TEST_FLAGS := -DUNIT_TESTS
 ASFLAGS := $(ASFLAGS) -g
 CFLAGS := $(CFLAGS) $(UNIT_TEST_FLAGS) -g
-LDFLAGS := $(LDFLAGS) -g -T kernel.ld
+LDFLAGS := $(LDFLAGS) -g -T kernel.ld -Xlinker -Map=obj/kernel.map
 
 SRCS := \
 	gdt.c \
@@ -16,6 +16,7 @@ SRCS := \
 	kbd.c \
 	pmm.c \
 	debug.c \
+	vmm.c \
 	main.c
 
 COMMON_SRCS := \
@@ -66,10 +67,10 @@ obj/common/%.c.o: ../common/%.c Makefile | obj
 run: obj/kernel.elf
 	# C-a x to exit qemu
 	# C-a h for help
-	qemu-system-i386 -nographic -no-reboot -kernel obj/kernel.elf
+	qemu-system-i386 -nographic -no-reboot -kernel obj/kernel.elf -d int -M smm=off
 
 run_graphic: obj/kernel.elf
-	qemu-system-i386 -serial stdio -no-reboot -kernel obj/kernel.elf
+	qemu-system-i386 -serial stdio -no-reboot -kernel obj/kernel.elf -d int -M smm=off
 
 debug: obj/kernel.elf
 	# make debug
@@ -81,3 +82,4 @@ debug: obj/kernel.elf
 
 clean:
 	rm -rf obj
+

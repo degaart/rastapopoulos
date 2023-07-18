@@ -1,4 +1,4 @@
 #pragma once
 
-void kbd_init();
+void kbd_init(void);
 

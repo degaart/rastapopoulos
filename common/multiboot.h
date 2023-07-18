@@ -266,6 +266,11 @@ struct multiboot_apm_info
   uint16_t dseg_len;
 };
 
+#define MULTIBOOT_MMAP_ITERATE(ADDR, IT, LEN) \
+    for(const struct multiboot_mmap_entry* IT = (ADDR); \
+        (uintptr_t)(IT) < (uintptr_t)(ADDR) + (LEN); \
+        IT = (const struct multiboot_mmap_entry*)((uintptr_t)(IT) + (IT)->size + sizeof(uint32_t))) \
+
 #endif /* ! ASM_FILE */
 
 #endif /* ! MULTIBOOT_HEADER */

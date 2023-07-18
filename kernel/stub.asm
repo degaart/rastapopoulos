@@ -24,7 +24,7 @@ _start:
     ; gdtr  undefined, so must set GDT
     ; idtr  undefined, so must set IDT
     cli
-    mov esp, stacktop
+    mov esp, _stacktop
     push eax
     push ebx
     call kmain
@@ -65,6 +65,9 @@ section .rodata
     current_file: db "stub.asm", 0
 
 section .bss
-    resb 4096
-stacktop:
+align 4096
+    resb 8192
+global _stacktop
+_stacktop:
+
 
