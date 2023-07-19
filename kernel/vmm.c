@@ -47,7 +47,7 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
         TRACE("vaddr %p is not aligned", vaddr);
         return false;
     } else if(!IS_ALIGNED(frame, VMM_PAGESIZE)) {
-        TRACE("frame %p is not aligned", frame);
+        TRACE("frame 0x%lX is not aligned", frame);
         return false;
     }
 
@@ -72,7 +72,7 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
     }
 }
 
-bool vmm_unmap(const void* vaddr)
+bool vmm_unmap(const void* vaddr, bool dealloc_frame)
 {
     if(!IS_ALIGNED((uintptr_t)vaddr, VMM_PAGESIZE)) {
         TRACE("vaddr %p is not aligned", vaddr);
@@ -101,7 +101,8 @@ bool vmm_unmap(const void* vaddr)
         }
 
         if(i == VMM_ENTRY_COUNT) {
-            pmm_free(pagedirs->entries[vi.pde_index] & VMM_FRAME);
+            if(dealloc_frame)
+                pmm_free(pagedirs->entries[vi.pde_index] & VMM_FRAME);
             pagedirs->entries[vi.pde_index] = 0;
         }
         vmm_flush();
@@ -126,17 +127,21 @@ static void pf_handler(struct isr_regs* regs)
  */
 static void vmm_test_ro_page()
 {
+    unsigned dpl;
+    isr_t old_pf_handler = idt_handler(0x0E, &dpl);
+
     idt_add_handler(0x0E, pf_handler, 3);
     pf_count = 0;
     pf_new_eip = &&label1;          /* this is a gcc extension */
 
     uint32_t cr0 = read_cr0();
     assert((cr0 && CR0_WP) != 0);
-    static const unsigned char* str = "ALL YOUR BASE ARE BELONG TO US";
+    static const char* str = "ALL YOUR BASE ARE BELONG TO US";
     uint32_t* ptr = (uint32_t*)str;
     *ptr = 0xDEADBEEF;
 label1:
     assert(pf_count == 1);
+    idt_add_handler(0x0E, old_pf_handler, dpl);
 }
 
 /*
@@ -144,6 +149,9 @@ label1:
  */
 static void vmm_test_non_present_page()
 {
+    unsigned dpl;
+    isr_t old_pf_handler = idt_handler(0x0E, &dpl);
+
     idt_add_handler(0x0E, pf_handler, 3);
     pf_count = 0;
     pf_new_eip = &&next;
@@ -152,6 +160,7 @@ static void vmm_test_non_present_page()
     *ptr = 0xDEADBEEF;
 next:
     assert(pf_count == 1);
+    idt_add_handler(0x0E, old_pf_handler, dpl);
 }
 
 /*
@@ -159,6 +168,9 @@ next:
  */
 static void vmm_test_map()
 {
+    unsigned dpl;
+    isr_t old_pf_handler = idt_handler(0x0E, &dpl);
+
     idt_add_handler(0x0E, pf_handler, 3);
     pf_count = 0;
     pf_new_eip = &&failed;
@@ -168,9 +180,11 @@ static void vmm_test_map()
     if(!vmm_map(ptr, frame, VMM_WRITABLE))
         PANIC("vmm_map failed");
     *ptr = 0xDEADBEEF;
-    if(!vmm_unmap(ptr))
+    if(!vmm_unmap(ptr, true))
         PANIC("vmm_unmap failed");
     assert(pf_count == 0);
+
+    idt_add_handler(0x0E, old_pf_handler, dpl);
     return;
 failed:
     PANIC("Test failed");
@@ -181,6 +195,9 @@ failed:
  */
 static void vmm_test_unmap()
 {
+    unsigned dpl;
+    isr_t old_pf_handler = idt_handler(0x0E, &dpl);
+
     idt_add_handler(0x0E, pf_handler, 3);
     pf_count = 0;
     pf_new_eip = &&failed;
@@ -190,12 +207,13 @@ static void vmm_test_unmap()
     if(!vmm_map(ptr, frame, VMM_WRITABLE))
         PANIC("vmm_map failed");
     *ptr = 0xDEADBEEF;
-    if(!vmm_unmap(ptr))
+    if(!vmm_unmap(ptr, true))
         PANIC("vmm_unmap failed");
     pf_new_eip = &&next;
     *ptr = 0x0BADCAFE;
 next:
     assert(pf_count == 1);
+    idt_add_handler(0x0E, old_pf_handler, dpl);
     return;
 failed:
     PANIC("Test failed");
@@ -223,7 +241,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
 
     uint32_t start = ROUND((uint32_t)_text_start, VMM_PAGESIZE);
     uint32_t end = (uint32_t)_text_end;
-    TRACE("    .text   %p - %p [R]", start, end);
+    TRACE("    .text   %p - %p [R]", (void*)start, (void*)end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
         assert((frame & ~VMM_FRAME) == 0);
@@ -232,7 +250,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
 
     start = ROUND((uint32_t)_rodata_start, VMM_PAGESIZE);
     end = (uint32_t)_rodata_end;
-    TRACE("    .rodata %p - %p [R]", start, end);
+    TRACE("    .rodata %p - %p [R]", (void*)start, (void*)end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
         assert((frame & ~VMM_FRAME) == 0);
@@ -241,7 +259,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
 
     start = ROUND((uint32_t)_data_start, VMM_PAGESIZE);
     end = (uint32_t)_data_end;
-    TRACE("    .data   %p - %p [RW]", start, end);
+    TRACE("    .data   %p - %p [RW]", (void*)start, (void*)end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
         assert((frame & ~VMM_FRAME) == 0);
@@ -251,7 +269,7 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     start = ROUND((uint32_t)_bss_start, VMM_PAGESIZE);
     end = (uint32_t)_bss_end;
     uint32_t stack_guard = (uintptr_t)_stacktop - (VMM_PAGESIZE * 2);
-    TRACE("    .bss    %p - %p [RW]", start, end);
+    TRACE("    .bss    %p - %p [RW]", (void*)start, (void*)end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         if(frame != stack_guard) {
             size_t index = frame / VMM_PAGESIZE;
@@ -262,13 +280,13 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
 
     start = ROUND((uint32_t)_heap_start, VMM_PAGESIZE);
     end = (uint32_t)early_kmalloc_get_heap();
-    TRACE("     heap   %p - %p [RW]", start, end);
+    TRACE("     heap   %p - %p [RW]", (void*)start, (void*)end);
     for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
         size_t index = frame / VMM_PAGESIZE;
         assert((frame & ~VMM_FRAME) == 0);
         pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
     }
-    TRACE("     stack guard: %p []", stack_guard);
+    TRACE("     stack guard: %p []", (void*)stack_guard);
 
     /* Map VGA_BASE as we need it for debugging */
     pagetable->entries[0xB8000/VMM_PAGESIZE] = 0xB8000 | VMM_PRESENT | VMM_WRITABLE;

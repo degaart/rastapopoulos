@@ -61,7 +61,7 @@ void isr_handler(struct isr_regs* regs)
     if(isr_handlers[regs->int_no])
         isr_handlers[regs->int_no](regs);
     else
-        PANIC("Unhandled interrupt 0x%x", regs->int_no);
+        PANIC("Unhandled interrupt 0x%lx", regs->int_no);
 }
 
 void idt_add_handler(int number, isr_t handler, unsigned dpl)

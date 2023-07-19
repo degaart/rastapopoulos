@@ -49,7 +49,7 @@ static void pmm_set_value(uint32_t phys_addr, bool value)
             return;
         }
     }
-    PANIC("Invalid frame: %p", phys_addr);
+    PANIC("Invalid frame: %p", (void*)phys_addr);
 }
 
 bool pmm_get(uint32_t phys_addr)
@@ -63,7 +63,7 @@ bool pmm_get(uint32_t phys_addr)
             return bitset_get(zones[i]->bitmap, frame_index);
         }
     }
-    PANIC("Invalid frame: %p", phys_addr);
+    PANIC("Invalid frame: %p", (void*)phys_addr);
     return false;
 }
 

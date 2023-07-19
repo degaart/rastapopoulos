@@ -1,6 +1,7 @@
 #include "gdt.h"
 #include "idt.h"
 #include "kbd.h"
+#include "kmalloc.h"
 #include "pic.h"
 #include "pit.h"
 #include "pmm.h"
@@ -44,8 +45,8 @@ void* early_kmalloc(size_t size)
 static void handle_page_fault(struct isr_regs* regs)
 {
     uint32_t cr2 = read_cr2();
-    TRACE("Page fault for %p", cr2);
-    TRACE("CS: 0x%X, EIP: %p, ESP: %p", regs->cs, regs->eip, regs->esp);
+    TRACE("Page fault for %p", (void*)cr2);
+    TRACE("CS: 0x%lX, EIP: 0x%lX, ESP: 0x%lX", regs->cs, regs->eip, regs->esp);
 
 #define PF_P        (1 << 0)
 #define PF_WR       (1 << 1)
@@ -74,7 +75,7 @@ static void handle_page_fault(struct isr_regs* regs)
 
 static void handle_gpf(struct isr_regs* regs)
 {
-    TRACE("General protection fault at 0x%X:%p", regs->cs, regs->eip);
+    TRACE("General protection fault at 0x%lX:0x%08lX", regs->cs, regs->eip);
     HALT();
 }
 
@@ -125,11 +126,55 @@ static void stack_overflow(int id)
         stack_overflow(id - 1);
 }
 
+static void kmalloc_test()
+{
+    TRACE("kmalloc_heap: %p, kmalloc_heap_end: %p",
+          kmalloc_heap, kmalloc_heap_end);
+
+    /* Check kmalloc_heap is not mapped */
+    struct vaddrinfo vi;
+    vmm_vaddrinfo(&vi, kmalloc_heap);
+    ASSERT(!(*vi.pde & VMM_PRESENT) || !(*vi.pte & VMM_PRESENT));
+
+    /* Now malloc some stuff and free */
+    uint32_t* ptr = kmalloc(sizeof(uint32_t));
+    DUMPP(ptr);
+    *ptr = 0xDEADBEEF;
+    kfree(ptr);
+
+    ptr = kmalloc(VMM_PAGESIZE * 8);
+    memset(ptr, 0, VMM_PAGESIZE * 8);
+    DUMPP(ptr);
+    kfree(ptr);
+
+    ptr = kmemalign(VMM_PAGESIZE * 8, VMM_PAGESIZE);
+    DUMPP(ptr);
+    kfree(ptr);
+
+    ptr = kmalloc(sizeof(uint32_t));
+    ptr[1] = 0xDEADBEEF;
+    kfree(ptr);
+
+    TRACE("footprint: 0x%lX", kmalloc_footprint());
+    kmalloc_trim(0);
+    TRACE("footprint: 0x%lX", kmalloc_footprint());
+
+    void* ptrs[16];
+    for(int i = 0; i < sizeof(ptrs)/sizeof(ptrs[0]); i++) {
+        size_t size = (1 << i);
+        TRACE("Allocating 0x%lX bytes", size);
+
+    }
+}
+
 void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 {
     vga_init();
     trace_init();
     gdt_init();
+
+    extern void test_format();
+    ADD_TEST(test_format);
 
     /* Processor detection */
     if(is_386()) {
@@ -164,7 +209,7 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     MULTIBOOT_MMAP_ITERATE(multiboot_info.mmap_addr, e, multiboot_info.mmap_length) {
         uint32_t addr = e->addr & 0xFFFFFFFF;
         uint32_t len = e->len & 0xFFFFFFFF;
-        TRACE("    %p %p %p", addr, len, e->type);
+        TRACE("    0x%08lX 0x%08lX 0x%08lX", addr, len, e->type);
     }
 
     /* setup IDT */
@@ -201,7 +246,7 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
     /* At this point, if we pmm_alloc(), we should get a page which is > _heap */
     uint32_t new_frame = pmm_alloc();
-    TRACE("_heap: %p, new_frame: %p", _heap, new_frame);
+    TRACE("_heap: %p, new_frame: 0x%08lX", _heap, new_frame);
     ASSERT(new_frame > (uintptr_t)_heap);
     pmm_free(new_frame);
 
@@ -217,6 +262,9 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
      * Most notably, writing beyond ALIGN(_heap, VMM_PAGESIZE) will corrupt
      * pagetables and lead to strange bugs
      */
+    kmalloc_heap = ALIGN_PTR(_heap, VMM_PAGESIZE);
+    kmalloc_heap_end = (void*)0x00400000;
+    ADD_TEST(kmalloc_test);
 
     /* Setup PIC */
     pic_init();
