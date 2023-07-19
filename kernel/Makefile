@@ -20,6 +20,7 @@ SRCS := \
 	pmm.c \
 	debug.c \
 	vmm.c \
+	kmalloc.c \
 	main.c
 
 COMMON_SRCS := \
