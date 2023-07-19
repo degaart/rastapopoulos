@@ -23,7 +23,7 @@ static inline uint32_t read_eflags(void)
     return result;
 }
 
-static void write_eflags(uint32_t eflags)
+static inline void write_eflags(uint32_t eflags)
 {
     asm volatile("push %0\npopfd"
                  :
