@@ -190,7 +190,7 @@ static bool load_sector(const struct bpb* bpb, void* buffer, size_t len, uint32_
 static void* malloc(size_t len)
 {
     unsigned char* result = (unsigned char*)((((uintptr_t)_heap_start + 15) / 16) * 16);
-    TRACE("Allocated %d bytes at 0x%X", len, result);
+    TRACE("Allocated %zd bytes at %p", len, result);
     ASSERT((uintptr_t)result < 0x0007FFFF);
     _heap_start = result + len;
     return result;
@@ -213,7 +213,7 @@ static void sector_cache_init(const struct bpb* bpb)
     }
 
     for(size_t i = 0; i < SECTOR_CACHE_SIZE; i++) {
-        TRACE("sector_cache[%d].buffer: %p", i, sector_cache[i].buffer);
+        TRACE("sector_cache[%zd].buffer: %p", i, sector_cache[i].buffer);
     }
 }
 
@@ -241,7 +241,7 @@ static void* cached_load_sector(const struct bpb* bpb, uint32_t lba)
         sector_cache[0].buffer = buffer;
 
         if(!load_sector(bpb, sector_cache[0].buffer, bpb->bytes_per_sect, lba)) {
-            PANIC("Failed to load sector 0x%X", lba);
+            PANIC("Failed to load sector 0x%lX", lba);
         }
         entry_index = 0;
     } else if(entry_index != 0) {
@@ -362,7 +362,7 @@ void start(const struct memmap* memmap)
     TRACE("BOOTLOADER STARTED");
     unsigned mmap_count = 0;
     for(size_t i = 0; memmap[i].len && memmap[i].type; i++) {
-        TRACE("memmap[%d]: %p %p %p %p",
+        TRACE("memmap[%zd]: 0x%08lX 0x%08lX 0x%lX 0x%lX",
               i,
               (uint32_t)memmap[i].base,
               (uint32_t)memmap[i].len,
@@ -423,7 +423,7 @@ void start(const struct memmap* memmap)
         if(kernel_dir_entry.name[0])
             break;
     }
-    TRACE("Kernel image found at cluster 0x%X (%d bytes)", kernel_dir_entry.first_cluster, kernel_dir_entry.size);        
+    TRACE("Kernel image found at cluster 0x%X (%ld bytes)", kernel_dir_entry.first_cluster, kernel_dir_entry.size);        
 
     /*
      * Elf structure
@@ -452,12 +452,12 @@ void start(const struct memmap* memmap)
         struct Elf32_Phdr phdr;
         read_file(bpb, &kernel_dir_entry, &phdr, sizeof(phdr), offset);
         if(phdr.p_type == PT_LOAD) {
-            TRACE("p_offset: 0x%X, "
-                  "p_vaddr: 0x%X, "
-                  "p_paddr: 0x%X, "
-                  "p_filesz: %u, "
-                  "p_memsz: %u, "
-                  "p_align: %u",
+            TRACE("p_offset: 0x%lX, "
+                  "p_vaddr: 0x%lX, "
+                  "p_paddr: 0x%lX, "
+                  "p_filesz: %lu, "
+                  "p_memsz: %lu, "
+                  "p_align: %lu",
                   phdr.p_offset,
                   phdr.p_vaddr,
                   phdr.p_paddr,
@@ -505,7 +505,7 @@ void start(const struct memmap* memmap)
     }
 
     /* Jump to kernel */
-    TRACE("Jumping to kernel at %p", elf_hdr.e_entry);
+    TRACE("Jumping to kernel at 0x%08lX", elf_hdr.e_entry);
     asm volatile(
               "jmp %0"
             :
