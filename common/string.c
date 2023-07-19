@@ -66,7 +66,7 @@ int strcmp(const char* s1, const char* s2)
         s1++;
         s2++;
     }
-    return *s1 - *s2;
+    return (unsigned char)*s1 - (unsigned char)*s2;
 }
 
 void* memcpy(void* restrict dst, const void* restrict src, size_t len)
