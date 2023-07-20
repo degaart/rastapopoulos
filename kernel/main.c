@@ -6,6 +6,7 @@
 #include "pit.h"
 #include "pmm.h"
 #include "vmm.h"
+#include "../user/obj/program1.h"
 #include <debug.h>
 #include <multiboot.h>
 #include <serial.h>
@@ -194,11 +195,18 @@ static void syscall3(struct isr_regs* regs)
     HALT();
 }
 
+static void syscall4(struct isr_regs* regs)
+{
+    uint64_t ticks = get_ticks();
+    regs->eax = ticks & 0xFFFFFFFF;
+    regs->ebx = ticks >> 32;
+}
+
 static void syscall_handler(struct isr_regs* regs)
 {
-    TRACE("Syscall handler called");
-    TRACE("esp: 0x%08lX", read_esp());
-    TRACE("IF: %s", interrupts_enabled() ? "SET" : "CLEAR");
+    //TRACE("Syscall handler called");
+    //TRACE("esp: 0x%08lX", read_esp());
+    //TRACE("IF: %s", interrupts_enabled() ? "SET" : "CLEAR");
     switch(regs->eax) {
         case 0:                 /* trace */
             syscall0(regs);
@@ -212,6 +220,9 @@ static void syscall_handler(struct isr_regs* regs)
         case 3:                 /* halt */
             syscall3(regs);
             break;
+        case 4:                 /* getticks */
+            syscall4(regs);
+            break;
         default:
             PANIC("Invalid syscall 0x%02lX", regs->eax);
             break;
@@ -222,10 +233,23 @@ static void test_usermode()
 {
     idt_add_handler(0x30, syscall_handler, 3);
 
-    unsigned char* userstack = kpvalloc(VMM_PAGESIZE);
+    /* Map program starting at 0x400000 */
+    unsigned char* dst;
+    const unsigned char* src;
+    for(dst = (unsigned char*)0x400000, src = obj_program1_elf;
+        src < obj_program1_elf + obj_program1_elf_len;
+        dst += VMM_PAGESIZE, src += VMM_PAGESIZE)
+    {
+        if(!vmm_alloc(dst, VMM_WRITABLE | VMM_USER))
+            PANIC("vmm_map failed");
+        memcpy(dst, src, VMM_PAGESIZE);
+    }
+
+    /* Map its stack at 3G - 4096 */
+    unsigned char* userstack = (unsigned char*)0xC0000000 - VMM_PAGESIZE;
     assert(IS_ALIGNED_PTR(userstack, VMM_PAGESIZE));
-    if(!vmm_remap(userstack, VMM_PRESENT | VMM_WRITABLE | VMM_USER))
-        PANIC("vmm_remap failed");
+    if(!vmm_alloc(userstack, VMM_WRITABLE | VMM_USER))
+        PANIC("vmm_alloc failed");
 
     unsigned char* kernelstack = kpvalloc(VMM_PAGESIZE);
     assert(IS_ALIGNED_PTR(kernelstack, VMM_PAGESIZE));
@@ -233,10 +257,11 @@ static void test_usermode()
 
     void user_entry(void);
     uint32_t esp = (uintptr_t)userstack + VMM_PAGESIZE;
-    uint32_t eip = (uintptr_t)user_entry;
+    uint32_t eip = 0x00400000;
     TRACE("Entering usermode, esp: 0x%08lX, eip: 0x%08lX, esp0: %p",
           esp, eip, kernelstack);
     asm volatile(
+            "xchg bx, bx\n"
             "cli\n"
             "mov   ax, 0x23\n"
             "mov   ds, ax\n"
@@ -246,6 +271,9 @@ static void test_usermode()
             "pushd 0x23\n"
             "pushd ebx\n"       /* esp */
             "pushf\n"
+            "pop   eax\n"
+            "or    eax, 0x200\n"    /* IF */
+            "pushd eax\n"
             "pushd 0x18|0x3\n"
             "push  ecx\n"       /* eip */
             "iretd\n"
