@@ -186,7 +186,7 @@ void pic_set_irq_handler(unsigned irq, irq_handler_t handler)
 void pic_init()
 {
     pic_remap();
-    for(unsigned i = 0x20; i < 0x28 + 16; i++) {
+    for(unsigned i = 0x20; i < 0x20 + 16; i++) {
         idt_add_handler(i, isr_handler, 0);
     }
 }

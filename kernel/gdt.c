@@ -2,6 +2,7 @@
 #include "gdt.h"
 #include "util.h"
 #include <stdint.h>
+#include <string.h>
 
 #define GDT_ACCESSED        1
 #define GDT_WRITABLE        (1 << 1)
@@ -35,10 +36,46 @@ struct gdt_ptr {
    uint32_t base;               // The address of the first gdt_entry struct.
 } __attribute__((packed));
 
-static struct gdt_entry gdt_entries[5];
+struct tss_entry {
+    uint32_t prev_tss;
+	uint32_t esp0;
+	uint32_t ss0;
+	uint32_t esp1;
+	uint32_t ss1;
+	uint32_t esp2;
+	uint32_t ss2;
+	uint32_t cr3;
+	uint32_t eip;
+	uint32_t eflags;
+	uint32_t eax;
+	uint32_t ecx;
+	uint32_t edx;
+	uint32_t ebx;
+	uint32_t esp;
+	uint32_t ebp;
+	uint32_t esi;
+	uint32_t edi;
+	uint32_t es;
+	uint32_t cs;
+	uint32_t ss;
+	uint32_t ds;
+	uint32_t fs;
+	uint32_t gs;
+	uint32_t ldt;
+	uint16_t trap;
+	uint16_t iomap;
+} __attribute__((packed));
+
+static struct gdt_entry gdt_entries[6];
 static struct gdt_ptr   gdt_ptr;
+static struct tss_entry tss;
 
 void gdt_flush(void* gdtr);
+
+void tss_set_esp0(const void* esp0)
+{
+    tss.esp0 = (uint32_t)esp0;
+}
 
 static inline void and_eflags(uint32_t mask)
 {
@@ -96,6 +133,12 @@ void gdt_init()
         GDT_WRITABLE|GDT_TYPE(1)|GDT_DPL(3)|GDT_PRESENT,
         GDT_32BIT|GDT_GRAN4K
     );  /* User data */
+    set_descriptor(
+        5,
+        (uint32_t)&tss, (uint32_t)&tss + sizeof(tss),
+        GDT_CODE|GDT_PRESENT|GDT_ACCESSED,
+        0
+    );  /* TSS */
 
     gdt_flush(&gdt_ptr);
 
@@ -104,5 +147,17 @@ void gdt_init()
      *  IOPL is stored in bis 12-13 of EFLAGS. Mask them out
      * */
     and_eflags(~(3 << 12));
+
+    /*
+     * Install tss
+     */
+    extern unsigned char _stacktop[];
+    memset(&tss, 0, sizeof(tss));
+    tss.ss0 = GDT_DS_KERNEL;
+    tss.esp0 = (uint32_t)_stacktop;
+    tss.cs = GDT_CS_KERNEL | 0x3;
+    tss.ss = tss.ds = tss.es = tss.fs = tss.gs = GDT_DS_KERNEL | 0x3;
+    tss.iomap = sizeof(tss);
+    asm volatile("ltr ax"::"a"(GDT_TSS):"memory");
 }
 

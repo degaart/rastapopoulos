@@ -157,6 +157,7 @@ void formatv(bool (*writefn)(char,void*), void* ctx, const char* fmt, va_list ar
 {
     int padding = 0;
     bool zeropad = false;
+    bool left = false;
     while(*fmt) {
         if(*fmt == '%') {
             fmt++;
@@ -166,7 +167,7 @@ void formatv(bool (*writefn)(char,void*), void* ctx, const char* fmt, va_list ar
                     case 's':
                     {
                         const char* s = va_arg(args, const char*);
-                        if(padding) {
+                        if(padding && !left) {
                             int padcount = padding - strlen(s);
                             for(int i = 0; i < padcount; i++) {
                                 if(!writefn(' ', ctx))
@@ -174,6 +175,13 @@ void formatv(bool (*writefn)(char,void*), void* ctx, const char* fmt, va_list ar
                             }
                         }
                         WRITESTRING(s);
+                        if(padding && left) {
+                            int padcount = padding - strlen(s);
+                            for(int i = 0; i < padcount; i++) {
+                                if(!writefn(' ', ctx))
+                                    return;
+                            }
+                        }
                         exitfmt = true;
                         break;
                     }
@@ -226,6 +234,11 @@ void formatv(bool (*writefn)(char,void*), void* ctx, const char* fmt, va_list ar
                         /* Ignore */
                         break;
                     }
+                    case '-':
+                    {
+                        left = true;
+                        break;
+                    }
                     case '0':
                     case '1':
                     case '2':
@@ -253,6 +266,7 @@ void formatv(bool (*writefn)(char,void*), void* ctx, const char* fmt, va_list ar
         }
         padding = 0;
         zeropad = false;
+        left = false;
     }
 }
 
@@ -317,6 +331,8 @@ void test_format()
 
     TEST("       aBCd", "%11s", "aBCd");
     TEST("      aBCd", "%10s", "aBCd");
+    TEST("aBCd       ", "%-11s", "aBCd");
+    TEST("aBCd      ", "%-10s", "aBCd");
     TEST("   12345678", "%11X", 0x12345678);
     TEST("   12345678", "%11lX", 0x12345678UL);
     TEST("   12345678", "%11lx", 0x12345678UL);
@@ -403,6 +419,7 @@ void test_format()
     TEST("1234567890", "%zd", (size_t)1234567890);
     TEST("1234567890", "%zu", (size_t)1234567890);
     TEST("aBCd", "%2s", "aBCd");
+    TEST("aBCd", "%-2s", "aBCd");
     TEST("aBCd", "%s", "aBCd");
 
 #pragma GCC diagnostic push

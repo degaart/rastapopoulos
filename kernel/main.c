@@ -45,8 +45,8 @@ void* early_kmalloc(size_t size)
 static void handle_page_fault(struct isr_regs* regs)
 {
     uint32_t cr2 = read_cr2();
-    TRACE("Page fault for %p", (void*)cr2);
-    TRACE("CS: 0x%lX, EIP: 0x%lX, ESP: 0x%lX", regs->cs, regs->eip, regs->esp);
+    TRACE("Page fault for 0x%08lX", cr2);
+    TRACE("CS: 0x%lX, EIP: 0x%08lX, ESP: 0x%08lX", regs->cs, regs->eip, regs->esp);
 
 #define PF_P        (1 << 0)
 #define PF_WR       (1 << 1)
@@ -163,8 +163,96 @@ static void kmalloc_test()
     for(int i = 0; i < sizeof(ptrs)/sizeof(ptrs[0]); i++) {
         size_t size = (1 << i);
         TRACE("Allocating 0x%lX bytes", size);
-
+        ptrs[i] = kmalloc(size);
     }
+
+    for(int i = (sizeof(ptrs)/sizeof(ptrs[0])) - 1; i >= 0; i--) {
+        kfree(ptrs[i]);
+    }
+    kmalloc_trim(0);
+    TRACE("footprint: 0x%lX, kmalloc_heap: %p", kmalloc_footprint(), kmalloc_heap);
+}
+
+static void syscall0(struct isr_regs* regs)
+{
+    TRACE("%s", (const char*)regs->ebx);
+}
+
+static void syscall1(struct isr_regs* regs)
+{
+    regs->eax = regs->ebx + regs->ecx + regs->edx;
+}
+
+static void syscall2(struct isr_regs* regs)
+{
+    PANIC("Panic from usermode");
+}
+
+static void syscall3(struct isr_regs* regs)
+{
+    TRACE("Halt from usermode");
+    HALT();
+}
+
+static void syscall_handler(struct isr_regs* regs)
+{
+    TRACE("Syscall handler called");
+    TRACE("esp: 0x%08lX", read_esp());
+    TRACE("IF: %s", interrupts_enabled() ? "SET" : "CLEAR");
+    switch(regs->eax) {
+        case 0:                 /* trace */
+            syscall0(regs);
+            break;
+        case 1:                 /* add ebx+ecx+edx */
+            syscall1(regs);
+            break;
+        case 2:                 /* panic */
+            syscall2(regs);
+            break;
+        case 3:                 /* halt */
+            syscall3(regs);
+            break;
+        default:
+            PANIC("Invalid syscall 0x%02lX", regs->eax);
+            break;
+    }
+}
+
+static void test_usermode()
+{
+    idt_add_handler(0x30, syscall_handler, 3);
+
+    unsigned char* userstack = kpvalloc(VMM_PAGESIZE);
+    assert(IS_ALIGNED_PTR(userstack, VMM_PAGESIZE));
+    if(!vmm_remap(userstack, VMM_PRESENT | VMM_WRITABLE | VMM_USER))
+        PANIC("vmm_remap failed");
+
+    unsigned char* kernelstack = kpvalloc(VMM_PAGESIZE);
+    assert(IS_ALIGNED_PTR(kernelstack, VMM_PAGESIZE));
+    tss_set_esp0(kernelstack);
+
+    void user_entry(void);
+    uint32_t esp = (uintptr_t)userstack + VMM_PAGESIZE;
+    uint32_t eip = (uintptr_t)user_entry;
+    TRACE("Entering usermode, esp: 0x%08lX, eip: 0x%08lX, esp0: %p",
+          esp, eip, kernelstack);
+    asm volatile(
+            "cli\n"
+            "mov   ax, 0x23\n"
+            "mov   ds, ax\n"
+            "mov   es, ax\n"
+            "mov   fs, ax\n"
+            "mov   gs, ax\n"
+            "pushd 0x23\n"
+            "pushd ebx\n"       /* esp */
+            "pushf\n"
+            "pushd 0x18|0x3\n"
+            "push  ecx\n"       /* eip */
+            "iretd\n"
+            ".next:\n"
+            :
+            : "ebx"(esp), "ecx"(eip));
+    PANIC("Invalid code path");
 }
 
 void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
@@ -214,7 +302,7 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
     /* setup IDT */
     idt_init();
-    idt_add_handler(0x0C, handle_gpf, 3);
+    idt_add_handler(0x0D, handle_gpf, 3);
     idt_add_handler(0x0E, handle_page_fault, 3);
 
     /* Init PMM */
@@ -274,6 +362,10 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
     /* Add keyboard handler */
     kbd_init();
+
+    /* Run user-mode tests */
+    test_usermode();
+    HALT();
 
 #ifdef UNIT_TESTS
     /* Run unit tests */

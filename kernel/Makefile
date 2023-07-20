@@ -21,6 +21,7 @@ SRCS := \
 	debug.c \
 	vmm.c \
 	kmalloc.c \
+	usermode.c \
 	main.c
 
 COMMON_SRCS := \
