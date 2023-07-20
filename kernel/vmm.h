@@ -36,6 +36,7 @@ struct vaddrinfo {
 
 void vmm_vaddrinfo(struct vaddrinfo* info, const void* vaddr);
 bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags) __attribute__((warn_unused_result));
+bool vmm_remap(const void* vaddr, unsigned flags) __attribute__((warn_unused_result));
 bool vmm_unmap(const void* vaddr, bool dealloc_frame) __attribute__((warn_unused_result));
 void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_length);
 

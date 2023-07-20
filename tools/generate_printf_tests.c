@@ -79,6 +79,16 @@ int main()
             }
         }
     }
+
+    char result[64];
+    snprintf(result, sizeof(result), "%-11s", "aBCd");
+    printf("TEST(\"%s\", \"%%-11s\", \"aBCd\");\n", result);
+
+    snprintf(result, sizeof(result), "%-10s", "aBCd");
+    printf("TEST(\"%s\", \"%%-10s\", \"aBCd\");\n", result);
+
+    snprintf(result, sizeof(result), "%-2s", "aBCd");
+    printf("TEST(\"%s\", \"%%-2s\", \"aBCd\");\n", result);
     return 0;
 }
 

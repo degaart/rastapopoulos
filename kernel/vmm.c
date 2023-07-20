@@ -6,16 +6,22 @@
 #include <string.h>
 #include <util.h>
 
-extern unsigned char _text_start[];
-extern unsigned char _text_end[];
-extern unsigned char _rodata_start[];
-extern unsigned char _rodata_end[];
-extern unsigned char _data_start[];
-extern unsigned char _data_end[];
-extern unsigned char _bss_start[];
-extern unsigned char _bss_end[];
-extern unsigned char _heap_start[];
-extern unsigned char _stacktop[];
+#define DECLARE_SYMBOL(n) extern unsigned char n[]
+#define DECLARE_SECTION_START(n)  DECLARE_SYMBOL(_ ## n ## _start)
+#define DECLARE_SECTION_END(n)    DECLARE_SYMBOL(_ ## n ## _end)
+#define DECLARE_SECTION(n) \
+    DECLARE_SECTION_START(n); \
+    DECLARE_SECTION_END(n)
+
+DECLARE_SECTION(text);
+DECLARE_SECTION(rodata);
+DECLARE_SECTION(data);
+DECLARE_SECTION(user_text);
+DECLARE_SECTION(user_data);
+DECLARE_SECTION(user_rodata);
+DECLARE_SECTION(bss);
+DECLARE_SECTION_START(heap);
+DECLARE_SYMBOL(_stacktop);
 
 /* Pagetables access */
 static struct pagetable* pagetables = (struct pagetable*)0xFFC00000;
@@ -70,6 +76,26 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
         vmm_flush();
         return true;
     }
+}
+
+bool vmm_remap(const void* vaddr, unsigned flags)
+{
+    if(!IS_ALIGNED((uintptr_t)vaddr, VMM_PAGESIZE)) {
+        TRACE("vaddr %p is not aligned", vaddr);
+        return false;
+    } else if((flags & VMM_PRESENT) == 0) {
+        TRACE("Invalid vmm_remap flags: 0x%X", flags);
+        return false;
+    }
+    struct vaddrinfo vi;
+    vmm_vaddrinfo(&vi, vaddr);
+    if(!(*vi.pde & VMM_PRESENT)) {
+        TRACE("vaddr: pde not present");
+        return false;
+    }
+    assert(vi.pte);
+    *vi.pte = (*vi.pte & VMM_FRAME) | flags;
+    return true;
 }
 
 bool vmm_unmap(const void* vaddr, bool dealloc_frame)
@@ -219,6 +245,55 @@ failed:
     PANIC("Test failed");
 }
 
+/*
+ * Test vmm_remap
+ */
+static void vmm_test_remap()
+{
+    unsigned dpl;
+    isr_t old_pf_handler = idt_handler(0x0E, &dpl);
+    idt_add_handler(0x0E, pf_handler, 3);
+    pf_count = 0;
+    pf_new_eip = &&next;
+
+    uint32_t* ptr = (uint32_t*)0xDEADB000;
+    uint32_t frame = pmm_alloc();
+    if(!vmm_map(ptr, frame, 0))
+        PANIC("vmm_map failed");
+    *ptr = 0xDEADBEEF;
+failed:
+    PANIC("Test failed");
+next:
+    pf_count = 0;
+    pf_new_eip = &&failed;
+
+    if(!vmm_remap(ptr, VMM_PRESENT | VMM_WRITABLE))
+        PANIC("vmm_remap failed");
+    *ptr = 0xDEADBEEF;
+    assert(pf_count == 0);
+
+    if(!vmm_unmap(ptr, true))
+        PANIC("vmm_unmap failed");
+    idt_add_handler(0x0E, old_pf_handler, dpl);
+}
+
+static void idmap_range(struct pagetable* pagetable, const char* name,
+                        const void* startp, const void* endp, uint32_t flags)
+{
+    uint32_t start = ROUND((uint32_t)startp, VMM_PAGESIZE);
+    uint32_t end = (uint32_t)endp;
+    char info[8] = {0};
+    info[0] = (flags & VMM_PRESENT) ? 'R' : ' ';
+    info[1] = (flags & VMM_WRITABLE) ? 'W' : ' ';
+    info[2] = (flags & VMM_USER) ? 'U' : ' ';
+    TRACE("    %-12s 0x%08lX - 0x%08lX [%3s]", name, start, end, info);
+    for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
+        size_t index = frame / VMM_PAGESIZE;
+        assert((frame & ~VMM_FRAME) == 0);
+        pagetable->entries[index] = frame | flags;
+    }
+}
+
 void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_length)
 {
     /*
@@ -238,64 +313,27 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     memset(pagetable, 0, sizeof(struct pagetable));
 
     TRACE("Kernel mappings:");
+    idmap_range(pagetable, ".text", _text_start, _text_end, VMM_PRESENT);
+    idmap_range(pagetable, ".rodata", _rodata_start, _rodata_end, VMM_PRESENT);
+    idmap_range(pagetable, ".data", _data_start, _data_end, VMM_PRESENT | VMM_WRITABLE);
+    idmap_range(pagetable, ".bss", _bss_start, _bss_end, VMM_PRESENT | VMM_WRITABLE);
+    idmap_range(pagetable, ".user_text", _user_text_start, _user_text_end, VMM_PRESENT | VMM_USER);
+    idmap_range(pagetable, ".user_data", _user_data_start, _user_data_end, VMM_PRESENT | VMM_WRITABLE | VMM_USER);
+    idmap_range(pagetable, ".user_rodata", _user_rodata_start, _user_rodata_end, VMM_PRESENT | VMM_USER);
+    idmap_range(pagetable, "heap", _heap_start, early_kmalloc_get_heap(), VMM_PRESENT | VMM_WRITABLE);
 
-    uint32_t start = ROUND((uint32_t)_text_start, VMM_PAGESIZE);
-    uint32_t end = (uint32_t)_text_end;
-    TRACE("    .text   %p - %p [R]", (void*)start, (void*)end);
-    for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
-        size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PRESENT;
-    }
-
-    start = ROUND((uint32_t)_rodata_start, VMM_PAGESIZE);
-    end = (uint32_t)_rodata_end;
-    TRACE("    .rodata %p - %p [R]", (void*)start, (void*)end);
-    for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
-        size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PRESENT;
-    }
-
-    start = ROUND((uint32_t)_data_start, VMM_PAGESIZE);
-    end = (uint32_t)_data_end;
-    TRACE("    .data   %p - %p [RW]", (void*)start, (void*)end);
-    for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
-        size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
-    }
-
-    start = ROUND((uint32_t)_bss_start, VMM_PAGESIZE);
-    end = (uint32_t)_bss_end;
     uint32_t stack_guard = (uintptr_t)_stacktop - (VMM_PAGESIZE * 2);
-    TRACE("    .bss    %p - %p [RW]", (void*)start, (void*)end);
-    for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
-        if(frame != stack_guard) {
-            size_t index = frame / VMM_PAGESIZE;
-            assert((frame & ~VMM_FRAME) == 0);
-            pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
-        }
-    }
+    TRACE("       stack guard  %p []", (void*)stack_guard);
 
-    start = ROUND((uint32_t)_heap_start, VMM_PAGESIZE);
-    end = (uint32_t)early_kmalloc_get_heap();
-    TRACE("     heap   %p - %p [RW]", (void*)start, (void*)end);
-    for(uint32_t frame = start; frame <= end; frame += VMM_PAGESIZE) {
-        size_t index = frame / VMM_PAGESIZE;
-        assert((frame & ~VMM_FRAME) == 0);
-        pagetable->entries[index] = frame | VMM_PRESENT | VMM_WRITABLE;
-    }
-    TRACE("     stack guard: %p []", (void*)stack_guard);
+    /* VGA_BASE */
+    pagetable->entries[0xB8000/VMM_PAGESIZE] = 0xB8000 | VMM_PRESENT | VMM_WRITABLE | VMM_USER;
 
-    /* Map VGA_BASE as we need it for debugging */
-    pagetable->entries[0xB8000/VMM_PAGESIZE] = 0xB8000 | VMM_PRESENT | VMM_WRITABLE;
-
-
+    /* PDE */
     assert(((uint32_t)pagetable & ~VMM_FRAME) == 0);
     pagedir->entries[0] = ((uint32_t)pagetable & VMM_FRAME) |
                           VMM_PRESENT |
-                          VMM_WRITABLE;
+                          VMM_WRITABLE |
+                          VMM_USER;
 
     /* Last entry on pagedir should point to itself */
     pagedir->entries[VMM_ENTRY_COUNT-1] = ((uint32_t)pagedir & VMM_FRAME) |
@@ -313,5 +351,6 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     ADD_TEST(vmm_test_non_present_page);
     ADD_TEST(vmm_test_map);
     ADD_TEST(vmm_test_unmap);
+    ADD_TEST(vmm_test_remap);
 }
 

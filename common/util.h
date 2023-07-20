@@ -6,11 +6,12 @@
 #define HALT() while(1) { asm volatile("cli\nhlt\n":::"memory"); }
 
 /* The following helper macros only work on powers of two */
-#define ALIGN(X, A)         (((X) + ((typeof(X))(A) - 1)) & ~((typeof(X))(A) - 1))
-#define ROUND(X, A)         ((X) & ~(((typeof(X))(A) - 1)))
-#define ALIGN_PTR(P, A)     ((typeof(P))ALIGN((uintptr_t)(P), (A)))
-#define ROUND_PTR(P, A)     ((typeof(P))ROUND((uintptr_t)(P), (A)))
-#define IS_ALIGNED(X, A)    (((X) & ((typeof(X))(A) - 1)) == 0)
+#define ALIGN(X, A)             (((X) + ((typeof(X))(A) - 1)) & ~((typeof(X))(A) - 1))
+#define ROUND(X, A)             ((X) & ~(((typeof(X))(A) - 1)))
+#define ALIGN_PTR(P, A)         ((typeof(P))ALIGN((uintptr_t)(P), (A)))
+#define ROUND_PTR(P, A)         ((typeof(P))ROUND((uintptr_t)(P), (A)))
+#define IS_ALIGNED(X, A)        (((X) & ((typeof(X))(A) - 1)) == 0)
+#define IS_ALIGNED_PTR(X, A)    IS_ALIGNED((uintptr_t)(X), (A))
 
 #define EFLAGS_IF 0x0200
 #define EFLAGS_AC 0x00040000
@@ -83,6 +84,13 @@ static inline uint32_t read_cr3(void)
 static inline void write_cr3(uint32_t cr3)
 {
     asm volatile("mov cr3, %0" :: "r"(cr3));
+}
+
+static inline uint32_t read_esp()
+{
+    uint32_t result;
+    asm volatile("mov %0, esp" : "=r"(result));
+    return result;
 }
 
 #define CLEAR_IF() \
