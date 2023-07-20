@@ -16,4 +16,5 @@ void itoa(char* buffer, size_t size, unsigned value);
 void format(bool (*writefn)(char,void*), void* ctx, const char* fmt, ...) __attribute__((format(printf, 3, 4)));
 void formatv(bool (*writefn)(char,void*), void* ctx, const char* fmt, va_list args);
 int snprintf(char* restrict str, size_t size, const char* restrict fmt, ...) __attribute__((format(printf, 3, 4)));
+int vsnprintf(char* restrict str, size_t size, const char* restrict fmt, va_list args);
 const char* basename(const char* filename);

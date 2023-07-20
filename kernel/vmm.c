@@ -16,9 +16,6 @@
 DECLARE_SECTION(text);
 DECLARE_SECTION(rodata);
 DECLARE_SECTION(data);
-DECLARE_SECTION(user_text);
-DECLARE_SECTION(user_data);
-DECLARE_SECTION(user_rodata);
 DECLARE_SECTION(bss);
 DECLARE_SECTION_START(heap);
 DECLARE_SYMBOL(_stacktop);
@@ -68,7 +65,12 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
             return true;
         }
     } else {
-        *vi.pde = pmm_alloc() | VMM_PRESENT | VMM_WRITABLE | VMM_USER;
+        uint32_t pde = pmm_alloc();
+        if(pde == INVALID_FRAME) {
+            return false;
+        }
+
+        *vi.pde = pde | VMM_PRESENT | VMM_WRITABLE | VMM_USER;
         vmm_flush();
         memset(pagetables[vi.pde_index].entries, 0, VMM_PAGESIZE);
         pagetables[vi.pde_index].entries[vi.pte_index] =
@@ -76,6 +78,24 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
         vmm_flush();
         return true;
     }
+}
+
+bool vmm_alloc(const void* vaddr, unsigned flags)
+{
+    if(!IS_ALIGNED_PTR(vaddr, VMM_PAGESIZE)) {
+        TRACE("vaddr %p is not aligned", vaddr);
+        return false;
+    }
+
+    uint32_t frame = pmm_alloc();
+    if(frame == INVALID_FRAME) {
+        return false;
+    }
+
+    bool ret = vmm_map(vaddr, frame, flags);
+    if(!ret)
+        pmm_free(frame);
+    return ret;
 }
 
 bool vmm_remap(const void* vaddr, unsigned flags)
@@ -317,9 +337,6 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     idmap_range(pagetable, ".rodata", _rodata_start, _rodata_end, VMM_PRESENT);
     idmap_range(pagetable, ".data", _data_start, _data_end, VMM_PRESENT | VMM_WRITABLE);
     idmap_range(pagetable, ".bss", _bss_start, _bss_end, VMM_PRESENT | VMM_WRITABLE);
-    idmap_range(pagetable, ".user_text", _user_text_start, _user_text_end, VMM_PRESENT | VMM_USER);
-    idmap_range(pagetable, ".user_data", _user_data_start, _user_data_end, VMM_PRESENT | VMM_WRITABLE | VMM_USER);
-    idmap_range(pagetable, ".user_rodata", _user_rodata_start, _user_rodata_end, VMM_PRESENT | VMM_USER);
     idmap_range(pagetable, "heap", _heap_start, early_kmalloc_get_heap(), VMM_PRESENT | VMM_WRITABLE);
 
     uint32_t stack_guard = (uintptr_t)_stacktop - (VMM_PAGESIZE * 2);

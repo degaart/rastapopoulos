@@ -5,7 +5,7 @@ include ../common/common.mk
 
 UNIT_TEST_FLAGS := -DUNIT_TESTS
 ASFLAGS := $(ASFLAGS) -g
-CFLAGS := $(CFLAGS) $(UNIT_TEST_FLAGS) -g
+CFLAGS := $(CFLAGS) $(UNIT_TEST_FLAGS) -g -DKERNEL
 LDFLAGS := $(LDFLAGS) -g -T kernel.ld -Xlinker -Map=obj/kernel.map
 
 QEMU_INT_FLAGS := -d int -M smm=off
@@ -21,7 +21,6 @@ SRCS := \
 	debug.c \
 	vmm.c \
 	kmalloc.c \
-	usermode.c \
 	main.c
 
 COMMON_SRCS := \

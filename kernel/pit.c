@@ -12,6 +12,11 @@
 
 static uint64_t ticks = 0;
 
+uint64_t get_ticks(void)
+{
+    return ticks;
+}
+
 static void irq_handler()
 {
     ticks++;

@@ -28,6 +28,7 @@ uint32_t pmm_alloc()
             return result;
         }
     }
+    TRACE("Physical memory exhaustion");
     return INVALID_FRAME;
 }
 

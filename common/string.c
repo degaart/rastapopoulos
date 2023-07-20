@@ -297,7 +297,11 @@ int snprintf(char* restrict str, size_t size, const char* restrict fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
+    return vsnprintf(str, size, fmt, args);
+}
 
+int vsnprintf(char* restrict str, size_t size, const char* restrict fmt, va_list args)
+{
     struct snprintf_ctx ctx;
     ctx.ptr = str;
     ctx.size = size - 1;
