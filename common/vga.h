@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 #define COLOR_BLACK         0x00
 #define COLOR_BLUE          0x01
 #define COLOR_GREEN         0x02
@@ -21,6 +23,7 @@
 #define VGA_WIDTH           80
 #define VGA_HEIGHT          25
 
+extern bool vga_enable;
 void vga_init(void);
 void vga_cursor_pos(unsigned* x, unsigned* y);
 void vga_set_cursor_pos(unsigned x, unsigned y);

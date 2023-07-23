@@ -283,6 +283,103 @@ static void test_usermode()
     PANIC("Invalid code path");
 }
 
+struct task {
+    void     (*entry)(void);
+    void*    stack;
+    uint32_t eflags;
+    uint32_t ebx;
+    uint32_t esp;
+    uint32_t ebp;
+    uint32_t esi;
+    uint32_t edi;
+    uint32_t eip;
+};
+struct task tasks[2];
+struct task dummy_task = {0};
+struct task* current_task = &dummy_task;
+void switch_task(struct task*);
+
+static void task1()
+{
+    assert(current_task == &tasks[0]);
+    static uint16_t* vga_base = (uint16_t*)VGA_BASE;
+    unsigned counter = 0;
+    while(1) {
+        uint32_t ticks = get_ticks();
+        counter++;
+
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "0x%08lX 0x%08X", ticks, counter);
+
+        uint16_t* d = vga_base;
+        for(char* s = buffer; *s; s++, d++) {
+            *d = *s | (uint16_t)(0x1F << 8);
+        }
+
+        switch_task(&tasks[1]);
+    }
+}
+
+static void task2()
+{
+    assert(current_task == &tasks[1]);
+    static uint16_t* vga_base = (uint16_t*)VGA_BASE;
+    unsigned counter = 0xFFFFFFFF;
+    while(1) {
+        uint32_t ticks = get_ticks();
+        counter--;
+
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "0x%08lX 0x%08X", ticks, counter);
+
+        uint16_t* d = vga_base + 80;
+        for(char* s = buffer; *s; s++, d++) {
+            *d = *s | (uint16_t)(0x1F << 8);
+        }
+
+        switch_task(&tasks[0]);
+    }
+}
+
+/*
+ * We want to run task1 and task2 in parallel
+ */
+static void test_context_switching()
+{
+    disable_interrupts();
+    memset(tasks, 0, sizeof(tasks));
+    tasks[0].entry = task1;
+    tasks[0].stack = kpvalloc(VMM_PAGESIZE);
+    memset(tasks[0].stack, 0xCC, VMM_PAGESIZE);
+    tasks[0].eflags = read_eflags();
+    uint32_t* esp = (uint32_t*)(tasks[0].stack + VMM_PAGESIZE);
+    *(--esp) = 0;           /* arg0 */
+    *(--esp) = (uintptr_t)tasks[0].entry;
+    *(--esp) = 0xDEADBEE0;           /* ebx */
+    *(--esp) = 0xDEADBEE1;           /* esi */
+    *(--esp) = 0xDEADBEE2;           /* edi */
+    *(--esp) = 0xDEADBEE3;           /* ebp */
+    tasks[0].esp = (uintptr_t)esp;
+    TRACE("tasks[0].esp: 0x%08lX", tasks[0].esp);
+
+    tasks[1].entry = task2;
+    tasks[1].stack = kpvalloc(VMM_PAGESIZE);
+    memset(tasks[1].stack, 0xCC, VMM_PAGESIZE);
+    tasks[1].eflags = read_eflags();
+    esp = (uint32_t*)(tasks[1].stack + VMM_PAGESIZE);
+    *(--esp) = 0; /* arg0 */
+    *(--esp) = (uintptr_t)tasks[1].entry;
+    *(--esp) = 0xDEADBEE0;           /* ebx */
+    *(--esp) = 0xDEADBEE1;           /* esi */
+    *(--esp) = 0xDEADBEE2;           /* edi */
+    *(--esp) = 0xDEADBEE3;           /* ebp */
+    tasks[1].esp = (uintptr_t)esp;
+    TRACE("tasks[1].esp: 0x%08lX", tasks[1].esp);
+
+    vga_enable = false;
+    switch_task(&tasks[0]);
+}
+
 void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 {
     vga_init();
@@ -391,8 +488,12 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     /* Add keyboard handler */
     kbd_init();
 
-    /* Run user-mode tests */
-    test_usermode();
+    ///* Run user-mode tests */
+    //test_usermode();
+    //HALT();
+
+    /* Run context switching tests */
+    test_context_switching();
     HALT();
 
 #ifdef UNIT_TESTS

@@ -35,6 +35,9 @@ menuentry "OS Name" {
    boot
 }
 
+# Documentation
+
+Use [MkDocs](https://www.mkdocs.org/getting-started/)
 
 
 
