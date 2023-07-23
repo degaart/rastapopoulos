@@ -284,15 +284,12 @@ static void test_usermode()
 }
 
 struct task {
-    void     (*entry)(void);
-    void*    stack;
-    uint32_t eflags;
-    uint32_t ebx;
+    /* 
+     * This must be the first field as switch_task does not have a
+     * definition of struct task
+     */
     uint32_t esp;
-    uint32_t ebp;
-    uint32_t esi;
-    uint32_t edi;
-    uint32_t eip;
+    void*    stack;
 };
 struct task tasks[2];
 struct task dummy_task = {0};
@@ -348,13 +345,11 @@ static void test_context_switching()
 {
     disable_interrupts();
     memset(tasks, 0, sizeof(tasks));
-    tasks[0].entry = task1;
     tasks[0].stack = kpvalloc(VMM_PAGESIZE);
     memset(tasks[0].stack, 0xCC, VMM_PAGESIZE);
-    tasks[0].eflags = read_eflags();
     uint32_t* esp = (uint32_t*)(tasks[0].stack + VMM_PAGESIZE);
     *(--esp) = 0;           /* arg0 */
-    *(--esp) = (uintptr_t)tasks[0].entry;
+    *(--esp) = (uintptr_t)task1;
     *(--esp) = 0xDEADBEE0;           /* ebx */
     *(--esp) = 0xDEADBEE1;           /* esi */
     *(--esp) = 0xDEADBEE2;           /* edi */
@@ -362,13 +357,11 @@ static void test_context_switching()
     tasks[0].esp = (uintptr_t)esp;
     TRACE("tasks[0].esp: 0x%08lX", tasks[0].esp);
 
-    tasks[1].entry = task2;
     tasks[1].stack = kpvalloc(VMM_PAGESIZE);
     memset(tasks[1].stack, 0xCC, VMM_PAGESIZE);
-    tasks[1].eflags = read_eflags();
     esp = (uint32_t*)(tasks[1].stack + VMM_PAGESIZE);
     *(--esp) = 0; /* arg0 */
-    *(--esp) = (uintptr_t)tasks[1].entry;
+    *(--esp) = (uintptr_t)task2;
     *(--esp) = 0xDEADBEE0;           /* ebx */
     *(--esp) = 0xDEADBEE1;           /* esi */
     *(--esp) = 0xDEADBEE2;           /* edi */
