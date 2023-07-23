@@ -1,5 +1,6 @@
 #include "debug.h"
 #include "pic.h"
+#include "kmalloc.h"
 #include <io.h>
 
 #define TIMER_FREQUENCY     20
@@ -10,16 +11,47 @@
 
 #define COMMAND_BYTE        0x43
 
+typedef void (*timer_t)(uint64_t,void*);
+
+struct timer {
+    timer_t         handler;
+    void*           ctx;
+    unsigned        interval;
+    unsigned        elapsed;
+    struct timer*   next;
+};
+
 static uint64_t ticks = 0;
+static struct timer* timers;
 
 uint64_t get_ticks(void)
 {
     return ticks;
 }
 
+void pit_add_timer(timer_t handler, void* ctx, unsigned interval)
+{
+    struct timer* timer = kmalloc(sizeof(struct timer));
+    timer->handler  = handler;
+    timer->ctx      = ctx;
+    timer->interval = interval;
+    timer->elapsed  = 0;
+    timer->next     = timers;
+    timers = timer;
+}
+
 static void irq_handler()
 {
     ticks++;
+    for(struct timer* timer = timers; timer; timer = timer->next) {
+        if(timer) {
+            timer->elapsed += 1000 / TIMER_FREQUENCY;
+            if(timer->elapsed >= timer->interval) {
+                timer->elapsed -= timer->interval;
+                timer->handler(ticks, timer->ctx);
+            }
+        }
+    }
 }
 
 void pit_init()

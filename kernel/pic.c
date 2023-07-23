@@ -169,12 +169,12 @@ static void isr_handler(struct isr_regs* regs)
         }
     }
 
+    pic_eoi(irq);
     if(irq_handlers[irq]) {
         irq_handlers[irq]();
     } else {
         TRACE("Unhandled IRQ%d", irq);
     }
-    pic_eoi(irq);
 }
 
 void pic_set_irq_handler(unsigned irq, irq_handler_t handler)
