@@ -288,55 +288,75 @@ struct task {
      * This must be the first field as switch_task does not have a
      * definition of struct task
      */
-    uint32_t esp;
-    void*    stack;
+    uint32_t        esp;
+    void*           stack;
+    struct task*    next;
 };
-struct task tasks[2];
-struct task dummy_task = {0};
-struct task* current_task = &dummy_task;
+
+struct task* current_task = NULL;
 void switch_task(struct task*);
 
-static void task1()
-{
-    assert(current_task == &tasks[0]);
-    static uint16_t* vga_base = (uint16_t*)VGA_BASE;
-    unsigned counter = 0;
-    while(1) {
-        uint32_t ticks = get_ticks();
-        counter++;
-
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "0x%08lX 0x%08X", ticks, counter);
-
-        uint16_t* d = vga_base;
-        for(char* s = buffer; *s; s++, d++) {
-            *d = *s | (uint16_t)(0x1F << 8);
-        }
-
-        switch_task(&tasks[1]);
+#define IMPLEMENT_TASK(name, index) \
+    static void name ## _entry() \
+    { \
+        enable_interrupts(); \
+        static uint16_t* vga_base = (uint16_t*)VGA_BASE; \
+        unsigned counter = 0; \
+        while(1) { \
+            uint32_t ticks = get_ticks(); \
+            counter++; \
+            char buffer[64]; \
+            snprintf(buffer, sizeof(buffer), "0x%08lX 0x%08X", ticks, counter); \
+            uint16_t* d = vga_base + (index * VGA_WIDTH); \
+            for(char* s = buffer; *s; s++, d++) { \
+                *d = *s | (uint16_t)(0x1F << 8); \
+            } \
+        } \
     }
+
+IMPLEMENT_TASK(task1, 0);
+IMPLEMENT_TASK(task2, 1);
+IMPLEMENT_TASK(task3, 2);
+IMPLEMENT_TASK(task4, 3);
+IMPLEMENT_TASK(task5, 4);
+IMPLEMENT_TASK(task6, 5);
+IMPLEMENT_TASK(task7, 6);
+IMPLEMENT_TASK(task8, 7);
+IMPLEMENT_TASK(task9, 8);
+IMPLEMENT_TASK(task10, 9);
+IMPLEMENT_TASK(task11, 10);
+IMPLEMENT_TASK(task12, 11);
+IMPLEMENT_TASK(task13, 12);
+IMPLEMENT_TASK(task14, 13);
+IMPLEMENT_TASK(task15, 14);
+IMPLEMENT_TASK(task16, 15);
+IMPLEMENT_TASK(task17, 16);
+IMPLEMENT_TASK(task18, 17);
+IMPLEMENT_TASK(task19, 18);
+IMPLEMENT_TASK(task20, 19);
+
+static void schedule_timer(uint64_t ticks, void* ctx)
+{
+    CLEAR_IF();
+    switch_task(current_task->next);
+    RESTORE_IF();
 }
 
-static void task2()
-{
-    assert(current_task == &tasks[1]);
-    static uint16_t* vga_base = (uint16_t*)VGA_BASE;
-    unsigned counter = 0xFFFFFFFF;
-    while(1) {
-        uint32_t ticks = get_ticks();
-        counter--;
+#define XCREATE_TASK(name) \
+    struct task* name = kmalloc(sizeof(struct task)); \
+    name->stack = kpvalloc(VMM_PAGESIZE); \
+    esp = (uint32_t*)(name->stack + VMM_PAGESIZE); \
+    *(--esp) = 0; \
+    *(--esp) = (uintptr_t)name ## _entry; \
+    *(--esp) = 0xDEADBEE0; \
+    *(--esp) = 0xDEADBEE1; \
+    *(--esp) = 0xDEADBEE2; \
+    *(--esp) = 0xDEADBEE3; \
+    name->esp = (uintptr_t)esp
 
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "0x%08lX 0x%08X", ticks, counter);
-
-        uint16_t* d = vga_base + 80;
-        for(char* s = buffer; *s; s++, d++) {
-            *d = *s | (uint16_t)(0x1F << 8);
-        }
-
-        switch_task(&tasks[0]);
-    }
-}
+#define CREATE_TASK(prev, name) \
+    XCREATE_TASK(name); \
+    prev->next = name
 
 /*
  * We want to run task1 and task2 in parallel
@@ -344,33 +364,34 @@ static void task2()
 static void test_context_switching()
 {
     disable_interrupts();
-    memset(tasks, 0, sizeof(tasks));
-    tasks[0].stack = kpvalloc(VMM_PAGESIZE);
-    memset(tasks[0].stack, 0xCC, VMM_PAGESIZE);
-    uint32_t* esp = (uint32_t*)(tasks[0].stack + VMM_PAGESIZE);
-    *(--esp) = 0;           /* arg0 */
-    *(--esp) = (uintptr_t)task1;
-    *(--esp) = 0xDEADBEE0;           /* ebx */
-    *(--esp) = 0xDEADBEE1;           /* esi */
-    *(--esp) = 0xDEADBEE2;           /* edi */
-    *(--esp) = 0xDEADBEE3;           /* ebp */
-    tasks[0].esp = (uintptr_t)esp;
-    TRACE("tasks[0].esp: 0x%08lX", tasks[0].esp);
+     
+    uint32_t* esp;
+    XCREATE_TASK(task1);
+    CREATE_TASK(task1, task2);
+    CREATE_TASK(task2, task3);
+    CREATE_TASK(task3, task4);
+    CREATE_TASK(task4, task5);
+    CREATE_TASK(task5, task6);
+    CREATE_TASK(task6, task7);
+    CREATE_TASK(task7, task8);
+    CREATE_TASK(task8, task9);
+    CREATE_TASK(task9, task10);
+    CREATE_TASK(task10, task11);
+    CREATE_TASK(task11, task12);
+    CREATE_TASK(task12, task13);
+    CREATE_TASK(task13, task14);
+    CREATE_TASK(task14, task15);
+    CREATE_TASK(task15, task16);
+    CREATE_TASK(task16, task17);
+    CREATE_TASK(task17, task18);
+    CREATE_TASK(task18, task19);
+    CREATE_TASK(task19, task20);
+    task20->next = task1;
 
-    tasks[1].stack = kpvalloc(VMM_PAGESIZE);
-    memset(tasks[1].stack, 0xCC, VMM_PAGESIZE);
-    esp = (uint32_t*)(tasks[1].stack + VMM_PAGESIZE);
-    *(--esp) = 0; /* arg0 */
-    *(--esp) = (uintptr_t)task2;
-    *(--esp) = 0xDEADBEE0;           /* ebx */
-    *(--esp) = 0xDEADBEE1;           /* esi */
-    *(--esp) = 0xDEADBEE2;           /* edi */
-    *(--esp) = 0xDEADBEE3;           /* ebp */
-    tasks[1].esp = (uintptr_t)esp;
-    TRACE("tasks[1].esp: 0x%08lX", tasks[1].esp);
+    pit_add_timer(schedule_timer, NULL, 50);
 
-    vga_enable = false;
-    switch_task(&tasks[0]);
+    //vga_enable = false;
+    switch_task(task1);
 }
 
 void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)

@@ -13,8 +13,11 @@ switch_task:
 
     ; save current esp into current task's data
     mov  eax, [current_task]
+    test eax, eax
+    jz   .switch
     mov  [eax], esp
 
+.switch:
     ; load esp of next task
     mov  eax, [esp + 20]
     mov  esp, [eax]
