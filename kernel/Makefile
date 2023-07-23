@@ -33,7 +33,8 @@ COMMON_SRCS := \
 
 ASM_SRCS := \
 	stub.asm \
-	idt.asm
+	idt.asm \
+	switch_task.asm
 
 all: obj/kernel.elf
 

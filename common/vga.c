@@ -6,6 +6,7 @@
 
 static unsigned vga_cursor_x;
 static unsigned vga_cursor_y;
+bool vga_enable = true;
 
 void vga_init()
 {
@@ -26,6 +27,9 @@ void vga_cursor_pos(unsigned* x, unsigned* y)
 
 void vga_set_cursor_pos(unsigned x, unsigned y)
 {
+    if(!vga_enable)
+        return;
+
     assert(x < VGA_WIDTH);
     assert(y < VGA_HEIGHT);
     uint16_t pos = (y * VGA_WIDTH) + x;
@@ -40,6 +44,8 @@ void vga_set_cursor_pos(unsigned x, unsigned y)
  */
 void vga_put_char(unsigned x, unsigned y, unsigned ch, unsigned attr)
 {
+    if(!vga_enable)
+        return;
     volatile uint16_t* ptr = ((uint16_t*)VGA_BASE + (y * VGA_WIDTH)) + x;
     *ptr = (ch & 0xFF)|((attr & 0xFF) << 8);
 }
@@ -49,6 +55,8 @@ void vga_put_char(unsigned x, unsigned y, unsigned ch, unsigned attr)
  */
 void vga_write_char(unsigned ch, unsigned attr)
 {
+    if(!vga_enable)
+        return;
     switch(ch) {
         case '\r':
             // ignore
@@ -78,6 +86,8 @@ void vga_write_char(unsigned ch, unsigned attr)
 
 void vga_write_string(const char* s, unsigned attr)
 {
+    if(!vga_enable)
+        return;
     while(*s) {
         vga_write_char(*s, attr);
         s++;
@@ -86,6 +96,8 @@ void vga_write_string(const char* s, unsigned attr)
 
 void vga_scroll()
 {
+    if(!vga_enable)
+        return;
     memcpy((void*)VGA_BASE,
            (void*)(VGA_BASE + (VGA_WIDTH * 2)),
            VGA_WIDTH * (VGA_HEIGHT - 1) * 2);
