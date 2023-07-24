@@ -34,7 +34,12 @@ struct vaddrinfo {
     uint32_t* pte;
 };
 
+struct pagedir* vmm_create_pagedir();
+void vmm_destroy_pagedir(struct pagedir* pagedir);
+void vmm_set_pagedir(struct pagedir* pagedir);
+void vmm_flush();
 void vmm_vaddrinfo(struct vaddrinfo* info, const void* vaddr);
+bool vmm_frame(uint32_t* frame, void* vaddr);
 bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags) __attribute__((warn_unused_result));
 bool vmm_alloc(const void* vaddr, unsigned flags) __attribute__((warn_unused_result));
 bool vmm_remap(const void* vaddr, unsigned flags) __attribute__((warn_unused_result));

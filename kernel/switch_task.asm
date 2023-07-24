@@ -1,8 +1,10 @@
 section .text
 
 extern current_task
-global switch_task
-switch_task:
+extern vmm_set_pagedir
+
+global switch_task_impl
+switch_task_impl:
     xchg bx, bx
 
     ; save state of current task
@@ -21,6 +23,12 @@ switch_task:
     ; load esp of next task
     mov  eax, [esp + 20]
     mov  esp, [eax]
+
+    ; ; load cr3 of next task
+    ; mov  ecx, [eax + 4]
+    ; push ecx
+    ; call vmm_set_pagedir
+    ; add  esp, 4
     
     ; update current_task
     mov  [current_task], eax

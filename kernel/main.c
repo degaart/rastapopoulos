@@ -94,6 +94,7 @@ bool debug_write(char ch, void*)
 
 void trace(const char* file, int line, const char* fn, const char* fmt, ...)
 {
+    CLEAR_IF();
     char prefix[64];
     snprintf(prefix, sizeof(prefix), "[%s:%s:%d] ", basename(file), fn, line);
     serial_write_string(prefix);
@@ -105,6 +106,7 @@ void trace(const char* file, int line, const char* fn, const char* fmt, ...)
     va_end(args);
     
     debug_write('\n', NULL);
+    RESTORE_IF();
 }
 
 void panic(const char* file, int line, const char* fn, const char* fmt, ...)
@@ -261,7 +263,6 @@ static void test_usermode()
     TRACE("Entering usermode, esp: 0x%08lX, eip: 0x%08lX, esp0: %p",
           esp, eip, kernelstack);
     asm volatile(
-            "xchg bx, bx\n"
             "cli\n"
             "mov   ax, 0x23\n"
             "mov   ds, ax\n"
@@ -269,45 +270,61 @@ static void test_usermode()
             "mov   fs, ax\n"
             "mov   gs, ax\n"
             "pushd 0x23\n"
-            "pushd ebx\n"       /* esp */
+            "pushd ebx\n"           /* esp */
             "pushf\n"
             "pop   eax\n"
             "or    eax, 0x200\n"    /* IF */
             "pushd eax\n"
             "pushd 0x18|0x3\n"
-            "push  ecx\n"       /* eip */
+            "push  ecx\n"           /* eip */
             "iretd\n"
-            ".next:\n"
             :
             : "ebx"(esp), "ecx"(eip));
     PANIC("Invalid code path");
 }
 
 struct task {
-    /* 
-     * This must be the first field as switch_task does not have a
-     * definition of struct task
+    /*
+     * `esp` must be the first field in this structure because switch_task
+     * does not have a complete definition of `struct task`
      */
     uint32_t        esp;
+    struct pagedir* pagedir;
     void*           stack;
     struct task*    next;
 };
 
 struct task* current_task = NULL;
-void switch_task(struct task*);
+
+void switch_task(struct task* task)
+{
+    void switch_task_impl(struct task*);
+
+    CLEAR_IF();
+    vmm_set_pagedir(task->pagedir);
+    switch_task_impl(task);
+    RESTORE_IF();
+}
 
 #define IMPLEMENT_TASK(name, index) \
     static void name ## _entry() \
     { \
         enable_interrupts(); \
+        uint32_t cr3 = read_cr3(); \
+        TRACE("cr3: 0x%08lX", cr3); \
+        void* data = (void*)0x00800000; \
+        if(!vmm_alloc(data, VMM_WRITABLE)) \
+            PANIC("vmm_alloc failed"); \
         static uint16_t* vga_base = (uint16_t*)VGA_BASE; \
-        unsigned counter = 0; \
+        unsigned* counter = data; \
+        unsigned* row = data + sizeof(unsigned); \
+        *row = index; \
+        char* buffer = data + (sizeof(unsigned) * 2); \
         while(1) { \
             uint32_t ticks = get_ticks(); \
-            counter++; \
-            char buffer[64]; \
-            snprintf(buffer, sizeof(buffer), "0x%08lX 0x%08X", ticks, counter); \
-            uint16_t* d = vga_base + (index * VGA_WIDTH); \
+            (*counter)++; \
+            snprintf(buffer, 128, "%d 0x%08lX 0x%08X", *row, ticks, *counter); \
+            uint16_t* d = vga_base + (*row * VGA_WIDTH); \
             for(char* s = buffer; *s; s++, d++) { \
                 *d = *s | (uint16_t)(0x1F << 8); \
             } \
@@ -335,11 +352,57 @@ IMPLEMENT_TASK(task18, 17);
 IMPLEMENT_TASK(task19, 18);
 IMPLEMENT_TASK(task20, 19);
 
+#if 0
+static void task1()
+{
+    idt_add_handler(0x30, syscall_handler, 3);
+
+    /* Map program starting at 0x400000 */
+    unsigned char* dst;
+    const unsigned char* src;
+    for(dst = (unsigned char*)0x400000, src = obj_program1_elf;
+        src < obj_program1_elf + obj_program1_elf_len;
+        dst += VMM_PAGESIZE, src += VMM_PAGESIZE)
+    {
+        if(!vmm_alloc(dst, VMM_WRITABLE | VMM_USER))
+            PANIC("vmm_map failed");
+        memcpy(dst, src, VMM_PAGESIZE);
+    }
+
+    /* Map its stack at 3G - 4096 */
+    unsigned char* userstack = (unsigned char*)0xC0000000 - VMM_PAGESIZE;
+    assert(IS_ALIGNED_PTR(userstack, VMM_PAGESIZE));
+    if(!vmm_alloc(userstack, VMM_WRITABLE | VMM_USER))
+        PANIC("vmm_alloc failed");
+    tss_set_esp0(current_task->stack);
+
+    uint32_t esp = (uintptr_t)userstack + VMM_PAGESIZE;
+    uint32_t eip = 0x00400000;
+    asm volatile(
+            "cli\n"
+            "mov   ax, 0x23\n"
+            "mov   ds, ax\n"
+            "mov   es, ax\n"
+            "mov   fs, ax\n"
+            "mov   gs, ax\n"
+            "pushd 0x23\n"
+            "pushd ebx\n"           /* esp */
+            "pushf\n"
+            "pop   eax\n"
+            "or    eax, 0x200\n"    /* IF */
+            "pushd eax\n"
+            "pushd 0x18|0x3\n"
+            "push  ecx\n"           /* eip */
+            "iretd\n"
+            :
+            : "ebx"(esp), "ecx"(eip));
+    PANIC("Invalid code path");
+}
+#endif
+
 static void schedule_timer(uint64_t ticks, void* ctx)
 {
-    CLEAR_IF();
     switch_task(current_task->next);
-    RESTORE_IF();
 }
 
 #define XCREATE_TASK(name) \
@@ -352,7 +415,8 @@ static void schedule_timer(uint64_t ticks, void* ctx)
     *(--esp) = 0xDEADBEE1; \
     *(--esp) = 0xDEADBEE2; \
     *(--esp) = 0xDEADBEE3; \
-    name->esp = (uintptr_t)esp
+    name->esp = (uintptr_t)esp; \
+    name->pagedir = vmm_create_pagedir()
 
 #define CREATE_TASK(prev, name) \
     XCREATE_TASK(name); \
@@ -387,8 +451,10 @@ static void test_context_switching()
     CREATE_TASK(task18, task19);
     CREATE_TASK(task19, task20);
     task20->next = task1;
+    // task1->next = task2;
+    // task2->next = task1;
 
-    pit_add_timer(schedule_timer, NULL, 50);
+    pit_add_timer(schedule_timer, NULL, 1);
 
     //vga_enable = false;
     switch_task(task1);
