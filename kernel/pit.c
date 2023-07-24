@@ -3,7 +3,7 @@
 #include "kmalloc.h"
 #include <io.h>
 
-#define TIMER_FREQUENCY     20
+#define TIMER_FREQUENCY     1000
 #define REG_CHAN0_DATA      0x40
 #define REG_CHAN1_DATA      0x41
 #define REG_CHAN2_DATA      0x42

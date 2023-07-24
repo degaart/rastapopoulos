@@ -2,6 +2,7 @@
 #include "string.h"
 #include "vga.h"
 #include "debug.h"
+#include "util.h"
 #include <stdint.h>
 
 static unsigned vga_cursor_x;
@@ -88,16 +89,19 @@ void vga_write_string(const char* s, unsigned attr)
 {
     if(!vga_enable)
         return;
+    CLEAR_IF();
     while(*s) {
         vga_write_char(*s, attr);
         s++;
     }
+    RESTORE_IF();
 }
 
 void vga_scroll()
 {
     if(!vga_enable)
         return;
+
     memcpy((void*)VGA_BASE,
            (void*)(VGA_BASE + (VGA_WIDTH * 2)),
            VGA_WIDTH * (VGA_HEIGHT - 1) * 2);

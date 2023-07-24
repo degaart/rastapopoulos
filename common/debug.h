@@ -5,7 +5,7 @@
 #define ASSERT(cond) if(!(cond)) PANIC("Assertion failed: " #cond "\n")
 #define assert(cond) ASSERT(cond)
 #define DUMP(var) TRACE(#var ": %u", var)
-#define DUMPX(var) TRACE(#var ": 0x%X", var)
+#define DUMPX(var) TRACE(#var ": 0x%08lX", (uint32_t)var)
 #define DUMPP(var) TRACE(#var ": %p", var)
 #define BREAKPOINT() asm volatile("xchg bx, bx":::"memory")
 

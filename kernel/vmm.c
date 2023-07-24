@@ -31,6 +31,47 @@ void vmm_flush()
     write_cr3(read_cr3());
 }
 
+bool vmm_frame(uint32_t* frame, void* vaddr)
+{
+    struct vaddrinfo vi;
+    vmm_vaddrinfo(&vi, vaddr);
+    if(!vi.pte)
+        return false;
+    else if(!(*vi.pte & VMM_PRESENT))
+        return false;
+    *frame = *vi.pte & VMM_FRAME;
+    return true;
+}
+
+struct pagedir* vmm_create_pagedir()
+{
+    struct pagedir* pagedir = kvalloc(VMM_ENTRY_COUNT * sizeof(uint32_t));
+    memset(pagedir, 0, sizeof(struct pagedir));
+
+    uint32_t frame;
+    if(!vmm_frame(&frame, pagedir))
+        PANIC("vmm_frame failed");
+    TRACE("new pagedir: %p (frame: 0x%08lX)", pagedir, frame);
+    return pagedir;
+}
+
+void vmm_set_pagedir(struct pagedir* pagedir)
+{
+    assert(IS_ALIGNED_PTR(pagedir, VMM_PAGESIZE));
+
+    uint32_t frame;
+    if(!vmm_frame(&frame, pagedir)) {
+        PANIC("Failed to get physical address of %p", pagedir);
+    }
+
+    /* Copy kernel mappings */
+    pagedir->entries[0] = pagedirs->entries[0];
+    pagedir->entries[VMM_ENTRY_COUNT-1] = (frame & VMM_FRAME) |
+                                          VMM_PRESENT |
+                                          VMM_WRITABLE;
+    write_cr3(frame);
+}
+
 void vmm_vaddrinfo(struct vaddrinfo* info, const void* vaddr)
 {
     uintptr_t aligned_vaddr = (uintptr_t)vaddr & ~(VMM_PAGESIZE - 1);
@@ -58,6 +99,7 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
     vmm_vaddrinfo(&vi, vaddr);
     if(*vi.pde & VMM_PRESENT) {
         if(*vi.pte & VMM_PRESENT) {
+            TRACE("Address %p already mapped", vaddr);
             return false;
         } else {
             *vi.pte = frame | VMM_PRESENT | flags;
@@ -93,8 +135,9 @@ bool vmm_alloc(const void* vaddr, unsigned flags)
     }
 
     bool ret = vmm_map(vaddr, frame, flags);
-    if(!ret)
+    if(!ret) {
         pmm_free(frame);
+    }
     return ret;
 }
 
