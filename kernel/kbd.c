@@ -1,10 +1,10 @@
 #include "pic.h"
-#include <io.h>
 #include <debug.h>
+#include <io.h>
 
-#define REG_DATA        0x60
-#define REG_CONTROL     0x64
-#define EXTENDED        0xE0
+#define REG_DATA 0x60
+#define REG_CONTROL 0x64
+#define EXTENDED 0xE0
 
 static void irq_handler()
 {
@@ -23,4 +23,3 @@ void kbd_init()
 {
     pic_set_irq_handler(1, irq_handler);
 }
-

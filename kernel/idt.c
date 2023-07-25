@@ -36,22 +36,22 @@ static void idt_test()
     assert(dpl == 3);
 
     int29_called = 0;
-    asm volatile("int 0x29":::"memory");
+    asm volatile("int 0x29" ::: "memory");
     assert(int29_called == 1);
 }
 
 void idt_init()
 {
-    for(size_t i = 0; i < sizeof(idt_entries)/sizeof(idt_entries[0]); i++) {
+    for(size_t i = 0; i < sizeof(idt_entries) / sizeof(idt_entries[0]); i++) {
         idt_entries[i].offset_lowerbits = (isr_stub_table[i] & 0xFFFF);
         idt_entries[i].offset_higherbits = (isr_stub_table[i] >> 16) & 0xFFFF;
         idt_entries[i].selector = 0x08; /* kernel code segment */
         idt_entries[i].zero = 0;
-        idt_entries[i].type_attr = IDT_PRESENT|IDT_DPL0|IDT_INT_GATE_32;
+        idt_entries[i].type_attr = IDT_PRESENT | IDT_DPL0 | IDT_INT_GATE_32;
     }
     idtr.limit = sizeof(idt_entries) - 1;
     idtr.base = idt_entries;
-    asm volatile("lidt %0" :: "m"(idtr));
+    asm volatile("lidt %0" ::"m"(idtr));
 
     ADD_TEST(idt_test);
 }
@@ -70,8 +70,8 @@ void idt_add_handler(int number, isr_t handler, unsigned dpl)
     assert(number < 256);
     assert(dpl == 0 || dpl == 3);
     isr_handlers[number] = handler;
-    idt_entries[number].type_attr = IDT_PRESENT|IDT_INT_GATE_32|(dpl << 5);
-    asm volatile("lidt %0" :: "m"(idtr));
+    idt_entries[number].type_attr = IDT_PRESENT | IDT_INT_GATE_32 | (dpl << 5);
+    asm volatile("lidt %0" ::"m"(idtr));
 }
 
 isr_t idt_handler(int number, unsigned* dpl)
@@ -82,5 +82,3 @@ isr_t idt_handler(int number, unsigned* dpl)
         *dpl = (idt_entries[number].type_attr >> 5) & 0x03;
     return isr_handlers[number];
 }
-
-

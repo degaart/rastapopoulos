@@ -1,3 +1,4 @@
+#include "../user/obj/program1.h"
 #include "gdt.h"
 #include "idt.h"
 #include "kbd.h"
@@ -6,7 +7,6 @@
 #include "pit.h"
 #include "pmm.h"
 #include "vmm.h"
-#include "../user/obj/program1.h"
 #include <debug.h>
 #include <multiboot.h>
 #include <serial.h>
@@ -14,9 +14,9 @@
 #include <util.h>
 #include <vga.h>
 
-#include <stddef.h>
-#include <stdbool.h>
 #include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
 
 extern unsigned char _heap_start[];
 static unsigned char* _heap = _heap_start;
@@ -47,13 +47,14 @@ static void handle_page_fault(struct isr_regs* regs)
 {
     uint32_t cr2 = read_cr2();
     TRACE("Page fault for 0x%08lX", cr2);
-    TRACE("CS: 0x%lX, EIP: 0x%08lX, ESP: 0x%08lX", regs->cs, regs->eip, regs->esp);
+    TRACE("CS: 0x%lX, EIP: 0x%08lX, ESP: 0x%08lX", regs->cs, regs->eip,
+          regs->esp);
 
-#define PF_P        (1 << 0)
-#define PF_WR       (1 << 1)
-#define PF_US       (1 << 2)
-#define PF_RSVD     (1 << 3)
-#define PF_ID       (1 << 4)
+#define PF_P (1 << 0)
+#define PF_WR (1 << 1)
+#define PF_US (1 << 2)
+#define PF_RSVD (1 << 3)
+#define PF_ID (1 << 4)
     char info[16];
     if(regs->err_code & PF_P)
         TRACE("    - Page-level protection violation");
@@ -104,7 +105,7 @@ void trace(const char* file, int line, const char* fn, const char* fmt, ...)
     va_start(args, fmt);
     formatv(debug_write, NULL, fmt, args);
     va_end(args);
-    
+
     debug_write('\n', NULL);
     RESTORE_IF();
 }
@@ -131,8 +132,8 @@ static void stack_overflow(int id)
 
 static void kmalloc_test()
 {
-    TRACE("kmalloc_heap: %p, kmalloc_heap_end: %p",
-          kmalloc_heap, kmalloc_heap_end);
+    TRACE("kmalloc_heap: %p, kmalloc_heap_end: %p", kmalloc_heap,
+          kmalloc_heap_end);
 
     /* Check kmalloc_heap is not mapped */
     struct vaddrinfo vi;
@@ -163,17 +164,18 @@ static void kmalloc_test()
     TRACE("footprint: 0x%lX", kmalloc_footprint());
 
     void* ptrs[16];
-    for(int i = 0; i < sizeof(ptrs)/sizeof(ptrs[0]); i++) {
+    for(int i = 0; i < sizeof(ptrs) / sizeof(ptrs[0]); i++) {
         size_t size = (1 << i);
         TRACE("Allocating 0x%lX bytes", size);
         ptrs[i] = kmalloc(size);
     }
 
-    for(int i = (sizeof(ptrs)/sizeof(ptrs[0])) - 1; i >= 0; i--) {
+    for(int i = (sizeof(ptrs) / sizeof(ptrs[0])) - 1; i >= 0; i--) {
         kfree(ptrs[i]);
     }
     kmalloc_trim(0);
-    TRACE("footprint: 0x%lX, kmalloc_heap: %p", kmalloc_footprint(), kmalloc_heap);
+    TRACE("footprint: 0x%lX, kmalloc_heap: %p", kmalloc_footprint(),
+          kmalloc_heap);
 }
 
 static void syscall0(struct isr_regs* regs)
@@ -206,28 +208,28 @@ static void syscall4(struct isr_regs* regs)
 
 static void syscall_handler(struct isr_regs* regs)
 {
-    //TRACE("Syscall handler called");
-    //TRACE("esp: 0x%08lX", read_esp());
-    //TRACE("IF: %s", interrupts_enabled() ? "SET" : "CLEAR");
+    // TRACE("Syscall handler called");
+    // TRACE("esp: 0x%08lX", read_esp());
+    // TRACE("IF: %s", interrupts_enabled() ? "SET" : "CLEAR");
     switch(regs->eax) {
-        case 0:                 /* trace */
-            syscall0(regs);
-            break;
-        case 1:                 /* add ebx+ecx+edx */
-            syscall1(regs);
-            break;
-        case 2:                 /* panic */
-            syscall2(regs);
-            break;
-        case 3:                 /* halt */
-            syscall3(regs);
-            break;
-        case 4:                 /* getticks */
-            syscall4(regs);
-            break;
-        default:
-            PANIC("Invalid syscall 0x%02lX", regs->eax);
-            break;
+    case 0: /* trace */
+        syscall0(regs);
+        break;
+    case 1: /* add ebx+ecx+edx */
+        syscall1(regs);
+        break;
+    case 2: /* panic */
+        syscall2(regs);
+        break;
+    case 3: /* halt */
+        syscall3(regs);
+        break;
+    case 4: /* getticks */
+        syscall4(regs);
+        break;
+    default:
+        PANIC("Invalid syscall 0x%02lX", regs->eax);
+        break;
     }
 }
 
@@ -240,8 +242,7 @@ static void test_usermode()
     const unsigned char* src;
     for(dst = (unsigned char*)0x400000, src = obj_program1_elf;
         src < obj_program1_elf + obj_program1_elf_len;
-        dst += VMM_PAGESIZE, src += VMM_PAGESIZE)
-    {
+        dst += VMM_PAGESIZE, src += VMM_PAGESIZE) {
         if(!vmm_alloc(dst, VMM_WRITABLE | VMM_USER))
             PANIC("vmm_map failed");
         memcpy(dst, src, VMM_PAGESIZE);
@@ -260,26 +261,25 @@ static void test_usermode()
     void user_entry(void);
     uint32_t esp = (uintptr_t)userstack + VMM_PAGESIZE;
     uint32_t eip = 0x00400000;
-    TRACE("Entering usermode, esp: 0x%08lX, eip: 0x%08lX, esp0: %p",
-          esp, eip, kernelstack);
-    asm volatile(
-            "cli\n"
-            "mov   ax, 0x23\n"
-            "mov   ds, ax\n"
-            "mov   es, ax\n"
-            "mov   fs, ax\n"
-            "mov   gs, ax\n"
-            "pushd 0x23\n"
-            "pushd ebx\n"           /* esp */
-            "pushf\n"
-            "pop   eax\n"
-            "or    eax, 0x200\n"    /* IF */
-            "pushd eax\n"
-            "pushd 0x18|0x3\n"
-            "push  ecx\n"           /* eip */
-            "iretd\n"
-            :
-            : "ebx"(esp), "ecx"(eip));
+    TRACE("Entering usermode, esp: 0x%08lX, eip: 0x%08lX, esp0: %p", esp, eip,
+          kernelstack);
+    asm volatile("cli\n"
+                 "mov   ax, 0x23\n"
+                 "mov   ds, ax\n"
+                 "mov   es, ax\n"
+                 "mov   fs, ax\n"
+                 "mov   gs, ax\n"
+                 "pushd 0x23\n"
+                 "pushd ebx\n" /* esp */
+                 "pushf\n"
+                 "pop   eax\n"
+                 "or    eax, 0x200\n" /* IF */
+                 "pushd eax\n"
+                 "pushd 0x18|0x3\n"
+                 "push  ecx\n" /* eip */
+                 "iretd\n"
+                 :
+                 : "ebx"(esp), "ecx"(eip));
     PANIC("Invalid code path");
 }
 
@@ -288,10 +288,10 @@ struct task {
      * `esp` must be the first field in this structure because switch_task
      * does not have a complete definition of `struct task`
      */
-    uint32_t        esp;
+    uint32_t esp;
     struct pagedir* pagedir;
-    void*           stack;
-    struct task*    next;
+    void* stack;
+    struct task* next;
 };
 
 struct task* current_task = NULL;
@@ -306,29 +306,29 @@ void switch_task(struct task* task)
     RESTORE_IF();
 }
 
-#define IMPLEMENT_TASK(name, index) \
-    static void name ## _entry() \
-    { \
-        enable_interrupts(); \
-        uint32_t cr3 = read_cr3(); \
-        TRACE("cr3: 0x%08lX", cr3); \
-        void* data = (void*)0x00800000; \
-        if(!vmm_alloc(data, VMM_WRITABLE)) \
-            PANIC("vmm_alloc failed"); \
-        static uint16_t* vga_base = (uint16_t*)VGA_BASE; \
-        unsigned* counter = data; \
-        unsigned* row = data + sizeof(unsigned); \
-        *row = index; \
-        char* buffer = data + (sizeof(unsigned) * 2); \
-        while(1) { \
-            uint32_t ticks = get_ticks(); \
-            (*counter)++; \
+#define IMPLEMENT_TASK(name, index)                                            \
+    static void name##_entry()                                                 \
+    {                                                                          \
+        enable_interrupts();                                                   \
+        uint32_t cr3 = read_cr3();                                             \
+        TRACE("cr3: 0x%08lX", cr3);                                            \
+        void* data = (void*)0x00800000;                                        \
+        if(!vmm_alloc(data, VMM_WRITABLE))                                     \
+            PANIC("vmm_alloc failed");                                         \
+        static uint16_t* vga_base = (uint16_t*)VGA_BASE;                       \
+        unsigned* counter = data;                                              \
+        unsigned* row = data + sizeof(unsigned);                               \
+        *row = index;                                                          \
+        char* buffer = data + (sizeof(unsigned) * 2);                          \
+        while(1) {                                                             \
+            uint32_t ticks = get_ticks();                                      \
+            (*counter)++;                                                      \
             snprintf(buffer, 128, "%d 0x%08lX 0x%08X", *row, ticks, *counter); \
-            uint16_t* d = vga_base + (*row * VGA_WIDTH); \
-            for(char* s = buffer; *s; s++, d++) { \
-                *d = *s | (uint16_t)(0x1F << 8); \
-            } \
-        } \
+            uint16_t* d = vga_base + (*row * VGA_WIDTH);                       \
+            for(char* s = buffer; *s; s++, d++) {                              \
+                *d = *s | (uint16_t)(0x1F << 8);                               \
+            }                                                                  \
+        }                                                                      \
     }
 
 IMPLEMENT_TASK(task1, 0);
@@ -405,21 +405,21 @@ static void schedule_timer(uint64_t ticks, void* ctx)
     switch_task(current_task->next);
 }
 
-#define XCREATE_TASK(name) \
-    struct task* name = kmalloc(sizeof(struct task)); \
-    name->stack = kpvalloc(VMM_PAGESIZE); \
-    esp = (uint32_t*)(name->stack + VMM_PAGESIZE); \
-    *(--esp) = 0; \
-    *(--esp) = (uintptr_t)name ## _entry; \
-    *(--esp) = 0xDEADBEE0; \
-    *(--esp) = 0xDEADBEE1; \
-    *(--esp) = 0xDEADBEE2; \
-    *(--esp) = 0xDEADBEE3; \
-    name->esp = (uintptr_t)esp; \
+#define XCREATE_TASK(name)                                                     \
+    struct task* name = kmalloc(sizeof(struct task));                          \
+    name->stack = kpvalloc(VMM_PAGESIZE);                                      \
+    esp = (uint32_t*)(name->stack + VMM_PAGESIZE);                             \
+    *(--esp) = 0;                                                              \
+    *(--esp) = (uintptr_t)name##_entry;                                        \
+    *(--esp) = 0xDEADBEE0;                                                     \
+    *(--esp) = 0xDEADBEE1;                                                     \
+    *(--esp) = 0xDEADBEE2;                                                     \
+    *(--esp) = 0xDEADBEE3;                                                     \
+    name->esp = (uintptr_t)esp;                                                \
     name->pagedir = vmm_create_pagedir()
 
-#define CREATE_TASK(prev, name) \
-    XCREATE_TASK(name); \
+#define CREATE_TASK(prev, name)                                                \
+    XCREATE_TASK(name);                                                        \
     prev->next = name
 
 /*
@@ -428,7 +428,7 @@ static void schedule_timer(uint64_t ticks, void* ctx)
 static void test_context_switching()
 {
     disable_interrupts();
-     
+
     uint32_t* esp;
     XCREATE_TASK(task1);
     CREATE_TASK(task1, task2);
@@ -456,7 +456,7 @@ static void test_context_switching()
 
     pit_add_timer(schedule_timer, NULL, 1);
 
-    //vga_enable = false;
+    // vga_enable = false;
     switch_task(task1);
 }
 
@@ -484,9 +484,9 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     }
     memcpy(&multiboot_info, multiboot, sizeof(multiboot_info));
     if(multiboot_info.flags & MULTIBOOT_INFO_MEM_MAP) {
-        struct multiboot_mmap_entry* mmap_entries = early_kmalloc(multiboot_info.mmap_length);
-        memcpy(mmap_entries,
-               multiboot_info.mmap_addr,
+        struct multiboot_mmap_entry* mmap_entries =
+            early_kmalloc(multiboot_info.mmap_length);
+        memcpy(mmap_entries, multiboot_info.mmap_addr,
                multiboot_info.mmap_length);
         multiboot_info.mmap_addr = mmap_entries;
     }
@@ -499,7 +499,9 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
      */
     TRACE("Memory map:");
     TRACE("    ADDR       LEN        TYPE");
-    MULTIBOOT_MMAP_ITERATE(multiboot_info.mmap_addr, e, multiboot_info.mmap_length) {
+    MULTIBOOT_MMAP_ITERATE(multiboot_info.mmap_addr, e,
+                           multiboot_info.mmap_length)
+    {
         uint32_t addr = e->addr & 0xFFFFFFFF;
         uint32_t len = e->len & 0xFFFFFFFF;
         TRACE("    0x%08lX 0x%08lX 0x%08lX", addr, len, e->type);
@@ -520,16 +522,17 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
      * for now
      */
     for(const struct multiboot_mmap_entry* e = multiboot_info.mmap_addr;
-        (uintptr_t)e < (uintptr_t)multiboot_info.mmap_addr + multiboot_info.mmap_length;
-        e = (const struct multiboot_mmap_entry*)((uintptr_t)e + e->size + sizeof(uint32_t)))
-    {
+        (uintptr_t)e <
+        (uintptr_t)multiboot_info.mmap_addr + multiboot_info.mmap_length;
+        e = (const struct multiboot_mmap_entry*)((uintptr_t)e + e->size +
+                                                 sizeof(uint32_t))) {
         if(e->type == MULTIBOOT_MEMORY_AVAILABLE) {
             uint32_t start = ALIGN(e->addr & 0xFFFFFFFF, VMM_PAGESIZE);
-            uint32_t size = ROUND(
-                    (e->len & 0xFFFFFFFF) -
-                    (start - (e->addr & 0xFFFFFFFF)),
-                    VMM_PAGESIZE);
-            for(uint32_t frame = start; frame < start + size; frame += VMM_PAGESIZE) {
+            uint32_t size =
+                ROUND((e->len & 0xFFFFFFFF) - (start - (e->addr & 0xFFFFFFFF)),
+                      VMM_PAGESIZE);
+            for(uint32_t frame = start; frame < start + size;
+                frame += VMM_PAGESIZE) {
                 if(frame <= (uint32_t)_heap) { /* 1Mb */
                     pmm_set(frame);
                 }
@@ -537,7 +540,8 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
         }
     }
 
-    /* At this point, if we pmm_alloc(), we should get a page which is > _heap */
+    /* At this point, if we pmm_alloc(), we should get a page which is > _heap
+     */
     uint32_t new_frame = pmm_alloc();
     TRACE("_heap: %p, new_frame: 0x%08lX", _heap, new_frame);
     ASSERT(new_frame > (uintptr_t)_heap);
@@ -569,8 +573,8 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     kbd_init();
 
     ///* Run user-mode tests */
-    //test_usermode();
-    //HALT();
+    // test_usermode();
+    // HALT();
 
     /* Run context switching tests */
     test_context_switching();
@@ -585,11 +589,10 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
     /* Enable interrupts */
     TRACE("Waiting for an interrupt");
-    asm volatile("sti":::"memory");
+    asm volatile("sti" ::: "memory");
 
     /* Wait for an interrupt */
     while(1) {
-        asm volatile("hlt":::"memory");
+        asm volatile("hlt" ::: "memory");
     }
 }
-
