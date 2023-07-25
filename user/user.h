@@ -7,4 +7,3 @@ void debug_write(const char* msg);
 int add(int a, int b, int c);
 void halt(void);
 uint32_t get_ticks(void);
-

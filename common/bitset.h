@@ -15,4 +15,3 @@ bool bitset_get(const struct bitset* bitset, unsigned index);
 void bitset_set(struct bitset* bitset, unsigned index);
 void bitset_clear(struct bitset* bitset, unsigned index);
 size_t bitset_find(struct bitset* bitset);
-

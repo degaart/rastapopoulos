@@ -4,21 +4,13 @@
 
 static inline void outb(uint16_t port, uint8_t val)
 {
-    asm volatile(
-            "out %1, %0"
-            :
-            : "a"(val), "Nd"(port)
-            : "memory");
+    asm volatile("out %1, %0" : : "a"(val), "Nd"(port) : "memory");
 }
 
 static inline uint8_t inb(uint16_t port)
 {
     uint8_t result;
-    asm volatile(
-            "in %0, %1"
-            : "=a"(result)
-            : "Nd"(port)
-            : "memory");
+    asm volatile("in %0, %1" : "=a"(result) : "Nd"(port) : "memory");
     return result;
 }
 
@@ -26,4 +18,3 @@ static inline void io_wait(void)
 {
     outb(0x80, 0);
 }
-
