@@ -112,6 +112,7 @@ void trace(const char* file, int line, const char* fn, const char* fmt, ...)
 
 void panic(const char* file, int line, const char* fn, const char* fmt, ...)
 {
+    CLEAR_IF();
     trace(file, line, fn, "*** KERNEL PANIC ***");
     va_list args;
     va_start(args, fmt);
@@ -310,8 +311,6 @@ void switch_task(struct task* task)
     static void name##_entry()                                                 \
     {                                                                          \
         enable_interrupts();                                                   \
-        uint32_t cr3 = read_cr3();                                             \
-        TRACE("cr3: 0x%08lX", cr3);                                            \
         void* data = (void*)0x00800000;                                        \
         if(!vmm_alloc(data, VMM_WRITABLE))                                     \
             PANIC("vmm_alloc failed");                                         \

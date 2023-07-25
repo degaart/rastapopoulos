@@ -20,11 +20,13 @@ static size_t zone_count;
 /* Returns a physical address */
 uint32_t pmm_alloc()
 {
+    CLEAR_IF();
     for(size_t i = 0; i < zone_count; i++) {
         size_t frame_index = bitset_find(zones[i]->bitmap);
         if(frame_index != BITSET_INVALID) {
             uint32_t result = zones[i]->start + (frame_index * PAGESIZE);
             pmm_set(result);
+            RESTORE_IF();
             return result;
         }
     }
@@ -55,14 +57,17 @@ static void pmm_set_value(uint32_t phys_addr, bool value)
 bool pmm_get(uint32_t phys_addr)
 {
     assert((phys_addr & (PAGESIZE - 1)) == 0); /* Check aligned to PAGESIZE */
+    CLEAR_IF();
     for(size_t i = 0; i < zone_count; i++) {
         if(phys_addr >= zones[i]->start &&
            phys_addr < zones[i]->start + zones[i]->size) {
             size_t frame_index = (phys_addr - zones[i]->start) / PAGESIZE;
+            RESTORE_IF();
             return bitset_get(zones[i]->bitmap, frame_index);
         }
     }
     PANIC("Invalid frame: %p", (void*)phys_addr);
+    RESTORE_IF();
     return false;
 }
 

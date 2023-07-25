@@ -31,7 +31,9 @@ static struct pagedir* pagedirs = (struct pagedir*)0xFFFFF000;
 
 void vmm_flush()
 {
+    CLEAR_IF();
     write_cr3(read_cr3());
+    RESTORE_IF();
 }
 
 bool vmm_frame(uint32_t* frame, void* vaddr)
@@ -54,7 +56,6 @@ struct pagedir* vmm_create_pagedir()
     uint32_t frame;
     if(!vmm_frame(&frame, pagedir))
         PANIC("vmm_frame failed");
-    TRACE("new pagedir: %p (frame: 0x%08lX)", pagedir, frame);
     return pagedir;
 }
 
@@ -68,10 +69,12 @@ void vmm_set_pagedir(struct pagedir* pagedir)
     }
 
     /* Copy kernel mappings */
+    CLEAR_IF();
     pagedir->entries[0] = pagedirs->entries[0];
     pagedir->entries[VMM_ENTRY_COUNT - 1] =
         (frame & VMM_FRAME) | VMM_PRESENT | VMM_WRITABLE;
     write_cr3(frame);
+    RESTORE_IF();
 }
 
 void vmm_vaddrinfo(struct vaddrinfo* info, const void* vaddr)
@@ -100,18 +103,22 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
 
     struct vaddrinfo vi;
     vmm_vaddrinfo(&vi, vaddr);
+    CLEAR_IF();
     if(*vi.pde & VMM_PRESENT) {
         if(*vi.pte & VMM_PRESENT) {
             TRACE("Address %p already mapped", vaddr);
+            RESTORE_IF();
             return false;
         } else {
             *vi.pte = frame | VMM_PRESENT | flags;
             vmm_flush();
+            RESTORE_IF();
             return true;
         }
     } else {
         uint32_t pde = pmm_alloc();
         if(pde == INVALID_FRAME) {
+            RESTORE_IF();
             return false;
         }
 
@@ -121,6 +128,7 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
         pagetables[vi.pde_index].entries[vi.pte_index] =
             frame | VMM_PRESENT | flags;
         vmm_flush();
+        RESTORE_IF();
         return true;
     }
 }
@@ -153,14 +161,18 @@ bool vmm_remap(const void* vaddr, unsigned flags)
         TRACE("Invalid vmm_remap flags: 0x%X", flags);
         return false;
     }
+
+    CLEAR_IF();
     struct vaddrinfo vi;
     vmm_vaddrinfo(&vi, vaddr);
     if(!(*vi.pde & VMM_PRESENT)) {
         TRACE("vaddr: pde not present");
+        RESTORE_IF();
         return false;
     }
     assert(vi.pte);
     *vi.pte = (*vi.pte & VMM_FRAME) | flags;
+    RESTORE_IF();
     return true;
 }
 
@@ -171,13 +183,16 @@ bool vmm_unmap(const void* vaddr, bool dealloc_frame)
         return false;
     }
 
+    CLEAR_IF();
     struct vaddrinfo vi;
     vmm_vaddrinfo(&vi, vaddr);
     if(!(pagedirs->entries[vi.pde_index] & VMM_PRESENT)) {
         TRACE("vaddr %p: pagedir not present", vaddr);
+        RESTORE_IF();
         return false;
     } else if(!(pagetables[vi.pde_index].entries[vi.pte_index] & VMM_PRESENT)) {
         TRACE("vaddr %p already unmapped", vaddr);
+        RESTORE_IF();
         return false;
     } else {
         pagetables[vi.pde_index].entries[vi.pte_index] = 0;
@@ -198,6 +213,7 @@ bool vmm_unmap(const void* vaddr, bool dealloc_frame)
             pagedirs->entries[vi.pde_index] = 0;
         }
         vmm_flush();
+        RESTORE_IF();
         return true;
     }
 }
