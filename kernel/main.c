@@ -323,7 +323,8 @@ void switch_task(struct task* task)
         while(1) {                                                             \
             uint32_t ticks = get_ticks();                                      \
             (*counter)++;                                                      \
-            snprintf(buffer, 128, "%d 0x%08lX 0x%08X", *row, ticks, *counter); \
+            snprintf(buffer, 128, "%02d 0x%08lX 0x%08X", *row, ticks,          \
+                     *counter);                                                \
             uint16_t* d = vga_base + (*row * VGA_WIDTH);                       \
             for(char* s = buffer; *s; s++, d++) {                              \
                 *d = *s | (uint16_t)(0x1F << 8);                               \
@@ -331,7 +332,7 @@ void switch_task(struct task* task)
         }                                                                      \
     }
 
-IMPLEMENT_TASK(task1, 0);
+// IMPLEMENT_TASK(task1, 0);
 IMPLEMENT_TASK(task2, 1);
 IMPLEMENT_TASK(task3, 2);
 IMPLEMENT_TASK(task4, 3);
@@ -352,8 +353,7 @@ IMPLEMENT_TASK(task18, 17);
 IMPLEMENT_TASK(task19, 18);
 IMPLEMENT_TASK(task20, 19);
 
-#if 0
-static void task1()
+static void task1_entry()
 {
     idt_add_handler(0x30, syscall_handler, 3);
 
@@ -362,8 +362,7 @@ static void task1()
     const unsigned char* src;
     for(dst = (unsigned char*)0x400000, src = obj_program1_elf;
         src < obj_program1_elf + obj_program1_elf_len;
-        dst += VMM_PAGESIZE, src += VMM_PAGESIZE)
-    {
+        dst += VMM_PAGESIZE, src += VMM_PAGESIZE) {
         if(!vmm_alloc(dst, VMM_WRITABLE | VMM_USER))
             PANIC("vmm_map failed");
         memcpy(dst, src, VMM_PAGESIZE);
@@ -374,31 +373,29 @@ static void task1()
     assert(IS_ALIGNED_PTR(userstack, VMM_PAGESIZE));
     if(!vmm_alloc(userstack, VMM_WRITABLE | VMM_USER))
         PANIC("vmm_alloc failed");
-    tss_set_esp0(current_task->stack);
+    tss_set_esp0(current_task->stack + VMM_PAGESIZE);
 
     uint32_t esp = (uintptr_t)userstack + VMM_PAGESIZE;
     uint32_t eip = 0x00400000;
-    asm volatile(
-            "cli\n"
-            "mov   ax, 0x23\n"
-            "mov   ds, ax\n"
-            "mov   es, ax\n"
-            "mov   fs, ax\n"
-            "mov   gs, ax\n"
-            "pushd 0x23\n"
-            "pushd ebx\n"           /* esp */
-            "pushf\n"
-            "pop   eax\n"
-            "or    eax, 0x200\n"    /* IF */
-            "pushd eax\n"
-            "pushd 0x18|0x3\n"
-            "push  ecx\n"           /* eip */
-            "iretd\n"
-            :
-            : "ebx"(esp), "ecx"(eip));
+    asm volatile("cli\n"
+                 "mov   ax, 0x23\n"
+                 "mov   ds, ax\n"
+                 "mov   es, ax\n"
+                 "mov   fs, ax\n"
+                 "mov   gs, ax\n"
+                 "pushd 0x23\n"
+                 "pushd ebx\n" /* esp */
+                 "pushf\n"
+                 "pop   eax\n"
+                 "or    eax, 0x200\n" /* IF */
+                 "pushd eax\n"
+                 "pushd 0x18|0x3\n"
+                 "push  ecx\n" /* eip */
+                 "iretd\n"
+                 :
+                 : "ebx"(esp), "ecx"(eip));
     PANIC("Invalid code path");
 }
-#endif
 
 static void schedule_timer(uint64_t ticks, void* ctx)
 {

@@ -1,4 +1,4 @@
-.PHONY: all clean run run_graphic debug
+.PHONY: all clean run run_graphic debug format
 .SUFFIXES:
 
 include ../common/common.mk
@@ -88,4 +88,8 @@ debug: obj/kernel.elf
 
 clean:
 	rm -rf obj
+
+format:
+	find .. -name '*.c' -or -name '*.h' -print -exec clang-format -i '{}' ';'
+
 
