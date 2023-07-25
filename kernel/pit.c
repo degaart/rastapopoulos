@@ -1,24 +1,24 @@
 #include "debug.h"
-#include "pic.h"
 #include "kmalloc.h"
+#include "pic.h"
 #include <io.h>
 
-#define TIMER_FREQUENCY     1000
-#define REG_CHAN0_DATA      0x40
-#define REG_CHAN1_DATA      0x41
-#define REG_CHAN2_DATA      0x42
-#define REG_COMMAND         0x43
+#define TIMER_FREQUENCY 1000
+#define REG_CHAN0_DATA 0x40
+#define REG_CHAN1_DATA 0x41
+#define REG_CHAN2_DATA 0x42
+#define REG_COMMAND 0x43
 
-#define COMMAND_BYTE        0x43
+#define COMMAND_BYTE 0x43
 
-typedef void (*timer_t)(uint64_t,void*);
+typedef void (*timer_t)(uint64_t, void*);
 
 struct timer {
-    timer_t         handler;
-    void*           ctx;
-    unsigned        interval;
-    unsigned        elapsed;
-    struct timer*   next;
+    timer_t handler;
+    void* ctx;
+    unsigned interval;
+    unsigned elapsed;
+    struct timer* next;
 };
 
 static uint64_t ticks = 0;
@@ -32,11 +32,11 @@ uint64_t get_ticks(void)
 void pit_add_timer(timer_t handler, void* ctx, unsigned interval)
 {
     struct timer* timer = kmalloc(sizeof(struct timer));
-    timer->handler  = handler;
-    timer->ctx      = ctx;
+    timer->handler = handler;
+    timer->ctx = ctx;
     timer->interval = interval;
-    timer->elapsed  = 0;
-    timer->next     = timers;
+    timer->elapsed = 0;
+    timer->next = timers;
     timers = timer;
 }
 
@@ -62,5 +62,3 @@ void pit_init()
     outb(REG_CHAN0_DATA, divisor >> 8);
     pic_set_irq_handler(0, irq_handler);
 }
-
-

@@ -1,16 +1,16 @@
+#include "vmm.h"
 #include "idt.h"
 #include "kmalloc.h"
 #include "pmm.h"
-#include "vmm.h"
 #include <debug.h>
 #include <string.h>
 #include <util.h>
 
 #define DECLARE_SYMBOL(n) extern unsigned char n[]
-#define DECLARE_SECTION_START(n)  DECLARE_SYMBOL(_ ## n ## _start)
-#define DECLARE_SECTION_END(n)    DECLARE_SYMBOL(_ ## n ## _end)
-#define DECLARE_SECTION(n) \
-    DECLARE_SECTION_START(n); \
+#define DECLARE_SECTION_START(n) DECLARE_SYMBOL(_##n##_start)
+#define DECLARE_SECTION_END(n) DECLARE_SYMBOL(_##n##_end)
+#define DECLARE_SECTION(n)                                                     \
+    DECLARE_SECTION_START(n);                                                  \
     DECLARE_SECTION_END(n)
 
 DECLARE_SECTION(text);
@@ -66,9 +66,8 @@ void vmm_set_pagedir(struct pagedir* pagedir)
 
     /* Copy kernel mappings */
     pagedir->entries[0] = pagedirs->entries[0];
-    pagedir->entries[VMM_ENTRY_COUNT-1] = (frame & VMM_FRAME) |
-                                          VMM_PRESENT |
-                                          VMM_WRITABLE;
+    pagedir->entries[VMM_ENTRY_COUNT - 1] =
+        (frame & VMM_FRAME) | VMM_PRESENT | VMM_WRITABLE;
     write_cr3(frame);
 }
 
@@ -76,7 +75,8 @@ void vmm_vaddrinfo(struct vaddrinfo* info, const void* vaddr)
 {
     uintptr_t aligned_vaddr = (uintptr_t)vaddr & ~(VMM_PAGESIZE - 1);
     info->pde_index = aligned_vaddr / (VMM_PAGESIZE * VMM_ENTRY_COUNT);
-    info->pte_index = (aligned_vaddr % (VMM_PAGESIZE * VMM_ENTRY_COUNT)) / VMM_PAGESIZE;
+    info->pte_index =
+        (aligned_vaddr % (VMM_PAGESIZE * VMM_ENTRY_COUNT)) / VMM_PAGESIZE;
     info->pde = &pagedirs->entries[info->pde_index];
     if(*info->pde & VMM_PRESENT) {
         info->pte = &pagetables[info->pde_index].entries[info->pte_index];
@@ -208,7 +208,6 @@ static void pf_handler(struct isr_regs* regs)
         regs->eip = (uint32_t)pf_new_eip;
 }
 
-
 /*
  * Testing write into RO page (int 0x0E page fault, only with CR0.WP)
  * Should trigger an int 0x0E page fault
@@ -221,7 +220,7 @@ static void vmm_test_ro_page()
 
     idt_add_handler(0x0E, pf_handler, 3);
     pf_count = 0;
-    pf_new_eip = &&label1;          /* this is a gcc extension */
+    pf_new_eip = &&label1; /* this is a gcc extension */
 
     uint32_t cr0 = read_cr0();
     assert((cr0 && CR0_WP) != 0);
@@ -357,7 +356,8 @@ static void idmap_range(struct pagetable* pagetable, const char* name,
     }
 }
 
-void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_length)
+void vmm_init(const struct multiboot_mmap_entry* mmap_entries,
+              size_t mmap_length)
 {
     /*
      * After our call to pmm_alloc, early_kmalloc would return invalid results,
@@ -378,27 +378,28 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     TRACE("Kernel mappings:");
     idmap_range(pagetable, ".text", _text_start, _text_end, VMM_PRESENT);
     idmap_range(pagetable, ".rodata", _rodata_start, _rodata_end, VMM_PRESENT);
-    idmap_range(pagetable, ".data", _data_start, _data_end, VMM_PRESENT | VMM_WRITABLE);
-    idmap_range(pagetable, ".bss", _bss_start, _bss_end, VMM_PRESENT | VMM_WRITABLE);
-    idmap_range(pagetable, "heap", _heap_start, early_kmalloc_get_heap(), VMM_PRESENT | VMM_WRITABLE);
+    idmap_range(pagetable, ".data", _data_start, _data_end,
+                VMM_PRESENT | VMM_WRITABLE);
+    idmap_range(pagetable, ".bss", _bss_start, _bss_end,
+                VMM_PRESENT | VMM_WRITABLE);
+    idmap_range(pagetable, "heap", _heap_start, early_kmalloc_get_heap(),
+                VMM_PRESENT | VMM_WRITABLE);
 
     uint32_t stack_guard = (uintptr_t)_stacktop - (VMM_PAGESIZE * 2);
     TRACE("       stack guard  %p []", (void*)stack_guard);
 
     /* VGA_BASE */
-    pagetable->entries[0xB8000/VMM_PAGESIZE] = 0xB8000 | VMM_PRESENT | VMM_WRITABLE | VMM_USER;
+    pagetable->entries[0xB8000 / VMM_PAGESIZE] =
+        0xB8000 | VMM_PRESENT | VMM_WRITABLE | VMM_USER;
 
     /* PDE */
     assert(((uint32_t)pagetable & ~VMM_FRAME) == 0);
-    pagedir->entries[0] = ((uint32_t)pagetable & VMM_FRAME) |
-                          VMM_PRESENT |
-                          VMM_WRITABLE |
-                          VMM_USER;
+    pagedir->entries[0] = ((uint32_t)pagetable & VMM_FRAME) | VMM_PRESENT |
+                          VMM_WRITABLE | VMM_USER;
 
     /* Last entry on pagedir should point to itself */
-    pagedir->entries[VMM_ENTRY_COUNT-1] = ((uint32_t)pagedir & VMM_FRAME) |
-                                          VMM_PRESENT |
-                                          VMM_WRITABLE;
+    pagedir->entries[VMM_ENTRY_COUNT - 1] =
+        ((uint32_t)pagedir & VMM_FRAME) | VMM_PRESENT | VMM_WRITABLE;
     write_cr3((uint32_t)pagedir);
 
     uint32_t cr0 = read_cr0();
@@ -413,4 +414,3 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries, size_t mmap_lengt
     ADD_TEST(vmm_test_unmap);
     ADD_TEST(vmm_test_remap);
 }
-

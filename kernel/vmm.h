@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
 
 #define VMM_PRESENT             (1 << 0)
 #define VMM_WRITABLE            (1 << 1)

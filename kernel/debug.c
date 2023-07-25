@@ -30,4 +30,3 @@ void run_tests()
         }
     }
 }
-
