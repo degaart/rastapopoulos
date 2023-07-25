@@ -16,6 +16,9 @@
 DECLARE_SECTION(text);
 DECLARE_SECTION(rodata);
 DECLARE_SECTION(data);
+DECLARE_SECTION(user_text);
+DECLARE_SECTION(user_data);
+DECLARE_SECTION(user_rodata);
 DECLARE_SECTION(bss);
 DECLARE_SECTION_START(heap);
 DECLARE_SYMBOL(_stacktop);
@@ -380,6 +383,12 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries,
     idmap_range(pagetable, ".rodata", _rodata_start, _rodata_end, VMM_PRESENT);
     idmap_range(pagetable, ".data", _data_start, _data_end,
                 VMM_PRESENT | VMM_WRITABLE);
+    idmap_range(pagetable, ".user_text", _user_text_start, _user_text_end,
+                VMM_PRESENT | VMM_USER);
+    idmap_range(pagetable, ".user_data", _user_data_start, _user_data_end,
+                VMM_PRESENT | VMM_WRITABLE | VMM_USER);
+    idmap_range(pagetable, ".user_rodata", _user_rodata_start, _user_rodata_end,
+                VMM_PRESENT | VMM_USER);
     idmap_range(pagetable, ".bss", _bss_start, _bss_end,
                 VMM_PRESENT | VMM_WRITABLE);
     idmap_range(pagetable, "heap", _heap_start, early_kmalloc_get_heap(),
