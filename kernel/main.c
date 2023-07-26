@@ -45,6 +45,7 @@ void* early_kmalloc(size_t size)
 
 static void handle_page_fault(struct isr_regs* regs)
 {
+    CLEAR_IF();
     uint32_t cr2 = read_cr2();
     TRACE("Page fault for 0x%08lX", cr2);
     TRACE("CS: 0x%lX, EIP: 0x%08lX, ESP: 0x%08lX", regs->cs, regs->eip,
