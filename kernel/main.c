@@ -1,4 +1,5 @@
 #include "../user/obj/program1.h"
+#include "../user/obj/program2.h"
 #include "gdt.h"
 #include "idt.h"
 #include "kbd.h"
@@ -17,6 +18,24 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
+
+#define ENTER_USERMODE(esp, eip)                \
+    asm volatile("cli\n"                        \
+                 "mov   ax, 0x23\n"             \
+                 "mov   ds, ax\n"               \
+                 "mov   es, ax\n"               \
+                 "mov   fs, ax\n"               \
+                 "mov   gs, ax\n"               \
+                 "pushd 0x23\n"                 \
+                 "pushd ebx\n"                  \
+                 "pushf\n"                      \
+                 "pop   eax\n"                  \
+                 "or    eax, 0x200\n"           \
+                 "pushd eax\n"                  \
+                 "pushd 0x18|0x3\n"             \
+                 "push  ecx\n"                  \
+                 "iretd\n"                      \
+                 :: "ebx"(esp), "ecx"(eip))
 
 extern unsigned char _heap_start[];
 static unsigned char* _heap = _heap_start;
@@ -235,9 +254,83 @@ static void syscall_handler(struct isr_regs* regs)
     }
 }
 
-static void test_usermode()
+struct task {
+    /*
+     * `esp` must be the first field in this structure because switch_task
+     * does not have a complete definition of `struct task`
+     */
+    uint32_t esp;
+    struct pagedir* pagedir;
+    void* stack;
+    char* name;
+    struct task* next;
+};
+
+struct task* ready_queue = NULL;
+struct task* current_task = NULL;
+
+void switch_task(struct task* task)
 {
-    idt_add_handler(0x30, syscall_handler, 3);
+    void switch_task_impl(struct task*);
+
+    CLEAR_IF();
+    vmm_set_pagedir(task->pagedir);
+    tss_set_esp0(task->stack + VMM_PAGESIZE);
+    switch_task_impl(task);
+    RESTORE_IF();
+}
+
+static void schedule_timer(uint64_t ticks, void* ctx)
+{
+    switch_task(current_task->next);
+}
+
+char* strdup(const char* str)
+{
+    size_t len = strlen(str);
+    char* buffer = kmalloc(len + 1);
+    memcpy(buffer, str, len);
+    return buffer;
+}
+
+struct task* task_create(const char* name, void (*entry)(void))
+{
+    struct task* task = kmalloc(sizeof(struct task));
+    memset(task, 0, sizeof(struct task));
+    task->stack = kpvalloc(VMM_PAGESIZE);
+    uint32_t* esp = (uint32_t*)(task->stack + VMM_PAGESIZE);
+    *(--esp) = 0;
+    *(--esp) = (uintptr_t)entry;
+    *(--esp) = 0xDEADBEE0;
+    *(--esp) = 0xDEADBEE1;
+    *(--esp) = 0xDEADBEE2;
+    *(--esp) = 0xDEADBEE3;
+    task->esp = (uintptr_t)esp;
+    task->pagedir = vmm_create_pagedir();
+    task->name = strdup(name);
+    if(ready_queue) {
+        struct task* last = ready_queue;
+        for(; last->next != last && last->next != ready_queue; last = last->next)
+            ;
+        if(last->next == last) {
+            task->next = last;
+            last->next = task;
+        } else {
+            task->next = ready_queue;
+            last->next = task;
+        }
+        ready_queue = task;
+    } else {
+        ready_queue = task;
+        task->next = task;
+    }
+
+    return task;
+}
+
+static void counter1_entry()
+{
+    enable_interrupts();
 
     /* Map program starting at 0x400000 */
     unsigned char* dst;
@@ -258,110 +351,24 @@ static void test_usermode()
 
     unsigned char* kernelstack = kpvalloc(VMM_PAGESIZE);
     assert(IS_ALIGNED_PTR(kernelstack, VMM_PAGESIZE));
-    tss_set_esp0(kernelstack);
+    tss_set_esp0(kernelstack + VMM_PAGESIZE);
 
     void user_entry(void);
     uint32_t esp = (uintptr_t)userstack + VMM_PAGESIZE;
     uint32_t eip = 0x00400000;
-    TRACE("Entering usermode, esp: 0x%08lX, eip: 0x%08lX, esp0: %p", esp, eip,
-          kernelstack);
-    asm volatile("cli\n"
-                 "mov   ax, 0x23\n"
-                 "mov   ds, ax\n"
-                 "mov   es, ax\n"
-                 "mov   fs, ax\n"
-                 "mov   gs, ax\n"
-                 "pushd 0x23\n"
-                 "pushd ebx\n" /* esp */
-                 "pushf\n"
-                 "pop   eax\n"
-                 "or    eax, 0x200\n" /* IF */
-                 "pushd eax\n"
-                 "pushd 0x18|0x3\n"
-                 "push  ecx\n" /* eip */
-                 "iretd\n"
-                 :
-                 : "ebx"(esp), "ecx"(eip));
-    PANIC("Invalid code path");
+    ENTER_USERMODE(esp, eip);
+    INVALID_CODE_PATH();
 }
 
-struct task {
-    /*
-     * `esp` must be the first field in this structure because switch_task
-     * does not have a complete definition of `struct task`
-     */
-    uint32_t esp;
-    struct pagedir* pagedir;
-    void* stack;
-    struct task* next;
-};
-
-struct task* current_task = NULL;
-
-void switch_task(struct task* task)
+static void counter2_entry()
 {
-    void switch_task_impl(struct task*);
-
-    CLEAR_IF();
-    vmm_set_pagedir(task->pagedir);
-    switch_task_impl(task);
-    RESTORE_IF();
-}
-
-#define IMPLEMENT_TASK(name, index)                                            \
-    static void name##_entry()                                                 \
-    {                                                                          \
-        enable_interrupts();                                                   \
-        void* data = (void*)0x00800000;                                        \
-        if(!vmm_alloc(data, VMM_WRITABLE))                                     \
-            PANIC("vmm_alloc failed");                                         \
-        static uint16_t* vga_base = (uint16_t*)VGA_BASE;                       \
-        unsigned* counter = data;                                              \
-        unsigned* row = data + sizeof(unsigned);                               \
-        *row = index;                                                          \
-        char* buffer = data + (sizeof(unsigned) * 2);                          \
-        while(1) {                                                             \
-            uint32_t ticks = get_ticks();                                      \
-            (*counter)++;                                                      \
-            snprintf(buffer, 128, "%02d 0x%08lX 0x%08X", *row, ticks,          \
-                     *counter);                                                \
-            uint16_t* d = vga_base + (*row * VGA_WIDTH);                       \
-            for(char* s = buffer; *s; s++, d++) {                              \
-                *d = *s | (uint16_t)(0x1F << 8);                               \
-            }                                                                  \
-        }                                                                      \
-    }
-
-// IMPLEMENT_TASK(task1, 0);
-IMPLEMENT_TASK(task2, 1);
-IMPLEMENT_TASK(task3, 2);
-IMPLEMENT_TASK(task4, 3);
-IMPLEMENT_TASK(task5, 4);
-IMPLEMENT_TASK(task6, 5);
-IMPLEMENT_TASK(task7, 6);
-IMPLEMENT_TASK(task8, 7);
-IMPLEMENT_TASK(task9, 8);
-IMPLEMENT_TASK(task10, 9);
-IMPLEMENT_TASK(task11, 10);
-IMPLEMENT_TASK(task12, 11);
-IMPLEMENT_TASK(task13, 12);
-IMPLEMENT_TASK(task14, 13);
-IMPLEMENT_TASK(task15, 14);
-IMPLEMENT_TASK(task16, 15);
-IMPLEMENT_TASK(task17, 16);
-IMPLEMENT_TASK(task18, 17);
-IMPLEMENT_TASK(task19, 18);
-IMPLEMENT_TASK(task20, 19);
-
-static void task1_entry()
-{
-    idt_add_handler(0x30, syscall_handler, 3);
+    enable_interrupts();
 
     /* Map program starting at 0x400000 */
     unsigned char* dst;
     const unsigned char* src;
-    for(dst = (unsigned char*)0x400000, src = obj_program1_elf;
-        src < obj_program1_elf + obj_program1_elf_len;
+    for(dst = (unsigned char*)0x400000, src = obj_program2_elf;
+        src < obj_program2_elf + obj_program2_elf_len;
         dst += VMM_PAGESIZE, src += VMM_PAGESIZE) {
         if(!vmm_alloc(dst, VMM_WRITABLE | VMM_USER))
             PANIC("vmm_map failed");
@@ -373,88 +380,37 @@ static void task1_entry()
     assert(IS_ALIGNED_PTR(userstack, VMM_PAGESIZE));
     if(!vmm_alloc(userstack, VMM_WRITABLE | VMM_USER))
         PANIC("vmm_alloc failed");
-    tss_set_esp0(current_task->stack + VMM_PAGESIZE);
 
+    unsigned char* kernelstack = kpvalloc(VMM_PAGESIZE);
+    assert(IS_ALIGNED_PTR(kernelstack, VMM_PAGESIZE));
+    tss_set_esp0(kernelstack + VMM_PAGESIZE);
+
+    void user_entry(void);
     uint32_t esp = (uintptr_t)userstack + VMM_PAGESIZE;
     uint32_t eip = 0x00400000;
-    asm volatile("cli\n"
-                 "mov   ax, 0x23\n"
-                 "mov   ds, ax\n"
-                 "mov   es, ax\n"
-                 "mov   fs, ax\n"
-                 "mov   gs, ax\n"
-                 "pushd 0x23\n"
-                 "pushd ebx\n" /* esp */
-                 "pushf\n"
-                 "pop   eax\n"
-                 "or    eax, 0x200\n" /* IF */
-                 "pushd eax\n"
-                 "pushd 0x18|0x3\n"
-                 "push  ecx\n" /* eip */
-                 "iretd\n"
-                 :
-                 : "ebx"(esp), "ecx"(eip));
-    PANIC("Invalid code path");
+    ENTER_USERMODE(esp, eip);
+    INVALID_CODE_PATH();
 }
 
-static void schedule_timer(uint64_t ticks, void* ctx)
+static void yield()
 {
     switch_task(current_task->next);
 }
 
-#define XCREATE_TASK(name)                                                     \
-    struct task* name = kmalloc(sizeof(struct task));                          \
-    name->stack = kpvalloc(VMM_PAGESIZE);                                      \
-    esp = (uint32_t*)(name->stack + VMM_PAGESIZE);                             \
-    *(--esp) = 0;                                                              \
-    *(--esp) = (uintptr_t)name##_entry;                                        \
-    *(--esp) = 0xDEADBEE0;                                                     \
-    *(--esp) = 0xDEADBEE1;                                                     \
-    *(--esp) = 0xDEADBEE2;                                                     \
-    *(--esp) = 0xDEADBEE3;                                                     \
-    name->esp = (uintptr_t)esp;                                                \
-    name->pagedir = vmm_create_pagedir()
-
-#define CREATE_TASK(prev, name)                                                \
-    XCREATE_TASK(name);                                                        \
-    prev->next = name
-
 /*
- * We want to run task1 and task2 in parallel
+ * first row of display: scheduler information
+ * second row: first userspace process (counter)
+ * third row: second userspace process (counter)
  */
-static void test_context_switching()
+static void kernel_task_entry()
 {
-    disable_interrupts();
-
-    uint32_t* esp;
-    XCREATE_TASK(task1);
-    CREATE_TASK(task1, task2);
-    CREATE_TASK(task2, task3);
-    CREATE_TASK(task3, task4);
-    CREATE_TASK(task4, task5);
-    CREATE_TASK(task5, task6);
-    CREATE_TASK(task6, task7);
-    CREATE_TASK(task7, task8);
-    CREATE_TASK(task8, task9);
-    CREATE_TASK(task9, task10);
-    CREATE_TASK(task10, task11);
-    CREATE_TASK(task11, task12);
-    CREATE_TASK(task12, task13);
-    CREATE_TASK(task13, task14);
-    CREATE_TASK(task14, task15);
-    CREATE_TASK(task15, task16);
-    CREATE_TASK(task16, task17);
-    CREATE_TASK(task17, task18);
-    CREATE_TASK(task18, task19);
-    CREATE_TASK(task19, task20);
-    task20->next = task1;
-    // task1->next = task2;
-    // task2->next = task1;
-
-    pit_add_timer(schedule_timer, NULL, 1);
-
-    // vga_enable = false;
-    switch_task(task1);
+    /* Every newly-created task starts with IF clear */
+    enable_interrupts();
+    struct task* counter1 = task_create("counter1", counter1_entry);
+    struct task* counter2 = task_create("counter2", counter2_entry);
+    while(1) {
+        yield();
+    }
 }
 
 void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
@@ -463,8 +419,10 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     trace_init();
     gdt_init();
 
+#ifdef UNIT_TESTS
     extern void test_format();
     ADD_TEST(test_format);
+#endif
 
     /* Processor detection */
     if(is_386()) {
@@ -569,13 +527,13 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     /* Add keyboard handler */
     kbd_init();
 
-    ///* Run user-mode tests */
+    // /* Run user-mode tests */
     // test_usermode();
     // HALT();
 
-    /* Run context switching tests */
-    test_context_switching();
-    HALT();
+    // /* Run context switching tests */
+    // test_context_switching();
+    // HALT();
 
 #ifdef UNIT_TESTS
     /* Run unit tests */
@@ -584,12 +542,13 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     HALT();
 #endif
 
-    /* Enable interrupts */
-    TRACE("Waiting for an interrupt");
-    asm volatile("sti" ::: "memory");
+    /* register system call handler */
+    idt_add_handler(0x30, syscall_handler, 3);
 
-    /* Wait for an interrupt */
-    while(1) {
-        asm volatile("hlt" ::: "memory");
-    }
+    /* Create kernel_task and execute it */
+    struct task* task = task_create("kernel_task", kernel_task_entry);
+    pit_add_timer(schedule_timer, NULL, 1);
+    vga_enable = false;
+    switch_task(task);
+    INVALID_CODE_PATH();
 }
