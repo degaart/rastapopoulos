@@ -1,7 +1,8 @@
 #pragma once
 
-#define TRACE(...) trace(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__)
-#define PANIC(...) panic(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__)
+#define TRACE(...)          trace(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__)
+#define PANIC(...)          panic(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__)
+#define INVALID_CODE_PATH() PANIC("Invalid code path")
 #define ASSERT(cond)                                                           \
     if(!(cond))                                                                \
     PANIC("Assertion failed: " #cond "\n")
