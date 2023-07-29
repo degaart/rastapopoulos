@@ -9,10 +9,19 @@ CFLAGS := \
     -masm=intel \
     -mpreferred-stack-boundary=2 -fno-omit-frame-pointer \
     -fno-delete-null-pointer-checks -fno-finite-loops -fno-strict-aliasing \
-    -Wall -Wno-unused-function -Wno-unused-variable
+    -Wall -Wno-unused-function -Wno-unused-variable -Wno-unused-local-typedefs
 
 LDFLAGS := \
     -ffreestanding -nostdlib
 
 DEPFLAGS := -MMD -MP
+
+COMMON_SRCS := \
+	crc32.c \
+	serial.c \
+	string.c \
+	vga.c \
+	bitset.c \
+	util.c \
+	rbuf.c
 
