@@ -176,6 +176,14 @@ void formatv(bool (*writefn)(char, void *), void *ctx, const char *fmt,
           exitfmt = true;
           break;
         }
+        case 'c': {
+          int ch = va_arg(args, int);
+          if(ch >= ' ' && ch < 128) {
+              if(!writefn(ch, ctx))
+                  return;
+          }
+          break;
+        }
         case 'u':
         case 'd':
         case 'x':
