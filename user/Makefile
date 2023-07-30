@@ -8,7 +8,8 @@ LDFLAGS := $(LDFLAGS) -T user.ld
 
 SRCS := \
 	program1.c \
-	program2.c
+	program2.c \
+	kbd_reader.c
 
 COMMON_SRCS := \
 	../common/crc32.c \

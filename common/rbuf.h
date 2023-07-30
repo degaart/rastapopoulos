@@ -76,4 +76,8 @@
         result;                                                                \
     })
 
+#define RBUF_EMPTY(rbuf) ((rbuf)->head == (rbuf)->tail)
+
+#define RBUF_FULL(rbuf) ((rbuf)->head + 1 < (rbuf)->tail)
+
 void test_rbuf(void);
