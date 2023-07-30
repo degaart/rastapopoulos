@@ -23,13 +23,7 @@ SRCS := \
 	kmalloc.c \
 	main.c
 
-COMMON_SRCS := \
-	../common/crc32.c \
-	../common/serial.c \
-	../common/string.c \
-	../common/vga.c \
-	../common/bitset.c \
-	../common/util.c
+COMMON_SRCS := $(addprefix ../common/,$(COMMON_SRCS))
 
 ASM_SRCS := \
 	stub.asm \
@@ -70,13 +64,19 @@ obj/%.c.o: %.c Makefile | obj
 obj/common/%.c.o: ../common/%.c Makefile | obj
 	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
 
+obj/keymap_macfr.h: obj/keymap_macfr.keymap
+	xxd -i -n keymap_macfr $< $@
+
+obj/keymap_macfr.keymap: keymap_macfr.txt
+	../tools/obj/generate_keymap < $< > $@
+
 run: obj/kernel.elf
 	# C-a x to exit qemu
 	# C-a h for help
 	qemu-system-i386 $(QEMU_FLAGS) -nographic
 
 run_graphic: obj/kernel.elf
-	qemu-system-i386 $(QEMU_FLAGS) -serial stdio
+	qemu-system-i386 $(QEMU_FLAGS) -serial stdio -k fr
 
 debug: obj/kernel.elf
 	# make debug
@@ -90,6 +90,6 @@ clean:
 	rm -rf obj
 
 format:
-	find .. -name '*.c' -or -name '*.h' -print -exec clang-format -i '{}' ';'
+	find . -name '*.c' -or -name '*.h' -exec clang-format -i '{}' ';'
 
 

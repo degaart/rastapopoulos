@@ -23,3 +23,9 @@ int snprintf(char* restrict str, size_t size, const char* restrict fmt, ...)
 int vsnprintf(char* restrict str, size_t size, const char* restrict fmt,
               va_list args);
 const char* basename(const char* filename);
+
+#define UTF8_IS4(c)    (((c)&0xF8) == 0xF0)
+#define UTF8_IS3(c)    (((c)&0xF0) == 0xE0)
+#define UTF8_IS2(c)    (((c)&0xE0) == 0xC0)
+#define UTF8_IS1(c)    (((c)&0x80) == 0x00)
+#define UTF8_ISCONT(c) (((c)&0xC0) == 0x80)

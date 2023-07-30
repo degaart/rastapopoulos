@@ -10,8 +10,10 @@
 #include "vmm.h"
 #include <debug.h>
 #include <multiboot.h>
+#include <rbuf.h>
 #include <serial.h>
 #include <string.h>
+#include <syscall.h>
 #include <util.h>
 #include <vga.h>
 
@@ -19,23 +21,23 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define ENTER_USERMODE(esp, eip)                \
-    asm volatile("cli\n"                        \
-                 "mov   ax, 0x23\n"             \
-                 "mov   ds, ax\n"               \
-                 "mov   es, ax\n"               \
-                 "mov   fs, ax\n"               \
-                 "mov   gs, ax\n"               \
-                 "pushd 0x23\n"                 \
-                 "pushd ebx\n"                  \
-                 "pushf\n"                      \
-                 "pop   eax\n"                  \
-                 "or    eax, 0x200\n"           \
-                 "pushd eax\n"                  \
-                 "pushd 0x18|0x3\n"             \
-                 "push  ecx\n"                  \
-                 "iretd\n"                      \
-                 :: "ebx"(esp), "ecx"(eip))
+#define ENTER_USERMODE(esp, eip)                                               \
+    asm volatile("cli\n"                                                       \
+                 "mov   ax, 0x23\n"                                            \
+                 "mov   ds, ax\n"                                              \
+                 "mov   es, ax\n"                                              \
+                 "mov   fs, ax\n"                                              \
+                 "mov   gs, ax\n"                                              \
+                 "pushd 0x23\n"                                                \
+                 "pushd ebx\n"                                                 \
+                 "pushf\n"                                                     \
+                 "pop   eax\n"                                                 \
+                 "or    eax, 0x200\n"                                          \
+                 "pushd eax\n"                                                 \
+                 "pushd 0x18|0x3\n"                                            \
+                 "push  ecx\n"                                                 \
+                 "iretd\n" ::"ebx"(esp),                                       \
+                 "ecx"(eip))
 
 extern unsigned char _heap_start[];
 static unsigned char* _heap = _heap_start;
@@ -70,11 +72,11 @@ static void handle_page_fault(struct isr_regs* regs)
     TRACE("CS: 0x%lX, EIP: 0x%08lX, ESP: 0x%08lX", regs->cs, regs->eip,
           regs->esp);
 
-#define PF_P (1 << 0)
-#define PF_WR (1 << 1)
-#define PF_US (1 << 2)
+#define PF_P    (1 << 0)
+#define PF_WR   (1 << 1)
+#define PF_US   (1 << 2)
 #define PF_RSVD (1 << 3)
-#define PF_ID (1 << 4)
+#define PF_ID   (1 << 4)
     char info[16];
     if(regs->err_code & PF_P)
         TRACE("    - Page-level protection violation");
@@ -199,32 +201,36 @@ static void kmalloc_test()
           kmalloc_heap);
 }
 
-static void syscall0(struct isr_regs* regs)
+static void syscall_trace(struct isr_regs* regs)
 {
     TRACE("%s", (const char*)regs->ebx);
 }
 
-static void syscall1(struct isr_regs* regs)
+static void syscall_add(struct isr_regs* regs)
 {
     regs->eax = regs->ebx + regs->ecx + regs->edx;
 }
 
-static void syscall2(struct isr_regs* regs)
+static void syscall_panic(struct isr_regs* regs)
 {
     PANIC("Panic from usermode");
 }
 
-static void syscall3(struct isr_regs* regs)
+static void syscall_halt(struct isr_regs* regs)
 {
     TRACE("Halt from usermode");
     HALT();
 }
 
-static void syscall4(struct isr_regs* regs)
+static void syscall_getticks(struct isr_regs* regs)
 {
     uint64_t ticks = get_ticks();
     regs->eax = ticks & 0xFFFFFFFF;
     regs->ebx = ticks >> 32;
+}
+
+static void syscall_readkbd(struct isr_regs* regs)
+{
 }
 
 static void syscall_handler(struct isr_regs* regs)
@@ -233,20 +239,23 @@ static void syscall_handler(struct isr_regs* regs)
     // TRACE("esp: 0x%08lX", read_esp());
     // TRACE("IF: %s", interrupts_enabled() ? "SET" : "CLEAR");
     switch(regs->eax) {
-    case 0: /* trace */
-        syscall0(regs);
+    case SYSCALL_TRACE: /* trace */
+        syscall_trace(regs);
         break;
-    case 1: /* add ebx+ecx+edx */
-        syscall1(regs);
+    case SYSCALL_ADD: /* add ebx+ecx+edx */
+        syscall_add(regs);
         break;
-    case 2: /* panic */
-        syscall2(regs);
+    case SYSCALL_PANIC: /* panic */
+        syscall_panic(regs);
         break;
-    case 3: /* halt */
-        syscall3(regs);
+    case SYSCALL_HALT: /* halt */
+        syscall_halt(regs);
         break;
-    case 4: /* getticks */
-        syscall4(regs);
+    case SYSCALL_GETTICKS: /* getticks */
+        syscall_getticks(regs);
+        break;
+    case SYSCALL_READKBD:
+        syscall_readkbd(regs);
         break;
     default:
         PANIC("Invalid syscall 0x%02lX", regs->eax);
@@ -310,7 +319,8 @@ struct task* task_create(const char* name, void (*entry)(void))
     task->name = strdup(name);
     if(ready_queue) {
         struct task* last = ready_queue;
-        for(; last->next != last && last->next != ready_queue; last = last->next)
+        for(; last->next != last && last->next != ready_queue;
+            last = last->next)
             ;
         if(last->next == last) {
             task->next = last;
@@ -408,7 +418,30 @@ static void kernel_task_entry()
     enable_interrupts();
     struct task* counter1 = task_create("counter1", counter1_entry);
     struct task* counter2 = task_create("counter2", counter2_entry);
+
+    /* ring buffer test */
+    test_rbuf();
+
+    /* idle loop */
+    uint16_t* vga_base = (uint16_t*)VGA_BASE;
+    char msgbuf[VGA_WIDTH + 1];
     while(1) {
+        struct kbd_event evt;
+        if(kbd_read(&evt)) {
+            snprintf(msgbuf, sizeof(msgbuf),
+                     "%10s 0x%02X %c %4s %3s %5s %5s %5s",
+                     evt.type == KBD_EVENT_PRESSED ? "pressed" : "released",
+                     evt.scancode, evt.ch ? evt.ch : ' ',
+                     (evt.modifiers & KBD_MOD_CTRL) ? "ctrl" : "",
+                     (evt.modifiers & KBD_MOD_ALT) ? "alt" : "",
+                     (evt.modifiers & KBD_MOD_ALTGR) ? "altgr" : "",
+                     (evt.modifiers & KBD_MOD_SHIFT) ? "shift" : "",
+                     (evt.modifiers & KBD_MOD_SUPER) ? "super" : "");
+            uint16_t* d = vga_base;
+            for(const char* p = msgbuf; *p; p++, d++) {
+                *d = *p | ((COLOR_YELLOW | (COLOR_BLUE << 4)) << 8);
+            }
+        }
         yield();
     }
 }
