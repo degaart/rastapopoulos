@@ -90,6 +90,6 @@ clean:
 	rm -rf obj
 
 format:
-	find . -name '*.c' -or -name '*.h' -exec clang-format -i '{}' ';'
+	cd .. && ./clang-format.sh
 
 
