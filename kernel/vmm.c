@@ -6,9 +6,9 @@
 #include <string.h>
 #include <util.h>
 
-#define DECLARE_SYMBOL(n) extern unsigned char n[]
+#define DECLARE_SYMBOL(n)        extern unsigned char n[]
 #define DECLARE_SECTION_START(n) DECLARE_SYMBOL(_##n##_start)
-#define DECLARE_SECTION_END(n) DECLARE_SYMBOL(_##n##_end)
+#define DECLARE_SECTION_END(n)   DECLARE_SYMBOL(_##n##_end)
 #define DECLARE_SECTION(n)                                                     \
     DECLARE_SECTION_START(n);                                                  \
     DECLARE_SECTION_END(n)

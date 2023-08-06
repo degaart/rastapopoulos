@@ -4,10 +4,10 @@
 #include <io.h>
 
 #define TIMER_FREQUENCY 1000
-#define REG_CHAN0_DATA 0x40
-#define REG_CHAN1_DATA 0x41
-#define REG_CHAN2_DATA 0x42
-#define REG_COMMAND 0x43
+#define REG_CHAN0_DATA  0x40
+#define REG_CHAN1_DATA  0x41
+#define REG_CHAN2_DATA  0x42
+#define REG_COMMAND     0x43
 
 #define COMMAND_BYTE 0x43
 

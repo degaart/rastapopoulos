@@ -531,11 +531,11 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 #include <stddef.h>
 #include <util.h>
 
-#define ABORT PANIC("dlmalloc abort")
-#define EINVAL 22
-#define ENOMEM 12
-#define FOOTERS 1
-#define HAVE_MMAP 0
+#define ABORT         PANIC("dlmalloc abort")
+#define EINVAL        22
+#define ENOMEM        12
+#define FOOTERS       1
+#define HAVE_MMAP     0
 #define HAVE_MORECORE 1
 #define LACKS_ERRNO_H
 #define LACKS_FCNTL_H
@@ -548,40 +548,40 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 #define LACKS_TIME_H
 #define LACKS_UNISTD_H
 #define MALLOC_FAILURE_ACTION TRACE("kmalloc failure")
-#define MORECORE morecore
-#define NO_MALLOC_STATS 1
-#define USE_DL_PREFIX 1
-#define USE_LOCKS 2
+#define MORECORE              morecore
+#define NO_MALLOC_STATS       1
+#define USE_DL_PREFIX         1
+#define USE_LOCKS             2
 
-#define MLOCK_T uint32_t
+#define MLOCK_T          uint32_t
 #define INITIAL_LOCK(lk) initial_lock(lk)
 #define DESTROY_LOCK(lk) destroy_lock(lk)
 #define ACQUIRE_LOCK(lk) acquire_lock(lk)
 #define RELEASE_LOCK(lk) release_lock(lk)
-#define TRY_LOCK(lk) try_lock(lk)
+#define TRY_LOCK(lk)     try_lock(lk)
 
-#define dlcalloc kcalloc
-#define dlfree kfree
-#define dlmalloc kmalloc
-#define dlmemalign kmemalign
-#define dlposix_memalign kposix_memalign
-#define dlrealloc krealloc
-#define dlrealloc_in_place krealloc_in_place
-#define dlvalloc kvalloc
-#define dlpvalloc kpvalloc
-#define dlmallinfo kmallinfo
-#define dlmallopt kmallopt
-#define dlmalloc_trim kmalloc_trim
-#define dlmalloc_stats kmalloc_stats
-#define dlmalloc_usable_size kmalloc_usable_size
-#define dlmalloc_footprint kmalloc_footprint
-#define dlmalloc_max_footprint kmalloc_max_footprint
-#define dlmalloc_footprint_limit kmalloc_footprint_limit
+#define dlcalloc                     kcalloc
+#define dlfree                       kfree
+#define dlmalloc                     kmalloc
+#define dlmemalign                   kmemalign
+#define dlposix_memalign             kposix_memalign
+#define dlrealloc                    krealloc
+#define dlrealloc_in_place           krealloc_in_place
+#define dlvalloc                     kvalloc
+#define dlpvalloc                    kpvalloc
+#define dlmallinfo                   kmallinfo
+#define dlmallopt                    kmallopt
+#define dlmalloc_trim                kmalloc_trim
+#define dlmalloc_stats               kmalloc_stats
+#define dlmalloc_usable_size         kmalloc_usable_size
+#define dlmalloc_footprint           kmalloc_footprint
+#define dlmalloc_max_footprint       kmalloc_max_footprint
+#define dlmalloc_footprint_limit     kmalloc_footprint_limit
 #define dlmalloc_set_footprint_limit kmalloc_set_footprint_limit
-#define dlmalloc_inspect_all kmalloc_inspect_all
-#define dlindependent_calloc kindependent_calloc
-#define dlindependent_comalloc kindependent_comalloc
-#define dlbulk_free kbulk_free
+#define dlmalloc_inspect_all         kmalloc_inspect_all
+#define dlindependent_calloc         kindependent_calloc
+#define dlindependent_comalloc       kindependent_comalloc
+#define dlbulk_free                  kbulk_free
 
 void* kmalloc_heap;
 void* kmalloc_heap_end;
@@ -686,7 +686,7 @@ static inline int try_lock(MLOCK_T* l)
 #define WIN32_LEAN_AND_MEAN
 #include <tchar.h>
 #include <windows.h>
-#define HAVE_MMAP 1
+#define HAVE_MMAP     1
 #define HAVE_MORECORE 0
 #define LACKS_UNISTD_H
 #define LACKS_SYS_PARAM_H
@@ -712,7 +712,7 @@ static inline int try_lock(MLOCK_T* l)
 /* Mac OSX docs advise not to use sbrk; it seems better to use mmap */
 #ifndef HAVE_MORECORE
 #define HAVE_MORECORE 0
-#define HAVE_MMAP 1
+#define HAVE_MMAP     1
 /* OSX allocators provide 16 byte alignment */
 #ifndef MALLOC_ALIGNMENT
 #define MALLOC_ALIGNMENT ((size_t)16U)
@@ -867,7 +867,7 @@ static inline int try_lock(MLOCK_T* l)
 */
 
 #define M_TRIM_THRESHOLD (-1)
-#define M_GRANULARITY (-2)
+#define M_GRANULARITY    (-2)
 #define M_MMAP_THRESHOLD (-3)
 
 /* ------------------------ Mallinfo declarations ------------------------ */
@@ -957,28 +957,28 @@ extern "C" {
 /* ------------------- Declarations of public routines ------------------- */
 
 #ifndef USE_DL_PREFIX
-#define dlcalloc calloc
-#define dlfree free
-#define dlmalloc malloc
-#define dlmemalign memalign
-#define dlposix_memalign posix_memalign
-#define dlrealloc realloc
-#define dlrealloc_in_place realloc_in_place
-#define dlvalloc valloc
-#define dlpvalloc pvalloc
-#define dlmallinfo mallinfo
-#define dlmallopt mallopt
-#define dlmalloc_trim malloc_trim
-#define dlmalloc_stats malloc_stats
-#define dlmalloc_usable_size malloc_usable_size
-#define dlmalloc_footprint malloc_footprint
-#define dlmalloc_max_footprint malloc_max_footprint
-#define dlmalloc_footprint_limit malloc_footprint_limit
+#define dlcalloc                     calloc
+#define dlfree                       free
+#define dlmalloc                     malloc
+#define dlmemalign                   memalign
+#define dlposix_memalign             posix_memalign
+#define dlrealloc                    realloc
+#define dlrealloc_in_place           realloc_in_place
+#define dlvalloc                     valloc
+#define dlpvalloc                    pvalloc
+#define dlmallinfo                   mallinfo
+#define dlmallopt                    mallopt
+#define dlmalloc_trim                malloc_trim
+#define dlmalloc_stats               malloc_stats
+#define dlmalloc_usable_size         malloc_usable_size
+#define dlmalloc_footprint           malloc_footprint
+#define dlmalloc_max_footprint       malloc_max_footprint
+#define dlmalloc_footprint_limit     malloc_footprint_limit
 #define dlmalloc_set_footprint_limit malloc_set_footprint_limit
-#define dlmalloc_inspect_all malloc_inspect_all
-#define dlindependent_calloc independent_calloc
-#define dlindependent_comalloc independent_comalloc
-#define dlbulk_free bulk_free
+#define dlmalloc_inspect_all         malloc_inspect_all
+#define dlindependent_calloc         independent_calloc
+#define dlindependent_comalloc       independent_comalloc
+#define dlbulk_free                  bulk_free
 #endif /* USE_DL_PREFIX */
 
 /*
@@ -1665,10 +1665,10 @@ LONG __cdecl _InterlockedExchange(LONG volatile* Target, LONG Value);
 #pragma intrinsic(_InterlockedCompareExchange)
 #pragma intrinsic(_InterlockedExchange)
 #define interlockedcompareexchange _InterlockedCompareExchange
-#define interlockedexchange _InterlockedExchange
+#define interlockedexchange        _InterlockedExchange
 #elif defined(WIN32) && defined(__GNUC__)
 #define interlockedcompareexchange(a, b, c) __sync_val_compare_and_swap(a, c, b)
-#define interlockedexchange __sync_lock_test_and_set
+#define interlockedexchange                 __sync_lock_test_and_set
 #endif /* Win32 */
 #else  /* USE_LOCKS */
 #endif /* USE_LOCKS */
@@ -1746,19 +1746,19 @@ extern size_t getpagesize();
 /* ------------------- size_t and alignment properties -------------------- */
 
 /* The byte and bit size of a size_t */
-#define SIZE_T_SIZE (sizeof(size_t))
+#define SIZE_T_SIZE    (sizeof(size_t))
 #define SIZE_T_BITSIZE (sizeof(size_t) << 3)
 
 /* Some constants coerced to size_t */
 /* Annoying but necessary to avoid errors on some platforms */
-#define SIZE_T_ZERO ((size_t)0)
-#define SIZE_T_ONE ((size_t)1)
-#define SIZE_T_TWO ((size_t)2)
-#define SIZE_T_FOUR ((size_t)4)
-#define TWO_SIZE_T_SIZES (SIZE_T_SIZE << 1)
+#define SIZE_T_ZERO       ((size_t)0)
+#define SIZE_T_ONE        ((size_t)1)
+#define SIZE_T_TWO        ((size_t)2)
+#define SIZE_T_FOUR       ((size_t)4)
+#define TWO_SIZE_T_SIZES  (SIZE_T_SIZE << 1)
 #define FOUR_SIZE_T_SIZES (SIZE_T_SIZE << 2)
-#define SIX_SIZE_T_SIZES (FOUR_SIZE_T_SIZES + TWO_SIZE_T_SIZES)
-#define HALF_MAX_SIZE_T (MAX_SIZE_T / 2U)
+#define SIX_SIZE_T_SIZES  (FOUR_SIZE_T_SIZES + TWO_SIZE_T_SIZES)
+#define HALF_MAX_SIZE_T   (MAX_SIZE_T / 2U)
 
 /* The bit mask value corresponding to MALLOC_ALIGNMENT */
 #define CHUNK_ALIGN_MASK (MALLOC_ALIGNMENT - SIZE_T_ONE)
@@ -1782,19 +1782,19 @@ extern size_t getpagesize();
 */
 
 /* MORECORE and MMAP must return MFAIL on failure */
-#define MFAIL ((void*)(MAX_SIZE_T))
+#define MFAIL  ((void*)(MAX_SIZE_T))
 #define CMFAIL ((char*)(MFAIL)) /* defined for convenience */
 
 #if HAVE_MMAP
 
 #ifndef WIN32
 #define MUNMAP_DEFAULT(a, s) munmap((a), (s))
-#define MMAP_PROT (PROT_READ | PROT_WRITE)
+#define MMAP_PROT            (PROT_READ | PROT_WRITE)
 #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
 #define MAP_ANONYMOUS MAP_ANON
 #endif /* MAP_ANON */
 #ifdef MAP_ANONYMOUS
-#define MMAP_FLAGS (MAP_PRIVATE | MAP_ANONYMOUS)
+#define MMAP_FLAGS      (MAP_PRIVATE | MAP_ANONYMOUS)
 #define MMAP_DEFAULT(s) mmap(0, (s), MMAP_PROT, MMAP_FLAGS, -1, 0)
 #else /* MAP_ANONYMOUS */
 /*
@@ -1847,8 +1847,8 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size)
     return 0;
 }
 
-#define MMAP_DEFAULT(s) win32mmap(s)
-#define MUNMAP_DEFAULT(a, s) win32munmap((a), (s))
+#define MMAP_DEFAULT(s)        win32mmap(s)
+#define MUNMAP_DEFAULT(a, s)   win32munmap((a), (s))
 #define DIRECT_MMAP_DEFAULT(s) win32direct_mmap(s)
 #endif /* WIN32 */
 #endif /* HAVE_MMAP */
@@ -1896,12 +1896,12 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size)
 #else  /* HAVE_MMAP */
 #define USE_MMAP_BIT (SIZE_T_ZERO)
 
-#define MMAP(s) MFAIL
-#define MUNMAP(a, s) (-1)
-#define DIRECT_MMAP(s) MFAIL
+#define MMAP(s)             MFAIL
+#define MUNMAP(a, s)        (-1)
+#define DIRECT_MMAP(s)      MFAIL
 #define CALL_DIRECT_MMAP(s) DIRECT_MMAP(s)
-#define CALL_MMAP(s) MMAP(s)
-#define CALL_MUNMAP(a, s) MUNMAP((a), (s))
+#define CALL_MMAP(s)        MMAP(s)
+#define CALL_MUNMAP(a, s)   MUNMAP((a), (s))
 #endif /* HAVE_MMAP */
 
 /**
@@ -1955,7 +1955,7 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size)
 */
 
 #if !USE_LOCKS
-#define USE_LOCK_BIT (0U)
+#define USE_LOCK_BIT    (0U)
 #define INITIAL_LOCK(l) (0)
 #define DESTROY_LOCK(l) (0)
 #define ACQUIRE_MALLOC_GLOBAL_LOCK()
@@ -1979,7 +1979,7 @@ static FORCEINLINE int win32munmap(void* ptr, size_t size)
 
 #if defined(__GNUC__) &&                                                       \
     (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 1))
-#define CAS_LOCK(sl) __sync_lock_test_and_set(sl, 1)
+#define CAS_LOCK(sl)   __sync_lock_test_and_set(sl, 1)
 #define CLEAR_LOCK(sl) __sync_lock_release(sl)
 
 #elif(defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__)))
@@ -2007,11 +2007,11 @@ static FORCEINLINE void x86_clear_lock(int* sl)
                          : "memory");
 }
 
-#define CAS_LOCK(sl) x86_cas_lock(sl)
+#define CAS_LOCK(sl)   x86_cas_lock(sl)
 #define CLEAR_LOCK(sl) x86_clear_lock(sl)
 
 #else /* Win32 MSC */
-#define CAS_LOCK(sl) interlockedexchange(sl, (LONG)1)
+#define CAS_LOCK(sl)   interlockedexchange(sl, (LONG)1)
 #define CLEAR_LOCK(sl) interlockedexchange(sl, (LONG)0)
 
 #endif /* ... gcc spins locks ... */
@@ -2020,7 +2020,7 @@ static FORCEINLINE void x86_clear_lock(int* sl)
 #define SPINS_PER_YIELD 63
 #if defined(_MSC_VER)
 #define SLEEP_EX_DURATION 50 /* delay for yield/sleep */
-#define SPIN_LOCK_YIELD SleepEx(SLEEP_EX_DURATION, FALSE)
+#define SPIN_LOCK_YIELD   SleepEx(SLEEP_EX_DURATION, FALSE)
 #elif defined(__SVR4) && defined(__sun) /* solaris */
 #define SPIN_LOCK_YIELD thr_yield();
 #elif !defined(LACKS_SCHED_H)
@@ -2042,8 +2042,8 @@ static int spin_acquire_lock(int* sl)
     return 0;
 }
 
-#define MLOCK_T int
-#define TRY_LOCK(sl) !CAS_LOCK(sl)
+#define MLOCK_T          int
+#define TRY_LOCK(sl)     !CAS_LOCK(sl)
 #define RELEASE_LOCK(sl) CLEAR_LOCK(sl)
 #define ACQUIRE_LOCK(sl) (CAS_LOCK(sl) ? spin_acquire_lock(sl) : 0)
 #define INITIAL_LOCK(sl) (*sl = 0)
@@ -2053,7 +2053,7 @@ static MLOCK_T malloc_global_mutex = 0;
 #else /* USE_RECURSIVE_LOCKS */
 /* types for lock owners */
 #ifdef WIN32
-#define THREAD_ID_T DWORD
+#define THREAD_ID_T    DWORD
 #define CURRENT_THREAD GetCurrentThreadId()
 #define EQ_OWNER(X, Y) ((X) == (Y))
 #else
@@ -2062,7 +2062,7 @@ static MLOCK_T malloc_global_mutex = 0;
   initialized to (casted) zero. If this is not the case, you will need to
   somehow redefine these or not use spin locks.
 */
-#define THREAD_ID_T pthread_t
+#define THREAD_ID_T    pthread_t
 #define CURRENT_THREAD pthread_self()
 #define EQ_OWNER(X, Y) pthread_equal(X, Y)
 #endif
@@ -2122,7 +2122,7 @@ static FORCEINLINE int recursive_try_lock(MLOCK_T* lk)
 }
 
 #define RELEASE_LOCK(lk) recursive_release_lock(lk)
-#define TRY_LOCK(lk) recursive_try_lock(lk)
+#define TRY_LOCK(lk)     recursive_try_lock(lk)
 #define ACQUIRE_LOCK(lk) recursive_acquire_lock(lk)
 #define INITIAL_LOCK(lk)                                                       \
     ((lk)->threadid = (THREAD_ID_T)0, (lk)->sl = 0, (lk)->c = 0)
@@ -2130,10 +2130,10 @@ static FORCEINLINE int recursive_try_lock(MLOCK_T* lk)
 #endif /* USE_RECURSIVE_LOCKS */
 
 #elif defined(WIN32) /* Win32 critical sections */
-#define MLOCK_T CRITICAL_SECTION
+#define MLOCK_T          CRITICAL_SECTION
 #define ACQUIRE_LOCK(lk) (EnterCriticalSection(lk), 0)
 #define RELEASE_LOCK(lk) LeaveCriticalSection(lk)
-#define TRY_LOCK(lk) TryEnterCriticalSection(lk)
+#define TRY_LOCK(lk)     TryEnterCriticalSection(lk)
 #define INITIAL_LOCK(lk)                                                       \
     (!InitializeCriticalSectionAndSpinCount((lk), 0x80000000 | 4000))
 #define DESTROY_LOCK(lk) (DeleteCriticalSection(lk), 0)
@@ -2161,10 +2161,10 @@ static void init_malloc_global_mutex()
 }
 
 #else /* pthreads-based locks */
-#define MLOCK_T pthread_mutex_t
+#define MLOCK_T          pthread_mutex_t
 #define ACQUIRE_LOCK(lk) pthread_mutex_lock(lk)
 #define RELEASE_LOCK(lk) pthread_mutex_unlock(lk)
-#define TRY_LOCK(lk) (!pthread_mutex_trylock(lk))
+#define TRY_LOCK(lk)     (!pthread_mutex_trylock(lk))
 #define INITIAL_LOCK(lk) pthread_init_lock(lk)
 #define DESTROY_LOCK(lk) pthread_mutex_destroy(lk)
 
@@ -2174,7 +2174,7 @@ static void init_malloc_global_mutex()
 /* skipped internal declaration from pthread.h */
 extern int pthread_mutexattr_setkind_np __P((pthread_mutexattr_t * __attr,
                                              int __kind));
-#define PTHREAD_MUTEX_RECURSIVE PTHREAD_MUTEX_RECURSIVE_NP
+#define PTHREAD_MUTEX_RECURSIVE         PTHREAD_MUTEX_RECURSIVE_NP
 #define pthread_mutexattr_settype(x, y) pthread_mutexattr_setkind_np(x, y)
 #endif /* USE_RECURSIVE_LOCKS ... */
 
@@ -2375,14 +2375,14 @@ typedef unsigned int flag_t;          /* The type of various bit flag sets */
 /* MMapped chunks need a second word of overhead ... */
 #define MMAP_CHUNK_OVERHEAD (TWO_SIZE_T_SIZES)
 /* ... and additional padding for fake next-chunk at foot */
-#define MMAP_FOOT_PAD (FOUR_SIZE_T_SIZES)
+#define MMAP_FOOT_PAD       (FOUR_SIZE_T_SIZES)
 
 /* The smallest size we can malloc is an aligned minimal chunk */
 #define MIN_CHUNK_SIZE ((MCHUNK_SIZE + CHUNK_ALIGN_MASK) & ~CHUNK_ALIGN_MASK)
 
 /* conversion from malloc headers to user pointers, and back */
-#define chunk2mem(p) ((void*)((char*)(p) + TWO_SIZE_T_SIZES))
-#define mem2chunk(mem) ((mchunkptr)((char*)(mem)-TWO_SIZE_T_SIZES))
+#define chunk2mem(p)      ((void*)((char*)(p) + TWO_SIZE_T_SIZES))
+#define mem2chunk(mem)    ((mchunkptr)((char*)(mem)-TWO_SIZE_T_SIZES))
 /* chunk associated with aligned address A */
 #define align_as_chunk(A) (mchunkptr)((A) + align_offset(chunk2mem(A)))
 
@@ -2410,28 +2410,28 @@ typedef unsigned int flag_t;          /* The type of various bit flag sets */
 
 #define PINUSE_BIT (SIZE_T_ONE)
 #define CINUSE_BIT (SIZE_T_TWO)
-#define FLAG4_BIT (SIZE_T_FOUR)
+#define FLAG4_BIT  (SIZE_T_FOUR)
 #define INUSE_BITS (PINUSE_BIT | CINUSE_BIT)
-#define FLAG_BITS (PINUSE_BIT | CINUSE_BIT | FLAG4_BIT)
+#define FLAG_BITS  (PINUSE_BIT | CINUSE_BIT | FLAG4_BIT)
 
 /* Head value for fenceposts */
 #define FENCEPOST_HEAD (INUSE_BITS | SIZE_T_SIZE)
 
 /* extraction of fields from head words */
-#define cinuse(p) ((p)->head & CINUSE_BIT)
-#define pinuse(p) ((p)->head & PINUSE_BIT)
+#define cinuse(p)     ((p)->head & CINUSE_BIT)
+#define pinuse(p)     ((p)->head & PINUSE_BIT)
 #define flag4inuse(p) ((p)->head & FLAG4_BIT)
-#define is_inuse(p) (((p)->head & INUSE_BITS) != PINUSE_BIT)
+#define is_inuse(p)   (((p)->head & INUSE_BITS) != PINUSE_BIT)
 #define is_mmapped(p) (((p)->head & INUSE_BITS) == 0)
 
 #define chunksize(p) ((p)->head & ~(FLAG_BITS))
 
 #define clear_pinuse(p) ((p)->head &= ~PINUSE_BIT)
-#define set_flag4(p) ((p)->head |= FLAG4_BIT)
-#define clear_flag4(p) ((p)->head &= ~FLAG4_BIT)
+#define set_flag4(p)    ((p)->head |= FLAG4_BIT)
+#define clear_flag4(p)  ((p)->head &= ~FLAG4_BIT)
 
 /* Treat space at ptr +/- offset as a chunk */
-#define chunk_plus_offset(p, s) ((mchunkptr)(((char*)(p)) + (s)))
+#define chunk_plus_offset(p, s)  ((mchunkptr)(((char*)(p)) + (s)))
 #define chunk_minus_offset(p, s) ((mchunkptr)(((char*)(p)) - (s)))
 
 /* Ptr to next or previous physical malloc_chunk. */
@@ -2638,7 +2638,7 @@ struct malloc_segment {
 };
 
 #define is_mmapped_segment(S) ((S)->sflags & USE_MMAP_BIT)
-#define is_extern_segment(S) ((S)->sflags & EXTERN_BIT)
+#define is_extern_segment(S)  ((S)->sflags & EXTERN_BIT)
 
 typedef struct malloc_segment msegment;
 typedef struct malloc_segment* msegmentptr;
@@ -2731,13 +2731,13 @@ typedef struct malloc_segment* msegmentptr;
 */
 
 /* Bin types, widths and sizes */
-#define NSMALLBINS (32U)
-#define NTREEBINS (32U)
-#define SMALLBIN_SHIFT (3U)
-#define SMALLBIN_WIDTH (SIZE_T_ONE << SMALLBIN_SHIFT)
-#define TREEBIN_SHIFT (8U)
-#define MIN_LARGE_SIZE (SIZE_T_ONE << TREEBIN_SHIFT)
-#define MAX_SMALL_SIZE (MIN_LARGE_SIZE - SIZE_T_ONE)
+#define NSMALLBINS        (32U)
+#define NTREEBINS         (32U)
+#define SMALLBIN_SHIFT    (3U)
+#define SMALLBIN_WIDTH    (SIZE_T_ONE << SMALLBIN_SHIFT)
+#define TREEBIN_SHIFT     (8U)
+#define MIN_LARGE_SIZE    (SIZE_T_ONE << TREEBIN_SHIFT)
+#define MAX_SMALL_SIZE    (MIN_LARGE_SIZE - SIZE_T_ONE)
 #define MAX_SMALL_REQUEST (MAX_SMALL_SIZE - CHUNK_ALIGN_MASK - CHUNK_OVERHEAD)
 
 struct malloc_state {
@@ -2794,7 +2794,7 @@ static struct malloc_params mparams;
 
 /* The global malloc_state used for all non-"mspace" calls */
 static struct malloc_state _gm_;
-#define gm (&_gm_)
+#define gm           (&_gm_)
 #define is_global(M) ((M) == &_gm_)
 
 #endif /* !ONLY_MSPACES */
@@ -2805,7 +2805,7 @@ static struct malloc_state _gm_;
 
 /* Operations on mflags */
 
-#define use_lock(M) ((M)->mflags & USE_LOCK_BIT)
+#define use_lock(M)    ((M)->mflags & USE_LOCK_BIT)
 #define enable_lock(M) ((M)->mflags |= USE_LOCK_BIT)
 #if USE_LOCKS
 #define disable_lock(M) ((M)->mflags &= ~USE_LOCK_BIT)
@@ -2813,7 +2813,7 @@ static struct malloc_state _gm_;
 #define disable_lock(M)
 #endif
 
-#define use_mmap(M) ((M)->mflags & USE_MMAP_BIT)
+#define use_mmap(M)    ((M)->mflags & USE_MMAP_BIT)
 #define enable_mmap(M) ((M)->mflags |= USE_MMAP_BIT)
 #if HAVE_MMAP
 #define disable_mmap(M) ((M)->mflags &= ~USE_MMAP_BIT)
@@ -2821,7 +2821,7 @@ static struct malloc_state _gm_;
 #define disable_mmap(M)
 #endif
 
-#define use_noncontiguous(M) ((M)->mflags & USE_NONCONTIGUOUS_BIT)
+#define use_noncontiguous(M)  ((M)->mflags & USE_NONCONTIGUOUS_BIT)
 #define disable_contiguous(M) ((M)->mflags |= USE_NONCONTIGUOUS_BIT)
 
 #define set_lock(M, L)                                                         \
@@ -2966,12 +2966,12 @@ static void reset_on_error(mstate m);
 #define check_top_chunk(M, P)
 
 #else /* DEBUG */
-#define check_free_chunk(M, P) do_check_free_chunk(M, P)
-#define check_inuse_chunk(M, P) do_check_inuse_chunk(M, P)
-#define check_top_chunk(M, P) do_check_top_chunk(M, P)
+#define check_free_chunk(M, P)        do_check_free_chunk(M, P)
+#define check_inuse_chunk(M, P)       do_check_inuse_chunk(M, P)
+#define check_top_chunk(M, P)         do_check_top_chunk(M, P)
 #define check_malloced_chunk(M, P, N) do_check_malloced_chunk(M, P, N)
-#define check_mmapped_chunk(M, P) do_check_mmapped_chunk(M, P)
-#define check_malloc_state(M) do_check_malloc_state(M)
+#define check_mmapped_chunk(M, P)     do_check_mmapped_chunk(M, P)
+#define check_malloc_state(M)         do_check_malloc_state(M)
 
 static void do_check_any_chunk(mstate m, mchunkptr p);
 static void do_check_top_chunk(mstate m, mchunkptr p);
@@ -2989,14 +2989,14 @@ static size_t traverse_and_check(mstate m);
 
 /* ---------------------------- Indexing Bins ---------------------------- */
 
-#define is_small(s) (((s) >> SMALLBIN_SHIFT) < NSMALLBINS)
-#define small_index(s) (bindex_t)((s) >> SMALLBIN_SHIFT)
+#define is_small(s)         (((s) >> SMALLBIN_SHIFT) < NSMALLBINS)
+#define small_index(s)      (bindex_t)((s) >> SMALLBIN_SHIFT)
 #define small_index2size(i) ((i) << SMALLBIN_SHIFT)
-#define MIN_SMALL_INDEX (small_index(MIN_CHUNK_SIZE))
+#define MIN_SMALL_INDEX     (small_index(MIN_CHUNK_SIZE))
 
 /* addressing by index. See above about smallbin repositioning */
 #define smallbin_at(M, i) ((sbinptr)((char*)&((M)->smallbins[(i) << 1])))
-#define treebin_at(M, i) (&((M)->treebins[i]))
+#define treebin_at(M, i)  (&((M)->treebins[i]))
 
 /* assign tree index for size S to variable I. Use x86 asm if possible  */
 #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
@@ -3085,12 +3085,12 @@ static size_t traverse_and_check(mstate m);
 #define idx2bit(i) ((binmap_t)(1) << (i))
 
 /* Mark/Clear bits with given index */
-#define mark_smallmap(M, i) ((M)->smallmap |= idx2bit(i))
-#define clear_smallmap(M, i) ((M)->smallmap &= ~idx2bit(i))
+#define mark_smallmap(M, i)      ((M)->smallmap |= idx2bit(i))
+#define clear_smallmap(M, i)     ((M)->smallmap &= ~idx2bit(i))
 #define smallmap_is_marked(M, i) ((M)->smallmap & idx2bit(i))
 
-#define mark_treemap(M, i) ((M)->treemap |= idx2bit(i))
-#define clear_treemap(M, i) ((M)->treemap &= ~idx2bit(i))
+#define mark_treemap(M, i)      ((M)->treemap |= idx2bit(i))
+#define clear_treemap(M, i)     ((M)->treemap &= ~idx2bit(i))
 #define treemap_is_marked(M, i) ((M)->treemap & idx2bit(i))
 
 /* isolate the least set bit of a bitmap */
@@ -3182,17 +3182,17 @@ static size_t traverse_and_check(mstate m);
 /* Check if address a is at least as high as any from MORECORE or MMAP */
 #define ok_address(M, a) ((char*)(a) >= (M)->least_addr)
 /* Check if address of next chunk n is higher than base chunk p */
-#define ok_next(p, n) ((char*)(p) < (char*)(n))
+#define ok_next(p, n)    ((char*)(p) < (char*)(n))
 /* Check if p has inuse status */
-#define ok_inuse(p) is_inuse(p)
+#define ok_inuse(p)      is_inuse(p)
 /* Check if p has its pinuse bit on */
-#define ok_pinuse(p) pinuse(p)
+#define ok_pinuse(p)     pinuse(p)
 
 #else /* !INSECURE */
 #define ok_address(M, a) (1)
-#define ok_next(b, n) (1)
-#define ok_inuse(p) (1)
-#define ok_pinuse(p) (1)
+#define ok_next(b, n)    (1)
+#define ok_inuse(p)      (1)
+#define ok_pinuse(p)     (1)
 #endif /* !INSECURE */
 
 #if(FOOTERS && !INSECURE)

@@ -18,4 +18,12 @@ obj/generate_keymap: generate_keymap.c | obj
 clean:
 	rm -rf obj
 
-
+format:
+	@for file in *.c *.h; do \
+		[ -f "$$file" ] && \
+		[ $$(wc -c < "$$file") -lt 65536 ] && { \
+			echo "[FMT] $$file"; \
+			clang-format -i "$$file"; \
+		}; \
+		true; \
+	done

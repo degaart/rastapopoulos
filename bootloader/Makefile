@@ -82,6 +82,3 @@ run: obj/boot.img
 debug: obj/boot.img
 	bochs -f bochsrc -rc bochsinit
 
-
-
-
