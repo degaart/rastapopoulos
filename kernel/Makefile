@@ -1,5 +1,6 @@
 .PHONY: all clean run run_graphic debug format
 .SUFFIXES:
+.DEFAULT_GOAL := all
 
 include ../common/common.mk
 

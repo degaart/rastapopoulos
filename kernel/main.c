@@ -156,17 +156,24 @@ static void handle_gpf(struct isr_regs* regs)
                 PANIC("Unsupported segment override prefix");
                 break;
             case 0xCD: /* int */
+            {
                 int intnum = eip[1];
-                stack -= 3;
-                stack[0] = (regs->eip + 2) & 0xFFFF;
-                stack[1] = regs->cs & 0xFFFF;
-                stack[2] = regs->eflags & 0xFFFF;
-                regs->cs = ivt[(intnum * 2) + 1];
-                regs->eip = ivt[intnum * 2];
-                regs->esp = ((regs->esp & 0xFFFF) - 6) & 0xFFFF;
-                TRACE("%p: int 0x%02X (0x%02lX:0x%04lX)", eip, intnum, regs->cs,
-                      regs->eip);
-                return;
+                if(intnum == 0x80) { /* vm exit */
+                    extern void v86_return(void) __attribute__((noreturn));
+                    v86_return();
+                } else {
+                    stack -= 3;
+                    stack[0] = (regs->eip + 2) & 0xFFFF;
+                    stack[1] = regs->cs & 0xFFFF;
+                    stack[2] = regs->eflags & 0xFFFF;
+                    regs->cs = ivt[(intnum * 2) + 1];
+                    regs->eip = ivt[intnum * 2];
+                    regs->esp = ((regs->esp & 0xFFFF) - 6) & 0xFFFF;
+                    TRACE("%p: int 0x%02X (0x%02lX:0x%04lX)", eip, intnum,
+                          regs->cs, regs->eip);
+                    return;
+                }
+            }
             case 0x9C: /* pushf */
                 TRACE("%p: pushf", eip);
                 if(o32) {
@@ -657,33 +664,38 @@ static void v86_test()
 
     /*
      * Conventional memory: 0x00000500 - 0x0007FFFF
-     * load executable image at start of conventional memory
      */
-    memcpy((void*)0x500, v86_1, v86_1_len);
+    const char* message = "All your base are belong to us\r\n";
+    uint8_t* stub = (uint8_t*)0x500;
+    uint8_t* ptr = stub;
+    *ptr++ = 0x87; /* xchg */
+    *ptr++ = 0xDB; /* bx, bx */
+    *ptr++ = 0xCD; /* int */
+    *ptr++ = 0x10; /* 0x10 */
+    *ptr++ = 0xCD; /* int */
+    *ptr++ = 0x80; /* 0x80 */
+    *ptr++ = 0xCC; /* int3 */
+    memcpy(ptr, message, strlen(message) + 1);
 
     /* We're toying with the screen, so disable VGA */
     vga_enable = false;
 
     /* iret with VM flags set */
-    asm volatile("xchg bx, bx\n"
-                 "cli\n"
-                 "pushd 0x40\n"   /* gs */
-                 "pushd 0x40\n"   /* fs */
-                 "pushd 0x40\n"   /* ds */
-                 "pushd 0x40\n"   /* es */
-                 "pushd 0x40\n"   /* ss */
-                 "pushd 0xFFFF\n" /* esp (0x103FF) */
-                 "pushf\n"
-                 "pop   eax\n"
-                 "or    eax, 0x00020000\n"  /* EFLAGS_VM */
-                 "and   eax, ~0x0000200\n"  /* EFLAGS_IF */
-                 "and   eax, ~0x00003000\n" /* EFLAGS_IOPL */
-                 "pushd eax\n"              /* eflags */
-                 "pushd 0x40\n"             /* cs */
-                 "pushd 0x100\n"            /* eip */
-                 "iretd\n" ::
-                     : "memory");
-    INVALID_CODE_PATH();
+    void v86_enter(struct isr_regs * regs);
+    TRACE("Entering v86");
+
+    struct isr_regs regs;
+    memset(&regs, 0, sizeof(regs));
+    regs.eax = 0x1301;
+    regs.ebx = 0x000F;
+    regs.ecx = strlen(message);
+    regs.ebp = (uintptr_t)ptr;
+    regs.eip = (uintptr_t)stub;
+    regs.esp = 0xFFFF;
+    regs.eflags = (read_eflags() | EFLAGS_VM) & ~EFLAGS_IF & ~EFLAGS_IOPL;
+    v86_enter(&regs);
+    TRACE("V86 call done");
+    HALT();
 }
 #endif
 

@@ -7,4 +7,5 @@
 #define GDT_TSS       0x28
 
 void tss_set_esp0(const void* esp0);
+void* tss_get_esp0(void);
 void gdt_init(void);

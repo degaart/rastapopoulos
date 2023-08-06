@@ -1,6 +1,7 @@
 .PHONY: all clean
 .SUFFIXES:
 .SECONDARY:
+.DEFAULT_GOAL := all
 
 include ../common/common.mk
 

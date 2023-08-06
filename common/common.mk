@@ -9,7 +9,8 @@ CFLAGS := \
     -masm=intel \
     -mpreferred-stack-boundary=2 -fno-omit-frame-pointer \
     -fno-delete-null-pointer-checks -fno-finite-loops -fno-strict-aliasing \
-    -Wall -Wno-unused-function -Wno-unused-variable -Wno-unused-local-typedefs
+    -Wall -Wno-unused-function -Wno-unused-variable -Wno-unused-local-typedefs \
+	-Wno-unused-but-set-variable
 
 LDFLAGS := \
     -ffreestanding -nostdlib
