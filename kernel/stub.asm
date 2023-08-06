@@ -59,6 +59,60 @@ gdt_flush:
 .return:
     ret
 
+; void v86_enter(struct isr_regs* regs)
+global v86_enter
+v86_enter:
+    xchg bx, bx
+    push ebp
+    mov  ebp, esp
+
+    push ebx
+    push esi
+    push edi
+
+    pushf
+    cli
+
+    extern tss_set_esp0
+    push esp
+    call tss_set_esp0
+    add  esp, 4
+
+    mov  eax, [ebp+8]
+    push DWORD [eax]                ; gs
+    push DWORD [eax+4]              ; fs
+    push DWORD [eax+12]             ; ds
+    push DWORD [eax+8]              ; es
+    push DWORD [eax+72]             ; ss
+    push DWORD [eax+68]             ; sp
+    push DWORD [eax+64]             ; eflags (VM !IF !IOPL)
+    push DWORD [eax+60]             ; cs
+    push DWORD [eax+56]             ; ip
+    mov  edi, [eax+16]
+    mov  esi, [eax+20]
+    mov  ebp, [eax+24]
+    mov  ebx, [eax+32]
+    mov  edx, [eax+36]
+    mov  ecx, [eax+40]
+    mov  eax, [eax+44]
+    iret
+
+global v86_return
+v86_return:
+    xchg bx, bx
+    cli
+
+    extern tss_get_esp0
+    call tss_get_esp0
+    mov  esp, eax
+
+    popf
+    pop  edi
+    pop  esi
+    pop  ebx
+    pop  ebp
+    ret
+
 section .rodata
     halted_message: db "SYSTEM HALTED", 10, 0
     start_fn: db "_start", 0
@@ -69,5 +123,4 @@ align 4096
     resb 8192
 global _stacktop
 _stacktop:
-
 

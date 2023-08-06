@@ -79,6 +79,11 @@ void tss_set_esp0(const void* esp0)
     tss.esp0 = (uint32_t)esp0;
 }
 
+void* tss_get_esp0(void)
+{
+    return (void*)tss.esp0;
+}
+
 static inline void and_eflags(uint32_t mask)
 {
     asm volatile("pushf\n"

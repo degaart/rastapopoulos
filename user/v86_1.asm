@@ -1,7 +1,7 @@
 bits 16
 org  0x100
 
-VGA_BASE equ 0xB800
+VGA_BASE equ 0xA000
 
 mov  ah, 0x00
 mov  al, 0x12
@@ -18,6 +18,7 @@ int  0x10
 inc  si
 jmp  .loop
 .exit:
+int  0x80
 jmp  $
 
 message: db "All your base are belong to us", 13, 10, 0
