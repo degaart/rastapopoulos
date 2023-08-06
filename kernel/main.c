@@ -648,6 +648,49 @@ static void kernel_task_entry()
 }
 
 #ifdef V86_TEST
+
+#define VGA_SEQ_INDEX  0x3C4
+#define VGA_SEQ_DATA   0x3C5
+#define VGA_GC_INDEX   0x3CE
+#define VGA_GC_DATA    0x3CF
+#define VGA_CRTC_INDEX 0x3D4
+#define VGA_CRTC_DATA  0x3D5
+
+static void setplane(unsigned plane)
+{
+    static unsigned current = ~0;
+
+    plane &= 3;
+    if(plane == current)
+        return;
+    current = plane;
+    unsigned pmask = 1 << plane;
+    outw(VGA_GC_INDEX, (plane << 8) | 4);
+    outw(VGA_SEQ_INDEX, (pmask << 8) | 2);
+}
+
+static void putpixel(unsigned x, unsigned y, unsigned color)
+{
+    if(x >= 640 || y >= 480)
+        return;
+
+    color &= 0x0F;
+    unsigned width_bytes = 640 / 8;
+    unsigned offset = (width_bytes * y) + (x / 8);
+    x &= 7; /* 0b0111 */
+    unsigned mask = 0x80 >> x;
+    unsigned pmask = 1;
+    uint8_t* vga_base = (uint8_t*)0xA0000;
+    for(unsigned p = 0; p < 4; p++) {
+        setplane(p);
+        if(color & pmask)
+            vga_base[offset] |= mask;
+        else
+            vga_base[offset] &= ~mask;
+        pmask <<= 1;
+    }
+}
+
 static void v86_test()
 {
     /* Identity-map first mega */
@@ -675,7 +718,6 @@ static void v86_test()
     *ptr++ = 0xCD; /* int */
     *ptr++ = 0x80; /* 0x80 */
     *ptr++ = 0xCC; /* int3 */
-    memcpy(ptr, message, strlen(message) + 1);
 
     /* We're toying with the screen, so disable VGA */
     vga_enable = false;
@@ -686,15 +728,23 @@ static void v86_test()
 
     struct isr_regs regs;
     memset(&regs, 0, sizeof(regs));
-    regs.eax = 0x1301;
-    regs.ebx = 0x000F;
-    regs.ecx = strlen(message);
-    regs.ebp = (uintptr_t)ptr;
+    regs.eax = 0x0012;
     regs.eip = (uintptr_t)stub;
     regs.esp = 0xFFFF;
     regs.eflags = (read_eflags() | EFLAGS_VM) & ~EFLAGS_IF & ~EFLAGS_IOPL;
     v86_enter(&regs);
     TRACE("V86 call done");
+
+    unsigned x = 0, y = 0;
+    for(unsigned col = 0; col < 16; col++) {
+        unsigned startx = 5 + ((col % 8) * 32);
+        unsigned starty = 5 + ((col / 8) * 32);
+        for(unsigned x = startx; x < startx + 32; x++) {
+            for(unsigned y = starty; y < starty + 32; y++) {
+                putpixel(x, y, col);
+            }
+        }
+    }
     HALT();
 }
 #endif
