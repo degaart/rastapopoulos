@@ -222,10 +222,6 @@ void kbd_init()
                 node->repr[j][1] = keymap_ptr[1];
                 node->repr[j][2] = keymap_ptr[2];
                 node->repr[j][3] = keymap_ptr[3];
-                TRACE("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X",
-                      (unsigned)node->scancode, (unsigned)keymap_ptr[0],
-                      (unsigned)keymap_ptr[1], (unsigned)keymap_ptr[2],
-                      (unsigned)keymap_ptr[3]);
                 keymap_ptr += 4;
             } else if(UTF8_IS3(*keymap_ptr)) {
                 assert(UTF8_ISCONT(keymap_ptr[1]));
@@ -234,9 +230,6 @@ void kbd_init()
                 node->repr[j][1] = keymap_ptr[1];
                 node->repr[j][2] = keymap_ptr[2];
                 node->repr[j][3] = 0;
-                TRACE("0x%02X 0x%02X 0x%02X 0x%02X", (unsigned)node->scancode,
-                      (unsigned)keymap_ptr[0], (unsigned)keymap_ptr[1],
-                      (unsigned)keymap_ptr[2]);
                 keymap_ptr += 3;
             } else if(UTF8_IS2(*keymap_ptr)) {
                 assert(UTF8_ISCONT(keymap_ptr[1]));
@@ -244,16 +237,12 @@ void kbd_init()
                 node->repr[j][1] = keymap_ptr[1];
                 node->repr[j][2] = 0;
                 node->repr[j][3] = 0;
-                TRACE("0x%02X 0x%02X 0x%02X", (unsigned)node->scancode,
-                      (unsigned)keymap_ptr[0], (unsigned)keymap_ptr[1]);
                 keymap_ptr += 2;
             } else if(UTF8_IS1(*keymap_ptr)) {
                 node->repr[j][0] = keymap_ptr[0];
                 node->repr[j][1] = 0;
                 node->repr[j][2] = 0;
                 node->repr[j][3] = 0;
-                TRACE("0x%02X 0x%02X", (unsigned)node->scancode,
-                      (unsigned)keymap_ptr[0]);
                 keymap_ptr += 1;
             } else {
                 PANIC("Invalid utf8 byte found in keymap");

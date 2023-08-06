@@ -14,13 +14,13 @@
 #define IDT_TRAP_GATE_32 (15)
 
 struct isr_regs {
-    uint32_t ds;                                        // Data segment selector
-    uint32_t edi, esi, ebp, unused, ebx, edx, ecx, eax; // Pushed by pusha.
-    uint32_t int_no,
-        err_code; // Interrupt number and error code (if applicable)
-    uint32_t eip, cs, eflags, esp, ss; // Pushed by the processor automatically.
-    // esp and ss are only populated if the interrupt originated
-    // from usermode
+    uint32_t gs, fs, es, ds;
+    uint32_t edi, esi, ebp, unused, ebx, edx, ecx, eax;
+    uint32_t int_no;
+    uint32_t err_code;
+    uint32_t eip, cs, eflags, esp, ss;
+    /* esp and ss are only populated if the interrupt originated from usermode
+     */
 } __attribute__((packed));
 
 typedef void (*isr_t)(struct isr_regs*);

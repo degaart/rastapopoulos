@@ -4,23 +4,23 @@
 #include <stdint.h>
 #include <string.h>
 
-#define GDT_ACCESSED 1
-#define GDT_WRITABLE (1 << 1)
+#define GDT_ACCESSED  1
+#define GDT_WRITABLE  (1 << 1)
 #define GDT_DIRECTION (1 << 2)
-#define GDT_TYPE(t) (((t)&1) << 4) // 0: system, 1: code/data
-#define GDT_DPL(d) ((d & 0x3) << 5)
-#define GDT_PRESENT (1 << 7)
+#define GDT_TYPE(t)   (((t)&1) << 4) // 0: system, 1: code/data
+#define GDT_DPL(d)    ((d & 0x3) << 5)
+#define GDT_PRESENT   (1 << 7)
 
-#define GDT_READABLE (1 << 1)
+#define GDT_READABLE   (1 << 1)
 #define GDT_CONFORMING (1 << 2)
-#define GDT_CODE (1 << 3)
-#define GDT_DEFAULT (1 << 6)
+#define GDT_CODE       (1 << 3)
+#define GDT_DEFAULT    (1 << 6)
 
 #define GDT_AVAIL(a) (((a)&1) << 4)
-#define GDT_16BIT 0
-#define GDT_32BIT (1 << 6)
-#define GDT_GRAN1B 0
-#define GDT_GRAN4K (1 << 7)
+#define GDT_16BIT    0
+#define GDT_32BIT    (1 << 6)
+#define GDT_GRAN1B   0
+#define GDT_GRAN4K   (1 << 7)
 
 struct gdt_entry {
     uint16_t limit_low;  // The lower 16 bits of the limit.
@@ -125,7 +125,7 @@ void gdt_init()
     set_descriptor(4, 0x0, 0xFFFFFFFF,
                    GDT_WRITABLE | GDT_TYPE(1) | GDT_DPL(3) | GDT_PRESENT,
                    GDT_32BIT | GDT_GRAN4K); /* User data */
-    set_descriptor(5, (uint32_t)&tss, (uint32_t)&tss + sizeof(tss),
+    set_descriptor(5, (uint32_t)&tss, sizeof(tss),
                    GDT_CODE | GDT_PRESENT | GDT_ACCESSED, 0); /* TSS */
 
     gdt_flush(&gdt_ptr);

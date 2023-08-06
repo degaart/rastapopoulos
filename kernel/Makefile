@@ -5,7 +5,7 @@ include ../common/common.mk
 
 UNIT_TEST_FLAGS := -DUNIT_TESTS
 ASFLAGS := $(ASFLAGS) -g
-CFLAGS := $(CFLAGS) -g -DKERNEL
+CFLAGS := $(CFLAGS) -g -DKERNEL -DV86_TEST
 LDFLAGS := $(LDFLAGS) -g -T kernel.ld -Xlinker -Map=obj/kernel.map
 
 QEMU_INT_FLAGS := -d int -M smm=off
@@ -33,7 +33,7 @@ ASM_SRCS := \
 all: obj/kernel.elf
 
 obj:
-	mkdir -p obj obj/common
+	mkdir -p obj obj/common obj/libx86emu
 
 OBJS := \
 	$(addprefix obj/,$(addsuffix .o,$(ASM_SRCS))) \
@@ -49,11 +49,11 @@ DEPFILES := \
 include $(wildcard $(DEPFILES))	
 
 debug_make:
-	@echo "OBJS: " $(OBJS)
-	@echo "DEPFILES: " $(DEPFILES)
+	@echo "OBJS: $(OBJS)"
+	@echo "DEPFILES: $(DEPFILES)"
 
 obj/kernel.elf: $(OBJS) | obj
-	$(CC) -o $@ $(LDFLAGS) $^
+	$(CC) -o $@ $(LDFLAGS) $^ -lgcc
 
 obj/%.asm.o: %.asm Makefile | obj
 	$(AS) -o $@ $(ASFLAGS) $<
@@ -63,6 +63,13 @@ obj/%.c.o: %.c Makefile | obj
 
 obj/common/%.c.o: ../common/%.c Makefile | obj
 	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
+
+obj/libx86emu/%.c.o: libx86emu/%.c Makefile | obj
+	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
+
+# due to a design limitation with our dependency generation, this has to be
+# specified manually here
+obj/kbd.c.o: obj/keymap_macfr.h
 
 obj/keymap_macfr.h: obj/keymap_macfr.keymap
 	xxd -i -n keymap_macfr $< $@

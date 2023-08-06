@@ -1,5 +1,6 @@
 .PHONY: all clean
 .SUFFIXES:
+.SECONDARY:
 
 include ../common/common.mk
 
@@ -19,7 +20,12 @@ COMMON_SRCS := \
 	../common/bitset.c \
 	../common/util.c
 
-PROGRAMS := $(addprefix obj/,$(addsuffix .elf,$(basename $(SRCS))))
+V86_SRCS := \
+	v86_1.asm
+
+PROGRAMS := \
+	$(addprefix obj/,$(addsuffix .elf,$(basename $(SRCS)))) \
+	$(addprefix obj/,$(addsuffix .com,$(basename $(V86_SRCS))))
 
 all: $(PROGRAMS)
 
@@ -51,6 +57,10 @@ obj/%.c.o: %.c Makefile | obj
 
 obj/common/%.c.o: ../common/%.c Makefile | obj
 	$(CC) -c -o $@ $(CFLAGS) $(DEPFLAGS) -MF $(basename $@).d -save-temps $<
+
+obj/%.com: %.asm Makefile | obj
+	nasm -o $@ -fbin $<
+	xxd -i -n $(notdir $(basename $@)) $@ $(basename $@).h
 
 clean:
 	rm -rf obj

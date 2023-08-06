@@ -1,27 +1,24 @@
-AS := nasm
-CC := i686-elf-gcc
+AS : = nasm CC : = i686 - elf -
+                   gcc
 
-ASFLAGS := -f elf32
+                       ASFLAGS : = -f elf32
 
-CFLAGS := \
-    -I../common \
-    -std=gnu99 -ffreestanding -Werror -march=i386 \
-    -masm=intel \
-    -mpreferred-stack-boundary=2 -fno-omit-frame-pointer \
-    -fno-delete-null-pointer-checks -fno-finite-loops -fno-strict-aliasing \
-    -Wall -Wno-unused-function -Wno-unused-variable -Wno-unused-local-typedefs
+                                       CFLAGS
+    : = -I../ common - std =
+            gnu99 - ffreestanding - Werror - march =
+                i386 - masm =
+                    intel - mpreferred - stack - boundary =
+                        2 - fno - omit - frame - pointer - fno - delete -null -
+                        pointer - checks - fno - finite - loops - fno - strict -
+                        aliasing - Wall - Wno - unused - function - Wno -
+                        unused - variable - Wno - unused - local - typedefs -
+                        Wno - unused - but - set -
+                        variable
 
-LDFLAGS := \
-    -ffreestanding -nostdlib
+                            LDFLAGS : = -ffreestanding - nostdlib
 
-DEPFLAGS := -MMD -MP
+                                                             DEPFLAGS
+    : = -MMD - MP
 
-COMMON_SRCS := \
-	crc32.c \
-	serial.c \
-	string.c \
-	vga.c \
-	bitset.c \
-	util.c \
-	rbuf.c
-
+                   COMMON_SRCS
+    : = crc32.c serial.c string.c vga.c bitset.c util.c rbuf.c

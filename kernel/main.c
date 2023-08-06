@@ -1,5 +1,6 @@
 #include "../user/obj/program1.h"
 #include "../user/obj/program2.h"
+#include "../user/obj/v86_1.h"
 #include "gdt.h"
 #include "idt.h"
 #include "kbd.h"
@@ -9,6 +10,7 @@
 #include "pmm.h"
 #include "vmm.h"
 #include <debug.h>
+#include <io.h>
 #include <multiboot.h>
 #include <rbuf.h>
 #include <serial.h>
@@ -99,7 +101,195 @@ static void handle_page_fault(struct isr_regs* regs)
 
 static void handle_gpf(struct isr_regs* regs)
 {
-    TRACE("General protection fault at 0x%lX:0x%08lX", regs->cs, regs->eip);
+#define VALID_FLAGS 0xDFF
+    // TRACE("General protection fault at 0x%lX:0x%08lX", regs->cs, regs->eip);
+    // TRACE("Error code: 0x%lX", regs->err_code);
+    // TRACE("EFLAGS: 0x%lX", regs->eflags);
+    assert(regs->err_code == 0);
+    if(regs->eflags & EFLAGS_VM) {
+        bool o32 = false;
+        bool a32 = false;
+        bool rep = false;
+        bool repne = false;
+        bool lock = false;
+        uint16_t* ivt = (uint16_t*)0x00000000; /* Undefined behaviour */
+        uint16_t* stack = (uint16_t*)((regs->ss * 0x10) + regs->esp);
+        uint8_t* eip = (uint8_t*)((regs->cs * 0x10) + regs->eip);
+        while(1) {
+            switch(*eip) {
+            case 0x66: /* o32 */
+                TRACE("%p: o32", eip);
+                o32 = true;
+                eip++;
+                regs->eip++;
+                break;
+            case 0x67: /* a32 */
+                TRACE("%p: a32", eip);
+                a32 = true;
+                eip++;
+                regs->eip++;
+                break;
+            case 0xF0: /* lock */
+                TRACE("%p: lock", eip);
+                lock = true;
+                eip++;
+                regs->eip++;
+                break;
+            case 0xF2: /* repne */
+                TRACE("%p: repne", eip);
+                repne = true;
+                eip++;
+                regs->eip++;
+                break;
+            case 0xF3: /* rep */
+                TRACE("%p: rep", eip);
+                rep = true;
+                eip++;
+                regs->eip++;
+                break;
+            case 0x2E: /* cs prefix */
+            case 0x36: /* ss prefix */
+            case 0x3E: /* ds prefix */
+            case 0x26: /* es prefix */
+            case 0x64: /* fs prefix */
+            case 0x65: /* gs prefix */
+                PANIC("Unsupported segment override prefix");
+                break;
+            case 0xCD: /* int */
+                int intnum = eip[1];
+                stack -= 3;
+                stack[0] = (regs->eip + 2) & 0xFFFF;
+                stack[1] = regs->cs & 0xFFFF;
+                stack[2] = regs->eflags & 0xFFFF;
+                regs->cs = ivt[(intnum * 2) + 1];
+                regs->eip = ivt[intnum * 2];
+                regs->esp = ((regs->esp & 0xFFFF) - 6) & 0xFFFF;
+                TRACE("%p: int 0x%02X (0x%02lX:0x%04lX)", eip, intnum, regs->cs,
+                      regs->eip);
+                return;
+            case 0x9C: /* pushf */
+                TRACE("%p: pushf", eip);
+                if(o32) {
+                    regs->esp = ((regs->esp & 0xFFFF) - 4) & 0xFFFF;
+                    unsigned flags = regs->eflags & VALID_FLAGS;
+                    stack -= 2;
+                    stack[0] = flags & 0xFFFF;
+                    stack[1] = (flags & 0xFFFF0000) >> 16;
+                } else {
+                    regs->esp = ((regs->esp & 0xFFFF) - 2) & 0xFFFF;
+                    stack--;
+                    stack[0] = regs->eflags & VALID_FLAGS;
+                }
+                regs->eip++;
+                return;
+            case 0x9D: /* popf */
+                TRACE("%p: popf", eip);
+                if(o32) {
+                    unsigned flags =
+                        (stack[0] | (stack[1] << 16)) & VALID_FLAGS;
+                    regs->eflags = EFLAGS_VM | flags;
+                    regs->esp = ((regs->esp & 0xFFFF) + 4) & 0xFFFF;
+                } else {
+                    regs->eflags = EFLAGS_VM | (stack[0] & VALID_FLAGS);
+                    regs->esp = ((regs->esp & 0xFFFF) + 2) & 0xFFFF;
+                }
+                regs->eip++;
+                return;
+            case 0xCF: /* iret */
+                assert(!o32);
+                regs->eip = stack[0];
+                regs->cs = stack[1];
+                regs->eflags = EFLAGS_IF | EFLAGS_VM | stack[2];
+                regs->esp = ((regs->esp & 0xFFFF) + 6) & 0xFFFF;
+                TRACE("%p: iret (dest: 0x%02lX:0x%02lX)", eip, regs->cs,
+                      regs->eip);
+                return;
+            case 0xFA: /* cli */
+                TRACE("%p: cli", eip);
+                regs->eip++;
+                return;
+            case 0xFB: /* sti */
+                TRACE("%p: sti", eip);
+                regs->eip++;
+                return;
+            case 0xE6: /* out imm8, al */
+            {
+                uint16_t port = eip[1];
+                uint8_t val = regs->eax & 0xFF;
+                regs->eip += 2;
+                TRACE("%p: out 0x%02X, 0x%02X", eip, port, val);
+                outb(port, val);
+                return;
+            }
+            case 0xE7: /* out imm8, ax */
+            {
+                uint16_t port = eip[1];
+                if(o32) {
+                    uint32_t val = regs->eax;
+                    TRACE("%p: out 0x%02X, 0x%08lX", eip, port, val);
+                    outl(port, val);
+                } else {
+                    uint16_t val = regs->eax & 0xFFFF;
+                    TRACE("%p: out 0x%02X, 0x%04X", eip, port, val);
+                    outw(port, val);
+                }
+                regs->eip += 2;
+                return;
+            }
+            case 0xEE: /* out dx, al */
+            {
+                uint16_t port = regs->edx & 0xFFFF;
+                uint8_t val = regs->eax & 0xFF;
+                TRACE("%p: out 0x%02X, 0x%02X", eip, port, val);
+                outb(port, val);
+                regs->eip++;
+                return;
+            }
+            case 0xEF: /* out dx, ax */
+            {
+                uint16_t port = regs->edx & 0xFFFF;
+                if(o32) {
+                    uint32_t val = regs->eax;
+                    TRACE("%p: out 0x%02X, 0x%08lX", eip, port, val);
+                    outl(port, val);
+                } else {
+                    uint16_t val = regs->eax & 0xFFFF;
+                    TRACE("%p: out 0x%02X, 0x%04X", eip, port, val);
+                    outw(port, val);
+                }
+                regs->eip++;
+                return;
+            }
+            case 0xEC: /* in al, dx */
+            {
+                uint16_t port = regs->edx & 0xFFFF;
+                TRACE("%p: in al, 0x%02X", eip, port);
+                uint8_t val = inb(port);
+                regs->eax = (regs->eax & ~0xFF) | val;
+                regs->eip++;
+                return;
+            }
+            case 0xED: /* in ax, dx */
+            {
+                uint16_t port = regs->edx & 0xFFFF;
+                if(o32) {
+                    TRACE("%p: in eax, 0x%02X", eip, port);
+                    uint32_t val = inl(port);
+                    regs->eax = val;
+                } else {
+                    TRACE("%p: in ax, 0x%02X", eip, port);
+                    uint16_t val = inw(port);
+                    regs->eax = (regs->eax & ~0xFFFF) | val;
+                }
+                regs->eip++;
+                return;
+            }
+            default:
+                PANIC("Unhandled instruction: 0x%02X", *eip);
+                break;
+            }
+        }
+    }
     HALT();
 }
 
@@ -374,6 +564,10 @@ static void counter2_entry()
 {
     enable_interrupts();
 
+    /* init tss */
+    uint8_t* kernel_stack = kpvalloc(VMM_PAGESIZE);
+    tss_set_esp0(kernel_stack + VMM_PAGESIZE);
+
     /* Map program starting at 0x400000 */
     unsigned char* dst;
     const unsigned char* src;
@@ -408,9 +602,9 @@ static void yield()
 }
 
 /*
- * first row of display: scheduler information
- * second row: first userspace process (counter)
- * third row: second userspace process (counter)
+ * commandline shell as usermode
+ *  - keyboard reader
+ *  - vga interface
  */
 static void kernel_task_entry()
 {
@@ -445,6 +639,53 @@ static void kernel_task_entry()
         yield();
     }
 }
+
+#ifdef V86_TEST
+static void v86_test()
+{
+    /* Identity-map first mega */
+    for(const uint8_t* ptr = 0; ptr < (const uint8_t*)0x100000;
+        ptr += VMM_PAGESIZE) {
+        if(ptr != (const uint8_t*)VGA_BASE) {
+            bool ret = vmm_map(ptr, (uintptr_t)ptr,
+                               VMM_PRESENT | VMM_USER | VMM_WRITABLE);
+            if(!ret) {
+                PANIC("vmm_map failed");
+            }
+        }
+    }
+
+    /*
+     * Conventional memory: 0x00000500 - 0x0007FFFF
+     * load executable image at start of conventional memory
+     */
+    memcpy((void*)0x500, v86_1, v86_1_len);
+
+    /* We're toying with the screen, so disable VGA */
+    vga_enable = false;
+
+    /* iret with VM flags set */
+    asm volatile("xchg bx, bx\n"
+                 "cli\n"
+                 "pushd 0x40\n"   /* gs */
+                 "pushd 0x40\n"   /* fs */
+                 "pushd 0x40\n"   /* ds */
+                 "pushd 0x40\n"   /* es */
+                 "pushd 0x40\n"   /* ss */
+                 "pushd 0xFFFF\n" /* esp (0x103FF) */
+                 "pushf\n"
+                 "pop   eax\n"
+                 "or    eax, 0x00020000\n"  /* EFLAGS_VM */
+                 "and   eax, ~0x0000200\n"  /* EFLAGS_IF */
+                 "and   eax, ~0x00003000\n" /* EFLAGS_IOPL */
+                 "pushd eax\n"              /* eflags */
+                 "pushd 0x40\n"             /* cs */
+                 "pushd 0x100\n"            /* eip */
+                 "iretd\n" ::
+                     : "memory");
+    INVALID_CODE_PATH();
+}
+#endif
 
 void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 {
@@ -572,6 +813,11 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
     /* Run unit tests */
     run_tests();
     TRACE("All tests done. Kernel Halted.");
+    HALT();
+#endif
+
+#ifdef V86_TEST
+    v86_test();
     HALT();
 #endif
 
