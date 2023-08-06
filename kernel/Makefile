@@ -96,7 +96,3 @@ debug: obj/kernel.elf
 clean:
 	rm -rf obj
 
-format:
-	cd .. && ./clang-format.sh
-
-

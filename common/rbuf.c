@@ -61,4 +61,3 @@ void test_rbuf(void)
     RBUF_PUSH(&rbuf, 0x06060606);
     assert(RBUF_POP(&rbuf, 0xCCCCCCCC) == 0x06060606);
 }
-
