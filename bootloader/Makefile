@@ -1,5 +1,6 @@
 .PHONY: all clean run debug disasm
 .SUFFIXES:
+.DEFAULT_GOAL := all
 
 include ../common/common.mk
 
