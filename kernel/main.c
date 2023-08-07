@@ -718,6 +718,85 @@ static void fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
     }
 }
 
+static void vline(unsigned x, unsigned y, unsigned h, unsigned col)
+{
+    unsigned pmask = 1;
+    uint8_t* vga_base = (uint8_t*)0xA0000;
+    for(unsigned plane = 0; plane < 4; plane++) {
+        setplane(plane);
+
+        unsigned lmask = 0x00FF >> (x & 7);
+        unsigned rmask = 0xFF80 >> (x & 7);
+        unsigned bytes = 1; /* (x2 / 8) - (x / 8) + 1 */
+        lmask &= rmask;
+
+        unsigned bytew = 640 / 8;
+        unsigned offset = (bytew * y) + (x / 8);
+        if(col & pmask) {
+            for(unsigned y2 = y; y2 < y + h; y2++) {
+                vga_base[offset] |= lmask;
+                offset += bytew;
+            }
+        } else {
+            lmask = ~lmask;
+            rmask = ~rmask;
+            for(unsigned y2 = y; y2 < y + h; y2++) {
+                vga_base[offset] &= lmask;
+                offset += bytew;
+            }
+        }
+        pmask <<= 1;
+    }
+}
+
+static void hline(unsigned x, unsigned y, unsigned w, unsigned col)
+{
+    unsigned pmask = 1;
+    uint8_t* vga_base = (uint8_t*)0xA0000;
+    for(unsigned plane = 0; plane < 4; plane++) {
+        setplane(plane);
+
+        unsigned x2 = x + w - 1;
+        unsigned lmask = 0x00FF >> (x & 7);
+        unsigned rmask = 0xFF80 >> (x2 & 7);
+        unsigned bytes = (x2 >> 3) - (x >> 3) + 1; /* (x2 / 8) - (x / 8) + 1 */
+        if(bytes == 1)
+            lmask &= rmask;
+
+        unsigned bytew = 640 / 8;
+        unsigned offset = (bytew * y) + (x / 8);
+        if(col & pmask) {
+            /* partial byte on left */
+            vga_base[offset] |= lmask;
+
+            /* solid bytes in middle */
+            if(bytes > 2)
+                memset(vga_base + offset + 1, 0xFF, bytes - 2);
+
+            /* partial bytes on right */
+            if(bytes > 1)
+                vga_base[offset + bytes - 1] |= rmask;
+        } else {
+            lmask = ~lmask;
+            rmask = ~rmask;
+            vga_base[offset] &= lmask;
+            if(bytes > 2)
+                memset(vga_base + offset + 1, 0, bytes - 2);
+            if(bytes > 1)
+                vga_base[offset + bytes - 1] &= rmask;
+        }
+        pmask <<= 1;
+    }
+}
+
+static void rect(unsigned x, unsigned y, unsigned w, unsigned h, unsigned col)
+{
+    hline(x, y, w, col);
+    hline(x, y + h - 1, w, col);
+    vline(x, y, h, col);
+    vline(x + w - 1, y, h, col);
+}
+
 static void putpixel(unsigned x, unsigned y, unsigned color)
 {
     if(x >= 640 || y >= 480)
@@ -796,6 +875,11 @@ static void v86_test()
             putpixel(x, y, logo_data[index++]);
         }
     }
+
+    hline(64, 10, 64, 2);
+    vline(128, 10, 64, 3);
+
+    rect(10, 128, 128, 64, 10);
     HALT();
 }
 #endif
