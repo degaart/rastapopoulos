@@ -524,6 +524,7 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 /******************************************************************************
  * Rastapopoulos                                                              *
  *****************************************************************************/
+#pragma GCC optimize ("Os")
 #include "kmalloc.h"
 #include "pmm.h"
 #include "vmm.h"
