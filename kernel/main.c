@@ -5,6 +5,7 @@
 #include "idt.h"
 #include "kbd.h"
 #include "kmalloc.h"
+#include "logo.h"
 #include "pic.h"
 #include "pit.h"
 #include "pmm.h"
@@ -669,6 +670,54 @@ static void setplane(unsigned plane)
     outw(VGA_SEQ_INDEX, (pmask << 8) | 2);
 }
 
+static void fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
+                     unsigned col)
+{
+    unsigned pmask = 1;
+    uint8_t* vga_base = (uint8_t*)0xA0000;
+    for(unsigned plane = 0; plane < 4; plane++) {
+        setplane(plane);
+
+        unsigned x2 = x + w - 1;
+        unsigned lmask = 0x00FF >> (x & 7);
+        unsigned rmask = 0xFF80 >> (x2 & 7);
+        unsigned bytes = (x2 >> 3) - (x >> 3) + 1; /* (x2 / 8) - (x / 8) + 1 */
+        if(bytes == 1)
+            lmask &= rmask;
+
+        unsigned bytew = 640 / 8;
+        unsigned offset = (bytew * y) + (x / 8);
+        if(col & pmask) {
+            for(unsigned y2 = y; y2 < y + h; y2++) {
+                /* partial byte on left */
+                vga_base[offset] |= lmask;
+
+                /* solid bytes in middle */
+                if(bytes > 2)
+                    memset(vga_base + offset + 1, 0xFF, bytes - 2);
+
+                /* partial bytes on right */
+                if(bytes > 1)
+                    vga_base[offset + bytes - 1] |= rmask;
+
+                offset += bytew;
+            }
+        } else {
+            lmask = ~lmask;
+            rmask = ~rmask;
+            for(unsigned y2 = y; y2 < y + h; y2++) {
+                vga_base[offset] &= lmask;
+                if(bytes > 2)
+                    memset(vga_base + offset + 1, 0, bytes - 2);
+                if(bytes > 1)
+                    vga_base[offset + bytes - 1] &= rmask;
+                offset += bytew;
+            }
+        }
+        pmask <<= 1;
+    }
+}
+
 static void putpixel(unsigned x, unsigned y, unsigned color)
 {
     if(x >= 640 || y >= 480)
@@ -735,14 +784,16 @@ static void v86_test()
     v86_enter(&regs);
     TRACE("V86 call done");
 
-    unsigned x = 0, y = 0;
     for(unsigned col = 0; col < 16; col++) {
         unsigned startx = 5 + ((col % 8) * 32);
-        unsigned starty = 5 + ((col / 8) * 32);
-        for(unsigned x = startx; x < startx + 32; x++) {
-            for(unsigned y = starty; y < starty + 32; y++) {
-                putpixel(x, y, col);
-            }
+        unsigned starty = 240 + ((col / 8) * 32);
+        fillrect(startx, starty, 32, 32, col);
+    }
+
+    unsigned index = 0;
+    for(unsigned y = 10; y < logo_height + 10; y++) {
+        for(unsigned x = 10; x < logo_width + 10; x++) {
+            putpixel(x, y, logo_data[index++]);
         }
     }
     HALT();
