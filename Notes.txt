@@ -39,5 +39,7 @@ menuentry "OS Name" {
 
 Use [MkDocs](https://www.mkdocs.org/getting-started/)
 
+# Analyze symbol and section sizes
+    nm --print-size --size-sort --radix=d obj/kernel.elf
 
 
