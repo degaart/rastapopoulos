@@ -670,6 +670,28 @@ static void setplane(unsigned plane)
     outw(VGA_SEQ_INDEX, (pmask << 8) | 2);
 }
 
+static void putpixel(unsigned x, unsigned y, unsigned color)
+{
+    if(x >= 640 || y >= 480)
+        return;
+
+    color &= 0x0F;
+    unsigned width_bytes = 640 / 8;
+    unsigned offset = (width_bytes * y) + (x / 8);
+    x &= 7; /* 0b0111 */
+    unsigned mask = 0x80 >> x;
+    unsigned pmask = 1;
+    uint8_t* vga_base = (uint8_t*)0xA0000;
+    for(unsigned p = 0; p < 4; p++) {
+        setplane(p);
+        if(color & pmask)
+            vga_base[offset] |= mask;
+        else
+            vga_base[offset] &= ~mask;
+        pmask <<= 1;
+    }
+}
+
 static void fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
                      unsigned col)
 {
@@ -789,34 +811,96 @@ static void hline(unsigned x, unsigned y, unsigned w, unsigned col)
     }
 }
 
+static void lineo0(unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
+                   unsigned xdirection, unsigned col)
+{
+    int deltayx2 = deltay * 2;
+    int deltayx2minusdeltaxx2 = deltayx2 - (int)(deltax * 2);
+    int errorterm = deltayx2 - (int)deltax;
+
+    putpixel(x0, y0, col);
+    while(deltax--) {
+        if(errorterm >= 0) {
+            y0++;
+            errorterm += deltayx2minusdeltaxx2;
+        } else {
+            errorterm += deltayx2;
+        }
+        x0 += xdirection;
+        putpixel(x0, y0, col);
+    }
+}
+
+static void lineo1(unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
+                   unsigned xdirection, unsigned col)
+{
+    int deltaxx2 = deltax * 2;
+    int deltaxx2minusdeltayx2 = deltaxx2 - (int)(deltay * 2);
+    int errorterm = deltaxx2 - (int)deltay;
+
+    putpixel(x0, y0, col);
+    while(deltay--) {
+        if(errorterm >= 0) {
+            x0 += xdirection;
+            errorterm += deltaxx2minusdeltayx2;
+        } else {
+            errorterm += deltaxx2;
+        }
+        y0++;
+        putpixel(x0, y0, col);
+    }
+}
+
+static void line(int x0, int y0, int x1, int y1, unsigned color)
+{
+    if(x0 == x1) {
+        if(y0 < y1)
+            vline(x0, y0, y1 - y0, color);
+        else
+            vline(x0, y1, y0 - y1, color);
+        return;
+    } else if(y0 == y1) {
+        if(x0 < x1)
+            hline(x0, y0, x1 - x0, color);
+        else
+            hline(x1, y0, x0 - x1, color);
+        return;
+    }
+
+    if(y0 > y1) {
+        int temp = y0;
+        y0 = y1;
+        y1 = temp;
+
+        temp = x0;
+        x0 = x1;
+        x1 = temp;
+    }
+
+    int deltax = x1 - x0;
+    int deltay = y1 - y0;
+    if(deltax > 0) {
+        if(deltax > deltay) {
+            lineo0(x0, y0, deltax, deltay, 1, color);
+        } else {
+            lineo1(x0, y0, deltax, deltay, 1, color);
+        }
+    } else {
+        deltax = -deltax;
+        if(deltax > deltay) {
+            lineo0(x0, y0, deltax, deltay, -1, color);
+        } else {
+            lineo1(x0, y0, deltax, deltay, -1, color);
+        }
+    }
+}
+
 static void rect(unsigned x, unsigned y, unsigned w, unsigned h, unsigned col)
 {
     hline(x, y, w, col);
     hline(x, y + h - 1, w, col);
     vline(x, y, h, col);
     vline(x + w - 1, y, h, col);
-}
-
-static void putpixel(unsigned x, unsigned y, unsigned color)
-{
-    if(x >= 640 || y >= 480)
-        return;
-
-    color &= 0x0F;
-    unsigned width_bytes = 640 / 8;
-    unsigned offset = (width_bytes * y) + (x / 8);
-    x &= 7; /* 0b0111 */
-    unsigned mask = 0x80 >> x;
-    unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)0xA0000;
-    for(unsigned p = 0; p < 4; p++) {
-        setplane(p);
-        if(color & pmask)
-            vga_base[offset] |= mask;
-        else
-            vga_base[offset] &= ~mask;
-        pmask <<= 1;
-    }
 }
 
 static void v86_test()
@@ -876,10 +960,13 @@ static void v86_test()
         }
     }
 
-    hline(64, 10, 64, 2);
-    vline(128, 10, 64, 3);
+    // hline(64, 10, 64, 2);
+    // vline(128, 10, 64, 3);
 
     rect(10, 128, 128, 64, 10);
+    line(32 + 10, 32 + 10, 128, 128, 11);
+    line(64, 10, 64, 10, 2);
+    line(128, 10, 128, 64, 3);
     HALT();
 }
 #endif
