@@ -903,6 +903,51 @@ static void rect(unsigned x, unsigned y, unsigned w, unsigned h, unsigned col)
     vline(x + w - 1, y, h, col);
 }
 
+static void circle(int cx, int cy, int radius, unsigned color)
+{
+    int x = 0;
+    int y = radius;
+    int m = 5 - 4 * radius;
+    while(x <= y) {
+        putpixel(cx + x, cy + y, color);
+        putpixel(cx + x, cy - y, color);
+        putpixel(cx - x, cy + y, color);
+        putpixel(cx - x, cy - y, color);
+        putpixel(cx + y, cy + x, color);
+        putpixel(cx + y, cy - x, color);
+        putpixel(cx - y, cy + x, color);
+        putpixel(cx - y, cy - x, color);
+        if(m > 0) {
+            y--;
+            m -= 8 * y;
+        }
+        x++;
+        m += 8 * x + 4;
+    }
+}
+
+void fillcircle(int centerX, int centerY, int radius, unsigned c)
+{
+    int x = 0;
+    int y = radius;
+    int m = 5 - 4 * radius;
+
+    while(x <= y) {
+        hline(centerX - y, centerY - x, y * 2, c);
+        hline(centerX - y, centerY + x, y * 2, c);
+
+        if(m > 0) {
+            hline(centerX - x, centerY - y, x * 2, c);
+            hline(centerX - x, centerY + y, x * 2, c);
+            y--;
+            m -= 8 * y;
+        }
+
+        x++;
+        m += 8 * x + 4;
+    }
+}
+
 static void v86_test()
 {
     /* Identity-map first mega */
@@ -964,9 +1009,11 @@ static void v86_test()
     // vline(128, 10, 64, 3);
 
     rect(10, 128, 128, 64, 10);
-    line(32 + 10, 32 + 10, 128, 128, 11);
+    line(32 + 10, 32 + 10, 640, 480, 11);
     line(64, 10, 64, 10, 2);
     line(128, 10, 128, 64, 3);
+    circle(640 / 2, 480 / 2, 128, 12);
+    fillcircle(640 / 2, 390, 64, 14);
     HALT();
 }
 #endif
