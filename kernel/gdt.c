@@ -1,5 +1,6 @@
-#include "gdt.h"
 #include "debug.h"
+#include "gdt.h"
+#include "kmalloc.h"
 #include "util.h"
 #include <stdint.h>
 #include <string.h>
@@ -65,23 +66,45 @@ struct tss_entry {
     uint32_t gs;
     uint32_t ldt;
     uint16_t trap;
-    uint16_t iomap;
+    uint16_t iomap_offset;
+    uint8_t iomap[8192];
+    uint8_t padding;
 } __attribute__((packed));
 
 static struct gdt_entry gdt_entries[6];
 static struct gdt_ptr gdt_ptr;
-static struct tss_entry tss;
+static struct tss_entry* tss;
 
 void gdt_flush(void* gdtr);
 
 void tss_set_esp0(const void* esp0)
 {
-    tss.esp0 = (uint32_t)esp0;
+    tss->esp0 = (uint32_t)esp0;
 }
 
 void* tss_get_esp0(void)
 {
-    return (void*)tss.esp0;
+    return (void*)tss->esp0;
+}
+
+void iomap_allow_all()
+{
+    memset(tss->iomap, 0, sizeof(tss->iomap));
+}
+
+void iomap_deny_all()
+{
+    memset(tss->iomap, 0xFF, sizeof(tss->iomap));
+}
+
+void iomap_deny(uint16_t port)
+{
+    tss->iomap[port / 8] &= ~(1 << (port % 8));
+}
+
+void iomap_allow(uint16_t port)
+{
+    tss->iomap[port / 8] |= 1 << (port % 8);
 }
 
 static inline void and_eflags(uint32_t mask)
@@ -130,7 +153,9 @@ void gdt_init()
     set_descriptor(4, 0x0, 0xFFFFFFFF,
                    GDT_WRITABLE | GDT_TYPE(1) | GDT_DPL(3) | GDT_PRESENT,
                    GDT_32BIT | GDT_GRAN4K); /* User data */
-    set_descriptor(5, (uint32_t)&tss, sizeof(tss),
+
+    tss = early_kmalloc(sizeof(*tss));
+    set_descriptor(5, (uint32_t)tss, sizeof(*tss),
                    GDT_CODE | GDT_PRESENT | GDT_ACCESSED, 0); /* TSS */
 
     gdt_flush(&gdt_ptr);
@@ -145,11 +170,15 @@ void gdt_init()
      * Install tss
      */
     extern unsigned char _stacktop[];
-    memset(&tss, 0, sizeof(tss));
-    tss.ss0 = GDT_DS_KERNEL;
-    tss.esp0 = (uint32_t)_stacktop;
-    tss.cs = GDT_CS_KERNEL | 0x3;
-    tss.ss = tss.ds = tss.es = tss.fs = tss.gs = GDT_DS_KERNEL | 0x3;
-    tss.iomap = sizeof(tss);
+    memset(tss, 0, sizeof(*tss));
+    tss->ss0 = GDT_DS_KERNEL;
+    tss->esp0 = (uint32_t)_stacktop;
+    tss->cs = GDT_CS_KERNEL | 0x3;
+    tss->ss = tss->ds = tss->es = tss->fs = tss->gs = GDT_DS_KERNEL | 0x3;
+    tss->iomap_offset = offsetof(struct tss_entry, iomap);
+    memset(tss->iomap, 0xFF, sizeof(tss->iomap));
+    tss->padding = 0xFF;
+    TRACE("tss->iomap_offset: %u", tss->iomap_offset);
     asm volatile("ltr ax" ::"a"(GDT_TSS) : "memory");
 }
+

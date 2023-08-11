@@ -983,6 +983,8 @@ static void v86_test()
     void v86_enter(struct isr_regs * regs);
     TRACE("Entering v86");
 
+    CLEAR_IF();
+    iomap_allow_all();
     struct isr_regs regs;
     memset(&regs, 0, sizeof(regs));
     regs.eax = 0x0012;
@@ -991,6 +993,8 @@ static void v86_test()
     regs.eflags = (read_eflags() | EFLAGS_VM) & ~EFLAGS_IF & ~EFLAGS_IOPL;
     v86_enter(&regs);
     TRACE("V86 call done");
+    iomap_deny_all();
+    RESTORE_IF();
 
     for(unsigned col = 0; col < 16; col++) {
         unsigned startx = 5 + ((col % 8) * 32);
@@ -1004,9 +1008,6 @@ static void v86_test()
             putpixel(x, y, logo_data[index++]);
         }
     }
-
-    // hline(64, 10, 64, 2);
-    // vline(128, 10, 64, 3);
 
     rect(10, 128, 128, 64, 10);
     line(32 + 10, 32 + 10, 640, 480, 11);
