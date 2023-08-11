@@ -62,7 +62,6 @@ gdt_flush:
 ; void v86_enter(struct isr_regs* regs)
 global v86_enter
 v86_enter:
-    xchg bx, bx
     push ebp
     mov  ebp, esp
 
@@ -99,7 +98,6 @@ v86_enter:
 
 global v86_return
 v86_return:
-    xchg bx, bx
     cli
 
     extern tss_get_esp0
