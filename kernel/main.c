@@ -24,6 +24,15 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+extern unsigned char _heap_start[];
+static unsigned char* _heap = _heap_start;
+static struct multiboot_info multiboot_info;
+bool early_kmalloc_enabled = true;
+
+#undef V86_DEBUG
+extern void v86_enter(struct isr_regs* regs);
+extern void v86_return(void) __attribute__((noreturn));
+
 #define ENTER_USERMODE(esp, eip)                                               \
     asm volatile("cli\n"                                                       \
                  "mov   ax, 0x23\n"                                            \
@@ -41,11 +50,6 @@
                  "push  ecx\n"                                                 \
                  "iretd\n" ::"ebx"(esp),                                       \
                  "ecx"(eip))
-
-extern unsigned char _heap_start[];
-static unsigned char* _heap = _heap_start;
-static struct multiboot_info multiboot_info;
-bool early_kmalloc_enabled = true;
 
 void* early_kmalloc_get_heap()
 {
@@ -103,6 +107,13 @@ static void handle_page_fault(struct isr_regs* regs)
 static void handle_gpf(struct isr_regs* regs)
 {
 #define VALID_FLAGS 0xDFF
+
+#ifdef V86_DEBUG
+#define V86_TRACE(...) TRACE(__VA_ARGS__)
+#else
+#define V86_TRACE(...)
+#endif
+
     // TRACE("General protection fault at 0x%lX:0x%08lX", regs->cs, regs->eip);
     // TRACE("Error code: 0x%lX", regs->err_code);
     // TRACE("EFLAGS: 0x%lX", regs->eflags);
@@ -119,31 +130,31 @@ static void handle_gpf(struct isr_regs* regs)
         while(1) {
             switch(*eip) {
             case 0x66: /* o32 */
-                TRACE("%p: o32", eip);
+                V86_TRACE("%p: o32", eip);
                 o32 = true;
                 eip++;
                 regs->eip++;
                 break;
             case 0x67: /* a32 */
-                TRACE("%p: a32", eip);
+                V86_TRACE("%p: a32", eip);
                 a32 = true;
                 eip++;
                 regs->eip++;
                 break;
             case 0xF0: /* lock */
-                TRACE("%p: lock", eip);
+                V86_TRACE("%p: lock", eip);
                 lock = true;
                 eip++;
                 regs->eip++;
                 break;
             case 0xF2: /* repne */
-                TRACE("%p: repne", eip);
+                V86_TRACE("%p: repne", eip);
                 repne = true;
                 eip++;
                 regs->eip++;
                 break;
             case 0xF3: /* rep */
-                TRACE("%p: rep", eip);
+                V86_TRACE("%p: rep", eip);
                 rep = true;
                 eip++;
                 regs->eip++;
@@ -160,9 +171,9 @@ static void handle_gpf(struct isr_regs* regs)
             {
                 int intnum = eip[1];
                 if(intnum == 0x80) { /* vm exit */
-                    extern void v86_return(void) __attribute__((noreturn));
                     v86_return();
                 } else {
+                    V86_TRACE("stack: %p", stack);
                     stack -= 3;
                     stack[0] = (regs->eip + 2) & 0xFFFF;
                     stack[1] = regs->cs & 0xFFFF;
@@ -170,13 +181,13 @@ static void handle_gpf(struct isr_regs* regs)
                     regs->cs = ivt[(intnum * 2) + 1];
                     regs->eip = ivt[intnum * 2];
                     regs->esp = ((regs->esp & 0xFFFF) - 6) & 0xFFFF;
-                    TRACE("%p: int 0x%02X (0x%02lX:0x%04lX)", eip, intnum,
-                          regs->cs, regs->eip);
+                    V86_TRACE("%p: int 0x%02X (0x%02lX:0x%04lX)", eip, intnum,
+                              regs->cs, regs->eip);
                     return;
                 }
             }
             case 0x9C: /* pushf */
-                TRACE("%p: pushf", eip);
+                V86_TRACE("%p: pushf", eip);
                 if(o32) {
                     regs->esp = ((regs->esp & 0xFFFF) - 4) & 0xFFFF;
                     unsigned flags = regs->eflags & VALID_FLAGS;
@@ -191,7 +202,7 @@ static void handle_gpf(struct isr_regs* regs)
                 regs->eip++;
                 return;
             case 0x9D: /* popf */
-                TRACE("%p: popf", eip);
+                V86_TRACE("%p: popf", eip);
                 if(o32) {
                     unsigned flags =
                         (stack[0] | (stack[1] << 16)) & VALID_FLAGS;
@@ -209,15 +220,15 @@ static void handle_gpf(struct isr_regs* regs)
                 regs->cs = stack[1];
                 regs->eflags = EFLAGS_IF | EFLAGS_VM | stack[2];
                 regs->esp = ((regs->esp & 0xFFFF) + 6) & 0xFFFF;
-                TRACE("%p: iret (dest: 0x%02lX:0x%02lX)", eip, regs->cs,
-                      regs->eip);
+                V86_TRACE("%p: iret (dest: 0x%02lX:0x%02lX)", eip, regs->cs,
+                          regs->eip);
                 return;
             case 0xFA: /* cli */
-                TRACE("%p: cli", eip);
+                V86_TRACE("%p: cli", eip);
                 regs->eip++;
                 return;
             case 0xFB: /* sti */
-                TRACE("%p: sti", eip);
+                V86_TRACE("%p: sti", eip);
                 regs->eip++;
                 return;
             case 0xE6: /* out imm8, al */
@@ -225,7 +236,7 @@ static void handle_gpf(struct isr_regs* regs)
                 uint16_t port = eip[1];
                 uint8_t val = regs->eax & 0xFF;
                 regs->eip += 2;
-                TRACE("%p: out 0x%02X, 0x%02X", eip, port, val);
+                V86_TRACE("%p: out 0x%02X, 0x%02X", eip, port, val);
                 outb(port, val);
                 return;
             }
@@ -234,11 +245,11 @@ static void handle_gpf(struct isr_regs* regs)
                 uint16_t port = eip[1];
                 if(o32) {
                     uint32_t val = regs->eax;
-                    TRACE("%p: out 0x%02X, 0x%08lX", eip, port, val);
+                    V86_TRACE("%p: out 0x%02X, 0x%08lX", eip, port, val);
                     outl(port, val);
                 } else {
                     uint16_t val = regs->eax & 0xFFFF;
-                    TRACE("%p: out 0x%02X, 0x%04X", eip, port, val);
+                    V86_TRACE("%p: out 0x%02X, 0x%04X", eip, port, val);
                     outw(port, val);
                 }
                 regs->eip += 2;
@@ -248,7 +259,7 @@ static void handle_gpf(struct isr_regs* regs)
             {
                 uint16_t port = regs->edx & 0xFFFF;
                 uint8_t val = regs->eax & 0xFF;
-                TRACE("%p: out 0x%02X, 0x%02X", eip, port, val);
+                V86_TRACE("%p: out 0x%02X, 0x%02X", eip, port, val);
                 outb(port, val);
                 regs->eip++;
                 return;
@@ -258,11 +269,11 @@ static void handle_gpf(struct isr_regs* regs)
                 uint16_t port = regs->edx & 0xFFFF;
                 if(o32) {
                     uint32_t val = regs->eax;
-                    TRACE("%p: out 0x%02X, 0x%08lX", eip, port, val);
+                    V86_TRACE("%p: out 0x%02X, 0x%08lX", eip, port, val);
                     outl(port, val);
                 } else {
                     uint16_t val = regs->eax & 0xFFFF;
-                    TRACE("%p: out 0x%02X, 0x%04X", eip, port, val);
+                    V86_TRACE("%p: out 0x%02X, 0x%04X", eip, port, val);
                     outw(port, val);
                 }
                 regs->eip++;
@@ -271,7 +282,7 @@ static void handle_gpf(struct isr_regs* regs)
             case 0xEC: /* in al, dx */
             {
                 uint16_t port = regs->edx & 0xFFFF;
-                TRACE("%p: in al, 0x%02X", eip, port);
+                V86_TRACE("%p: in al, 0x%02X", eip, port);
                 uint8_t val = inb(port);
                 regs->eax = (regs->eax & ~0xFF) | val;
                 regs->eip++;
@@ -281,11 +292,11 @@ static void handle_gpf(struct isr_regs* regs)
             {
                 uint16_t port = regs->edx & 0xFFFF;
                 if(o32) {
-                    TRACE("%p: in eax, 0x%02X", eip, port);
+                    V86_TRACE("%p: in eax, 0x%02X", eip, port);
                     uint32_t val = inl(port);
                     regs->eax = val;
                 } else {
-                    TRACE("%p: in ax, 0x%02X", eip, port);
+                    V86_TRACE("%p: in ax, 0x%02X", eip, port);
                     uint16_t val = inw(port);
                     regs->eax = (regs->eax & ~0xFFFF) | val;
                 }
@@ -948,10 +959,21 @@ void fillcircle(int centerX, int centerY, int radius, unsigned c)
     }
 }
 
-static void v86_test()
+static void int10(struct isr_regs* regs)
 {
-    /* Identity-map first mega */
-    for(const uint8_t* ptr = 0; ptr < (const uint8_t*)0x100000;
+    /*
+     * Identity-map real-mode IVT, and from end of conventional memory
+     * up to 1 megabyte. I.e:
+     *  - 0x00000000 - 0x00001000
+     *  - 0x00080000 - 0x000FFFFF
+     */
+    bool ret =
+        vmm_map(0x00000000, 0x00000000, VMM_PRESENT | VMM_USER | VMM_WRITABLE);
+    if(!ret) {
+        PANIC("vmm_map failed");
+    }
+
+    for(const uint8_t* ptr = (uint8_t*)0x80000; ptr < (uint8_t*)0x100000;
         ptr += VMM_PAGESIZE) {
         if(ptr != (const uint8_t*)VGA_BASE) {
             bool ret = vmm_map(ptr, (uintptr_t)ptr,
@@ -965,36 +987,34 @@ static void v86_test()
     /*
      * Conventional memory: 0x00000500 - 0x0007FFFF
      */
-    const char* message = "All your base are belong to us\r\n";
     uint8_t* stub = (uint8_t*)0x500;
     uint8_t* ptr = stub;
-    *ptr++ = 0x87; /* xchg */
-    *ptr++ = 0xDB; /* bx, bx */
     *ptr++ = 0xCD; /* int */
     *ptr++ = 0x10; /* 0x10 */
     *ptr++ = 0xCD; /* int */
     *ptr++ = 0x80; /* 0x80 */
     *ptr++ = 0xCC; /* int3 */
 
-    /* We're toying with the screen, so disable VGA */
-    vga_enable = false;
-
     /* iret with VM flags set */
-    void v86_enter(struct isr_regs * regs);
-    TRACE("Entering v86");
 
     CLEAR_IF();
     iomap_allow_all();
+    regs->esp = 0x1000;
+    regs->eip = (uint32_t)stub;
+    regs->eflags = (read_eflags() | EFLAGS_VM) & ~EFLAGS_IF & ~EFLAGS_IOPL;
+    v86_enter(regs);
+    iomap_deny_all();
+    RESTORE_IF();
+}
+
+static void v86_test()
+{
+    vga_enable = false;
+
     struct isr_regs regs;
     memset(&regs, 0, sizeof(regs));
     regs.eax = 0x0012;
-    regs.eip = (uintptr_t)stub;
-    regs.esp = 0xFFFF;
-    regs.eflags = (read_eflags() | EFLAGS_VM) & ~EFLAGS_IF & ~EFLAGS_IOPL;
-    v86_enter(&regs);
-    TRACE("V86 call done");
-    iomap_deny_all();
-    RESTORE_IF();
+    int10(&regs);
 
     for(unsigned col = 0; col < 16; col++) {
         unsigned startx = 5 + ((col % 8) * 32);
