@@ -133,6 +133,24 @@ bool vmm_map(const void* vaddr, uint32_t frame, unsigned flags)
     }
 }
 
+bool vmm_map_range(const void* vaddr, uint32_t frame, unsigned size,
+                   unsigned flags)
+{
+    const void* vptr;
+    uint32_t fptr;
+    for(vptr = vaddr, fptr = frame; vptr < vaddr + size;
+        vptr += VMM_PAGESIZE, fptr += VMM_PAGESIZE) {
+        if(!vmm_map(vptr, fptr, flags)) {
+            for(const void* cptr = vaddr; cptr <= vptr; cptr += VMM_PAGESIZE) {
+                if(!vmm_unmap(cptr, false))
+                    PANIC("vmm_unmap failed");
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
 bool vmm_alloc(const void* vaddr, unsigned flags)
 {
     if(!IS_ALIGNED_PTR(vaddr, VMM_PAGESIZE)) {
@@ -216,6 +234,16 @@ bool vmm_unmap(const void* vaddr, bool dealloc_frame)
         RESTORE_IF();
         return true;
     }
+}
+
+bool vmm_unmap_range(const void* vaddr, unsigned size, bool dealloc_frames)
+{
+    bool result = true;
+    for(const void* ptr = vaddr; ptr < vaddr + size; ptr += VMM_PAGESIZE) {
+        if(!vmm_unmap(ptr, false))
+            result = false;
+    }
+    return result;
 }
 
 static unsigned pf_count = 0;

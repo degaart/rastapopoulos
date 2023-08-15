@@ -1,5 +1,7 @@
 ; vim: set ft=nasm:
 
+%include "isr_regs.inc"
+
 %define MB_ALIGN (1<<0)
 %define MB_MEMINFO (1<<1)
 %define MB_FLAGS (MB_ALIGN|MB_MEMINFO)
@@ -78,31 +80,39 @@ v86_enter:
     add  esp, 4
 
     mov  eax, [ebp+8]
-    push DWORD [eax]                ; gs
-    push DWORD [eax+4]              ; fs
-    push DWORD [eax+12]             ; ds
-    push DWORD [eax+8]              ; es
-    push DWORD [eax+72]             ; ss
-    push DWORD [eax+68]             ; sp
-    push DWORD [eax+64]             ; eflags (VM !IF !IOPL)
-    push DWORD [eax+60]             ; cs
-    push DWORD [eax+56]             ; ip
-    mov  edi, [eax+16]
-    mov  esi, [eax+20]
-    mov  ebp, [eax+24]
-    mov  ebx, [eax+32]
-    mov  edx, [eax+36]
-    mov  ecx, [eax+40]
-    mov  eax, [eax+44]
+    push DWORD [eax+isr_regs.v86_gs]
+    push DWORD [eax+isr_regs.v86_fs]
+    push DWORD [eax+isr_regs.v86_ds]
+    push DWORD [eax+isr_regs.v86_es]
+    push DWORD [eax+isr_regs.ss]
+    push DWORD [eax+isr_regs.esp]
+    push DWORD [eax+isr_regs.eflags]
+    push DWORD [eax+isr_regs.cs]
+    push DWORD [eax+isr_regs.eip]
+    mov  edi,  [eax+isr_regs.edi]
+    mov  esi,  [eax+isr_regs.esi]
+    mov  ebp,  [eax+isr_regs.ebp]
+    mov  ebx,  [eax+isr_regs.ebx]
+    mov  edx,  [eax+isr_regs.edx]
+    mov  ecx,  [eax+isr_regs.ecx]
+    mov  eax,  [eax+isr_regs.eax]
     iret
 
+; void v86_return(struct isr_regs*)
 global v86_return
 v86_return:
     cli
 
+    mov  esi, [esp+4]                       ; regs from int
+
+    ; restore esp
     extern tss_get_esp0
     call tss_get_esp0
     mov  esp, eax
+
+    mov  edi, [esp+24]                      ; regs from v86_enter
+    mov  ecx, isr_regs_size
+    rep  movsb
 
     popf
     pop  edi
@@ -121,4 +131,5 @@ align 4096
     resb 8192
 global _stacktop
 _stacktop:
+
 

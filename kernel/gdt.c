@@ -1,5 +1,5 @@
-#include "debug.h"
 #include "gdt.h"
+#include "debug.h"
 #include "kmalloc.h"
 #include "util.h"
 #include <stdint.h>
@@ -181,4 +181,3 @@ void gdt_init()
     TRACE("tss->iomap_offset: %u", tss->iomap_offset);
     asm volatile("ltr ax" ::"a"(GDT_TSS) : "memory");
 }
-

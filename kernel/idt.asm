@@ -25,13 +25,7 @@ isr_common_stub:
 
     xor     eax, eax
     mov     ax, ds
-    push    eax                 ; save ds
-    mov     ax, es
-    push    eax                 ; save es
-    mov     ax, fs
-    push    eax                 ; save fs
-    mov     ax, gs
-    push    eax                 ; save gs
+    push    eax                 ; push ds
 
     mov     ax, 0x10            ; load the kernel data segment descriptor
     mov     ds, ax
@@ -47,13 +41,10 @@ isr_common_stub:
     mov     esp, ebp
 
     pop     eax
-    mov     gs, ax
-    pop     eax
-    mov     fs, ax
-    pop     eax
-    mov     es, ax
-    pop     eax
     mov     ds, ax
+    mov     es, ax
+    mov     fs, ax
+    mov     gs, ax
 
     popa                        ; Pops edi,esi,ebp...
     add     esp, 8              ; Cleans up the pushed error code and pushed ISR number
@@ -64,6 +55,7 @@ isr_common_stub:
 %assign isr_index 0
 %rep 256
     isr_stub_ %+ isr_index:
+        xchg bx, bx
         cli
     %if (isr_index != 8) && \
           (isr_index != 10) && \

@@ -31,7 +31,7 @@ bool early_kmalloc_enabled = true;
 
 #undef V86_DEBUG
 extern void v86_enter(struct isr_regs* regs);
-extern void v86_return(void) __attribute__((noreturn));
+extern void v86_return(struct isr_regs*) __attribute__((noreturn));
 
 #define ENTER_USERMODE(esp, eip)                                               \
     asm volatile("cli\n"                                                       \
@@ -104,6 +104,11 @@ static void handle_page_fault(struct isr_regs* regs)
     HALT();
 }
 
+static void handle_ud(struct isr_regs* regs)
+{
+    PANIC("Invalid opcode at 0x%02lX:0x%08lX", regs->cs, regs->eip);
+}
+
 static void handle_gpf(struct isr_regs* regs)
 {
 #define VALID_FLAGS 0xDFF
@@ -114,9 +119,10 @@ static void handle_gpf(struct isr_regs* regs)
 #define V86_TRACE(...)
 #endif
 
-    // TRACE("General protection fault at 0x%lX:0x%08lX", regs->cs, regs->eip);
-    // TRACE("Error code: 0x%lX", regs->err_code);
-    // TRACE("EFLAGS: 0x%lX", regs->eflags);
+    if(regs->err_code != 0) {
+        TRACE("GPF at 0x%02lX:0x%02lX, error code: 0x%08lX", regs->cs,
+              regs->eip, regs->err_code);
+    }
     assert(regs->err_code == 0);
     if(regs->eflags & EFLAGS_VM) {
         bool o32 = false;
@@ -171,7 +177,7 @@ static void handle_gpf(struct isr_regs* regs)
             {
                 int intnum = eip[1];
                 if(intnum == 0x80) { /* vm exit */
-                    v86_return();
+                    v86_return(regs);
                 } else {
                     V86_TRACE("stack: %p", stack);
                     stack -= 3;
@@ -692,7 +698,7 @@ static void putpixel(unsigned x, unsigned y, unsigned color)
     x &= 7; /* 0b0111 */
     unsigned mask = 0x80 >> x;
     unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)0xA0000;
+    uint8_t* vga_base = (uint8_t*)VGA_START;
     for(unsigned p = 0; p < 4; p++) {
         setplane(p);
         if(color & pmask)
@@ -707,7 +713,7 @@ static void fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
                      unsigned col)
 {
     unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)0xA0000;
+    uint8_t* vga_base = (uint8_t*)VGA_START;
     for(unsigned plane = 0; plane < 4; plane++) {
         setplane(plane);
 
@@ -754,7 +760,7 @@ static void fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
 static void vline(unsigned x, unsigned y, unsigned h, unsigned col)
 {
     unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)0xA0000;
+    uint8_t* vga_base = (uint8_t*)VGA_START;
     for(unsigned plane = 0; plane < 4; plane++) {
         setplane(plane);
 
@@ -785,7 +791,7 @@ static void vline(unsigned x, unsigned y, unsigned h, unsigned col)
 static void hline(unsigned x, unsigned y, unsigned w, unsigned col)
 {
     unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)0xA0000;
+    uint8_t* vga_base = (uint8_t*)VGA_START;
     for(unsigned plane = 0; plane < 4; plane++) {
         setplane(plane);
 
@@ -962,20 +968,23 @@ void fillcircle(int centerX, int centerY, int radius, unsigned c)
 static void int10(struct isr_regs* regs)
 {
     /*
-     * Identity-map real-mode IVT, and from end of conventional memory
-     * up to 1 megabyte. I.e:
-     *  - 0x00000000 - 0x00001000
+     * Identity-map the first 64k, and from the EBDA to 1MB
+     * This will give us more than 64k or stack
+     *  - 0x00000000 - 0x0000FFFF
      *  - 0x00080000 - 0x000FFFFF
      */
-    bool ret =
-        vmm_map(0x00000000, 0x00000000, VMM_PRESENT | VMM_USER | VMM_WRITABLE);
-    if(!ret) {
-        PANIC("vmm_map failed");
+    for(const uint8_t* ptr = (uint8_t*)0x0; ptr < (uint8_t*)0xFFFF;
+        ptr += VMM_PAGESIZE) {
+        bool ret =
+            vmm_map(ptr, (uintptr_t)ptr, VMM_PRESENT | VMM_USER | VMM_WRITABLE);
+        if(!ret) {
+            PANIC("vmm_map failed");
+        }
     }
 
     for(const uint8_t* ptr = (uint8_t*)0x80000; ptr < (uint8_t*)0x100000;
         ptr += VMM_PAGESIZE) {
-        if(ptr != (const uint8_t*)VGA_BASE) {
+        if(ptr < (uint8_t*)VGA_START || ptr > (uint8_t*)VGA_END) {
             bool ret = vmm_map(ptr, (uintptr_t)ptr,
                                VMM_PRESENT | VMM_USER | VMM_WRITABLE);
             if(!ret) {
@@ -988,30 +997,113 @@ static void int10(struct isr_regs* regs)
      * Conventional memory: 0x00000500 - 0x0007FFFF
      */
     uint8_t* stub = (uint8_t*)0x500;
+    memset(stub, 0xCC, 0x10000 - (uintptr_t)stub);
+
     uint8_t* ptr = stub;
     *ptr++ = 0xCD; /* int */
     *ptr++ = 0x10; /* 0x10 */
+
     *ptr++ = 0xCD; /* int */
     *ptr++ = 0x80; /* 0x80 */
     *ptr++ = 0xCC; /* int3 */
 
     /* iret with VM flags set */
-
     CLEAR_IF();
     iomap_allow_all();
-    regs->esp = 0x1000;
+    regs->esp = 0x10000;
     regs->eip = (uint32_t)stub;
     regs->eflags = (read_eflags() | EFLAGS_VM) & ~EFLAGS_IF & ~EFLAGS_IOPL;
     v86_enter(regs);
     iomap_deny_all();
     RESTORE_IF();
+
+    /* Cleanup */
+    for(const uint8_t* ptr = (uint8_t*)0x0; ptr < (uint8_t*)0xFFFF;
+        ptr += VMM_PAGESIZE) {
+        bool ret = vmm_unmap(ptr, false);
+        if(!ret) {
+            PANIC("vmm_unmap failed");
+        }
+    }
+
+    for(const uint8_t* ptr = (uint8_t*)0x80000; ptr < (uint8_t*)0x100000;
+        ptr += VMM_PAGESIZE) {
+        if(ptr < (uint8_t*)VGA_START || ptr > (uint8_t*)VGA_END) {
+            bool ret = vmm_unmap(ptr, false);
+            if(!ret) {
+                PANIC("vmm_unmap failed");
+            }
+        }
+    }
+}
+
+static void drawstring(const uint8_t* vga_font, unsigned x, unsigned y,
+                       unsigned col, const char* str, size_t len)
+{
+    if(len == -1)
+        len = strlen(str);
+
+    int currx = x;
+    int curry = y;
+    while(len) {
+        if(*str >= ' ') {
+            const uint8_t* glyph = vga_font + (*str * 16);
+            for(unsigned scanline = 0; scanline < 16; scanline++) {
+                for(int bit = 7; bit >= 0; bit--) {
+                    if(*glyph & (1 << bit)) {
+                        putpixel(currx, curry, col);
+                    }
+                    currx++;
+                }
+                glyph++;
+                currx = x;
+                curry++;
+            }
+        }
+        x += 8;
+        currx = x;
+        curry = y;
+        str++;
+        len--;
+    }
 }
 
 static void v86_test()
 {
     vga_enable = false;
 
+    /* Map VGA display memory */
+    for(const uint8_t* p = (uint8_t*)VGA_START; p < (uint8_t*)VGA_END;
+        p += VMM_PAGESIZE) {
+        if(p != (uint8_t*)VGA_BASE) {
+            if(!vmm_map(p, (uintptr_t)p, VMM_PRESENT | VMM_USER | VMM_WRITABLE))
+                PANIC("vmm_map failed");
+        }
+    }
+
+    /* get bios 8x16 font */
     struct isr_regs regs;
+    memset(&regs, 0, sizeof(regs));
+    regs.eax = 0x1130;
+    regs.ebx = 0x0600;
+    int10(&regs); /* vgafont in es:bp */
+    TRACE("vga font in 0x%02lX:%04lX", regs.v86_es, regs.ebp);
+
+    // uint8_t* vga_font = kmalloc(8192);
+    const uint8_t* vga_font_ptr =
+        (uint8_t*)((regs.v86_es * 0x10) + (regs.ebp & 0xFFFF));
+    const uint8_t* vga_font_frame = ROUND_PTR(vga_font_ptr, VMM_PAGESIZE);
+    if(!vmm_map_range(vga_font_frame, (uintptr_t)vga_font_frame,
+                      8192 + VMM_PAGESIZE, VMM_PRESENT))
+        PANIC("vmm_map_range failed");
+
+    uint8_t* vga_font = kmalloc(8192);
+    memcpy(vga_font, vga_font_ptr, 8192);
+
+    if(!vmm_unmap_range(vga_font_frame, 8192 + VMM_PAGESIZE, false))
+        PANIC("vmm_unmap_range failed");
+
+    /* switch to vga mode 12 */
     memset(&regs, 0, sizeof(regs));
     regs.eax = 0x0012;
     int10(&regs);
@@ -1035,6 +1127,7 @@ static void v86_test()
     line(128, 10, 128, 64, 3);
     circle(640 / 2, 480 / 2, 128, 12);
     fillcircle(640 / 2, 390, 64, 14);
+    drawstring(vga_font, 190, 400, 9, "All your base are belong to us", -1);
     HALT();
 }
 #endif
@@ -1090,6 +1183,7 @@ void kmain(const struct multiboot_info* multiboot, uint32_t multiboot_magic)
 
     /* setup IDT */
     idt_init();
+    idt_add_handler(0x06, handle_ud, 3);
     idt_add_handler(0x0D, handle_gpf, 3);
     idt_add_handler(0x0E, handle_page_fault, 3);
 

@@ -20,6 +20,8 @@
 #define COLOR_WHITE        0x0F
 
 #define VGA_BASE   0xB8000
+#define VGA_START  0xA0000
+#define VGA_END    0xBFFFF
 #define VGA_WIDTH  80
 #define VGA_HEIGHT 25
 
