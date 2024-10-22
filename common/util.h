@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define HLT() asm volatile("hlt\n" ::: "memory")
+
 #define HALT()                                                                 \
     while(1) {                                                                 \
         asm volatile("cli\nhlt\n" ::: "memory");                               \

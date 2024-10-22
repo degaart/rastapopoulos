@@ -1,5 +1,5 @@
 AS := nasm
-CC := i686-elf-gcc
+CC := i386-elf-gcc
 
 ASFLAGS := -f elf32
 
