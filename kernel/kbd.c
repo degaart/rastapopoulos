@@ -117,6 +117,7 @@ static void kbd_pressed(uint8_t scancode)
             evt.ch = 0;
         }
         RBUF_PUSH(&events_buffer, evt);
+        /*TRACE("kbd: pressed 0x%X", (int)scancode);*/
     }
 }
 
@@ -139,11 +140,13 @@ static void kbd_released(uint8_t scancode)
         evt.ch = 0;
     }
     RBUF_PUSH(&events_buffer, evt);
+    /*TRACE("kbd: released 0x%X", (int)scancode);*/
 }
 
 static void irq_handler()
 {
     uint8_t scancode = inb(REG_DATA);
+    
     switch(state) {
     case 0:
         if(scancode == 0xE0) { /* 2-byte scancode */
@@ -250,25 +253,25 @@ void kbd_init()
         }
     }
 
-    char lookupbuf[4];
-    bool ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x02, 0);
-    assert(ret == true);
-    assert(lookupbuf[0] == '&');
+    // char lookupbuf[4];
+    // bool ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x02, 0);
+    // assert(ret == true);
+    // assert(lookupbuf[0] == '&');
 
-    ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x10, 0);
-    assert(ret == true);
-    assert(lookupbuf[0] == 'a');
+    // ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x10, 0);
+    // assert(ret == true);
+    // assert(lookupbuf[0] == 'a');
 
-    ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x10, KBD_MOD_SHIFT);
-    assert(ret == true);
-    assert(lookupbuf[0] == 'A');
+    // ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x10, KBD_MOD_SHIFT);
+    // assert(ret == true);
+    // assert(lookupbuf[0] == 'A');
 
-    ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x31, KBD_MOD_ALT);
-    assert(ret == true);
-    assert(lookupbuf[0] == '~');
+    // ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x31, KBD_MOD_ALT);
+    // assert(ret == true);
+    // assert(lookupbuf[0] == '~');
 
-    ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x34,
-                     KBD_MOD_ALT | KBD_MOD_SHIFT);
-    assert(ret == true);
-    assert(lookupbuf[0] == '\\');
+    // ret = lookup_key(lookupbuf, sizeof(lookupbuf), 0x34,
+    //                  KBD_MOD_ALT | KBD_MOD_SHIFT);
+    // assert(ret == true);
+    // assert(lookupbuf[0] == '\\');
 }

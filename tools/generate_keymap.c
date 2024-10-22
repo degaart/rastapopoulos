@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #define UTF8_IS4(c)    (((c)&0xF8) == 0xF0)
 #define UTF8_IS3(c)    (((c)&0xF0) == 0xE0)

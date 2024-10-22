@@ -1108,27 +1108,59 @@ static void v86_test()
     regs.eax = 0x0012;
     int10(&regs);
 
-    for(unsigned col = 0; col < 16; col++) {
-        unsigned startx = 5 + ((col % 8) * 32);
-        unsigned starty = 240 + ((col / 8) * 32);
-        fillrect(startx, starty, 32, 32, col);
-    }
-
-    unsigned index = 0;
-    for(unsigned y = 10; y < logo_height + 10; y++) {
-        for(unsigned x = 10; x < logo_width + 10; x++) {
-            putpixel(x, y, logo_data[index++]);
+    enable_interrupts();
+    int curx = 640 / 2;
+    int cury = 390;
+    bool dirty = true;
+    while(1) {
+        struct kbd_event evt;
+        if(kbd_read(&evt)) {
+            if(evt.type == KBD_EVENT_PRESSED) {
+                switch(evt.scancode) {
+                case 0xC8: /* up */
+                    cury--;
+                    break;
+                case 0xD0: /* down */
+                    cury++;
+                    break;
+                case 0xCB: /* left */
+                    curx--;
+                    break;
+                case 0xCD: /* right */
+                    curx++;
+                    break;
+                }
+                dirty = true;
+            }
         }
-    }
 
-    rect(10, 128, 128, 64, 10);
-    line(32 + 10, 32 + 10, 640, 480, 11);
-    line(64, 10, 64, 10, 2);
-    line(128, 10, 128, 64, 3);
-    circle(640 / 2, 480 / 2, 128, 12);
-    fillcircle(640 / 2, 390, 64, 14);
-    drawstring(vga_font, 190, 400, 9, "All your base are belong to us", -1);
-    HALT();
+        if(dirty) {
+            fillrect(0, 0, 640, 480, 0);
+            for(unsigned col = 0; col < 16; col++) {
+                unsigned startx = 5 + ((col % 8) * 32);
+                unsigned starty = 240 + ((col / 8) * 32);
+                fillrect(startx, starty, 32, 32, col);
+            }
+
+            unsigned index = 0;
+            for(unsigned y = 10; y < logo_height + 10; y++) {
+                for(unsigned x = 10; x < logo_width + 10; x++) {
+                    putpixel(x, y, logo_data[index++]);
+                }
+            }
+
+            rect(10, 128, 128, 64, 10);
+            line(32 + 10, 32 + 10, 640, 480, 11);
+            line(64, 10, 64, 10, 2);
+            line(128, 10, 128, 64, 3);
+            circle(640 / 2, 480 / 2, 128, 12);
+            fillcircle(curx, cury, 64, 14);
+            drawstring(vga_font, 190, 400, 9, "All your base are belong to us", -1);
+            dirty = false;
+        }
+
+        HLT();
+    }
 }
 #endif
 
