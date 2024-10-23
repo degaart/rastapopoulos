@@ -10,6 +10,8 @@
         asm volatile("cli\nhlt\n" ::: "memory");                               \
     }
 
+#define RDTSC() __builtin_ia32_rdtsc()
+
 /* The following helper macros only work on powers of two */
 #define ALIGN(X, A)          (((X) + ((typeof(X))(A)-1)) & ~((typeof(X))(A)-1))
 #define ROUND(X, A)          ((X) & ~(((typeof(X))(A)-1)))
@@ -36,6 +38,7 @@
 #define EFLAGS_VIF  0x00080000
 #define EFLAGS_VIP  0x00100000
 #define EFLAGS_ID   0x00200000
+
 static inline uint32_t read_eflags(void)
 {
     uint32_t result;

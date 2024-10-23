@@ -63,7 +63,7 @@ void vmm_set_pagedir(struct pagedir* pagedir)
 {
     assert(IS_ALIGNED_PTR(pagedir, VMM_PAGESIZE));
 
-    uint32_t frame;
+    uint32_t frame = 0;
     if(!vmm_frame(&frame, pagedir)) {
         PANIC("Failed to get physical address of %p", pagedir);
     }
