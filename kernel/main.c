@@ -674,6 +674,18 @@ static void kernel_task_entry()
 #define VGA_CRTC_INDEX 0x3D4
 #define VGA_CRTC_DATA  0x3D5
 
+/*
+    We have two buffers: the frontbuffer and the backbuffer.
+    These buffers are in 640x480x8 format, but only the low-order nibble of each pixel is used.
+    Draw commands operate on the backbuffer.
+    When swap() is called, it calculates the changed pixels and send them to the VGA hardware buffers.
+*/
+#define FB_WIDTH 640
+#define FB_HEIGHT 480
+uint8_t* buffers;
+uint8_t* frontbuf;
+uint8_t* backbuf;
+
 static void setplane(unsigned plane)
 {
     static unsigned current = ~0;
@@ -689,142 +701,63 @@ static void setplane(unsigned plane)
 
 static void putpixel(unsigned x, unsigned y, unsigned color)
 {
-    if(x >= 640 || y >= 480)
+    if(x >= FB_WIDTH || y >= FB_HEIGHT)
         return;
 
-    color &= 0x0F;
-    unsigned width_bytes = 640 / 8;
-    unsigned offset = (width_bytes * y) + (x / 8);
-    x &= 7; /* 0b0111 */
-    unsigned mask = 0x80 >> x;
-    unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)VGA_START;
-    for(unsigned p = 0; p < 4; p++) {
-        setplane(p);
-        if(color & pmask)
-            vga_base[offset] |= mask;
-        else
-            vga_base[offset] &= ~mask;
-        pmask <<= 1;
-    }
+    backbuf[x + (y * FB_WIDTH)] = color & 0xFF;
 }
 
 static void fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
                      unsigned col)
 {
-    unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)VGA_START;
-    for(unsigned plane = 0; plane < 4; plane++) {
-        setplane(plane);
+    uint8_t* ptr;
+    uint8_t c = (uint8_t)col;
 
-        unsigned x2 = x + w - 1;
-        unsigned lmask = 0x00FF >> (x & 7);
-        unsigned rmask = 0xFF80 >> (x2 & 7);
-        unsigned bytes = (x2 >> 3) - (x >> 3) + 1; /* (x2 / 8) - (x / 8) + 1 */
-        if(bytes == 1)
-            lmask &= rmask;
+    if(x + w > FB_WIDTH)
+        w = FB_WIDTH - x;
+    if(y + h > FB_HEIGHT)
+        h = FB_HEIGHT - y;
 
-        unsigned bytew = 640 / 8;
-        unsigned offset = (bytew * y) + (x / 8);
-        if(col & pmask) {
-            for(unsigned y2 = y; y2 < y + h; y2++) {
-                /* partial byte on left */
-                vga_base[offset] |= lmask;
-
-                /* solid bytes in middle */
-                if(bytes > 2)
-                    memset(vga_base + offset + 1, 0xFF, bytes - 2);
-
-                /* partial bytes on right */
-                if(bytes > 1)
-                    vga_base[offset + bytes - 1] |= rmask;
-
-                offset += bytew;
-            }
-        } else {
-            lmask = ~lmask;
-            rmask = ~rmask;
-            for(unsigned y2 = y; y2 < y + h; y2++) {
-                vga_base[offset] &= lmask;
-                if(bytes > 2)
-                    memset(vga_base + offset + 1, 0, bytes - 2);
-                if(bytes > 1)
-                    vga_base[offset + bytes - 1] &= rmask;
-                offset += bytew;
-            }
+    for(unsigned j = y; j < y + h; j++) {
+        ptr = backbuf + x + (j * FB_WIDTH);
+        for(unsigned i = x; i < x + w; i++) {
+            *ptr = c;
+            ptr++;
         }
-        pmask <<= 1;
     }
 }
 
 static void vline(unsigned x, unsigned y, unsigned h, unsigned col)
 {
-    unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)VGA_START;
-    for(unsigned plane = 0; plane < 4; plane++) {
-        setplane(plane);
+    if(x >= FB_WIDTH)
+        return;
+    else if(y >= FB_HEIGHT)
+        return;
+    if(y + h >= FB_HEIGHT)
+        h = FB_HEIGHT - y;
 
-        unsigned lmask = 0x00FF >> (x & 7);
-        unsigned rmask = 0xFF80 >> (x & 7);
-        unsigned bytes = 1; /* (x2 / 8) - (x / 8) + 1 */
-        lmask &= rmask;
-
-        unsigned bytew = 640 / 8;
-        unsigned offset = (bytew * y) + (x / 8);
-        if(col & pmask) {
-            for(unsigned y2 = y; y2 < y + h; y2++) {
-                vga_base[offset] |= lmask;
-                offset += bytew;
-            }
-        } else {
-            lmask = ~lmask;
-            rmask = ~rmask;
-            for(unsigned y2 = y; y2 < y + h; y2++) {
-                vga_base[offset] &= lmask;
-                offset += bytew;
-            }
-        }
-        pmask <<= 1;
+    uint8_t* ptr = backbuf + x + (y * FB_WIDTH);
+    uint8_t c = (uint8_t)col;
+    for(unsigned j = 0; j < h; j++) {
+        *ptr = c;
+        ptr += FB_WIDTH;
     }
 }
 
 static void hline(unsigned x, unsigned y, unsigned w, unsigned col)
 {
-    unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)VGA_START;
-    for(unsigned plane = 0; plane < 4; plane++) {
-        setplane(plane);
+    if(x >= FB_WIDTH)
+        return;
+    else if(y >= FB_HEIGHT)
+        return;
+    if(x + w >= FB_WIDTH)
+        w = FB_WIDTH - x;
 
-        unsigned x2 = x + w - 1;
-        unsigned lmask = 0x00FF >> (x & 7);
-        unsigned rmask = 0xFF80 >> (x2 & 7);
-        unsigned bytes = (x2 >> 3) - (x >> 3) + 1; /* (x2 / 8) - (x / 8) + 1 */
-        if(bytes == 1)
-            lmask &= rmask;
-
-        unsigned bytew = 640 / 8;
-        unsigned offset = (bytew * y) + (x / 8);
-        if(col & pmask) {
-            /* partial byte on left */
-            vga_base[offset] |= lmask;
-
-            /* solid bytes in middle */
-            if(bytes > 2)
-                memset(vga_base + offset + 1, 0xFF, bytes - 2);
-
-            /* partial bytes on right */
-            if(bytes > 1)
-                vga_base[offset + bytes - 1] |= rmask;
-        } else {
-            lmask = ~lmask;
-            rmask = ~rmask;
-            vga_base[offset] &= lmask;
-            if(bytes > 2)
-                memset(vga_base + offset + 1, 0, bytes - 2);
-            if(bytes > 1)
-                vga_base[offset + bytes - 1] &= rmask;
-        }
-        pmask <<= 1;
+    uint8_t* ptr = backbuf + x + (y * FB_WIDTH);
+    uint8_t c = (uint8_t)col;
+    for(unsigned i = 0; i < w; i++) {
+        *ptr = c;
+        ptr++;
     }
 }
 
@@ -1037,6 +970,7 @@ static void int10(struct isr_regs* regs)
     }
 }
 
+
 static void drawstring(const uint8_t* vga_font, unsigned x, unsigned y,
                        unsigned col, const char* str, size_t len)
 {
@@ -1068,6 +1002,51 @@ static void drawstring(const uint8_t* vga_font, unsigned x, unsigned y,
     }
 }
 
+static  void clearscreen(unsigned color)
+{
+    memset(backbuf, color & 0xF, FB_WIDTH * FB_HEIGHT);
+}
+
+static void swapbuffers()
+{
+    unsigned pmask = 1;
+    uint8_t* vga_base = (uint8_t*)VGA_START;
+    unsigned width_bytes = 640 / 8;
+
+    for(unsigned plane = 0; plane < 4; plane++) {
+        setplane(plane);
+
+        uint8_t* back = backbuf;
+        uint8_t* front = frontbuf;
+        for(unsigned y = 0; y < FB_HEIGHT; y++) {
+            uint8_t* ptr = vga_base + (y * width_bytes);
+            for(unsigned x = 0; x < FB_WIDTH; x++) {
+                if(*back != *front) {
+                    unsigned color = *back & 0xF;
+                    unsigned mask = 0x80 >> (x & 7); /* 0b0111 */
+                    if(color & pmask) {
+                        ptr[x/8] |= mask;
+                    } else {
+                        ptr[x/8] &= ~mask;
+                    }
+                }
+                back++;
+                front++;
+            }
+        }
+
+        pmask <<= 1;
+    }
+
+    if(frontbuf == buffers) {
+        backbuf = buffers;
+        frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
+    } else {
+        frontbuf = buffers;
+        backbuf = buffers + (FB_WIDTH * FB_HEIGHT);
+    }
+}
+
 static void v86_test()
 {
     vga_enable = false;
@@ -1076,10 +1055,16 @@ static void v86_test()
     for(const uint8_t* p = (uint8_t*)VGA_START; p < (uint8_t*)VGA_END;
         p += VMM_PAGESIZE) {
         if(p != (uint8_t*)VGA_BASE) {
-            if(!vmm_map(p, (uintptr_t)p, VMM_PRESENT | VMM_USER | VMM_WRITABLE))
+            if(!vmm_map(p, (uintptr_t)p, VMM_PRESENT | VMM_USER | VMM_WRITABLE | VMM_PCD))
                 PANIC("vmm_map failed");
         }
     }
+
+    /* Initialize buffers */
+    buffers = kmalloc(FB_WIDTH * FB_HEIGHT * 2);
+    memset(buffers, 0, FB_WIDTH * FB_HEIGHT * 2);
+    backbuf = buffers;
+    frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
 
     /* get bios 8x16 font */
     struct isr_regs regs;
@@ -1108,26 +1093,30 @@ static void v86_test()
     regs.eax = 0x0012;
     int10(&regs);
 
-    enable_interrupts();
-    int curx = 640 / 2;
-    int cury = 390;
+    int curx = FB_WIDTH / 2;
+    int cury = FB_HEIGHT / 2;
     bool dirty = true;
+    enable_interrupts();
     while(1) {
         struct kbd_event evt;
         if(kbd_read(&evt)) {
             if(evt.type == KBD_EVENT_PRESSED) {
                 switch(evt.scancode) {
                 case 0xC8: /* up */
-                    cury--;
+                    if(cury > 5)
+                        cury -= 5;
                     break;
                 case 0xD0: /* down */
-                    cury++;
+                    if(cury < FB_HEIGHT - 5)
+                        cury += 5;
                     break;
                 case 0xCB: /* left */
-                    curx--;
+                    if(curx > 5)
+                        curx -= 5;
                     break;
                 case 0xCD: /* right */
-                    curx++;
+                    if(curx < FB_WIDTH - 5)
+                        curx += 5;
                     break;
                 }
                 dirty = true;
@@ -1135,30 +1124,37 @@ static void v86_test()
         }
 
         if(dirty) {
-            fillrect(0, 0, 640, 480, 0);
+            clearscreen(0);
+            putpixel(curx, cury, 2);
+            
             for(unsigned col = 0; col < 16; col++) {
-                unsigned startx = 5 + ((col % 8) * 32);
-                unsigned starty = 240 + ((col / 8) * 32);
+                unsigned startx = curx + 5 + ((col % 8) * 32);
+                unsigned starty = cury + 5 + ((col / 8) * 32);
                 fillrect(startx, starty, 32, 32, col);
             }
 
             unsigned index = 0;
-            for(unsigned y = 10; y < logo_height + 10; y++) {
-                for(unsigned x = 10; x < logo_width + 10; x++) {
+            for(unsigned y = cury; y < cury + logo_height; y++) {
+                for(unsigned x = curx; x < curx + logo_width; x++) {
                     putpixel(x, y, logo_data[index++]);
                 }
             }
 
-            rect(10, 128, 128, 64, 10);
-            line(32 + 10, 32 + 10, 640, 480, 11);
-            line(64, 10, 64, 10, 2);
-            line(128, 10, 128, 64, 3);
+            rect(curx, cury, 300, 72, 10);
+
+            line(32, 32, curx, cury, 11);
+            line(curx + 300, cury + 72, FB_WIDTH - 32, FB_HEIGHT - 32, 3);
+            line(curx, cury + 72, 32, FB_HEIGHT - 32, 2);
+            line(curx + 300, cury, FB_WIDTH - 32, 32, 6);
+
             circle(640 / 2, 480 / 2, 128, 12);
-            fillcircle(curx, cury, 64, 14);
-            drawstring(vga_font, 190, 400, 9, "All your base are belong to us", -1);
+            fillcircle(curx + 300, cury + 128, 16, 14);
+
+            drawstring(vga_font, curx, cury - 32, 9, "All your base are belong to us", -1);
+
+            swapbuffers();
             dirty = false;
         }
-
         HLT();
     }
 }
