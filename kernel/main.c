@@ -686,6 +686,8 @@ uint8_t* buffers;
 uint8_t* frontbuf;
 uint8_t* backbuf;
 
+#define OPTIMIZE __attribute__((optimize("03")))
+
 static void setplane(unsigned plane)
 {
     static unsigned current = ~0;
@@ -699,7 +701,7 @@ static void setplane(unsigned plane)
     outw(VGA_SEQ_INDEX, (pmask << 8) | 2);
 }
 
-static void putpixel(unsigned x, unsigned y, unsigned color)
+static void OPTIMIZE putpixel(unsigned x, unsigned y, unsigned color)
 {
     if(x >= FB_WIDTH || y >= FB_HEIGHT)
         return;
@@ -707,7 +709,7 @@ static void putpixel(unsigned x, unsigned y, unsigned color)
     backbuf[x + (y * FB_WIDTH)] = color & 0xFF;
 }
 
-static void fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
+static void OPTIMIZE fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
                      unsigned col)
 {
     uint8_t* ptr;
@@ -1007,8 +1009,35 @@ static  void clearscreen(unsigned color)
     memset(backbuf, color & 0xF, FB_WIDTH * FB_HEIGHT);
 }
 
-static void swapbuffers()
+static void OPTIMIZE swapbuffers()
 {
+#if 1
+    for(unsigned plane = 0; plane < 4; plane++) {
+        setplane(plane);
+
+        uint8_t* backptr;
+        uint8_t* frontptr;
+        uint8_t* vgaptr;
+        for(backptr = backbuf, frontptr = frontbuf, vgaptr = (uint8_t*)VGA_START;
+            backptr < backbuf + (FB_WIDTH * FB_HEIGHT);
+            backptr += 8, frontptr += 8, vgaptr++
+        ) {
+            bool dirty = false;
+            uint8_t value = 0;
+            for(unsigned i = 0; i < 8; i++) {
+                if(backptr[i] != frontptr[i]) {
+                    dirty = true;
+                }
+                if(backptr[i] & (1 << plane)) {
+                    value |= 1 << (7 - i);
+                }
+            }
+            if(dirty) {
+                *vgaptr = value;
+            }
+        }
+    }
+#else
     unsigned pmask = 1;
     uint8_t* vga_base = (uint8_t*)VGA_START;
     unsigned width_bytes = 640 / 8;
@@ -1037,7 +1066,7 @@ static void swapbuffers()
 
         pmask <<= 1;
     }
-
+#endif
     if(frontbuf == buffers) {
         backbuf = buffers;
         frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
@@ -1061,10 +1090,19 @@ static void v86_test()
     }
 
     /* Initialize buffers */
+#if 1
+    size_t buffers_size = (FB_WIDTH * FB_HEIGHT * 2) + ((FB_WIDTH * FB_HEIGHT * 4) / 8);
+    TRACE("buffers_size: %zu", buffers_size);
+    buffers = kmalloc(buffers_size);
+    memset(buffers, 0, buffers_size);
+    backbuf = buffers;
+    frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
+#else
     buffers = kmalloc(FB_WIDTH * FB_HEIGHT * 2);
     memset(buffers, 0, FB_WIDTH * FB_HEIGHT * 2);
     backbuf = buffers;
     frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
+#endif
 
     /* get bios 8x16 font */
     struct isr_regs regs;
@@ -1118,12 +1156,20 @@ static void v86_test()
                     if(curx < FB_WIDTH - 5)
                         curx += 5;
                     break;
+                case 0x1: /* esc */
+                    curx = FB_WIDTH / 2;
+                    cury = FB_HEIGHT / 2;
+                    break;
+                default:
+                    TRACE("pressed: 0x%X", evt.scancode);
                 }
                 dirty = true;
             }
         }
 
         if(dirty) {
+            uint64_t startts = RDTSC();
+
             clearscreen(0);
             putpixel(curx, cury, 2);
             
@@ -1154,6 +1200,11 @@ static void v86_test()
 
             swapbuffers();
             dirty = false;
+
+            uint64_t endts = RDTSC();
+            uint64_t timing = (endts - startts) >> 14;
+            assert(timing < UINT32_MAX);
+            TRACE("Draw finished in %u cycles", (unsigned)timing);
         }
         HLT();
     }
