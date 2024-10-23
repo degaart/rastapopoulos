@@ -99,26 +99,23 @@ static unsigned get_mods()
 
 static void kbd_pressed(uint8_t scancode)
 {
-    if(!keystates[scancode]) {
-        keystates[scancode] = 1;
+    keystates[scancode] = 1;
 
-        struct kbd_event evt;
-        evt.type = KBD_EVENT_PRESSED;
-        evt.scancode = scancode;
-        evt.modifiers = get_mods();
-        if(lookup_key(evt.unicode_ch, sizeof(evt.unicode_ch), evt.scancode,
-                      evt.modifiers)) {
-            if(UTF8_IS1(evt.unicode_ch[0]))
-                evt.ch = evt.unicode_ch[0];
-            else
-                evt.ch = 0;
-        } else {
-            memset(evt.unicode_ch, 0, sizeof(evt.unicode_ch));
+    struct kbd_event evt;
+    evt.type = KBD_EVENT_PRESSED;
+    evt.scancode = scancode;
+    evt.modifiers = get_mods();
+    if(lookup_key(evt.unicode_ch, sizeof(evt.unicode_ch), evt.scancode,
+                  evt.modifiers)) {
+        if(UTF8_IS1(evt.unicode_ch[0]))
+            evt.ch = evt.unicode_ch[0];
+        else
             evt.ch = 0;
-        }
-        RBUF_PUSH(&events_buffer, evt);
-        /*TRACE("kbd: pressed 0x%X", (int)scancode);*/
+    } else {
+        memset(evt.unicode_ch, 0, sizeof(evt.unicode_ch));
+        evt.ch = 0;
     }
+    RBUF_PUSH(&events_buffer, evt);
 }
 
 static void kbd_released(uint8_t scancode)
@@ -140,7 +137,6 @@ static void kbd_released(uint8_t scancode)
         evt.ch = 0;
     }
     RBUF_PUSH(&events_buffer, evt);
-    /*TRACE("kbd: released 0x%X", (int)scancode);*/
 }
 
 static void irq_handler()

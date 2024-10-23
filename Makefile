@@ -10,7 +10,8 @@ run: all
 	qemu-system-i386 \
 		-drive file=bootloader/obj/boot.img,if=floppy,format=raw,readonly=on \
 		-chardev stdio,id=char0 \
-		-serial chardev:char0
+		-serial chardev:char0 \
+		-vga cirrus
 
 clean:
 	make -C tools clean
