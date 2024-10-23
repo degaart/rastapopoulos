@@ -1091,7 +1091,7 @@ static void v86_test()
 
     /* Initialize buffers */
 #if 1
-    size_t buffers_size = (FB_WIDTH * FB_HEIGHT * 2) + ((FB_WIDTH * FB_HEIGHT * 4) / 8);
+    size_t buffers_size = FB_WIDTH * FB_HEIGHT * 2;
     TRACE("buffers_size: %zu", buffers_size);
     buffers = kmalloc(buffers_size);
     memset(buffers, 0, buffers_size);

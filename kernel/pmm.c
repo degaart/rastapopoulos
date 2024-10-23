@@ -30,7 +30,7 @@ uint32_t pmm_alloc()
             return result;
         }
     }
-    TRACE("Physical memory exhaustion");
+    PANIC("Physical memory exhaustion");
     return INVALID_FRAME;
 }
 
