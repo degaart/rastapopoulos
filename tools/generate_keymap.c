@@ -7,6 +7,10 @@
 #include <unistd.h>
 #include <stdint.h>
 
+#ifdef __linux
+#include <bsd/string.h>
+#endif
+
 #define UTF8_IS4(c)    (((c)&0xF8) == 0xF0)
 #define UTF8_IS3(c)    (((c)&0xF0) == 0xE0)
 #define UTF8_IS2(c)    (((c)&0xE0) == 0xC0)

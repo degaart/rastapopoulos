@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef __linux
+#include <bsd/string.h>
+#endif
+
 int main()
 {
     const char terminators[] = "%spudxX";
