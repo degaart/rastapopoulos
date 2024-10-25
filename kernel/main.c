@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <limits.h>
 
 extern unsigned char _heap_start[];
 static unsigned char* _heap = _heap_start;
@@ -686,9 +687,18 @@ uint8_t* buffers;
 uint8_t* frontbuf;
 uint8_t* backbuf;
 
-#define OPTIMIZE __attribute__((optimize("03")))
+struct framebuf {
+    unsigned w, h;
+    unsigned x, y;
+    uint8_t* buf;
+};
+struct framebuf framebufs[4];
+uint8_t* shadowbufs[4];
+uint8_t* dirtybuf;
 
-static void setplane(unsigned plane)
+#define OPTIMIZE __attribute__((optimize("02")))
+
+static void OPTIMIZE setplane(unsigned plane)
 {
     static unsigned current = ~0;
 
@@ -701,27 +711,30 @@ static void setplane(unsigned plane)
     outw(VGA_SEQ_INDEX, (pmask << 8) | 2);
 }
 
-static void OPTIMIZE putpixel(unsigned x, unsigned y, unsigned color)
-{
-    if(x >= FB_WIDTH || y >= FB_HEIGHT)
+static inline void OPTIMIZE putpixel(
+    struct framebuf* framebuf,
+    unsigned x, unsigned y, unsigned color
+) {
+    if(x >= framebuf->w || y >= framebuf->h)
         return;
 
-    backbuf[x + (y * FB_WIDTH)] = color & 0xFF;
+    framebuf->buf[x + (y * framebuf->w)] = color & 0xFF;
 }
 
-static void OPTIMIZE fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
-                     unsigned col)
-{
+static void OPTIMIZE fillrect(
+    struct framebuf* framebuf,
+    unsigned x, unsigned y, unsigned w, unsigned h, unsigned col
+) {
     uint8_t* ptr;
     uint8_t c = (uint8_t)col;
 
-    if(x + w > FB_WIDTH)
-        w = FB_WIDTH - x;
-    if(y + h > FB_HEIGHT)
-        h = FB_HEIGHT - y;
+    if(x + w > framebuf->w)
+        w = framebuf->w - x;
+    if(y + h > framebuf->h)
+        h = framebuf->h - y;
 
     for(unsigned j = y; j < y + h; j++) {
-        ptr = backbuf + x + (j * FB_WIDTH);
+        ptr = framebuf->buf + x + (j * framebuf->w);
         for(unsigned i = x; i < x + w; i++) {
             *ptr = c;
             ptr++;
@@ -729,33 +742,37 @@ static void OPTIMIZE fillrect(unsigned x, unsigned y, unsigned w, unsigned h,
     }
 }
 
-static void vline(unsigned x, unsigned y, unsigned h, unsigned col)
-{
-    if(x >= FB_WIDTH)
+static void OPTIMIZE vline(
+    struct framebuf* framebuf,
+    unsigned x, unsigned y, unsigned h, unsigned col
+) {
+    if(x >= framebuf->w)
         return;
-    else if(y >= FB_HEIGHT)
+    else if(y >= framebuf->h)
         return;
-    if(y + h >= FB_HEIGHT)
-        h = FB_HEIGHT - y;
+    if(y + h >= framebuf->h)
+        h = framebuf->h - y;
 
-    uint8_t* ptr = backbuf + x + (y * FB_WIDTH);
+    uint8_t* ptr = framebuf->buf + x + (y * framebuf->w);
     uint8_t c = (uint8_t)col;
     for(unsigned j = 0; j < h; j++) {
         *ptr = c;
-        ptr += FB_WIDTH;
+        ptr += framebuf->w;
     }
 }
 
-static void hline(unsigned x, unsigned y, unsigned w, unsigned col)
-{
-    if(x >= FB_WIDTH)
+static void OPTIMIZE hline(
+    struct framebuf* framebuf,
+    unsigned x, unsigned y, unsigned w, unsigned col
+) {
+    if(x >= framebuf->w)
         return;
-    else if(y >= FB_HEIGHT)
+    else if(y >= framebuf->h)
         return;
-    if(x + w >= FB_WIDTH)
-        w = FB_WIDTH - x;
+    if(x + w >= framebuf->w)
+        w = framebuf->w - x;
 
-    uint8_t* ptr = backbuf + x + (y * FB_WIDTH);
+    uint8_t* ptr = framebuf->buf + x + (y * framebuf->w);
     uint8_t c = (uint8_t)col;
     for(unsigned i = 0; i < w; i++) {
         *ptr = c;
@@ -763,14 +780,16 @@ static void hline(unsigned x, unsigned y, unsigned w, unsigned col)
     }
 }
 
-static void lineo0(unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
-                   unsigned xdirection, unsigned col)
-{
+static void OPTIMIZE lineo0(
+    struct framebuf* framebuf,
+    unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
+    unsigned xdirection, unsigned col
+) {
     int deltayx2 = deltay * 2;
     int deltayx2minusdeltaxx2 = deltayx2 - (int)(deltax * 2);
     int errorterm = deltayx2 - (int)deltax;
 
-    putpixel(x0, y0, col);
+    putpixel(framebuf, x0, y0, col);
     while(deltax--) {
         if(errorterm >= 0) {
             y0++;
@@ -779,18 +798,20 @@ static void lineo0(unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
             errorterm += deltayx2;
         }
         x0 += xdirection;
-        putpixel(x0, y0, col);
+        putpixel(framebuf, x0, y0, col);
     }
 }
 
-static void lineo1(unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
-                   unsigned xdirection, unsigned col)
-{
+static void OPTIMIZE lineo1(
+    struct framebuf* framebuf,
+    unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
+    unsigned xdirection, unsigned col
+) {
     int deltaxx2 = deltax * 2;
     int deltaxx2minusdeltayx2 = deltaxx2 - (int)(deltay * 2);
     int errorterm = deltaxx2 - (int)deltay;
 
-    putpixel(x0, y0, col);
+    putpixel(framebuf, x0, y0, col);
     while(deltay--) {
         if(errorterm >= 0) {
             x0 += xdirection;
@@ -799,23 +820,25 @@ static void lineo1(unsigned x0, unsigned y0, unsigned deltax, unsigned deltay,
             errorterm += deltaxx2;
         }
         y0++;
-        putpixel(x0, y0, col);
+        putpixel(framebuf, x0, y0, col);
     }
 }
 
-static void line(int x0, int y0, int x1, int y1, unsigned color)
-{
+static void OPTIMIZE line(
+    struct framebuf* framebuf,
+    int x0, int y0, int x1, int y1, unsigned color
+) {
     if(x0 == x1) {
         if(y0 < y1)
-            vline(x0, y0, y1 - y0, color);
+            vline(framebuf, x0, y0, y1 - y0, color);
         else
-            vline(x0, y1, y0 - y1, color);
+            vline(framebuf, x0, y1, y0 - y1, color);
         return;
     } else if(y0 == y1) {
         if(x0 < x1)
-            hline(x0, y0, x1 - x0, color);
+            hline(framebuf, x0, y0, x1 - x0, color);
         else
-            hline(x1, y0, x0 - x1, color);
+            hline(framebuf, x1, y0, x0 - x1, color);
         return;
     }
 
@@ -833,42 +856,46 @@ static void line(int x0, int y0, int x1, int y1, unsigned color)
     int deltay = y1 - y0;
     if(deltax > 0) {
         if(deltax > deltay) {
-            lineo0(x0, y0, deltax, deltay, 1, color);
+            lineo0(framebuf, x0, y0, deltax, deltay, 1, color);
         } else {
-            lineo1(x0, y0, deltax, deltay, 1, color);
+            lineo1(framebuf, x0, y0, deltax, deltay, 1, color);
         }
     } else {
         deltax = -deltax;
         if(deltax > deltay) {
-            lineo0(x0, y0, deltax, deltay, -1, color);
+            lineo0(framebuf, x0, y0, deltax, deltay, -1, color);
         } else {
-            lineo1(x0, y0, deltax, deltay, -1, color);
+            lineo1(framebuf, x0, y0, deltax, deltay, -1, color);
         }
     }
 }
 
-static void rect(unsigned x, unsigned y, unsigned w, unsigned h, unsigned col)
-{
-    hline(x, y, w, col);
-    hline(x, y + h - 1, w, col);
-    vline(x, y, h, col);
-    vline(x + w - 1, y, h, col);
+static void OPTIMIZE rect(
+    struct framebuf* framebuf,
+    unsigned x, unsigned y, unsigned w, unsigned h, unsigned col
+) {
+    hline(framebuf, x, y, w, col);
+    hline(framebuf, x, y + h - 1, w, col);
+    vline(framebuf, x, y, h, col);
+    vline(framebuf, x + w - 1, y, h, col);
 }
 
-static void circle(int cx, int cy, int radius, unsigned color)
-{
+static void OPTIMIZE circle(
+    struct framebuf* framebuf,
+    int cx, int cy, int radius, unsigned color
+) {
     int x = 0;
     int y = radius;
     int m = 5 - 4 * radius;
     while(x <= y) {
-        putpixel(cx + x, cy + y, color);
-        putpixel(cx + x, cy - y, color);
-        putpixel(cx - x, cy + y, color);
-        putpixel(cx - x, cy - y, color);
-        putpixel(cx + y, cy + x, color);
-        putpixel(cx + y, cy - x, color);
-        putpixel(cx - y, cy + x, color);
-        putpixel(cx - y, cy - x, color);
+        putpixel(framebuf, cx + x, cy + y, color);
+        putpixel(framebuf, cx + x, cy - y, color);
+        putpixel(framebuf, cx - x, cy + y, color);
+        putpixel(framebuf, cx - x, cy - y, color);
+        putpixel(framebuf, cx + y, cy + x, color);
+        putpixel(framebuf, cx + y, cy - x, color);
+        putpixel(framebuf, cx - y, cy + x, color);
+        putpixel(framebuf, cx - y, cy - x, color);
         if(m > 0) {
             y--;
             m -= 8 * y;
@@ -878,25 +905,137 @@ static void circle(int cx, int cy, int radius, unsigned color)
     }
 }
 
-void fillcircle(int centerX, int centerY, int radius, unsigned c)
-{
+static void OPTIMIZE fillcircle(
+    struct framebuf* framebuf,
+    int centerX, int centerY, int radius, unsigned c
+) {
     int x = 0;
     int y = radius;
     int m = 5 - 4 * radius;
 
     while(x <= y) {
-        hline(centerX - y, centerY - x, y * 2, c);
-        hline(centerX - y, centerY + x, y * 2, c);
+        hline(framebuf, centerX - y, centerY - x, y * 2, c);
+        hline(framebuf, centerX - y, centerY + x, y * 2, c);
 
         if(m > 0) {
-            hline(centerX - x, centerY - y, x * 2, c);
-            hline(centerX - x, centerY + y, x * 2, c);
+            hline(framebuf, centerX - x, centerY - y, x * 2, c);
+            hline(framebuf, centerX - x, centerY + y, x * 2, c);
             y--;
             m -= 8 * y;
         }
 
         x++;
         m += 8 * x + 4;
+    }
+}
+
+static void OPTIMIZE drawstring(
+    struct framebuf* framebuf,
+    const uint8_t* vga_font, unsigned x, unsigned y,
+    unsigned col, const char* str, size_t len
+) {
+    if(len == -1)
+        len = strlen(str);
+
+    int currx = x;
+    int curry = y;
+    while(len) {
+        if(*str >= ' ') {
+            const uint8_t* glyph = vga_font + (*str * 16);
+            for(unsigned scanline = 0; scanline < 16; scanline++) {
+                for(int bit = 7; bit >= 0; bit--) {
+                    if(*glyph & (1 << bit)) {
+                        putpixel(framebuf, currx, curry, col);
+                    }
+                    currx++;
+                }
+                glyph++;
+                currx = x;
+                curry++;
+            }
+        }
+        x += 8;
+        currx = x;
+        curry = y;
+        str++;
+        len--;
+    }
+}
+
+static void clear(struct framebuf* framebuf, unsigned color)
+{
+    memset(framebuf->buf, color & 0xF, framebuf->w * framebuf->h);
+}
+
+struct rect {
+    int top, left, bottom, right;       /* exclusive, so width = right - left */
+};
+
+static void OPTIMIZE render(struct framebuf* framebuf)
+{
+    memset(dirtybuf, 0, (FB_WIDTH * FB_HEIGHT) / 8);
+    struct rect dirtyrect = {
+        .left = FB_WIDTH,
+        .top = FB_HEIGHT,
+        .right = 0,
+        .bottom = 0,
+    };
+
+    uint8_t* bufptr = framebuf->buf;
+    for(unsigned y = 0; y < framebuf->h; y++) {
+        unsigned desty = y + framebuf->y; 
+        size_t base = desty * FB_WIDTH;
+        for(unsigned x = 0; x < framebuf->w; x++) {
+            unsigned destx = x + framebuf->x;
+            size_t offset = (destx + base) / 8;
+            unsigned mask = 0x80 >> ((x + framebuf->x) & 7);
+
+            unsigned newvalue = *(bufptr++);
+            for(unsigned plane = 0; plane < 4; plane++) {
+                uint8_t newpattern;
+                if(newvalue & (1 << plane)) {
+                    newpattern = shadowbufs[plane][offset] | mask;
+                } else {
+                    newpattern = shadowbufs[plane][offset] & ~mask;
+                }
+
+                if(newpattern != shadowbufs[plane][offset]) {
+                    shadowbufs[plane][offset] = newpattern;
+                    dirtybuf[offset] |= mask;
+
+                    if(destx < dirtyrect.left)
+                        dirtyrect.left = destx;
+                    if(destx + 1 > dirtyrect.right)
+                        dirtyrect.right = destx + 1;
+                    if(desty < dirtyrect.top)
+                        dirtyrect.top = desty;
+                    if(desty + 1 > dirtyrect.bottom)
+                        dirtyrect.bottom = desty + 1;
+                }
+            }
+        }
+    }
+
+    if((dirtyrect.right - dirtyrect.left > 0) && (dirtyrect.bottom - dirtyrect.top > 0)) {
+        uint8_t* vga_base = (uint8_t*)VGA_START;
+        for(unsigned plane = 0; plane < 4; plane++) {
+            setplane(plane);
+
+            for(unsigned y = dirtyrect.top; y < dirtyrect.bottom; y++) {
+                size_t offset = ((dirtyrect.left + (y* FB_WIDTH)) / 8);
+                uint8_t* dst = vga_base + offset;
+                uint8_t* dst_end = dst + ((dirtyrect.right - dirtyrect.left + 8) / 8);
+                uint8_t* src = shadowbufs[plane] + offset;
+                uint8_t* dirty = dirtybuf + offset;
+
+                if(dst_end > vga_base + ((FB_WIDTH * FB_HEIGHT) / 8))
+                    dst_end = vga_base + ((FB_WIDTH * FB_HEIGHT) / 8);
+                for(; dst < dst_end; src++, dst++, dirty++) {
+                    if(*dirty)
+                        *dst = *src;
+                }    
+            }
+        }
     }
 }
 
@@ -972,110 +1111,6 @@ static void int10(struct isr_regs* regs)
     }
 }
 
-
-static void drawstring(const uint8_t* vga_font, unsigned x, unsigned y,
-                       unsigned col, const char* str, size_t len)
-{
-    if(len == -1)
-        len = strlen(str);
-
-    int currx = x;
-    int curry = y;
-    while(len) {
-        if(*str >= ' ') {
-            const uint8_t* glyph = vga_font + (*str * 16);
-            for(unsigned scanline = 0; scanline < 16; scanline++) {
-                for(int bit = 7; bit >= 0; bit--) {
-                    if(*glyph & (1 << bit)) {
-                        putpixel(currx, curry, col);
-                    }
-                    currx++;
-                }
-                glyph++;
-                currx = x;
-                curry++;
-            }
-        }
-        x += 8;
-        currx = x;
-        curry = y;
-        str++;
-        len--;
-    }
-}
-
-static  void clearscreen(unsigned color)
-{
-    memset(backbuf, color & 0xF, FB_WIDTH * FB_HEIGHT);
-}
-
-static void OPTIMIZE swapbuffers()
-{
-#if 1
-    for(unsigned plane = 0; plane < 4; plane++) {
-        setplane(plane);
-
-        uint8_t* backptr;
-        uint8_t* frontptr;
-        uint8_t* vgaptr;
-        for(backptr = backbuf, frontptr = frontbuf, vgaptr = (uint8_t*)VGA_START;
-            backptr < backbuf + (FB_WIDTH * FB_HEIGHT);
-            backptr += 8, frontptr += 8, vgaptr++
-        ) {
-            bool dirty = false;
-            uint8_t value = 0;
-            for(unsigned i = 0; i < 8; i++) {
-                if(backptr[i] != frontptr[i]) {
-                    dirty = true;
-                }
-                if(backptr[i] & (1 << plane)) {
-                    value |= 1 << (7 - i);
-                }
-            }
-            if(dirty) {
-                *vgaptr = value;
-            }
-        }
-    }
-#else
-    unsigned pmask = 1;
-    uint8_t* vga_base = (uint8_t*)VGA_START;
-    unsigned width_bytes = 640 / 8;
-
-    for(unsigned plane = 0; plane < 4; plane++) {
-        setplane(plane);
-
-        uint8_t* back = backbuf;
-        uint8_t* front = frontbuf;
-        for(unsigned y = 0; y < FB_HEIGHT; y++) {
-            uint8_t* ptr = vga_base + (y * width_bytes);
-            for(unsigned x = 0; x < FB_WIDTH; x++) {
-                if(*back != *front) {
-                    unsigned color = *back & 0xF;
-                    unsigned mask = 0x80 >> (x & 7); /* 0b0111 */
-                    if(color & pmask) {
-                        ptr[x/8] |= mask;
-                    } else {
-                        ptr[x/8] &= ~mask;
-                    }
-                }
-                back++;
-                front++;
-            }
-        }
-
-        pmask <<= 1;
-    }
-#endif
-    if(frontbuf == buffers) {
-        backbuf = buffers;
-        frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
-    } else {
-        frontbuf = buffers;
-        backbuf = buffers + (FB_WIDTH * FB_HEIGHT);
-    }
-}
-
 static void v86_test()
 {
     vga_enable = false;
@@ -1090,19 +1125,32 @@ static void v86_test()
     }
 
     /* Initialize buffers */
-#if 1
-    size_t buffers_size = FB_WIDTH * FB_HEIGHT * 2;
-    TRACE("buffers_size: %zu", buffers_size);
-    buffers = kmalloc(buffers_size);
-    memset(buffers, 0, buffers_size);
-    backbuf = buffers;
-    frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
-#else
-    buffers = kmalloc(FB_WIDTH * FB_HEIGHT * 2);
-    memset(buffers, 0, FB_WIDTH * FB_HEIGHT * 2);
-    backbuf = buffers;
-    frontbuf = buffers + (FB_WIDTH * FB_HEIGHT);
-#endif
+    size_t shadowbuf_size = (FB_WIDTH * FB_HEIGHT) / 8;
+    for(int i = 0; i < sizeof(shadowbufs) / sizeof(shadowbufs[0]); i++) {
+        shadowbufs[i] = kmalloc(shadowbuf_size);
+        memset(shadowbufs[i], 0, shadowbuf_size);
+    }
+
+    dirtybuf = kmalloc(shadowbuf_size);
+    memset(dirtybuf, 0, shadowbuf_size);
+
+    for(int i = 0; i < sizeof(framebufs) / sizeof(framebufs[0]); i++) {
+        framebufs[i].w = FB_WIDTH / 2;
+        framebufs[i].h = FB_HEIGHT / 2;
+
+        size_t size = framebufs[i].w * framebufs[i].h;
+        framebufs[i].buf = kmalloc(size);
+        memset(framebufs[i].buf, 0, size);
+    }
+
+    framebufs[0].x = 0;
+    framebufs[0].y = 0;
+    framebufs[1].x = FB_WIDTH / 2;
+    framebufs[1].y = 0;
+    framebufs[2].x = 0;
+    framebufs[2].y = FB_HEIGHT / 2;
+    framebufs[3].x = FB_WIDTH / 2;
+    framebufs[3].y = FB_HEIGHT / 2;
 
     /* get bios 8x16 font */
     struct isr_regs regs;
@@ -1131,9 +1179,44 @@ static void v86_test()
     regs.eax = 0x0012;
     int10(&regs);
 
-    int curx = FB_WIDTH / 2;
-    int cury = FB_HEIGHT / 2;
+    int maxx = framebufs[0].w;
+    int maxy = framebufs[0].h;
+    int curx = maxx / 2;
+    int cury = maxy / 2;
     bool dirty = true;
+
+    {
+        for(unsigned col = 0; col < 16; col++) {
+            unsigned startx = ((col % 8) * 32);
+            unsigned starty = ((col / 8) * 32);
+            fillrect(&framebufs[1], startx, starty, 32, 32, col);
+        }
+        render(&framebufs[1]);
+    }
+
+    {
+        unsigned index = 0;
+        for(unsigned y = 0; y < logo_height; y++) {
+            for(unsigned x = 0; x < logo_width; x++) {
+                putpixel(&framebufs[2], x, y, logo_data[index++]);
+            }
+        }
+        fillcircle(&framebufs[2], framebufs[2].w / 2, framebufs[2].h / 2, 16, 14);
+        render(&framebufs[2]);
+    }
+    
+    {
+        circle(&framebufs[3], framebufs[3].w / 2, framebufs[3].h / 2, 64, 12);
+        drawstring(&framebufs[3], vga_font, 0, 0, 9, "All your base are belong to us", -1);
+        render(&framebufs[3]);
+    }
+
+    uint32_t timings[64];
+    memset(timings, 0, sizeof(timings));
+
+    size_t timing_idx = 0;
+    unsigned timing_count = 0;
+
     enable_interrupts();
     while(1) {
         struct kbd_event evt;
@@ -1141,24 +1224,24 @@ static void v86_test()
             if(evt.type == KBD_EVENT_PRESSED) {
                 switch(evt.scancode) {
                 case 0xC8: /* up */
-                    if(cury > 5)
-                        cury -= 5;
+                    if(cury > 0)
+                        cury--;
                     break;
                 case 0xD0: /* down */
-                    if(cury < FB_HEIGHT - 5)
-                        cury += 5;
+                    if(cury < maxy - 1)
+                        cury++;
                     break;
                 case 0xCB: /* left */
-                    if(curx > 5)
-                        curx -= 5;
+                    if(curx > 0)
+                        curx--;
                     break;
                 case 0xCD: /* right */
-                    if(curx < FB_WIDTH - 5)
-                        curx += 5;
+                    if(curx < maxx - 1)
+                        curx++;
                     break;
                 case 0x1: /* esc */
-                    curx = FB_WIDTH / 2;
-                    cury = FB_HEIGHT / 2;
+                    curx = maxx / 2;
+                    cury = maxy / 2;
                     break;
                 default:
                     TRACE("pressed: 0x%X", evt.scancode);
@@ -1167,45 +1250,38 @@ static void v86_test()
             }
         }
 
+        uint64_t startts = RDTSC();
+        clear(&framebufs[0], 0);
+        rect(&framebufs[0], 0, 0, framebufs[0].w, framebufs[0].h, 1);
+        rect(&framebufs[0], curx - 8, cury - 8, 16, 16, 2);
+        render(&framebufs[0]);
+
+        uint64_t endts = RDTSC();
+        uint64_t timing = (endts - startts) >> 20;
+        assert(timing < UINT32_MAX);
+
+        timings[timing_idx] = (uint32_t)timing;
+        timing_idx++;
+        if(timing_idx == sizeof(timings) / sizeof(timings[0]))
+            timing_idx = 0;
+        timing_count++;
+
         if(dirty) {
-            uint64_t startts = RDTSC();
-
-            clearscreen(0);
-            putpixel(curx, cury, 2);
-            
-            for(unsigned col = 0; col < 16; col++) {
-                unsigned startx = curx + 5 + ((col % 8) * 32);
-                unsigned starty = cury + 5 + ((col / 8) * 32);
-                fillrect(startx, starty, 32, 32, col);
-            }
-
-            unsigned index = 0;
-            for(unsigned y = cury; y < cury + logo_height; y++) {
-                for(unsigned x = curx; x < curx + logo_width; x++) {
-                    putpixel(x, y, logo_data[index++]);
+            if(timing_count >= sizeof(timings) / sizeof(timings[0])) {
+                uint32_t sum = 0, min = UINT32_MAX, max = 0;
+                for(size_t i = 0; i < sizeof(timings) / sizeof(timings[0]); i++) {
+                    sum += timings[i];
+                    if(timings[i] < min)
+                        min = timings[i];
+                    if(timings[i] > max)
+                        max = timings[i];
                 }
+                uint32_t avg = sum / (sizeof(timings) / sizeof(timings[0]));
+                TRACE("avg: %u min: %u max: %u", (unsigned)avg, (unsigned)min, (unsigned)max);
             }
-
-            rect(curx, cury, 300, 72, 10);
-
-            line(32, 32, curx, cury, 11);
-            line(curx + 300, cury + 72, FB_WIDTH - 32, FB_HEIGHT - 32, 3);
-            line(curx, cury + 72, 32, FB_HEIGHT - 32, 2);
-            line(curx + 300, cury, FB_WIDTH - 32, 32, 6);
-
-            circle(640 / 2, 480 / 2, 128, 12);
-            fillcircle(curx + 300, cury + 128, 16, 14);
-
-            drawstring(vga_font, curx, cury - 32, 9, "All your base are belong to us", -1);
-
-            swapbuffers();
             dirty = false;
-
-            uint64_t endts = RDTSC();
-            uint64_t timing = (endts - startts) >> 14;
-            assert(timing < UINT32_MAX);
-            TRACE("Draw finished in %u cycles", (unsigned)timing);
         }
+        
         HLT();
     }
 }
