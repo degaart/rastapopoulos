@@ -1,8 +1,13 @@
 .PHONY: all clean
 .SUFFIXES:
 
+UNAME := $(shell uname)
 CFLAGS := -g -fsanitize=address -fno-omit-frame-pointer -Wno-format-security
 LDFLAGS := -g -fsanitize=address -fno-omit-frame-pointer
+
+ifeq ($(UNAME),Linux)
+	LDFLAGS += -lbsd
+endif
 
 all: obj/generate_printf_tests obj/generate_keymap
 
@@ -27,3 +32,6 @@ format:
 		}; \
 		true; \
 	done
+
+test:
+	@echo $(LDFLAGS)
