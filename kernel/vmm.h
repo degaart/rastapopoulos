@@ -54,3 +54,4 @@ bool vmm_unmap_range(const void* vaddr, unsigned size, bool dealloc_frames)
     __attribute__((warn_unused_result));
 void vmm_init(const struct multiboot_mmap_entry* mmap_entries,
               size_t mmap_length);
+bool vmm_is_readable(void* addr, size_t len);

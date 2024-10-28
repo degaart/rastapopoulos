@@ -236,6 +236,28 @@ bool vmm_unmap(const void* vaddr, bool dealloc_frame)
     }
 }
 
+bool vmm_is_readable(void* addr, size_t len)
+{
+    while(len) {
+        struct vaddrinfo vi;
+        vmm_vaddrinfo(&vi, (void*)ROUND((uint32_t)addr, VMM_PAGESIZE));
+
+        if(!(pagedirs->entries[vi.pde_index] & VMM_PRESENT)) {
+            return false;
+        } else if(!(pagetables[vi.pde_index].entries[vi.pte_index] & VMM_PRESENT)) {
+            return false;
+        }
+
+        addr += VMM_PAGESIZE;
+        if(len < VMM_PAGESIZE)
+            len = 0;
+        else
+            len -= VMM_PAGESIZE;
+    }
+    
+    return true;
+}
+
 bool vmm_unmap_range(const void* vaddr, unsigned size, bool dealloc_frames)
 {
     bool result = true;
@@ -467,3 +489,4 @@ void vmm_init(const struct multiboot_mmap_entry* mmap_entries,
     ADD_TEST(vmm_test_unmap);
     ADD_TEST(vmm_test_remap);
 }
+
