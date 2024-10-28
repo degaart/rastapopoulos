@@ -16,6 +16,7 @@
 #include <rbuf.h>
 #include <serial.h>
 #include <string.h>
+#include <format.h>
 #include <syscall.h>
 #include <util.h>
 #include <vga.h>
@@ -102,6 +103,20 @@ static void handle_page_fault(struct isr_regs* regs)
         TRACE("    - Reserved bits set to 1");
     if(regs->err_code & PF_ID)
         TRACE("    - Instuction fetch");
+
+    TRACE("Stack:");
+    uint32_t* ebp = (uint32_t*)regs->ebp;
+    while(1) {
+        if(!vmm_is_readable(ebp + 1, sizeof(uint32_t)))
+            break;
+        uint32_t* eip = (uint32_t*) *(ebp + 1);
+        TRACE("\t0x%p", eip);
+
+        if(!vmm_is_readable(ebp, sizeof(uint32_t)))
+            break;
+        ebp = (uint32_t*)*ebp;
+    }
+
     HALT();
 }
 
@@ -324,11 +339,17 @@ void trace_init()
     serial_write_char('\n');
 }
 
-bool debug_write(char ch, void*)
+/*
+    Note: ctx must point to a buffer of size STB_SPRINTF_MIN
+*/
+static char* debug_write(const char* buf, void* ctx, int len)
 {
-    serial_write_char(ch);
-    vga_write_char(ch, COLOR_LIGHTGRAY);
-    return true;
+    while(len--) {
+        serial_write_char(*buf);
+        vga_write_char(*buf, COLOR_LIGHTGRAY);
+        buf++;
+    }
+    return ctx;
 }
 
 void trace(const char* file, int line, const char* fn, const char* fmt, ...)
@@ -340,11 +361,12 @@ void trace(const char* file, int line, const char* fn, const char* fmt, ...)
     vga_write_string(prefix, COLOR_LIGHTGRAY);
 
     va_list args;
+    char buffer[64];
     va_start(args, fmt);
-    formatv(debug_write, NULL, fmt, args);
+    formatv(debug_write, buffer, buffer, fmt, args);
     va_end(args);
 
-    debug_write('\n', NULL);
+    debug_write("\n", buffer, 1);
     RESTORE_IF();
 }
 
@@ -353,10 +375,11 @@ void panic(const char* file, int line, const char* fn, const char* fmt, ...)
     CLEAR_IF();
     trace(file, line, fn, "*** KERNEL PANIC ***");
     va_list args;
+    char buffer[64];
     va_start(args, fmt);
-    formatv(debug_write, NULL, fmt, args);
+    formatv(debug_write, buffer, buffer, fmt, args);
     va_end(args);
-    debug_write('\n', NULL);
+    debug_write("\n", buffer, 1);
     HALT();
 }
 

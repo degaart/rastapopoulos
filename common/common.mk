@@ -24,7 +24,8 @@ COMMON_SRCS := \
 	vga.c \
 	bitset.c \
 	util.c \
-	rbuf.c
+	rbuf.c \
+	format.c
 
 format:
 	@for file in *.c *.h; do \
