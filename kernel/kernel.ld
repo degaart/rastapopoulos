@@ -14,8 +14,9 @@ SECTIONS
     .rodata BLOCK(4K) : ALIGN(4K)
     {
         _rodata_start = .;
-        *(.rodata)
+        *(.rodata*)
         *(.comment)
+        *(.eh_frame)
         _rodata_end = .;
     }
 
