@@ -3,6 +3,7 @@
 #include <multiboot.h>
 #include <serial.h>
 #include <string.h>
+#include <format.h>
 #include <util.h>
 #include <vga.h>
 
@@ -96,20 +97,28 @@ struct idt_ptr {
 } __attribute__((packed));
 static struct idt_ptr idtr __attribute__((aligned(8)));
 
-static bool debug_write(char ch, void*)
+/*
+    Note: ctx must point to a buffer of size STB_SPRINTF_MIN
+*/
+static char* debug_write(const char* buf, void* ctx, int len)
 {
-    serial_write_char(ch);
-    vga_write_char(ch, COLOR_LIGHTGRAY);
-    return true;
+    while(len--) {
+        serial_write_char(*buf);
+        vga_write_char(*buf, COLOR_LIGHTGRAY);
+        buf++;
+    }
+    return ctx;
 }
+
 
 void panic(const char* file, int line, const char* fn, const char* fmt, ...)
 {
     trace(file, line, fn, "*** BOOTLOADER PANIC ***");
 
     va_list args;
+    char buffer[64];
     va_start(args, fmt);
-    formatv(debug_write, NULL, fmt, args);
+    formatv(debug_write, buffer, buffer, fmt, args);
     va_end(args);
     HALT();
 }
@@ -127,8 +136,9 @@ void trace(const char* file, int line, const char* fn, const char* fmt, ...)
     vga_write_string(buf, COLOR_LIGHTGRAY);
 
     va_list args;
+    char buffer[64];
     va_start(args, fmt);
-    formatv(debug_write, NULL, fmt, args);
+    formatv(debug_write, buffer, buffer, fmt, args);
     va_end(args);
 
     serial_write_string("\n");

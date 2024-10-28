@@ -1,4 +1,5 @@
 #include "string.h"
+#include "format.h"
 
 #ifdef UNIT_TESTS
 #include "debug.h"
@@ -148,174 +149,82 @@ void itoa(char* buffer, size_t size, unsigned value)
     *buffer = '\0';
 }
 
-#define WRITESTRING(s)                                                         \
-    for(const char* ch = s; *ch; ch++) {                                       \
-        if(!writefn(*ch, ctx))                                                 \
-            return;                                                            \
-    }
+typedef struct stbsp__context {
+    char *buf;
+    int count;
+    int length;
+    char tmp[STB_SPRINTF_MIN];
+} stbsp__context;
 
-void formatv(bool (*writefn)(char, void*), void* ctx, const char* fmt,
-             va_list args)
+static char *stbsp__clamp_callback(const char *buf, void *user, int len)
 {
-    int padding = 0;
-    bool zeropad = false;
-    bool left = false;
-    while(*fmt) {
-        if(*fmt == '%') {
-            fmt++;
-            bool exitfmt = false;
-            while(*fmt && !exitfmt) {
-                switch(*fmt) {
-                case 's': {
-                    const char* s = va_arg(args, const char*);
-                    if(padding && !left) {
-                        int padcount = padding - strlen(s);
-                        for(int i = 0; i < padcount; i++) {
-                            if(!writefn(' ', ctx))
-                                return;
-                        }
-                    }
-                    WRITESTRING(s);
-                    if(padding && left) {
-                        int padcount = padding - strlen(s);
-                        for(int i = 0; i < padcount; i++) {
-                            if(!writefn(' ', ctx))
-                                return;
-                        }
-                    }
-                    exitfmt = true;
-                    break;
-                }
-                case 'c': {
-                    int ch = va_arg(args, int);
-                    if(ch < ' ' || ch >= 128) {
-                        ch = ' ';
-                    }
-                    if(!writefn(ch, ctx))
-                        return;
-                    exitfmt = true;
-                    break;
-                }
-                case 'u':
-                case 'd':
-                case 'x':
-                case 'X':
-                case 'p': {
-                    unsigned value = va_arg(args, unsigned);
-                    char buffer[16];
-                    switch(*fmt) {
-                    case 'u':
-                    case 'd':
-                        itoa(buffer, sizeof(buffer), value);
-                        break;
-                    case 'x':
-                    case 'X':
-                        itox(buffer, sizeof(buffer), value);
-                        break;
-                    case 'p':
-                        WRITESTRING("0x");
-                        itox(buffer, sizeof(buffer), value);
-                        zeropad = true;
-                        padding = 8;
-                        break;
-                    }
-                    if(padding) {
-                        int padcount = padding - strlen(buffer);
-                        int padchar = zeropad ? '0' : ' ';
-                        for(int i = 0; i < padcount; i++) {
-                            if(!writefn(padchar, ctx))
-                                return;
-                        }
-                    }
-                    WRITESTRING(buffer);
-                    exitfmt = true;
-                    break;
-                }
-                case '%': {
-                    if(!writefn('%', ctx))
-                        return;
-                    exitfmt = true;
-                    break;
-                }
-                case 'z':
-                case 'l': {
-                    /* Ignore */
-                    break;
-                }
-                case '-': {
-                    left = true;
-                    break;
-                }
-                case '0':
-                case '1':
-                case '2':
-                case '3':
-                case '4':
-                case '5':
-                case '6':
-                case '7':
-                case '8':
-                case '9': {
-                    if(*fmt == '0' && padding == 0) {
-                        zeropad = true;
-                    }
-                    padding = (padding * 10) + *fmt - '0';
-                    break;
-                }
-                }
-                fmt++;
-            }
-        } else {
-            if(!writefn(*fmt, ctx))
-                return;
-            fmt++;
+    stbsp__context *c = (stbsp__context *)user;
+    c->length += len;
+
+    if (len > c->count)
+        len = c->count;
+
+    if (len) {
+        if (buf != c->buf) {
+            const char *s, *se;
+            char *d;
+            d = c->buf;
+            s = buf;
+            se = buf + len;
+            do {
+                *d++ = *s++;
+            } while (s < se);
         }
-        padding = 0;
-        zeropad = false;
-        left = false;
+        c->buf += len;
+        c->count -= len;
     }
+
+    if (c->count <= 0)
+        return c->tmp;
+    return (c->count >= STB_SPRINTF_MIN) ? c->buf : c->tmp; // go direct into buffer if you can
 }
 
-struct snprintf_ctx {
-    size_t size;
-    int total_written;
-    char* ptr;
-};
-
-static bool snprintf_writefn(char ch, void* ctxp)
+static char * stbsp__count_clamp_callback( const char * buf, void * user, int len )
 {
-    struct snprintf_ctx* ctx = ctxp;
-    if(ctx->size) {
-        *ctx->ptr = ch;
-        ctx->ptr++;
-        ctx->size--;
+    stbsp__context * c = (stbsp__context*)user;
+    c->length += len;
+    return c->tmp; // go direct into buffer if you can
+}
+
+int vsnprintf(char* buf, int count, const char* fmt, va_list va)
+{
+    stbsp__context c;
+
+    if ( (count == 0) && !buf ) {
+        c.length = 0;
+
+        formatv( stbsp__count_clamp_callback, &c, c.tmp, fmt, va );
+    } else {
+        int l;
+
+        c.buf = buf;
+        c.count = count;
+        c.length = 0;
+
+        formatv( stbsp__clamp_callback, &c, stbsp__clamp_callback(0,&c,0), fmt, va );
+
+        // zero-terminate
+        l = (int)( c.buf - buf );
+        if ( l >= count ) // should never be greater, only equal (or less) than count
+            l = count - 1;
+        buf[l] = 0;
     }
-    ctx->total_written++;
-    return true;
+
+    return c.length;
 }
 
-/*
- * Returns the number of characters that would have been printed if the size
- * were unlimited (not including the final ‘\0’). Returns a negative value if an
- * error occurs.
- */
-int snprintf(char* restrict str, size_t size, const char* restrict fmt, ...)
+int snprintf(char* buf, int count, const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt);
-    return vsnprintf(str, size, fmt, args);
-}
-
-int vsnprintf(char* restrict str, size_t size, const char* restrict fmt,
-              va_list args)
-{
-    struct snprintf_ctx ctx;
-    ctx.ptr = str;
-    ctx.size = size - 1;
-    ctx.total_written = 0;
-    formatv(snprintf_writefn, &ctx, fmt, args);
-    int result = ctx.total_written;
-    str[ctx.total_written] = '\0';
+    int result;
+    va_list va;
+    va_start(va, fmt);
+    result = vsnprintf(buf, count, fmt, va);
+    va_end(va);
     return result;
 }
 

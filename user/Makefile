@@ -6,7 +6,7 @@
 include ../common/common.mk
 
 CFLAGS 	:= $(CFLAGS)
-LDFLAGS := $(LDFLAGS) -T user.ld
+LDFLAGS := $(LDFLAGS) -T user.ld -lgcc
 
 SRCS := \
 	program1.c \
@@ -19,7 +19,8 @@ COMMON_SRCS := \
 	../common/string.c \
 	../common/vga.c \
 	../common/bitset.c \
-	../common/util.c
+	../common/util.c \
+	../common/format.c
 
 V86_SRCS := \
 	v86_1.asm
@@ -50,7 +51,7 @@ debug_make:
 	@echo "DEPFILES:    $(DEPFILES)"
 
 obj/%.elf: obj/%.c.o obj/user.c.o $(COMMON_OBJS) Makefile | obj
-	$(CC) -o $@ $(LDFLAGS) -Xlinker -Map=$(basename $@).map $< obj/user.c.o $(COMMON_OBJS)
+	$(CC) -o $@ -Xlinker -Map=$(basename $@).map $< obj/user.c.o $(COMMON_OBJS) $(LDFLAGS)
 	xxd -i $@ > $(basename $@).h
 
 obj/%.c.o: %.c Makefile | obj

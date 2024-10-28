@@ -7,7 +7,7 @@ include ../common/common.mk
 HOST_CC := cc
 ASFLAGS16 := -f bin
 CFLAGS := $(CFLAGS)
-LDFLAGS := $(LDFLAGS) -T boot1.ld
+LDFLAGS := $(LDFLAGS) -T boot1.ld -lgcc
 HOST_CFLAGS := -g -fno-omit-frame-pointer -fsanitize=address
 HOST_LDFLAGS :=
 
@@ -18,7 +18,8 @@ COMMON_SRCS := \
 	../common/crc32.c \
 	../common/serial.c \
 	../common/string.c \
-	../common/vga.c
+	../common/vga.c \
+	../common/format.c
 
 all: obj/boot.img
 
@@ -41,7 +42,7 @@ obj/fatread: fatread.c | obj
 
 # boot1.o must be the first dependency
 obj/boot1.bin: obj/boot1.o $(addprefix obj/,$(addsuffix .o,$(SRCS))) $(addprefix obj/common/,$(addsuffix .o,$(notdir $(COMMON_SRCS))))
-	$(CC) -o $@ $(LDFLAGS) $^
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 obj/boot1.o: boot1.asm | obj
 	$(AS) -o $@ $(ASFLAGS) $<
