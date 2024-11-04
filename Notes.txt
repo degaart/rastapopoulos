@@ -43,3 +43,70 @@ Use [MkDocs](https://www.mkdocs.org/getting-started/)
     nm --print-size --size-sort --radix=d obj/kernel.elf
 
 
+# Checkpoints
+
+## Checkpoint 1
+
+One single-thread user task that calls gettid().
+
+- Draft fault handlers
+- Draft syscall handlers
+- Draft process control block and thread control block
+- Basic VMM
+   - Dummy alloc-only PMM
+   - Page directory & page table manipulation routines
+   - Address space manager
+- Rough first program loader
+   - Setup task
+   - Setup thread
+   - Init mem regions
+   - Craft register values
+   - Craft kernel stack contents
+   - Set control regs
+
+## Checkpoint 2
+
+Two threads can context-switch back and forth. Either fork() or exec() works.
+
+## Checkpoint 3
+
+Half of syscalls and exception handlers work.
+
+## Checkpoint 4
+
+Rough version of all syscalls.
+
+## Checkpoint 5
+
+All code written.
+
+- Kernel boots
+- Shell running
+- Can run commands
+
+# Syscalls
+
+- fork
+- thread_fork
+- exec
+- set_status
+- vanish (exit current thread immediately)
+- wait (wait for specific thread to exit)
+- task_vanish (exit current task)
+- gettid
+- yield (switch to a specific thread or any runnable thread)
+- cas2i_runflag (perform cas on the run flag of a thread)
+- getticks
+- sleep
+- new_pages
+- remove_pages
+- getchar
+- readline
+- print
+- set_term_color
+- set_cursor_pos
+- get_cursor_pos
+- ls
+- halt
+
+
