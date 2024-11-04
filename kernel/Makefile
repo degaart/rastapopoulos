@@ -6,7 +6,7 @@ include ../common/common.mk
 
 UNIT_TEST_FLAGS := -DUNIT_TESTS
 ASFLAGS := $(ASFLAGS) -g
-CFLAGS := $(CFLAGS) -g -DKERNEL -DV86_TEST
+CFLAGS := $(CFLAGS) -g -DKERNEL
 LDFLAGS := $(LDFLAGS) -g -T kernel.ld -Xlinker -Map=obj/kernel.map
 
 QEMU_INT_FLAGS := -d int -M smm=off
