@@ -1,9 +1,17 @@
 bits 16
 org 0x0000
 
+mov ax, cs
+mov ds, ax
+mov es, ax
+
 mov si, message
 call puts
-jmp $
+
+halt:
+    cli
+    hlt
+    jmp halt
 
 
 ; in:       si = asciiz string to print
