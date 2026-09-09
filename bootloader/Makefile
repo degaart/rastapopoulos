@@ -15,8 +15,28 @@ build/rastapopoulos.img: build/bootsect.bin build/rastaldr.bin
 	@mcopy -i build/rastapopoulos.img -o build/rastaldr.bin ::/rastaldr.bin
 	@cp build/rastapopoulos.img $(HOSTDATA)
 
-build/%.bin: %.asm | build
+build/bootsect.bin: bootsect.asm | build
 	@nasm -fbin -o $@ $<
+
+build/rastaldr.bin: build/rastaldr.o build/main.o| build
+	@ia16-elf-gcc \
+		-nostdlib \
+		-T rastaldr.ld \
+		-Wl,-Map=build/rastaldr.map \
+		-Wl,--gc-sections \
+		-o $@ $^
+
+build/main.o: main.c | build
+	@ia16-elf-gcc \
+		-c \
+		-o $@ \
+		-ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
+		-fdata-sections -ffunction-sections \
+		-march=i8086 -mcmodel=tiny -mshort-jumps \
+		$<
+
+build/rastaldr.o: rastaldr.asm | build
+	@nasm -felf32 -o $@ $<
 
 build:
 	@mkdir -p $@
