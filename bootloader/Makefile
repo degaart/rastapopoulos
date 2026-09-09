@@ -1,8 +1,15 @@
-.PHONY: all clean run
+.PHONY: all clean run format
 .SUFFIXES:
 
 AS := nasm
-CC := i686-elf-gcc
+CC := ia16-elf-gcc
+CFLAGS := -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
+		-fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
+		-mshort-jumps \
+		-I../third-party/stb
+OBJS := build/rastaldr.o \
+		build/main.o \
+		build/format.o
 
 all: build/rastapopoulos.img
 
@@ -16,27 +23,26 @@ build/rastapopoulos.img: build/bootsect.bin build/rastaldr.bin
 	@cp build/rastapopoulos.img $(HOSTDATA)
 
 build/bootsect.bin: bootsect.asm | build
-	@nasm -fbin -o $@ $<
+	@$(AS) -fbin -o $@ $<
 
-build/rastaldr.bin: build/rastaldr.o build/main.o| build
-	@ia16-elf-gcc \
+build/rastaldr.bin: $(OBJS) | build
+	@$(CC) \
 		-nostdlib \
 		-T rastaldr.ld \
 		-Wl,-Map=build/rastaldr.map \
 		-Wl,--gc-sections \
-		-o $@ $^
+		-o $@ $^ \
+		-lgcc
 
-build/main.o: main.c | build
-	@ia16-elf-gcc \
+build/%.o: %.c | build
+	@$(CC) \
 		-c \
 		-o $@ \
-		-ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
-		-fdata-sections -ffunction-sections \
-		-march=i8086 -mcmodel=tiny -mshort-jumps \
+		$(CFLAGS) \
 		$<
 
 build/rastaldr.o: rastaldr.asm | build
-	@nasm -felf32 -o $@ $<
+	@$(AS) -felf32 -o $@ $<
 
 build:
 	@mkdir -p $@
@@ -46,4 +52,7 @@ clean:
 
 run:
 	@qemu-system-i386 -drive file=build/rastapopoulos.img,format=raw,if=floppy -boot a --no-reboot
+
+format:
+	@clang-format -i *.c *.h
 

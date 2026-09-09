@@ -62,6 +62,18 @@ halt:
     hlt
     jmp halt
 
+; prints a character
+; arg: int: char to print
+global putc
+putc:
+    push si
+    mov  si, sp
+    mov  si, [si+4]
+    mov  ah, 0x0E
+    mov  bx, 0x0007
+    int  0x10
+    pop  si
+    ret
 
 ; prints an asciiz string
 ; arg: string to print

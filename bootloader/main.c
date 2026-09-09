@@ -1,23 +1,25 @@
+#include "format.h"
+#include "rastaldr.h"
 #include <stddef.h>
-#include <stdint.h>
 
-char testBss[512];
+static void writeChar(void* data, char ch)
+{
+    putc(ch);
+}
 
-extern void puts(const char* msg);
-extern void halt() __attribute__((noreturn));
+__attribute__((format(printf, 1, 2)))
+int printf(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int ret = vformat(writeChar, NULL, fmt, args);
+    va_end(args);
+    return ret;
+}
 
 void ldrmain(void)
 {
-    for (int i = 0; i < sizeof(testBss); i++)
-    {
-        if(testBss[i])
-        {
-            puts("Bss not cleared\r\n");
-            halt();
-        }
-    }
-    puts("ldrmain running\r\n");
-    while(1);
+    printf("ldrmain %d%d running\r\n", 420, 69);
     halt();
 }
 
