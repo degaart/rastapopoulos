@@ -5,11 +5,11 @@ AS := nasm
 CC := ia16-elf-gcc
 CFLAGS := -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		-fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
-		-mshort-jumps \
-		-I../third-party/stb
+		-mshort-jumps
 OBJS := build/rastaldr.o \
 		build/main.o \
-		build/format.o
+		build/format.o \
+		build/allocator.o
 
 all: build/rastapopoulos.img
 
@@ -20,6 +20,7 @@ build/rastapopoulos.img: build/bootsect.bin build/rastaldr.bin
 	fi
 	@dd if=build/bootsect.bin of=build/rastapopoulos.img bs=512 count=1 conv=notrunc status=none
 	@mcopy -i build/rastapopoulos.img -o build/rastaldr.bin ::/rastaldr.bin
+	@mcopy -i build/rastapopoulos.img -o main.c ::/kernel.bin
 	@cp build/rastapopoulos.img $(HOSTDATA)
 
 build/bootsect.bin: bootsect.asm | build

@@ -120,8 +120,8 @@ puts:
 ;       cyl    bp + 8
 ;       count  bp + 6
 ;       buffer bp + 4
-global readSectorsCHS
-readSectorsCHS:
+global read_sectors_chs
+read_sectors_chs:
     push bp
     mov  bp, sp
 
