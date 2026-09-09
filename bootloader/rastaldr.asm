@@ -68,9 +68,20 @@ global putc
 putc:
     push si
     mov  si, sp
-    mov  si, [si+4]
+    mov  al, [si+4]
+
     mov  ah, 0x0E
     mov  bx, 0x0007
+
+    cmp  al, byte `\n`
+    jne  .printchar
+
+    push ax
+    mov  al, `\r`
+    int  0x10
+    pop  ax
+
+.printchar:
     int  0x10
     pop  si
     ret

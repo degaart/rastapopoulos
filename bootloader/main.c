@@ -48,13 +48,13 @@ extern uint16_t readSectorsCHS(void* buffer, uint16_t count, uint16_t cyl,
 
 void ldrmain(void)
 {
-    printf("ldrmain %d%d running\r\n", 420, 69);
+    printf("ldrmain %d%d running\n", 420, 69);
 
     /* Boot parameter block is at 0x7c03 */
     static const struct BPB __far* bpb = MK_FP(0x0, 0x7c03);
-    printf("Boot drive: %u\r\n", bpb->bootDrive);
-    printf("sizeof(int): %u\r\n", sizeof(int));
-    printf("sizeof(void*): %u\r\n", sizeof(void*));
+    printf("Boot drive: %u\n", bpb->bootDrive);
+    printf("sizeof(int): %u\n", sizeof(int));
+    printf("sizeof(void*): %u\n", sizeof(void*));
 
     unsigned char readBuffer[512];
     uint16_t lba = 33;
@@ -64,16 +64,16 @@ void ldrmain(void)
     uint16_t ret =
         readSectorsCHS(readBuffer, 1, cyl, head, sect, bpb->bootDrive);
     if (ret >> 8) {
-        printf("Read error: %u\r\n", ret >> 8);
+        printf("Read error: %u\n", ret >> 8);
         halt();
     }
-    printf("Read sectors: %u\r\n", ret & 0xff);
+    printf("Read sectors: %u\n", ret & 0xff);
 
     for (int i = 0; i < 16; i++) {
         if (i)
             printf(" ");
         printf("%02x", readBuffer[i]);
     }
-    printf("\r\n");
+    printf("\n");
 }
 
