@@ -1,20 +1,26 @@
 #include "format.h"
 
-static int formatUnsigned(FormatOutputFn output, void* data, unsigned int value, unsigned int base)
+static int format_unsigned(FormatOutputFn output, void* data,
+                           unsigned int value, unsigned int base,
+                           unsigned int width)
 {
     static const char digits[] = "0123456789abcdef";
     char buffer[sizeof(unsigned int) * 8];
-    int length = 0;
+    unsigned int length = 0;
     int count = 0;
 
-    do
-    {
+    do {
         buffer[length++] = digits[value % base];
         value /= base;
     } while (value != 0);
 
-    while (length != 0)
-    {
+    while (width > length) {
+        output(data, '0');
+        --width;
+        ++count;
+    }
+
+    while (length != 0) {
         output(data, buffer[--length]);
         ++count;
     }
@@ -22,14 +28,15 @@ static int formatUnsigned(FormatOutputFn output, void* data, unsigned int value,
     return count;
 }
 
-int vformat(FormatOutputFn output, void* data, const char* format, va_list arguments)
+int vformat(FormatOutputFn output, void* data, const char* format,
+            va_list arguments)
 {
     int count = 0;
 
-    while (*format != '\0')
-    {
-        if (*format != '%')
-        {
+    while (*format != '\0') {
+        unsigned int width = 0;
+
+        if (*format != '%') {
             output(data, *format++);
             ++count;
             continue;
@@ -37,15 +44,24 @@ int vformat(FormatOutputFn output, void* data, const char* format, va_list argum
 
         ++format;
 
-        switch (*format)
-        {
+        if (*format == '0') {
+            ++format;
+
+            while (*format >= '0' && *format <= '9') {
+                width = width * 10 + (unsigned int)(*format - '0');
+                ++format;
+            }
+        }
+
+        switch (*format) {
         case '%':
             output(data, '%');
             ++count;
             break;
 
         case 'u':
-            count += formatUnsigned(output, data, va_arg(arguments, unsigned int), 10);
+            count += format_unsigned(
+                output, data, va_arg(arguments, unsigned int), 10, width);
             break;
 
         case 'd':
@@ -54,21 +70,22 @@ int vformat(FormatOutputFn output, void* data, const char* format, va_list argum
             int value = va_arg(arguments, int);
             unsigned int magnitude = (unsigned int)value;
 
-            if (value < 0)
-            {
+            if (value < 0) {
                 output(data, '-');
                 ++count;
-
-                /* This also works for INT_MIN. */
                 magnitude = 0u - magnitude;
+
+                if (width != 0)
+                    --width;
             }
 
-            count += formatUnsigned(output, data, magnitude, 10);
+            count += format_unsigned(output, data, magnitude, 10, width);
             break;
         }
 
         case 'x':
-            count += formatUnsigned(output, data, va_arg(arguments, unsigned int), 16);
+            count += format_unsigned(
+                output, data, va_arg(arguments, unsigned int), 16, width);
             break;
 
         case 'p':
@@ -79,7 +96,13 @@ int vformat(FormatOutputFn output, void* data, const char* format, va_list argum
             output(data, 'x');
             count += 2;
 
-            count += formatUnsigned(output, data, (unsigned int)pointer, 16);
+            if (width >= 2)
+                width -= 2;
+            else
+                width = 0;
+
+            count += format_unsigned(output, data, (unsigned int)pointer, 16,
+                                     width);
             break;
         }
 
@@ -87,8 +110,7 @@ int vformat(FormatOutputFn output, void* data, const char* format, va_list argum
         {
             const char* string = va_arg(arguments, const char*);
 
-            while (*string != '\0')
-            {
+            while (*string != '\0') {
                 output(data, *string++);
                 ++count;
             }
@@ -97,12 +119,10 @@ int vformat(FormatOutputFn output, void* data, const char* format, va_list argum
         }
 
         case '\0':
-            /* Treat a trailing '%' literally. */
             output(data, '%');
             return count + 1;
 
         default:
-            /* Preserve unsupported conversions literally. */
             output(data, '%');
             output(data, *format);
             count += 2;

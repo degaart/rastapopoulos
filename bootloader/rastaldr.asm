@@ -102,6 +102,35 @@ puts:
     pop  bp
     ret
 
+; reads sectors using BIOS
+; args: drive  bp + 14
+;       sect   bp + 12
+;       head   bp + 10
+;       cyl    bp + 8
+;       count  bp + 6
+;       buffer bp + 4
+global readSectorsCHS
+readSectorsCHS:
+    push bp
+    mov  bp, sp
+
+    push es
+
+    push ds
+    pop  es
+    mov  bx, [bp + 4]   ; buffer
+    mov  ch, [bp + 8]   ; cyl
+    mov  dh, [bp + 10]  ; head
+    mov  cl, [bp + 12]  ; sect
+    mov  dl, [bp + 14]  ; drive
+    mov  al, [bp + 6]   ; count
+    mov  ah, 0x02
+    int  0x13
+
+    pop  es
+    pop  bp
+    ret
+
 section .rodata
 message: db 'RASTALDR running', 13, 10, 0
 message2: db 'RASTALDR still running', 13, 10, 0

@@ -18,7 +18,7 @@ BraceWrapping:
   BeforeElse: false
   BeforeWhile: false
 BreakTemplateDeclarations: Yes
-ColumnLimit: 160
+ColumnLimit: 79 
 CompactNamespaces: true
 IndentPPDirectives: AfterHash
 IndentWidth: 4
