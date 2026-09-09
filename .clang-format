@@ -3,7 +3,20 @@ BasedOnStyle: LLVM
 AccessModifierOffset: -4
 AllowShortEnumsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
-BreakBeforeBraces: Allman
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Never
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: false
+  BeforeWhile: false
 BreakTemplateDeclarations: Yes
 ColumnLimit: 160
 CompactNamespaces: true
@@ -26,3 +39,4 @@ AlignConsecutiveMacros:
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: false
 SpaceBeforeCpp11BracedList: true
+
