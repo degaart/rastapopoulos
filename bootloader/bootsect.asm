@@ -1,7 +1,8 @@
 ; FAT12 boot sector for a standard 1.44 MiB floppy.
 ; Loads RASTALDR.BIN at 1000:0000 (physical 0x10000) and jumps to it.
-bits 16
-org  0x7c00
+bits    16
+cpu     8086
+org     0x7c00
 
     ; constants
     BPB_BYTES_PER_SECTOR    equ 512
@@ -9,15 +10,17 @@ org  0x7c00
     BPB_ROOT_ENTRIES        equ 224
     BPB_FAT_COUNT           equ 2
     BPB_SECTORS_PER_FAT     equ 9
-    FAT12_FREE              equ 0xE5
+    FAT12_FREE              equ 0xe5
     FIRST_DATA_LBA          equ 33
+    LOAD_SEGMENT            equ 0x0800
 
     ; work buffers
     FAT_BUFFER              equ 0x500
     DISK_LBA                equ FAT_BUFFER + (512 * 9)
     CLUSTER                 equ DISK_LBA + 2
     REMAINING               equ CLUSTER + 2
-    ROOT_BUFFER             equ REMAINING + 4
+    PANIC_CODE              equ REMAINING + 4
+    ROOT_BUFFER             equ PANIC_CODE + 1
 
     ; types
 struc Dirent
@@ -44,7 +47,26 @@ endstruc
     int 0x10
 %endmacro
 
+%macro isabugger0 1
+    mov  al, 0x02
+    out  0x7a, al
+    mov  al, %1
+    out  0x7b, al
+%endmacro
 
+%macro isabugger1 1
+    mov  al, 0x04
+    out  0x7a, al
+    mov  al, %1
+    out  0x7b, al
+%endmacro
+
+%macro debugcon 0-1
+    %if %0 = 1
+        mov  al, %1
+    %endif
+    out  0xe9, al
+%endmacro
 
     ; skip BPB
     jmp  short boot
@@ -76,33 +98,54 @@ bpb:
 boot:
     ; setup
     cli
-    xor  ax, ax
+    mov  ax, cs
     mov  ds, ax
-    mov  es, ax
-    mov  ss, ax
+    xor  dx, dx
+    mov  ss, dx
     mov  sp, 0x7c00
     cld
     mov  [bpb.boot_drive], dl
 
     ; Read first FAT
     mov  ax, 1
-    mov  cx, BPB_SECTORS_PER_FAT
+    mov  cx, [bpb.sectors_per_fat]
     mov  bx, FAT_BUFFER
     call read_sectors
 
-    ; Read the complete root directory
+    mov  si, bpb.bytes_per_sector
+
+.loop:
+    mov  bx, si
+    cmp  bx, bpb.end
+    jae  halt
+
+    isabugger1 bl
+    isabugger0 [si]
+
+    xor  ah, ah
+    int  0x16
+
+    inc  si
+    jmp  .loop
+
+    ; read root directory
     ; lba = reserved_sectors + (fat_count * sectors_per_fat)
     ; size_in_sectors = (root_entries * 32) / bytes_per_sector
-    mov  ax, BPB_RESERVED_SECTORS + (BPB_FAT_COUNT * BPB_SECTORS_PER_FAT)
-    mov  cx, (BPB_ROOT_ENTRIES * 32) / BPB_BYTES_PER_SECTOR
+    mov  ax, [bpb.fat_count]
+    mul  word [bpb.sectors_per_fat]
+    add  ax, [bpb.reserved_sectors]
     mov  bx, ROOT_BUFFER
     call read_sectors
 
-    ; find the loader inside root entries
+    mov  [PANIC_CODE], byte '*'
+    jmp  panic
+
+    ; find loader
     mov  di, ROOT_BUFFER
 find_ldr:
+    mov  [PANIC_CODE], byte '2'
     cmp  byte [di], 0
-    je   .not_found
+    je   panic
     cmp  byte [di], FAT12_FREE
     je   .next
 
@@ -117,28 +160,30 @@ find_ldr:
     add  di, Dirent_size
     dec  dx
     jnz  find_ldr
-.not_found:
-    jmp  halt
 
 .found:
     mov  ax, [di + Dirent.first_cluster_low]
     mov  [CLUSTER], ax
     mov  ax, [di + Dirent.file_size]
     mov  dx, [di + Dirent.file_size + 2]
-    mov  [REMAINING],   ax
+    mov  [REMAINING], ax
     mov  [REMAINING + 2], dx
-    or   ax, dx
-    jz   fatal                  ; check whether both are zero
+    mov  [PANIC_CODE], byte '3'
+    or   ax, dx                     ; check bot AX and DX are zero
+    jz   panic
 
-    mov  ax, 0x1000
+    mov  ax, LOAD_SEGMENT
     mov  es, ax
 
 load_cluster:
     mov  ax, [CLUSTER]
+    mov  [PANIC_CODE], byte '4'
     cmp  ax, 2
-    jb   fatal
-    cmp  ax, 0x0FF0
-    jae  fatal
+    jb   panic
+
+    mov  [PANIC_CODE], byte '5'
+    cmp  ax, 0x0ff0
+    jae  panic
 
     ; general formula is lba = FIRST_DATA_LBA + (cluster - 2) * sectors_per_cluster
     ; but sectors_per_cluster is always 1
@@ -162,12 +207,14 @@ load_cluster:
     mov  dx, [bx + FAT_BUFFER]
     test ax, 1
     jz   .even
-    shr  dx, 4
+    mov  cl, 4
+    shr  dx, cl
 .even:
-    and  dx, 0x0FFF
+    and  dx, 0x0fff
     mov  [CLUSTER], dx
-    cmp  dx, 0x0FF8
-    jae  fatal
+    mov  [PANIC_CODE], byte '6'
+    cmp  dx, 0x0ff8
+    jae  panic
 
     mov  ax, es
     add  ax, 0x20                   ; 512 bytes
@@ -175,13 +222,16 @@ load_cluster:
     jmp  load_cluster
 
 launch:
-    jmp 0x1000:0
+    jmp  LOAD_SEGMENT:0
 
-halt:
-    hlt
-    jmp halt
+    ; ===================================================
+    ;mov  si, message
+    ;call puts
+    jmp  halt
+
 
 ; Read CX sectors beginning at LBA AX into es:BX.
+; Preserves all caller-visible registers.
 read_sectors:
     call read_sector
     inc ax
@@ -192,58 +242,79 @@ read_sectors:
 ; Read one LBA sector from the boot drive into ES:BX.
 ; Preserves all caller-visible registers.
 read_sector:
-    mov [DISK_LBA], ax
-    pusha
-    mov si, 3
+    push cx
+    push dx
+    push bp
+    push si
+    push di
+
+    mov  [DISK_LBA], ax
+    mov  si, 3
 .retry:
-    mov ax, [DISK_LBA]
-    xor dx, dx
-    div word [bpb.sectors_per_track]
-    inc dl
-    mov cl, dl                    ; sector (1..18)
-    xor dx, dx
-    div word [bpb.head_count]
-    mov ch, al                    ; cylinder (0..79)
-    mov dh, dl                    ; head (0..1)
-    mov dl, [bpb.boot_drive]
-    mov ax, 0x0201
-    int 0x13
-    jnc .ok
-    xor ax, ax
-    int 0x13
-    dec si
-    jnz .retry                    ; recompute CHS after the BIOS reset
-    jmp fatal
+    mov  ax, [DISK_LBA]
+    xor  dx, dx
+    div  word [bpb.sectors_per_track]
+    inc  dl
+    mov  cl, dl                    ; sector (1..18)
+    xor  dx, dx
+    div  word [bpb.head_count]
+    mov  ch, al                    ; cylinder (0..79)
+    mov  dh, dl                    ; head (0..1)
+    mov  dl, [bpb.boot_drive]
+    mov  ax, 0x0201
+    int  0x13
+    jnc  .ok
+    xor  ax, ax
+    int  0x13
+    dec  si
+    jnz  .retry                    ; recompute CHS after the BIOS reset
+
+    mov  [PANIC_CODE], byte '7'
+    jmp  panic
 .ok:
-    popa
+    pop  di
+    pop  si
+    pop  bp
+    pop  dx
+    pop  cx
     ret
 
-; in:       si = asciiz string to print
-; clobbers: ax, bx, si
+; print string
+; args:
+;   si      string address
+; trashes: ax, bx, si
 puts:
-    mov ah, 0x0E
-    mov bx, 0x0007
-
+    push bp
 .loop:
-    mov al, [si]
-    test al, al
-    jz .return
-    int 0x10
-    inc si
-    jmp .loop
+    mov  ah, 0x0e
+    mov  bx, 0x0007
+    mov  al, [si]
+    cmp  al, 0
+    je   .return
+    int  0x10
+    inc  si
+    jmp  .loop
 .return:
+    pop  bp
     ret
 
-fatal:
-    mov si, fatal_msg
+; panic with the error code in [PANIC_CODE]
+panic:
+    mov  si, panic_message
     call puts
-    jmp halt
+    mov  al, [PANIC_CODE]
+    mov  ah, 0x0e
+    mov  bx, 0x0007
+    int  0x10
 
+halt:
+    cli
+    hlt
+    jmp  halt
 
-message: db "It works!", 13, 10, 0
-fatal_msg: db "Bootloader error", 13, 10, 0
+message: db `KAKA\r\n`, 0
+panic_message: db `PANIC `, 0
 loader_name: db "RASTALDRBIN"
-found_msg: db "Found", 13, 10, 0
 
 times 510 - ($ - $$) db 0
 dw 0xaa55
