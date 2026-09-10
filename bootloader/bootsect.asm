@@ -5,22 +5,23 @@ cpu     8086
 org     0x7c00
 
     ; constants
-    BPB_BYTES_PER_SECTOR    equ 512
-    BPB_RESERVED_SECTORS    equ 1
-    BPB_ROOT_ENTRIES        equ 224
-    BPB_FAT_COUNT           equ 2
-    BPB_SECTORS_PER_FAT     equ 9
     FAT12_FREE              equ 0xe5
-    FIRST_DATA_LBA          equ 33
+    FIRST_DATA_LBA          equ 7
     LOAD_SEGMENT            equ 0x0800
 
-    ; work buffers
-    FAT_BUFFER              equ 0x500
-    DISK_LBA                equ FAT_BUFFER + (512 * 9)
-    CLUSTER                 equ DISK_LBA + 2
-    REMAINING               equ CLUSTER + 2
-    PANIC_CODE              equ REMAINING + 4
-    ROOT_BUFFER             equ PANIC_CODE + 1
+    ; Work buffers
+    VARS                    equ 0x500
+struc V
+    .disk_lba               resw 1
+    .cluster                resw 1
+    .remaining              resd 1
+    .panic_code             resb 1
+    .root_dir_lba           resw 1
+    .root_dir_size_sect     resw 1
+    .first_data_lba         resw 1
+    .fat_buffer             resb 512 * 9                    ; intentionally limit to 9 sectors
+    .root_buffer            resb 1                          ; variable-length
+endstruc
 
     ; types
 struc Dirent
@@ -39,7 +40,7 @@ struc Dirent
     .file_size:         resd    1       ; File size in bytes
 endstruc
 
-    ; debugging macro
+    ; debugging macros
 %macro print_char 1
     mov al, %1
     mov ah, 0x0e
@@ -47,14 +48,14 @@ endstruc
     int 0x10
 %endmacro
 
-%macro isabugger0 1
+%macro isabuggerR 1
     mov  al, 0x02
     out  0x7a, al
     mov  al, %1
     out  0x7b, al
 %endmacro
 
-%macro isabugger1 1
+%macro isabuggerL 1
     mov  al, 0x04
     out  0x7a, al
     mov  al, %1
@@ -68,6 +69,17 @@ endstruc
     out  0xe9, al
 %endmacro
 
+%macro panic 1
+    mov  byte [VARS+V.panic_code], %1
+    jmp  _panic
+%endmacro
+
+%macro assert 2
+    %1 %%end
+    panic %2
+%%end:
+%endmacro
+
     ; skip BPB
     jmp  short boot
     nop
@@ -75,33 +87,36 @@ endstruc
     ; BIOS Parameter Block (BPB)
 bpb:
     .oem_name:            db 'RASTAOS '
-    .bytes_per_sector:    dw BPB_BYTES_PER_SECTOR
-    .sectors_per_cluster: db 1
-    .reserved_sectors:    dw BPB_RESERVED_SECTORS
-    .fat_count:           db BPB_FAT_COUNT
-    .root_entries:        dw BPB_ROOT_ENTRIES
-    .total_sectors_16:    dw 2880
-    .media_descriptor:    db 0xf0
-    .sectors_per_fat:     dw BPB_SECTORS_PER_FAT
-    .sectors_per_track:   dw 18
-    .head_count:          dw 2
+    .bytes_per_sector:    dw 0
+    .sectors_per_cluster: db 0
+    .reserved_sectors:    dw 0
+    .fat_count:           db 0
+    .root_entries:        dw 0
+    .total_sectors_16:    dw 0
+    .media_descriptor:    db 0
+    .sectors_per_fat:     dw 0
+    .sectors_per_track:   dw 0
+    .head_count:          dw 0
     .hidden_sectors:      dd 0
     .total_sectors_32:    dd 0
     .boot_drive:          db 0
     .reserved:            db 0
-    .extended_signature:  db 0x29
-    .volume_serial:       dd 0x52535441
-    .volume_label:        db 'RASTA FLOPPY'
-    .filesystem_type:     db 'FAT12   '
+    .extended_signature:  db 0
+    .volume_serial:       dd 0
+    .volume_label:        db '            '
+    .filesystem_type:     db '        '
     .end:
 
 boot:
     ; setup
     cli
-    mov  ax, cs
+    jmp 0:.setupsegs
+
+.setupsegs:
+    xor  ax, ax
     mov  ds, ax
-    xor  dx, dx
-    mov  ss, dx
+    mov  es, ax
+    mov  ss, ax
     mov  sp, 0x7c00
     cld
     mov  [bpb.boot_drive], dl
@@ -109,129 +124,157 @@ boot:
     ; Read first FAT
     mov  ax, 1
     mov  cx, [bpb.sectors_per_fat]
-    mov  bx, FAT_BUFFER
+    cmp  cx, 9
+    jbe  .readfat
+    panic '0'
+.readfat:
+    mov  bx, VARS+V.fat_buffer
     call read_sectors
-
-    mov  si, bpb.bytes_per_sector
-
-.loop:
-    mov  bx, si
-    cmp  bx, bpb.end
-    jae  halt
-
-    isabugger1 bl
-    isabugger0 [si]
-
-    xor  ah, ah
-    int  0x16
-
-    inc  si
-    jmp  .loop
 
     ; read root directory
     ; lba = reserved_sectors + (fat_count * sectors_per_fat)
     ; size_in_sectors = (root_entries * 32) / bytes_per_sector
-    mov  ax, [bpb.fat_count]
+    mov  ax, [bpb.root_entries]
+    mov  cl, 5
+    shl  ax, cl                             ; ax *= 32
+    xor  dx, dx
+    div  word [bpb.bytes_per_sector]        ; ax /= bpb.bytes_per_sector
+    mov  cx, ax                             ; cx = size in sectors
+    mov  [VARS+V.root_dir_size_sect], cx    ; we need it when calculating first data cluster lba
+
+    xor  ax, ax
+    mov  al, [bpb.fat_count]
     mul  word [bpb.sectors_per_fat]
-    add  ax, [bpb.reserved_sectors]
-    mov  bx, ROOT_BUFFER
+    add  ax, [bpb.reserved_sectors]     ; ax = lba
+    mov  [VARS+V.root_dir_lba], ax
+
+    mov  bx, VARS+V.root_buffer
     call read_sectors
 
-    mov  [PANIC_CODE], byte '*'
-    jmp  panic
-
-    ; find loader
-    mov  di, ROOT_BUFFER
+     ; find loader
+     mov  di, VARS+V.root_buffer
 find_ldr:
-    mov  [PANIC_CODE], byte '2'
-    cmp  byte [di], 0
-    je   panic
-    cmp  byte [di], FAT12_FREE
-    je   .next
+     cmp  byte [di], 0
+     jne  .check_free
+     panic '1'
 
-    ; compare with loader name
-    push di
-    mov  si, loader_name
-    mov  cx, 11
-    repe cmpsb
-    pop  di
-    je   .found
-.next:
-    add  di, Dirent_size
-    dec  dx
-    jnz  find_ldr
+.check_free:
+     cmp  byte [di], FAT12_FREE
+     je   .next
 
-.found:
+     ; compare with loader name
+     push di
+     mov  si, loader_name
+     mov  cx, 11
+     repe cmpsb
+     pop  di
+     je   .found
+ .next:
+     add  di, Dirent_size
+     dec  dx
+     jnz  find_ldr
+ 
+ .found:
     mov  ax, [di + Dirent.first_cluster_low]
-    mov  [CLUSTER], ax
+    mov  [VARS+V.cluster], ax
     mov  ax, [di + Dirent.file_size]
     mov  dx, [di + Dirent.file_size + 2]
-    mov  [REMAINING], ax
-    mov  [REMAINING + 2], dx
-    mov  [PANIC_CODE], byte '3'
-    or   ax, dx                     ; check bot AX and DX are zero
-    jz   panic
+    mov  [VARS+V.remaining], ax
+    mov  [VARS+V.remaining+2], dx
+    or   ax, dx                     ; check both AX and DX are zero
+    jnz  .check_size
+    panic '2'
 
+.check_size:
+    int  0x12
+
+    ; shift left ax by 10, putting the high word in DX
+    ; ax = low 16 bits of (original << 10)
+    ; dx = high 16 bits = original >> 6
+    mov  dx, ax
+    mov  cl, 10
+    shl  ax, cl
+    mov  cl, 6
+    shr  dx, cl
+
+    ; compare to (dx:ax) - (LOAD_SEGMENT / 16)
+    sub  ax, LOAD_SEGMENT / 16
+    sbb  dx, 0
+    cmp  dx, [VARS+V.remaining+2]
+    ja   .load_es
+    cmp  ax, [VARS+V.remaining]
+    ja   .load_es
+    panic '3'
+
+.load_es:
     mov  ax, LOAD_SEGMENT
     mov  es, ax
 
+    ; save LBA of first data LBA
+    mov  ax, [VARS+V.root_dir_lba]
+    add  ax, [VARS+V.root_dir_size_sect]
+    mov  [VARS+V.first_data_lba], ax
+
 load_cluster:
-    mov  ax, [CLUSTER]
-    mov  [PANIC_CODE], byte '4'
+    mov  ax, [VARS+V.cluster]
     cmp  ax, 2
-    jb   panic
+    jae  .check_clus
+    panic '4'
 
-    mov  [PANIC_CODE], byte '5'
+.check_clus:
     cmp  ax, 0x0ff0
-    jae  panic
+    jb   .read_clus
+    panic '5'
 
+.read_clus:
     ; general formula is lba = FIRST_DATA_LBA + (cluster - 2) * sectors_per_cluster
-    ; but sectors_per_cluster is always 1
-    ; so we can simplify to lba = cluster + FIRST_DATA_LBA - 2
-    add  ax, FIRST_DATA_LBA - 2
+    sub  ax, 2
+    xor  bx, bx
+    mov  bl, [bpb.sectors_per_cluster]
+    mul  bx
+    add  ax, [VARS+V.first_data_lba]
+
     xor  bx, bx
     call read_sector
-    cmp  word [REMAINING + 2], 0
+
+    cmp  word [VARS+V.remaining+2], 0
     jne  .next
-    cmp  word [REMAINING], 512
+    cmp  word [VARS+V.remaining], 512
     jbe  launch
 .next:
-    sub  word [REMAINING], 512
-    sbb  word [REMAINING + 2], 0
+    sub  word [VARS+V.remaining], 512
+    sbb  word [VARS+V.remaining+2], 0
 
     ; next fat12 entry
-    mov  ax, [CLUSTER]
+    mov  ax, [VARS+V.cluster]
     mov  bx, ax
     shr  bx, 1
     add  bx, ax
-    mov  dx, [bx + FAT_BUFFER]
+    mov  dx, [bx + VARS+V.fat_buffer]
     test ax, 1
     jz   .even
     mov  cl, 4
     shr  dx, cl
 .even:
     and  dx, 0x0fff
-    mov  [CLUSTER], dx
-    mov  [PANIC_CODE], byte '6'
+    mov  [VARS+V.cluster], dx
     cmp  dx, 0x0ff8
-    jae  panic
+    jb   .inc_es
+    panic '6'
 
+.inc_es:
     mov  ax, es
     add  ax, 0x20                   ; 512 bytes
     mov  es, ax
     jmp  load_cluster
 
 launch:
+    mov  ax, LOAD_SEGMENT
+    mov  es, ax
     jmp  LOAD_SEGMENT:0
 
-    ; ===================================================
-    ;mov  si, message
-    ;call puts
-    jmp  halt
-
-
 ; Read CX sectors beginning at LBA AX into es:BX.
-; Preserves all caller-visible registers.
+; Trashes ax and bx
 read_sectors:
     call read_sector
     inc ax
@@ -239,19 +282,21 @@ read_sectors:
     loop read_sectors
     ret
 
-; Read one LBA sector from the boot drive into ES:BX.
+; Read one AX=LBA sector from the boot drive into ES:BX.
 ; Preserves all caller-visible registers.
 read_sector:
+    push ax
+    push bx
     push cx
     push dx
     push bp
     push si
-    push di
+    ;push di
 
-    mov  [DISK_LBA], ax
+    mov  [VARS+V.disk_lba], ax
     mov  si, 3
 .retry:
-    mov  ax, [DISK_LBA]
+    mov  ax, [VARS+V.disk_lba]
     xor  dx, dx
     div  word [bpb.sectors_per_track]
     inc  dl
@@ -268,52 +313,28 @@ read_sector:
     int  0x13
     dec  si
     jnz  .retry                    ; recompute CHS after the BIOS reset
-
-    mov  [PANIC_CODE], byte '7'
-    jmp  panic
+    panic '7'
 .ok:
-    pop  di
+    ;pop  di
     pop  si
     pop  bp
     pop  dx
     pop  cx
-    ret
-
-; print string
-; args:
-;   si      string address
-; trashes: ax, bx, si
-puts:
-    push bp
-.loop:
-    mov  ah, 0x0e
-    mov  bx, 0x0007
-    mov  al, [si]
-    cmp  al, 0
-    je   .return
-    int  0x10
-    inc  si
-    jmp  .loop
-.return:
-    pop  bp
+    pop  bx
+    pop  ax
     ret
 
 ; panic with the error code in [PANIC_CODE]
-panic:
-    mov  si, panic_message
-    call puts
-    mov  al, [PANIC_CODE]
+; use the panic macro
+_panic:
+    mov  al, [VARS+V.panic_code]
     mov  ah, 0x0e
     mov  bx, 0x0007
     int  0x10
 
 halt:
-    cli
-    hlt
     jmp  halt
 
-message: db `KAKA\r\n`, 0
-panic_message: db `PANIC `, 0
 loader_name: db "RASTALDRBIN"
 
 times 510 - ($ - $$) db 0
