@@ -1,49 +1,44 @@
-.PHONY: all clean run format
+.PHONY: all clean run format bochs
 .SUFFIXES:
 
 AS := nasm
-CC := ia16-elf-gcc
-CFLAGS := -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
-		-fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
-		-mshort-jumps
-OBJS := build/rastaldr.o \
-		build/main.o \
-		build/format.o \
-		build/allocator.o
+CC := rastacc
+LD := ld
+OBJS := build/start.o \
+		build/main.o
 
 all: build/rastapopoulos.img
 
-build/rastapopoulos.img: build/bootsect.bin build/rastaldr.bin
-	@if ! [ -f build/rastapopoulos.img ]; then \
-		dd if=/dev/zero of=build/rastapopoulos.img bs=512 count=2880 status=none; \
+build/rastapopoulos.img: build/bootsect.bin build/rastaldr.bin | build
+	if ! [ -f build/rastapopoulos.img ]; then \
+		dd if=/dev/zero of=build/rastapopoulos.img bs=512 count=320 status=none; \
 		mformat -i build/rastapopoulos.img -k; \
 	fi
-	@dd if=build/bootsect.bin of=build/rastapopoulos.img bs=512 count=1 conv=notrunc status=none
-	@mcopy -i build/rastapopoulos.img -o build/rastaldr.bin ::/rastaldr.bin
-	@mcopy -i build/rastapopoulos.img -o main.c ::/kernel.bin
-	@cp build/rastapopoulos.img $(HOSTDATA)
+	[ -f build/bpb.bin ] || \
+		dd if=build/rastapopoulos.img of=build/bpb.bin bs=1 skip=11 count=51 status=none
+	dd if=build/bootsect.bin of=build/rastapopoulos.img bs=512 count=1 conv=notrunc status=none
+	dd if=build/bpb.bin of=build/rastapopoulos.img bs=1 seek=11 conv=notrunc status=none
+	mcopy -o -i build/rastapopoulos.img build/rastaldr.bin ::/RASTALDR.BIN
+	cp build/rastapopoulos.img $(HOSTDATA)
 
 build/bootsect.bin: bootsect.asm | build
-	@$(AS) -fbin -o $@ $<
+	$(AS) -fbin -o $@ $<
 
 build/rastaldr.bin: $(OBJS) | build
-	@$(CC) \
-		-nostdlib \
+	$(LD) \
+		-m elf_i386 \
 		-T rastaldr.ld \
-		-Wl,-Map=build/rastaldr.map \
-		-Wl,--gc-sections \
-		-o $@ $^ \
-		-lgcc
+		-Map=build/rastaldr.map \
+		-o $@ $^
 
-build/%.o: %.c | build
-	@$(CC) \
-		-c \
-		-o $@ \
-		$(CFLAGS) \
-		$<
+build/start.o: start.asm | build
+	$(AS) -felf32 -o $@ $<
 
-build/rastaldr.o: rastaldr.asm | build
-	@$(AS) -felf32 -o $@ $<
+build/%.o: build/%.asm | build
+	$(AS) -felf32 -o $@ $<
+
+build/%.asm: %.c *.h| build
+	$(CC) -o $@ $<
 
 build:
 	@mkdir -p $@
@@ -52,7 +47,13 @@ clean:
 	@rm -rf build
 
 run:
-	@qemu-system-i386 -drive file=build/rastapopoulos.img,format=raw,if=floppy -boot a --no-reboot
+	@qemu-system-i386 \
+		-drive file=build/rastapopoulos.img,format=raw,if=floppy \
+		-boot a \
+		--no-reboot
+
+bochs:
+	@bochs -q -dbg_gui
 
 format:
 	@clang-format -i *.c *.h
