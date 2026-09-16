@@ -9,7 +9,8 @@ CPP := cpp
 CC := rastacc
 LD := ld
 OBJS := build/start.o \
-		build/main.o
+		build/main.o \
+		build/format.o
 
 all: build/rastapopoulos.img
 
@@ -33,7 +34,8 @@ build/rastaldr.bin: $(OBJS) | build
 		-m elf_i386 \
 		-T rastaldr.ld \
 		-Map=build/rastaldr.map \
-		-o $@ $^
+		-o $@ $^ \
+		-L $(RASTACC_HOME)/runtime -lcc8086
 
 build/start.o: start.asm | build
 	$(AS) -felf32 -o $@ $<
