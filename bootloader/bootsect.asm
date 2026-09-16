@@ -1,281 +1,342 @@
-; Loads root-directory RASTALDR.BIN to 0800:0000 (physical 8000h)
-; Maximum file size 32768 bytes, including sector rounding
-;
-; Buffers: 0600..21FF FAT (<=7168 bytes), 2200..31FF directory sector.
-; Stack below 7A00h; code at 7C00h; loader 8000..FFFFh.
-; Entry: DL=BIOS drive. Exit: CS=ES=0800h, IP=0, DS=SS=0,
-; SP=7A00h, DL=boot drive, interrupts enabled, direction flag clear.
-bits 16
-cpu 8086
-org 0x7c00
-FAT equ 0x600
-ROOT equ 0x2200
-DATA equ 0x500
-LEFT equ 0x502
-FATEND equ 0x504
+; FAT12 boot sector for a standard 1.44 MiB floppy.
+; Loads RASTALDR.BIN at 1000:0000 (physical 0x10000) and jumps to it.
+bits    16
+cpu     8086
+org     0x7c00
 
-; Boot header including the entry jump, so fields are sector-relative.
-struc BPB
-    .jump:                  resb 3
-    .oem_name:              resb 8
-    .bytes_per_sector:      resw 1
-    .sectors_per_cluster:   resb 1
-    .reserved_sectors:      resw 1
-    .fat_count:             resb 1
-    .root_entries:          resw 1
-    .total_sectors_16:      resw 1
-    .media_descriptor:      resb 1
-    .sectors_per_fat:       resw 1
-    .sectors_per_track:     resw 1
-    .head_count:            resw 1
-    .hidden_sectors:        resd 1
-    .total_sectors_32:      resd 1
-    .boot_drive:            resb 1
-    .reserved:              resb 1
-    .extended_signature:    resb 1
-    .volume_serial:         resd 1
-    .volume_label:          resb 11
-    .filesystem_type:       resb 8
+    ; constants
+    FAT12_FREE              equ 0xe5
+    FIRST_DATA_LBA          equ 7
+    LOAD_SEGMENT            equ 0x0800
+
+    ; Work buffers
+    VARS                    equ 0x500
+struc V
+    .disk_lba               resw 1
+    .cluster                resw 1
+    .remaining              resd 1
+    .panic_code             resb 1
+    .root_dir_lba           resw 1
+    .root_dir_size_sect     resw 1
+    .first_data_lba         resw 1
+    .fat_buffer             resb 512 * 9                    ; intentionally limit to 9 sectors
+    .root_buffer            resb 1                          ; variable-length
 endstruc
 
-boot_sector:
-    istruc BPB
-        at BPB.jump, jmp short boot
-                     nop
-        at BPB.oem_name,              db 'RASTAOS '
-        at BPB.bytes_per_sector,      dw 0
-        at BPB.sectors_per_cluster,   db 0
-        at BPB.reserved_sectors,      dw 0
-        at BPB.fat_count,             db 0
-        at BPB.root_entries,          dw 0
-        at BPB.total_sectors_16,      dw 0
-        at BPB.media_descriptor,      db 0
-        at BPB.sectors_per_fat,       dw 0
-        at BPB.sectors_per_track,     dw 0
-        at BPB.head_count,            dw 0
-        at BPB.hidden_sectors,        dd 0
-        at BPB.total_sectors_32,      dd 0
-        at BPB.boot_drive,            db 0
-        at BPB.reserved,              db 0
-        at BPB.extended_signature,    db 0
-        at BPB.volume_serial,         dd 0
-        at BPB.volume_label,          db 'RASTAOS    '
-        at BPB.filesystem_type,       db 'FAT12   '
-    iend
-boot:
-    cli
-    xor ax,ax
-    mov ds,ax
-    mov es,ax
-    mov ss,ax
-    mov sp,0x7a00
-    sti
-    cld
-    mov bp,boot_sector          ; BPB structure offsets fit disp8 addressing
-    mov [bp+BPB.boot_drive],dl
+    ; types
+struc Dirent
+    .filename:          resb    8       ; Filename (padded with spaces)
+    .extension:         resb    3       ; Extension (padded with spaces)
+    .attributes:        resb    1       ; File attributes (hidden, system, dir, etc.)
+    .reserved_nt:       resb    1       ; Reserved for NT (lowercase flags)
+    .creation_time_ms:  resb    1       ; Creation time tenths of a second
+    .creation_time:     resw    1       ; Creation time (Hour:5, Min:6, Sec:5/2)
+    .creation_date:     resw    1       ; Creation date (Year:7, Month:4, Day:5)
+    .last_access_date:  resw    1       ; Last access date (Year:7, Month:4, Day:5)
+    .first_cluster_hi:  resw    1       ; High 16-bits of cluster (0 in FAT12)
+    .write_time:        resw    1       ; Last modification time
+    .write_date:        resw    1       ; Last modification date
+    .first_cluster_low: resw    1       ; Low 16-bits of cluster (Starting cluster)
+    .file_size:         resd    1       ; File size in bytes
+endstruc
 
-    ; Bound buffers. Valid sector sizes are powers of two, 512..4096.
-    mov ax,[bp+BPB.bytes_per_sector]
-    cmp ax,512
-    jb fail
-    cmp ax,4096
-    ja fail
-    mov dx,ax
-    dec dx
-    test ax,dx
-    jnz fail
-    ; Copy the BIOS floppy parameter table; update sector size and EOT.
-    push ds
-    lds si,[0x78]
-    mov di,0x510
-    mov cx,11
-    rep movsb
-    pop ds
-    mov dl,[bp+BPB.sectors_per_track]
-    mov [0x514],dl
-    mov dx,ax
-    mov cl,7
-    shr dx,cl
-    xor cx,cx
-.size:
-    shr dx,1
-    jz .size_done
-    inc cx
-    jmp short .size
-.size_done:
-    mov [0x513],cl
-    cli
-    mov word [0x78],0x510
-    mov [0x7a],ds
-    sti
-    cmp word [bp+BPB.hidden_sectors+2],0           ; no 32-bit disk addressing
-    jne fail
-    mul word [bp+BPB.sectors_per_fat]
-    or dx,dx
-    jnz fail
-    cmp ax,ROOT-FAT
-    ja fail
-    add ax,FAT
-    mov [FATEND],ax
-    mov cx,[bp+BPB.sectors_per_fat]
-    jcxz fail
-    mov ax,[bp+BPB.reserved_sectors]               ; first FAT, not hardcoded LBA 1
-    mov bx,FAT
-.fat:
-    call read
-    loop .fat
-
-    xor ax,ax
-    mov al,[bp+BPB.fat_count]
-    mul word [bp+BPB.sectors_per_fat]
-    add ax,[bp+BPB.reserved_sectors]
-    push ax                     ; root LBA
-    mov ax,[bp+BPB.bytes_per_sector]
-    mov cl,5
-    shr ax,cl
-    mov si,ax                   ; entries/sector
-    mov ax,[bp+BPB.root_entries]
-    or ax,ax
-    jz fail
-    dec ax
-    xor dx,dx
-    div si
-    inc ax                      ; ceil(root entries / entries per sector)
-    pop dx
-    add ax,dx
-    mov [DATA],ax
-    mov ax,dx
-    mov dx,[bp+BPB.root_entries]              ; total entries left to inspect
-.root:
-    mov bx,ROOT
-    call read                   ; AX advances, BX advances by sector size
-    mov di,ROOT
-    mov si,[bp+BPB.bytes_per_sector]
-.entry:
-    cmp byte [di],0
-    je fail
-    test byte [di+11],0x18       ; skip volume labels, directories, LFNs
-    jnz .next
-    push si
-    push di
-    mov si,name
-    mov cx,11
-    repe cmpsb
-    pop di
-    pop si
-    je found
-.next:
-    dec dx
-    jz fail
-    add di,32
-    sub si,32
-    jnz .entry
-    jmp short .root
-fail:
-    mov ax,0x0e21               ; '!': invalid/unsupported, missing, or I/O
-    mov bx,7
+    ; debugging macros
+%macro print_char 1
+    mov al, %1
+    mov ah, 0x0e
+    mov bx, 0x0007
     int 0x10
-.halt:
-    cli
-    hlt
-    jmp short .halt
-found:
-    cmp word [di+30],0
-    jne fail
-    mov ax,[di+28]
-    dec ax                      ; reject empty or >32768, round up safely
-    cmp ax,32767
-    ja fail
-    xor dx,dx
-    div word [bp+BPB.bytes_per_sector]
-    inc ax
-    mov [LEFT],ax              ; remaining file sectors
-    mov si,[di+26]
-    mov ax,0x800
-    mov es,ax
-    xor bx,bx
-.cluster:
-    mov ax,si
-    sub ax,2
-    cmp ax,0xfee                ; reject <2 and >=FF0h
-    jae fail
-    xor cx,cx
-    mov cl,[bp+BPB.sectors_per_cluster]
-    jcxz fail
-    mul cx
-    add ax,[DATA]
-.sector:
-    call read
-    dec word [LEFT]
-    jz launch
-    loop .sector
-    push bx                     ; destination offset
-    mov bx,si
-    shr bx,1
-    add bx,si
-    add bx,FAT
-    inc bx
-    cmp bx,[FATEND]             ; both bytes of packed entry must exist
-    jae fail
-    mov ax,[bx-1]
-    pop bx
-    test si,1
-    jz .even
-    mov cl,4
-    shr ax,cl
-.even:
-    and ax,0xfff
-    mov si,ax
-    jmp short .cluster
-launch:
-    mov dl,[bp+BPB.boot_drive]
-    jmp 0x800:0
+%endmacro
 
-; AX=volume-relative sector, ES:BX=buffer. Returns AX+1, BX+bytes/sector.
-; Preserves CX,DX,SI,DI,BP; BIOS standard register preservation required.
-; Single-sector transfers never cross a track or 64 KiB DMA boundary.
-read:
-    push cx
-    push dx
-    push si
-    mov si,3
-.retry:
+%macro isabuggerR 1
+    mov  al, 0x02
+    out  0x7a, al
+    mov  al, %1
+    out  0x7b, al
+%endmacro
+
+%macro isabuggerL 1
+    mov  al, 0x04
+    out  0x7a, al
+    mov  al, %1
+    out  0x7b, al
+%endmacro
+
+%macro debugcon 0-1
+    %if %0 = 1
+        mov  al, %1
+    %endif
+    out  0xe9, al
+%endmacro
+
+%macro panic 1
+    mov  byte [VARS+V.panic_code], %1
+    jmp  _panic
+%endmacro
+
+%macro assert 2
+    %1 %%end
+    panic %2
+%%end:
+%endmacro
+
+    ; skip BPB
+    jmp  short boot
+    nop
+
+    ; BIOS Parameter Block (BPB)
+bpb:
+    .oem_name:            db 'RASTAOS '
+    .bytes_per_sector:    dw 0
+    .sectors_per_cluster: db 0
+    .reserved_sectors:    dw 0
+    .fat_count:           db 0
+    .root_entries:        dw 0
+    .total_sectors_16:    dw 0
+    .media_descriptor:    db 0
+    .sectors_per_fat:     dw 0
+    .sectors_per_track:   dw 0
+    .head_count:          dw 0
+    .hidden_sectors:      dd 0
+    .total_sectors_32:    dd 0
+    .boot_drive:          db 0
+    .reserved:            db 0
+    .extended_signature:  db 0
+    .volume_serial:       dd 0
+    .volume_label:        db '            '
+    .filesystem_type:     db '        '
+    .end:
+
+boot:
+    ; setup
+    cli
+    jmp 0:setupsegs
+
+setupsegs:
+    xor  ax, ax
+    mov  ds, ax
+    mov  es, ax
+    mov  ss, ax
+    mov  sp, 0x7c00
+    cld
+    mov  [bpb.boot_drive], dl
+
+    ; Read first FAT
+    inc  ax                             ; ax=1 here
+    mov  cx, [bpb.sectors_per_fat]
+    cmp  cx, 9
+    jbe  .readfat
+    panic '0'
+.readfat:
+    mov  bx, VARS+V.fat_buffer
+    call read_sectors
+
+    ; read root directory
+    ; lba = reserved_sectors + (fat_count * sectors_per_fat)
+    ; size_in_sectors = (root_entries * 32) / bytes_per_sector
+    mov  ax, [bpb.root_entries]
+    mov  cl, 5
+    shl  ax, cl                             ; ax *= 32
+    xor  dx, dx
+    div  word [bpb.bytes_per_sector]        ; ax /= bpb.bytes_per_sector
+    mov  cx, ax                             ; cx = size in sectors
+    mov  [VARS+V.root_dir_size_sect], cx    ; we need it when calculating first data cluster lba
+
+    xor  ax, ax
+    mov  al, [bpb.fat_count]
+    mul  word [bpb.sectors_per_fat]
+    add  ax, [bpb.reserved_sectors]     ; ax = lba
+    mov  [VARS+V.root_dir_lba], ax
+
+    mov  bx, VARS+V.root_buffer
+    call read_sectors
+
+     ; find loader
+     mov  di, VARS+V.root_buffer
+find_ldr:
+     cmp  byte [di], 0
+     jne  .check_free
+     panic '1'
+
+.check_free:
+     cmp  byte [di], FAT12_FREE
+     je   .next
+
+     ; compare with loader name
+     push di
+     mov  si, loader_name
+     mov  cx, 11
+     repe cmpsb
+     pop  di
+     je   .found
+ .next:
+     add  di, Dirent_size
+     dec  dx
+     jnz  find_ldr
+ 
+ .found:
+    mov  ax, [di + Dirent.first_cluster_low]
+    mov  [VARS+V.cluster], ax
+    mov  ax, [di + Dirent.file_size]
+    mov  dx, [di + Dirent.file_size + 2]
+    mov  [VARS+V.remaining], ax
+    mov  [VARS+V.remaining+2], dx
+    or   ax, dx                     ; check both AX and DX are zero
+    jnz  .check_size
+    panic '2'
+
+.check_size:
+    int  0x12
+
+    ; shift left ax by 10, putting the high word in DX
+    ; ax = low 16 bits of (original << 10)
+    ; dx = high 16 bits = original >> 6
+    mov  dx, ax
+    mov  cl, 10
+    shl  ax, cl
+    mov  cl, 6
+    shr  dx, cl
+
+    ; compare to (dx:ax) - (LOAD_SEGMENT / 16)
+    sub  ax, LOAD_SEGMENT / 16
+    sbb  dx, 0
+    cmp  dx, [VARS+V.remaining+2]
+    ja   .load_es
+    cmp  ax, [VARS+V.remaining]
+    ja   .load_es
+    panic '3'
+
+.load_es:
+    mov  ax, LOAD_SEGMENT
+    mov  es, ax
+
+    ; save LBA of first data LBA
+    mov  ax, [VARS+V.root_dir_lba]
+    add  ax, [VARS+V.root_dir_size_sect]
+    mov  [VARS+V.first_data_lba], ax
+
+load_cluster:
+    mov  ax, [VARS+V.cluster]
+    cmp  ax, 2
+    jae  .check_clus
+    panic '4'
+
+.check_clus:
+    cmp  ax, 0x0ff0
+    jb   .read_clus
+    panic '5'
+
+.read_clus:
+    ; general formula is lba = FIRST_DATA_LBA + (cluster - 2) * sectors_per_cluster
+    sub  ax, 2
+    xor  bx, bx
+    mov  bl, [bpb.sectors_per_cluster]
+    mul  bx
+    add  ax, [VARS+V.first_data_lba]
+
+    xor  bx, bx
+    call read_sector
+
+    cmp  word [VARS+V.remaining+2], 0
+    jne  .next
+    cmp  word [VARS+V.remaining], 512
+    jbe  launch
+.next:
+    sub  word [VARS+V.remaining], 512
+    sbb  word [VARS+V.remaining+2], 0
+
+    ; next fat12 entry
+    mov  ax, [VARS+V.cluster]
+    mov  bx, ax
+    shr  bx, 1
+    add  bx, ax
+    mov  dx, [bx + VARS+V.fat_buffer]
+    test ax, 1
+    jz   .even
+    mov  cl, 4
+    shr  dx, cl
+.even:
+    and  dx, 0x0fff
+    mov  [VARS+V.cluster], dx
+    cmp  dx, 0x0ff8
+    jb   .inc_es
+    panic '6'
+
+.inc_es:
+    mov  ax, es
+    add  ax, 0x20                   ; 512 bytes
+    mov  es, ax
+    jmp  load_cluster
+
+launch:
+    mov  ax, LOAD_SEGMENT
+    mov  es, ax
+    jmp  LOAD_SEGMENT:0
+
+; Read CX sectors beginning at LBA AX into es:BX.
+; Trashes ax and bx
+read_sectors:
+    call read_sector
+    inc ax
+    add bx, 512
+    loop read_sectors
+    ret
+
+; Read one AX=LBA sector from the boot drive into ES:BX.
+; Preserves all caller-visible registers.
+read_sector:
     push ax
     push bx
-    add ax,[bp+BPB.hidden_sectors]              ; hidden sector offset (16-bit floppy LBA)
-    xor dx,dx
-    div word [bp+BPB.sectors_per_track]
-    mov cl,dl
-    inc cl
-    xor dx,dx
-    div word [bp+BPB.head_count]
-    mov ch,al
-    ror ah,1
-    ror ah,1
-    or cl,ah                   ; cylinder bits 8..9 -> CL bits 6..7
-    mov dh,dl
-    mov dl,[bp+BPB.boot_drive]
-    mov ax,0x201
-    int 0x13
-    pop bx
-    pop ax
-    jnc .ok
-    push ax
-    xor ax,ax
-    mov dl,[bp+BPB.boot_drive]
-    int 0x13
-    pop ax
-    dec si
-    jnz .retry
-    jmp fail
-.ok:
-    pop si
-    pop dx
-    pop cx
-    inc ax
-    add bx,[bp+BPB.bytes_per_sector]
-    ret
-name: db 'RASTALDRBIN'
+    push cx
+    push dx
+    push bp
+    push si
+    ;push di
 
-times 510-($-$$) db 0
+    mov  [VARS+V.disk_lba], ax
+    mov  si, 3
+.retry:
+    mov  ax, [VARS+V.disk_lba]
+    xor  dx, dx
+    div  word [bpb.sectors_per_track]
+    inc  dl
+    mov  cl, dl                    ; sector (1..18)
+    xor  dx, dx
+    div  word [bpb.head_count]
+    mov  ch, al                    ; cylinder (0..79)
+    mov  dh, dl                    ; head (0..1)
+    mov  dl, [bpb.boot_drive]
+    mov  ax, 0x0201
+    int  0x13
+    jnc  .ok
+    xor  ax, ax
+    int  0x13
+    dec  si
+    jnz  .retry                    ; recompute CHS after the BIOS reset
+    panic '7'
+.ok:
+    ;pop  di
+    pop  si
+    pop  bp
+    pop  dx
+    pop  cx
+    pop  bx
+    pop  ax
+    ret
+
+; panic with the error code in [PANIC_CODE]
+; use the panic macro
+_panic:
+    mov  al, [VARS+V.panic_code]
+    mov  ah, 0x0e
+    mov  bx, 0x0007
+    int  0x10
+
+halt:
+    jmp  halt
+
+loader_name: db "RASTALDRBIN"
+
+times 510 - ($ - $$) db 0
 dw 0xaa55
+
