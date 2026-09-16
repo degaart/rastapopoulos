@@ -1,6 +1,9 @@
 .PHONY: all clean run format bochs
 .SUFFIXES:
 
+# disable removal of build/*.asm files by make
+.SECONDARY:
+
 AS := nasm
 CC := rastacc
 LD := ld
@@ -41,20 +44,20 @@ build/%.asm: %.c *.h| build
 	$(CC) -o $@ $<
 
 build:
-	@mkdir -p $@
+	mkdir -p $@
 
 clean:
-	@rm -rf build
+	rm -rf build
 
 run:
-	@qemu-system-i386 \
+	qemu-system-i386 \
 		-drive file=build/rastapopoulos.img,format=raw,if=floppy \
 		-boot a \
 		--no-reboot
 
 bochs:
-	@bochs -q -dbg_gui
+	bochs -q -dbg_gui
 
 format:
-	@clang-format -i *.c *.h
+	clang-format -i *.c *.h
 
