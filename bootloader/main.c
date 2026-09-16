@@ -1,3 +1,5 @@
+#include <stddef.h>
+
 void putc(int ch)
 {
     asm(

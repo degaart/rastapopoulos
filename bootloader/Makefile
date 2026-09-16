@@ -5,6 +5,7 @@
 .SECONDARY:
 
 AS := nasm
+CPP := cpp
 CC := rastacc
 LD := ld
 OBJS := build/start.o \
@@ -40,8 +41,11 @@ build/start.o: start.asm | build
 build/%.o: build/%.asm | build
 	$(AS) -felf32 -o $@ $<
 
-build/%.asm: %.c *.h| build
+build/%.asm: build/%.i | build
 	$(CC) -o $@ $<
+
+build/%.i: %.c *.h| build
+	$(CPP) -o $@ -I $(RASTACC_HOME)/include -DRASTACC $<
 
 build:
 	mkdir -p $@
