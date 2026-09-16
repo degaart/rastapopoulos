@@ -1,0 +1,6 @@
+export PREFIX=
+export HOSTDATA=
+export RASTACC_HOME=
+
+export PATH="$RASTACC_HOME:$PREFIX/bin:$PREFIX/sbin:$PATH"
+
