@@ -6,8 +6,16 @@
 
 AS := nasm
 CPP := cpp
-CC := rastacc
-LD := ld
+CC := ia16-elf-gcc
+CFLAGS := -DRASTA -DRASTA_BOOTLOADER -DRASTA_KERNEL \
+		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
+		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
+		  -mshort-jumps -march=i8088
+LDFLAGS := -nostdlib \
+		   -T rastaldr.ld \
+		   -Wl,-Map=build/rastaldr.map \
+		   -Wl,--gc-sections \
+		   -lgcc
 OBJS := build/start.o \
 		build/main.o \
 		build/format.o
@@ -30,24 +38,13 @@ build/bootsect.bin: bootsect.asm | build
 	$(AS) -fbin -o $@ $<
 
 build/rastaldr.bin: $(OBJS) | build
-	$(LD) \
-		-m elf_i386 \
-		-T rastaldr.ld \
-		-Map=build/rastaldr.map \
-		-o $@ $^ \
-		-L $(RASTACC_HOME)/runtime -lcc8086
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 build/start.o: start.asm | build
 	$(AS) -felf32 -o $@ $<
 
-build/%.o: build/%.asm | build
-	$(AS) -felf32 -o $@ $<
-
-build/%.asm: build/%.i | build
-	$(CC) -o $@ $<
-
-build/%.i: %.c *.h| build
-	$(CPP) -o $@ -I $(RASTACC_HOME)/include -DRASTACC $<
+build/%.o: %.c | build
+	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
 
 build:
 	mkdir -p $@

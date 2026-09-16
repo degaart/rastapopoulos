@@ -28,24 +28,26 @@ struct BPB
 
 void putc(int ch)
 {
-    asm(
-        "    mov al, [bp+4]\n"
-        "    cmp al, 10\n"
-        "    jne .1\n"
-        "    push ax\n"
-        "    mov al, 13\n"
-        "    mov ah, 0xe\n"
-        "    mov bx, 0x7\n"
-        "    int 0x10\n"
-        "    pop ax\n"
-        ".1:\n"
-        "    mov ah, 0xe\n"
-        "    mov bx, 0x7\n"
-        "    int 0x10\n"
+    asm volatile (
+        "cmp al, 10\n\t"
+        "jne 1f\n\t"
+        "push ax\n\t"
+        "mov al, 13\n\t"
+        "mov ah, 0xe\n\t"
+        "mov bx, 0x7\n\t"
+        "int 0x10\n\t"
+        "pop ax\n\t"
+        "1:\n\t"
+        "mov ah, 0xe\n\t"
+        "mov bx, 0x7\n\t"
+        "int 0x10"
+        : "+a"(ch)
+        :
+        : "bx", "bp", "cc", "memory"
     );
 }
 
-void format_out(void*, char ch)
+void format_out(void* unused, char ch)
 {
     putc(ch);
 }
@@ -59,20 +61,24 @@ int printf(const char* fmt, ...)
     return ret;
 }
 
-naked unsigned low_mem_size()
+unsigned int12()
 {
-    asm(
-        "    int 0x12\n"
-        "    ret\n"
-        );
+    /* gcc-ia16 specifies bx, bp and flags should be preserved inside asm blocks */
+    unsigned ax;
+    asm volatile(
+        "int 0x12\n\t"
+        : "=a"(ax)
+        :
+        : "bx", "bp", "cc", "memory"
+    );
+    return ax;
 }
 
 void main()
 {
     /* Get conventional memory size */
-    uint32_t convmem_size = low_mem_size() * 1024U;
-    unsigned ng = convmem_size / 1024;
-    printf("Conventional memory: %ub\n", ng);
+    unsigned long mem_size = int12() * 1024UL;
+    printf("Conventional memory: %lu bytes\n", mem_size);
 
     /* Get boot drive number, stored in the BPB at 0x7c00 */
     const struct BPB* bpb = (const struct BPB*)0x7c00;
