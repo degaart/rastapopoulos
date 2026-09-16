@@ -10,7 +10,7 @@ void putc(int ch)
    );
 }
 
-void cmain()
+void main()
 {
     putc('%');
 }

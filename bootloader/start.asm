@@ -32,8 +32,8 @@ clear_bss:
 
     ; call C main function
 call_main:
-    extern cmain
-    call cmain
+    extern main
+    call main
     jmp halt
 
 section .text
