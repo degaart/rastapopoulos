@@ -20,6 +20,7 @@ struc V
     .root_dir_lba           resw 1
     .root_dir_size_sect     resw 1
     .first_data_lba         resw 1
+    .read_retry             resw 1
     .fat_buffer             resb 512 * 9                    ; intentionally limit to 9 sectors
     .root_buffer            resb 1                          ; variable-length
 endstruc
@@ -122,17 +123,37 @@ setupsegs:
     cld
     mov  [bpb.boot_drive], dl
 
-; AX: lba of sector to read
-; :wa
+    mov  ax, 7
+    mov  bx, 0x8000
+    call read_sector
+    cmp  ah, 0
+    jz   halt
 
+    mov  byte [VARS+V.panic_code], '!'
+    jmp  _panic
+
+; read one sector from boot_drive
+; AX: lba of sector to read
+; ES:BX: destination
+; On return: AH: status (0 = success)
+;            AL: Count of read sectors
+; retries 3 times in case of read error
+; Assumes int 0x13 does not trash any registers except AX
 read_sector:
     ; C = LBA / (H x S)
     ; H = (LBA / S) % H
     ; S = (LBA % S) + 1
     ; CX = ((C & 0xff) << 8)|((C & 0x300) >> 2)|S
-    LBA     equ 7
+    push cx
+    push dx
 
-    mov  ax, LBA
+    mov  word [VARS+V.read_retry], 3
+
+.loop:
+    mov  dx, [VARS+V.read_retry]
+    cmp  dx, 0
+    je   .return
+
     xor  dx, dx
     div  word [bpb.sectors_per_track]
     ; AX = LBA / sectors_per_track
@@ -159,8 +180,19 @@ read_sector:
     mov  ah, 2          ; func
     mov  al, 1          ; sect count
     mov  dl, [bpb.boot_drive]
-    mov  bx, 0x8000     ; dest
     int  0x13
+    jnc  .return        ; pop does not change flags
+
+    mov  dx, [VARS+V.read_retry]
+    dec  dx
+    mov  [VARS+V.read_retry], dx
+    jmp  .loop
+
+.return:
+    pop dx
+    pop cx
+    ret
+
     jnc  halt
     mov  byte [VARS+V.panic_code], '!'
     jmp  _panic
