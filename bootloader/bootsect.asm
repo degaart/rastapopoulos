@@ -183,6 +183,9 @@ read_sector:
     int  0x13
     jnc  .return        ; pop does not change flags
 
+    xor  ah, ah
+    int  0x13
+
     mov  dx, [VARS+V.read_retry]
     dec  dx
     mov  [VARS+V.read_retry], dx
