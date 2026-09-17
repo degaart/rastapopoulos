@@ -1,22 +1,22 @@
 ; vim: tabstop=4 shiftwidth=4 expandtab nocindent autoindent:
 ; Loads RASTALDR.BIN at 800:0000 (physical 0x8000) and jumps to it.
+; Some parts of the code assume 512-byte sectors, and I'm too lazy rn to fix that
 bits    16
 cpu     8086
 org     0x7c00
 
     ; constants
     FAT12_FREE              equ 0xe5
-    FIRST_DATA_LBA          equ 7
-    LOAD_SEGMENT            equ 0x0800
+    LOAD_SEGMENT            equ 0x800
+    BAD_CLUSTER             equ 0xff7
+    END_OF_CHAIN            equ 0xff8
 
     ; Work buffers
     VARS                    equ 0x500
 struc V
-    .disk_lba               resw 1
     .cluster                resw 1
     .root_dir_lba           resw 1
     .root_dir_size_sect     resw 1
-    .first_data_lba         resw 1
     .read_retry             resw 1
     .paragraphs_per_cluster resw 1
     .fat_buffer             resb 512 * 9                    ; intentionally limit to 9 sectors
@@ -154,9 +154,9 @@ find_ldr:
     mov ax, [di+Dirent.first_cluster_low]
     mov word [VARS+V.cluster], ax
 
-    ; bx is always 0x8000
+    ; bx stays the same
     ; but es is incremented each loop
-    mov ax, 0x800
+    mov ax, LOAD_SEGMENT
     mov es, ax
 
 load_file:
@@ -203,9 +203,9 @@ load_file:
 .check:
     cmp ax, 2
     jb bad
-    cmp ax, 0xff7
+    cmp ax, BAD_CLUSTER                 ; bad sector
     je bad
-    cmp ax, 0x0ff8          ; end of cluster chain
+    cmp ax, END_OF_CHAIN                ; end of cluster chain
     jae done_loading
 
     mov [VARS+V.cluster], ax
@@ -213,14 +213,14 @@ load_file:
 
 bad:
     mov  al, 'B'
-    mov  ah, 0x0e
-    mov  bx, 0x0007
+    mov  ah, 0xe
+    mov  bx, 0x7
     int  0x10
     jmp  halt
 
 done_loading:
     xchg bx, bx
-    jmp 0x800:0
+    jmp LOAD_SEGMENT:0
 
 ; load cluster from boot_drive
 ; AX: cluster number
