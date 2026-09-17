@@ -1,4 +1,7 @@
 #include "allocator.h"
+#include "format.h"
+
+extern void halt(void);
 
 struct FreeBlock
 {
@@ -6,14 +9,14 @@ struct FreeBlock
     struct FreeBlock* next;
 };
 
-static struct FreeBlock* freeList;
+static struct FreeBlock* free_list;
 
-void heapInit(void* arena, size_t size)
+void heap_init(void* arena, size_t size)
 {
     unsigned char* p = arena;
 
     if (!size) {
-        freeList = 0;
+        free_list = 0;
         return;
     }
 
@@ -25,18 +28,18 @@ void heapInit(void* arena, size_t size)
     size &= (size_t)~1;
 
     if (size < sizeof(struct FreeBlock)) {
-        freeList = 0;
+        free_list = 0;
         return;
     }
 
-    freeList = (struct FreeBlock*)p;
-    freeList->size = size;
-    freeList->next = 0;
+    free_list = (struct FreeBlock*)p;
+    free_list->size = size;
+    free_list->next = 0;
 }
 
 void* malloc(size_t size)
 {
-    struct FreeBlock** link = &freeList;
+    struct FreeBlock** link = &free_list;
     struct FreeBlock* block;
     struct FreeBlock* rest;
     size_t needed;
@@ -61,6 +64,8 @@ void* malloc(size_t size)
         }
         link = &block->next;
     }
+    printf("Out of memory\n");
+    halt();
     return 0;
 }
 
@@ -76,7 +81,7 @@ void free(void* ptr)
     block = (struct FreeBlock*)((unsigned char*)ptr - sizeof(size_t));
 
     /* Keep the list address-sorted so neighboring blocks can be merged */
-    next = freeList;
+    next = free_list;
     while (next && next < block) {
         prev = next;
         next = next->next;
@@ -86,7 +91,7 @@ void free(void* ptr)
     if (prev)
         prev->next = block;
     else
-        freeList = block;
+        free_list = block;
 
     if (next && (unsigned char*)block + block->size == (unsigned char*)next) {
         block->size += next->size;

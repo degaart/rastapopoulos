@@ -18,7 +18,10 @@ LDFLAGS := -nostdlib \
 		   -lgcc
 OBJS := build/start.o \
 		build/main.o \
-		build/format.o
+		build/format.o \
+		build/allocator.o \
+		build/int13.o \
+		build/string.o
 
 all: build/rastapopoulos.img
 
@@ -40,7 +43,7 @@ build/bootsect.bin: bootsect.asm | build
 build/rastaldr.bin: $(OBJS) | build
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-build/start.o: start.asm | build
+build/%.o: %.asm | build
 	$(AS) -felf32 -o $@ $<
 
 build/%.o: %.c | build

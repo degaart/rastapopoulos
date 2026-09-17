@@ -1,6 +1,22 @@
+#include "allocator.h"
+#include "format.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "format.h"
+
+extern void halt(void);
+
+#define debugbreak() \
+    asm volatile("xchg bx, bx":::"memory")
+
+struct Regs
+{
+    uint16_t ax, bx, cx, dx;
+    uint16_t si, di, bp, es;
+    uint16_t cf;
+};
+
+void int13(struct Regs *regs);
 
 struct BPB
 {
@@ -24,7 +40,7 @@ struct BPB
     uint32_t volume_serial;
     uint8_t volume_label[11];
     uint8_t filesystem_type[8];
-};
+} __attribute__((packed));
 
 void putc(int ch)
 {
@@ -74,16 +90,61 @@ unsigned int12()
     return ax;
 }
 
+bool read_sector(const struct BPB* bpb, void* buffer, unsigned lba)
+{
+    /*
+     * C = LBA / (HeadCount * Spt)
+     * H = (LBA / Spt) % HeadCount
+     * S = (LBA % Spt) + 1
+     * CX = ((C & 0xff) << 8)|((C & 0x300) >> 2)|S
+     */
+    unsigned cyl = lba / (bpb->head_count * bpb->sectors_per_track);
+    unsigned head = (lba / bpb->sectors_per_track) % bpb->head_count;
+    unsigned sect = (lba % bpb->sectors_per_track) + 1;
+
+    struct Regs regs = {0};
+    regs.ax = 0x201;
+    regs.bx = (uint16_t)buffer;
+    regs.cx = ((cyl & 0xff) << 8)|((cyl & 0x300) >> 2)|sect;
+    regs.dx = bpb->boot_drive|(head << 8);
+    regs.es = 0x0;
+
+    int13(&regs);
+    return regs.cf == 0;
+}
+
+bool read_sectors(const struct BPB* bpb, void* buffer, unsigned lba, unsigned count)
+{
+    uint8_t* ptr = buffer;
+    while(count--)
+    {
+        if (!read_sector(bpb, ptr, lba))
+        {
+            return false;
+        }
+        lba++;
+        ptr+=bpb->bytes_per_sector;
+    }
+
+    return true;
+}
+
 void main()
 {
     /* Get conventional memory size */
     unsigned long mem_size = int12() * 1024UL;
     printf("Conventional memory: %lu bytes\n", mem_size);
 
+    /* Setup heap, notice out total address space is just 64Kb */
+    extern void* __bss_end;
+    size_t heap_size = (mem_size > 65535 ? 65535 : mem_size) - (uintptr_t)&__bss_end;
+    printf("Heap: %p %u bytes\n", &__bss_end, heap_size);
+    heap_init(&__bss_end, heap_size);
+
     /* Get boot drive number, stored in the BPB at 0x7c00 */
     const struct BPB* bpb = (const struct BPB*)0x7c00;
     uint8_t boot_drive = bpb->boot_drive;
-    printf("Boot drive: %d\n", (int)boot_drive);
+    printf("Boot drive: %p %d\n", &boot_drive, (int)boot_drive);
 
     /* Validate sector size (powers of two from 512 to 4096) */
     if (bpb->bytes_per_sector < 512 || bpb->bytes_per_sector > 4096 ||
@@ -93,6 +154,26 @@ void main()
     }
 
     /* Read FAT */
+    size_t fat_size = bpb->sectors_per_fat * bpb->bytes_per_sector;
+    uint16_t* fat_buffer = malloc(fat_size);
+    bool ret = read_sectors(bpb, fat_buffer, 0x1, bpb->sectors_per_fat);
+    if (!ret)
+    {
+        printf("Failed to read FAT\n");
+        halt();
+    }
+
+    /* read root dir */
+    unsigned root_dir_lba = bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
+    unsigned root_dir_sectors = (bpb->root_entries * 32) / bpb->bytes_per_sector;
+    uint16_t* root_dir_buffer = malloc(root_dir_sectors * bpb->bytes_per_sector);
+    ret = read_sectors(bpb, root_dir_buffer, root_dir_lba, root_dir_sectors);
+    if (!ret)
+    {
+        printf("Failed to read root dir\n");
+        halt();
+    }
+    printf("OK\n");
 }
 
 

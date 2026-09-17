@@ -219,7 +219,6 @@ bad:
     jmp  halt
 
 done_loading:
-    xchg bx, bx
     jmp LOAD_SEGMENT:0
 
 ; load cluster from boot_drive
@@ -298,9 +297,9 @@ read_sectors:
 ; retries 3 times in case of read error
 ; Assumes int 0x13 does not trash any registers except AX
 read_sector:
-    ; C = LBA / (H x S)
-    ; H = (LBA / S) % H
-    ; S = (LBA % S) + 1
+    ; C = LBA / (HeadCount * Spt)
+    ; H = (LBA / Spt) % HeadCount
+    ; S = (LBA % Spt) + 1
     ; CX = ((C & 0xff) << 8)|((C & 0x300) >> 2)|S
     push cx
     push dx
