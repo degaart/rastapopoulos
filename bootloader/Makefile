@@ -7,11 +7,13 @@
 AS := nasm
 CPP := cpp
 CC := ia16-elf-gcc
+STRIP := i686-elf-strip
 IMAGE := build/rastapopoulos.img
 CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
-		  -mshort-jumps -march=i8088 -Wall
+		  -mshort-jumps -march=i8088 \
+		  -Wall -Wno-unused-variable
 LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \
 		   -Wl,-Map=build/rastaldr.map \
@@ -37,7 +39,8 @@ $(IMAGE): build/bootsect.bin build/rastaldr.bin | build
 	dd if=build/bootsect.bin of=$(IMAGE) bs=512 count=1 conv=notrunc status=none
 	dd if=build/bpb.bin of=$(IMAGE) bs=1 seek=11 conv=notrunc status=none
 	mcopy -o -i $(IMAGE) build/rastaldr.bin ::/RASTALDR.BIN
-	mcopy -o -i $(IMAGE) ../kernel/build/kernel.elf ::/KERNEL.ELF
+	$(STRIP) ../kernel/build/kernel.elf -o build/kernel.stripped.elf
+	mcopy -o -i $(IMAGE) build/kernel.stripped.elf ::/KERNEL.ELF
 	cp $(IMAGE) $(HOSTDATA)
 
 build/bootsect.bin: bootsect.asm $(HEADERS) | build

@@ -69,6 +69,19 @@ void* malloc(size_t size)
     return 0;
 }
 
+size_t heap_info()
+{
+    size_t ret;
+    struct FreeBlock** link = &free_list;
+    struct FreeBlock* block;
+    while ((block = *link) != 0) {
+        if (block->size >= sizeof(struct FreeBlock))
+            ret += block->size - sizeof(struct FreeBlock);
+        link = &block->next;
+    }
+    return ret;
+}
+
 void free(void* ptr)
 {
     struct FreeBlock* block;
@@ -103,3 +116,4 @@ void free(void* ptr)
         prev->next = block->next;
     }
 }
+
