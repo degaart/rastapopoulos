@@ -11,7 +11,7 @@ IMAGE := build/rastapopoulos.img
 CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
-		  -mshort-jumps -march=i8088
+		  -mshort-jumps -march=i8088 -Wall
 LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \
 		   -Wl,-Map=build/rastaldr.map \

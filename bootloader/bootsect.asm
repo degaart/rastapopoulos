@@ -95,6 +95,9 @@ setupsegs:
     ; read root directory
     ; lba = reserved_sectors + (fat_count * sectors_per_fat)
     ; sectors = (root_entries) * 32 / bytes_per_sector
+    ; this is wrong, the sector count should be aligned up
+    ; the correct formula is:
+    ;   sectors = ((root_entries * 32) + bytes_per_sector - 1) / bytes_per_sector
     mov ax, [bpb.root_entries]
     mov cl, 5
     shl ax, cl                          ; ax *= 32
@@ -201,6 +204,7 @@ load_file:
     and ax, 0xfff
 
 .check:
+    ; This lacks a check for reserved clusters (0xFF0–0xFF6)
     cmp ax, 2
     jb bad
     cmp ax, BAD_CLUSTER                 ; bad sector

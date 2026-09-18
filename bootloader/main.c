@@ -1,6 +1,7 @@
 #include "allocator.h"
 #include "format.h"
 #include "string.h"
+#include "multiboot.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -49,6 +50,11 @@ struct BPB
 } __attribute__((packed));
 
 #define FAT12_FREE 0xe5
+#define FAT12_FIRST 2
+#define FAT12_RSVD 0xff0
+#define FAT12_RSVD_END 0xff6
+#define FAT12_BAD 0xff7
+#define FAT12_END 0xff8
 struct Dirent
 {
     char filename[8];         /* Filename (padded with spaces) */
@@ -65,6 +71,13 @@ struct Dirent
     uint16_t first_cluster_low; /* Low 16-bits of cluster (Starting cluster) */
     uint32_t file_size;         /* File size in bytes */
 } __attribute__((packed));
+
+struct File
+{
+    uint32_t size;
+    uint32_t offset;
+    uint16_t current_cluster;
+};
 
 void putc(int ch)
 {
@@ -172,7 +185,7 @@ void main()
 
     /* Read FAT */
     size_t fat_size = bpb->sectors_per_fat * bpb->bytes_per_sector;
-    void* fat_buffer = malloc(fat_size);
+    uint8_t* fat_buffer = malloc(fat_size);
     bool ret = read_sectors(bpb, fat_buffer, 0x1, bpb->sectors_per_fat);
     if (!ret) {
         printf("Failed to read FAT\n");
@@ -207,7 +220,66 @@ void main()
     if (!kernel_entry) {
         printf("KERNEL.ELF not found\n");
         halt();
+    } else if(kernel_entry->file_size < 512) {
+        printf("Invalid kernel, size=%lu bytes\n", kernel_entry->file_size);
+        halt();
     }
+
+    /* Walk cluster chain */
+    uint16_t first_data_lba = bpb->reserved_sectors +
+                              (bpb->fat_count * bpb->sectors_per_fat) +
+                              ((bpb->root_entries * 32 + bpb->bytes_per_sector - 1) / bpb->bytes_per_sector);
+    assert(first_data_lba == 7);
+    uint16_t cluster = kernel_entry->first_cluster_low;
+    while (true)
+    {
+        if (cluster < FAT12_FIRST ||
+            cluster == FAT12_BAD ||
+            (cluster >= FAT12_RSVD && cluster <= FAT12_RSVD_END)) {
+            printf("Invalid cluster detected\n");
+            halt();
+        } else if (cluster >= FAT12_END) {
+            break;
+        }
+
+        uint16_t lba = first_data_lba +
+                       (cluster - 2) * bpb->sectors_per_cluster;
+        printf("Cluster: %u, lba %u\n", cluster, lba);
+
+        /* Next cluster */
+        size_t offset = cluster + (cluster / 2);
+        uint16_t value = fat_buffer[offset] | ((uint16_t)fat_buffer[offset + 1] << 8);
+        if(cluster & 1) { /* odd */
+            cluster = value >> 4;
+        } else { /* even */
+            cluster = value & 0xfff;
+        }
+    }
+
+    /*
+     * Multiboot1 header: fits within the first 8kb of the image,
+     * and must be dword-aligned
+     * So, read the first 8kb of the image
+     */
+    //struct File file;
+    //file.size = entry->file_size;
+    //file.offset = 0;
+    //file.current_cluster = entry->first_cluster_low;
+
+    /*
+     * Where to load the kernel?
+     * The lowest config I can find is Epson PC AX3, which has 256Kb of RAM
+     * However, no document stating that configuration was commercially available
+     * exists.
+     * The most plausible one is Dell System 316SX which has 512Kb of RAM.
+     * That being said, < 1M on a 386 is absurd and rare. Do we really need to
+     * support them?
+     * Let's settle on 4Mb RAM minimum as config... that seems plausible
+     * and is the minimum for Win95 anyway.
+     * Now, that being said, Xenix required only 1Mb and Sysvr3 required 2Mb
+     * Sigh...
+     */
+
     printf("OK\n");
 }
 
