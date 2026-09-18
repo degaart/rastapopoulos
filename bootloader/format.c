@@ -120,8 +120,8 @@ int vformat(FormatOutputFn output, void* data, const char* format,
                         --width;
                 }
 
-                count += format_unsigned_long(
-                    output, data, magnitude, 10, width);
+                count +=
+                    format_unsigned_long(output, data, magnitude, 10, width);
             } else {
                 int value = va_arg(arguments, int);
                 unsigned int magnitude = (unsigned int)value;
@@ -163,8 +163,8 @@ int vformat(FormatOutputFn output, void* data, const char* format,
             else
                 width = 0;
 
-            count += format_unsigned(output, data, (unsigned int)(uintptr_t)pointer, 16,
-                                     width);
+            count += format_unsigned(
+                output, data, (unsigned int)(uintptr_t)pointer, 16, width);
             break;
         }
 

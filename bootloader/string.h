@@ -3,3 +3,19 @@
 #include <stddef.h>
 
 void* memset(void* dest, int ch, size_t count);
+int memcmp(const void* lhs, const void* rhs, size_t count);
+void* memcpy(void* restrict dest, const void* restrict src, size_t count);
+void* memchr(const void* ptr, int ch, size_t count);
+void* memmove(void* dest, const void* src, size_t count);
+size_t strlen(const char* str);
+size_t strnlen_s(const char* str, size_t strsz);
+int strcmp(const char* lhs, const char* rhs);
+int strncmp(const char* lhs, const char* rhs, size_t count);
+char* strchr(const char* str, int ch);
+char* strrchr(const char* str, int ch);
+char* strstr(const char* str, const char* substr);
+int strcpy_s(char* restrict dest, size_t destsz, const char* restrict src);
+int strncpy_s(char* restrict dest, size_t destsz, const char* restrict src,
+              size_t count);
+int strcat_s(char* restrict dest, size_t destsz, const char* restrict src);
+

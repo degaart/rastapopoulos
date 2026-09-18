@@ -131,7 +131,7 @@ find_ldr:
     je .found
  .next:
     add di, Dirent_size
-    dec dx
+    ; dec dx
     jnz find_ldr
 
  .found:

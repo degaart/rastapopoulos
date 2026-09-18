@@ -10,4 +10,3 @@ int format(FormatOutputFn output, void* data, const char* fmt, ...);
 int printf(const char* fmt, ...);
 #endif
 
-
