@@ -30,7 +30,7 @@ build/test_fat12: build/test_fat12.o build/fat12.o build/crc32.o | build
 build/test_fat12.o: test_fat12.c | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-build/fat12.o: fat12.c | build
+build/fat12.o: ../bootloader/fat12.c | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 build/crc32.o: ../bootloader/crc32.c | build

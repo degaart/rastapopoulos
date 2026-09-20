@@ -10,7 +10,7 @@
 
 static int _fd;
 
-const char* __asan_default_options() { return "detect_leaks=0"; }
+//const char* __asan_default_options() { return "detect_leaks=0"; }
 
 void _panic(const char* file, int line, const char* fmt, ...)
 {
@@ -88,9 +88,12 @@ int main()
 
         crc = crc32_update(crc, buffer, nread);
     }
+    fat12_close(&file);
+
     crc = crc32_finish(crc);
     assert(crc == 0x1CAD98B);
     printf("\ncrc32: 0x%08X\n", crc);
+    free(fat_buffer);
     return 0;
 }
 

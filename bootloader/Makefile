@@ -13,6 +13,7 @@ CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
 		  -mshort-jumps -march=i8088 \
+		  -I. \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \
@@ -26,7 +27,9 @@ OBJS := build/start.o \
 		build/allocator.o \
 		build/int13.o \
 		build/string.o \
-		build/crc32.o
+		build/crc32.o \
+		build/fat12.o \
+		build/stdio.o
 
 all: $(IMAGE)
 

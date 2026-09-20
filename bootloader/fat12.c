@@ -2,7 +2,7 @@
 #include "rastaldr.h"
 #include <string.h>
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 static bool read_cluster(const struct BPB* bpb, void* buffer, unsigned cluster)
 {
@@ -98,40 +98,6 @@ bool fat12_open(const struct BPB* bpb,
     return true;
 }
 
-int fat12_read_cluster(struct File* file, void* buffer, size_t buffer_size)
-{
-    uint32_t cluster_size = file->bpb->sectors_per_cluster * file->bpb->bytes_per_sector;
-    if (buffer_size < cluster_size) {
-        return -1;
-    } if (file->cluster >= FAT12_FREE) {
-        return 0;
-    }
-
-    bool ret = read_cluster(file->bpb, buffer, file->cluster);
-    if (!ret) {
-        return -1;
-    }
-
-    /* update cluster */
-    size_t offset = file->cluster + (file->cluster / 2);
-    uint16_t value =
-        file->fat[offset] | ((uint16_t)file->fat[offset + 1] << 8);
-    if (file->cluster & 1) {       /* odd */
-        file->cluster = value >> 4;
-    } else {                            /* even */
-        file->cluster = value & 0xfff;
-    }
-
-    uint32_t nread = cluster_size;
-    if (file->offset + cluster_size > file->size) {
-        nread = file->size - file->offset;
-    } else {
-        nread = cluster_size;
-    }
-    file->offset += nread;
-    return nread;
-}
-
 static uint32_t next_cluster(const uint8_t* fat, uint32_t cluster) {
     size_t offset = cluster + (cluster / 2);
     uint16_t value =
@@ -207,5 +173,12 @@ int fat12_read(struct File* file, void* buffer, size_t size)
         size -= nread;
     }
     return result;
+}
+
+void fat12_close(struct File* file)
+{
+    if (file->buffer) {
+        free(file->buffer);
+    }
 }
 

@@ -4,8 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-struct BPB;
-
 #define FAT12_FREE     0xe5
 #define FAT12_FIRST    2
 #define FAT12_RSVD     0xff0
@@ -44,6 +42,6 @@ struct File
 bool fat12_open(const struct BPB* bpb,
           const void* fat,
           struct File* file, const char* filename);
-int fat12_read_cluster(struct File* file, void* buffer, size_t buffer_size);
 int fat12_read(struct File* file, void* buffer, size_t size);
+void fat12_close(struct File* file);
 
