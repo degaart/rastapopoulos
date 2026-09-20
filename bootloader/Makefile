@@ -13,7 +13,7 @@ CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
 		  -mshort-jumps -march=i8088 \
-		  -Wall -Wno-unused-variable
+		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \
 		   -Wl,-Map=build/rastaldr.map \
@@ -25,7 +25,8 @@ OBJS := build/start.o \
 		build/format.o \
 		build/allocator.o \
 		build/int13.o \
-		build/string.o
+		build/string.o \
+		build/crc32.o
 
 all: $(IMAGE)
 
@@ -41,6 +42,8 @@ $(IMAGE): build/bootsect.bin build/rastaldr.bin | build
 	mcopy -o -i $(IMAGE) build/rastaldr.bin ::/RASTALDR.BIN
 	$(STRIP) ../kernel/build/kernel.elf -o build/kernel.stripped.elf
 	mcopy -o -i $(IMAGE) build/kernel.stripped.elf ::/KERNEL.ELF
+	../tools/build/calc_crc32 < build/kernel.stripped.elf > build/kernel.crc
+	mcopy -o -i $(IMAGE) build/kernel.crc ::/KERNEL.CRC
 	cp $(IMAGE) $(HOSTDATA)
 
 build/bootsect.bin: bootsect.asm $(HEADERS) | build
@@ -61,7 +64,7 @@ build:
 clean:
 	rm -rf build
 
-run:
+run: all
 	qemu-system-i386 \
 		-drive file=$(IMAGE),format=raw,if=floppy \
 		-boot a \

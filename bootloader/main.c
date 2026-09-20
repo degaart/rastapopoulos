@@ -77,6 +77,7 @@ struct File
     uint32_t size;
     uint32_t offset;
     uint16_t current_cluster;
+    const struct BPB* bpb;
 };
 
 void putc(int ch)
@@ -161,6 +162,13 @@ bool read_sectors(const struct BPB* bpb, void* buffer, unsigned lba,
 
 bool read_cluster(const struct BPB* bpb, void* buffer, unsigned cluster)
 {
+    if (cluster < FAT12_FIRST || cluster == FAT12_BAD ||
+        (cluster >= FAT12_RSVD && cluster <= FAT12_RSVD_END) ||
+        (cluster >= FAT12_END)) {
+        printf("Invalid cluster detected\n");
+        return false;
+    }
+
     uint16_t first_data_lba =
         bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat) +
         ((bpb->root_entries * 32 + bpb->bytes_per_sector - 1) /
@@ -168,6 +176,144 @@ bool read_cluster(const struct BPB* bpb, void* buffer, unsigned cluster)
     uint16_t lba = first_data_lba + (cluster - 2) * bpb->sectors_per_cluster;
 
     return read_sectors(bpb, buffer, lba, bpb->sectors_per_cluster);
+}
+
+bool open(const struct BPB* bpb,
+          const void* fat,
+          struct File* file, const char* filename)
+{
+    /* transform filename */
+    char name_buffer[8+3];
+    memset(name_buffer, ' ', sizeof(name_buffer));
+
+    char* ext = strrchr(filename, '.');
+    if (ext) {
+        if (strlen(ext) > 4) {
+            return false;
+        } else if(ext - filename > 8) {
+            return false;
+        }
+        memcpy(name_buffer, filename, ext - filename);
+        memcpy(name_buffer + 8, ext + 1, strlen(ext));
+    } else {
+        if (strlen(filename) > 8) {
+            return false;
+        }
+        memcpy(name_buffer, filename, strlen(filename));
+    }
+
+    for (int i = 0; i < 8+3; i++) {
+        if (name_buffer[i] >= 'a' && name_buffer[i] <= 'z') {
+            name_buffer[i] = name_buffer[i] - 'a' + 'A';
+        }
+    }
+
+    /* read root dir */
+    unsigned root_dir_lba =
+        bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
+    unsigned root_dir_sectors =
+        (bpb->root_entries * 32) / bpb->bytes_per_sector;
+    struct Dirent* root_dir_buffer =
+        malloc(root_dir_sectors * bpb->bytes_per_sector);
+    bool ret = read_sectors(bpb, root_dir_buffer, root_dir_lba, root_dir_sectors);
+    if (!ret) {
+        printf("Failed to read root dir\n");
+        halt();
+    }
+
+    /* Find in root dir */
+    const struct Dirent* entry = root_dir_buffer;
+    const struct Dirent* file_entry = NULL;
+    for (; entry->filename[0]; entry++) {
+        if (entry->filename[0] == FAT12_FREE) {
+            continue;
+        } else if (!memcmp(entry->filename, name_buffer, sizeof(name_buffer))) {
+            file_entry = entry;
+            break;
+        }
+    }
+
+    if (!file_entry) {
+        free(root_dir_buffer);
+        printf("File not found: %s\n", filename);
+        return false;
+    } else if (entry->first_cluster_hi) {
+        free(root_dir_buffer);
+        printf("Unsupported first cluster for file: %s\n", filename);
+        return false;
+    }
+
+    file->size = entry->file_size;
+    file->offset = 0;
+    file->current_cluster = entry->first_cluster_low;
+    file->bpb = bpb;
+
+    free(root_dir_buffer);
+    return true;
+}
+
+int read_from_buffer(struct File* file, void* buffer, size_t size)
+{
+    if (size > file->size - file->offset) {
+        size = file->size - file->offset;
+    }
+
+    unsigned available = file->buffer_size - file->buffer_offset;
+    if (available == 0) {
+        return 0;
+    }
+
+    unsigned nread = size > available ? available : size;
+    memcpy(buffer, file->buffer + file->buffer_offset, nread);
+    file->buffer_offset += nread;
+    file->offset += nread;
+    return nread;
+}
+
+int read(struct File* file, void* buffer, size_t size)
+{
+    int result = 0;
+    if (size == 0) {
+        return result;
+    } else if (file->offset >= file->size) {
+        return result;
+    }
+
+    unsigned nread = read_from_buffer(file, buffer, size);
+    size -= nread;
+    result += nread;
+
+    if (size == 0) {
+        return result;
+    } else if (file->offset >= file->size) {
+        return result;
+    }
+
+    /* refill buffer */
+    if (!read_cluster(file->bpb, file->buffer, file->next_cluster)) {
+        printf("Error reading cluster 0x%X\n", file->next_cluster);
+        return false;
+    }
+    file->buffer_offset = 0;
+
+    /* update next cluster */
+    if (file->next_cluster < FAT12_END) {
+        size_t offset = file->next_cluster + (file->next_cluster / 2);
+        uint16_t value =
+            file->fat[offset] | ((uint16_t)file->fat[offset + 1] << 8);
+        if (file->next_cluster & 1) {       /* odd */
+            file->next_cluster = value >> 4;
+        } else {                            /* even */
+            file->next_cluster = value & 0xfff;
+        }
+    }
+
+    /* Copy the remaining bytes */
+    unsigned nread = read_from_buffer(file, buffer, size);
+    size -= nread;
+    result += nread;
+
+    return result;
 }
 
 void main()
@@ -207,6 +353,29 @@ void main()
         halt();
     }
 
+    printf("Free mem: %u bytes\n", heap_info());
+    struct File file;
+    if (!open(bpb, fat_buffer, &file, "kernel.elf")) {
+        printf("Failed to open kernel\n");
+        halt();
+    }
+    printf("Free mem: %u bytes\n", heap_info());
+
+    uint32_t expected_crc = 0xffffffff;
+    int r = read(&file, &expected_crc, sizeof(expected_crc));
+    if (r == -1) {
+        printf("I/O error\n");
+        halt();
+    } else if (r < sizeof(expected_crc)) {
+        printf("Short read\n");
+        halt();
+    } else if (r > sizeof(expected_crc)) {
+        printf("Overflown read\n");
+        halt();
+    }
+    printf("Expected crc: 0x%lx\n", expected_crc);
+
+#if 0
     /* read root dir */
     unsigned root_dir_lba =
         bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
@@ -278,10 +447,7 @@ void main()
      * and must be dword-aligned
      * So, read the first 8kb of the image
      */
-    struct File file;
-    file.size = entry->file_size;
-    file.offset = 0;
-    file.current_cluster = entry->first_cluster_low;
+#endif
 
     printf("OK\n");
 }
