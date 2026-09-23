@@ -61,7 +61,7 @@ bool fat12_open(const struct BPB* bpb,
         malloc(root_dir_sectors * bpb->bytes_per_sector);
     bool ret = read_sectors(bpb, root_dir_buffer, root_dir_lba, root_dir_sectors);
     if (!ret) {
-        panic("Failed to read root dir\n");
+        panic("Failed to read root dir");
     }
 
     /* Find in root dir */
@@ -88,6 +88,7 @@ bool fat12_open(const struct BPB* bpb,
 
     file->size = entry->file_size;
     file->offset = 0;
+    file->first_cluster = (uint32_t)entry->first_cluster_low | ((uint32_t)entry->first_cluster_hi << 16);
     file->cluster = entry->first_cluster_low;
     file->bpb = bpb;
     file->fat = fat;
@@ -180,5 +181,30 @@ void fat12_close(struct File* file)
     if (file->buffer) {
         free(file->buffer);
     }
+}
+
+uint32_t fat12_seek(struct File* file, uint32_t offset)
+{
+    if (offset > file->size) {
+        offset = file->size;
+        file->cluster = FAT12_END;
+    } else {
+        file->offset = 0;
+        file->cluster = file->first_cluster;
+    }
+
+    file->buffer_offset = 0;
+
+    uint32_t cluster_size = file->bpb->sectors_per_cluster * file->bpb->bytes_per_sector;
+    while (offset - file->offset > cluster_size) {
+        file->cluster = next_cluster(file->fat, file->cluster);
+        file->offset += cluster_size;
+    }
+
+
+    free(file->buffer);
+    file->buffer = NULL;
+    file->buffer_offset = offset - file->offset;
+    return offset;
 }
 

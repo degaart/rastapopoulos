@@ -107,7 +107,7 @@ void main()
     /* Validate sector size (powers of two from 512 to 4096) */
     if (bpb->bytes_per_sector < 512 || bpb->bytes_per_sector > 4096 ||
         (bpb->bytes_per_sector & (bpb->bytes_per_sector - 1)) != 0) {
-        printf("Invalid sector size: %u\n", bpb->bytes_per_sector);
+        panic("Invalid sector size: %u", bpb->bytes_per_sector);
     }
 
     /* Read FAT */
@@ -115,8 +115,7 @@ void main()
     uint8_t* fat_buffer = malloc(fat_size);
     bool ret = read_sectors(bpb, fat_buffer, 0x1, bpb->sectors_per_fat);
     if (!ret) {
-        printf("Failed to read FAT\n");
-        halt();
+        panic("Failed to read FAT");
     }
 
     /* Open kernel */
@@ -138,25 +137,45 @@ void main()
 
         crc = crc32_update(crc, buffer, nread);
     }
-    fat12_close(&file);
     crc = crc32_finish(crc);
 
     /* Open and read kernel.crc */
+    struct File crc_file;
     uint32_t kernel_crc;
-    ret = fat12_open(bpb, fat_buffer, &file, "kernel.crc");
+    ret = fat12_open(bpb, fat_buffer, &crc_file, "kernel.crc");
     if (!ret) {
         panic("Failed to open kernel.crc");
     } else {
-        int nread = fat12_read(&file, &kernel_crc, sizeof(kernel_crc));
+        int nread = fat12_read(&crc_file, &kernel_crc, sizeof(kernel_crc));
         if (nread == -1) {
             panic("I/O error");
         } else if (nread != sizeof(kernel_crc)) {
             panic("Invalid kernel.crc");
         }
     }
+    fat12_close(&crc_file);
 
     if (crc != kernel_crc) {
         panic("Invalid kernel crc. Expected 0x%lx, got 0x%lx", kernel_crc, crc);
+    }
+
+    uint32_t off = fat12_seek(&file, 0);
+    assert(off == 0);
+
+    crc = CRC32_INIT;
+    while (true) {
+        int nread = fat12_read(&file, buffer, sizeof(buffer));
+        if (nread == -1) {
+            panic("I/O error");
+        } else if(nread == 0) {
+            break;
+        }
+
+        crc = crc32_update(crc, buffer, nread);
+    }
+    crc = crc32_finish(crc);
+    if (crc != kernel_crc) {
+        panic("Second crc verification failed. Expected 0x%lx, got 0x%lx", kernel_crc, crc);
     }
 
     /*
@@ -164,6 +183,7 @@ void main()
      * and must be dword-aligned
      * So, read the first 8kb of the image
      */
+    void* read_buffer = malloc(8192);
 
     printf("OK\n");
 }

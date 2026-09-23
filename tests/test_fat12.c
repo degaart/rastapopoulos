@@ -84,15 +84,31 @@ int main()
             break;
         }
 
-        fflush(stdout);
+        crc = crc32_update(crc, buffer, nread);
+    }
+
+    crc = crc32_finish(crc);
+    assert(crc == 0x1CAD98B);
+    printf("\ncrc32: 0x%08X\n", crc);
+
+    fat12_seek(&file, 0);
+
+    crc = CRC32_INIT;
+    while (true) {
+        int nread = fat12_read(&file, buffer, sizeof(buffer));
+        if (nread == -1) {
+            panic("I/O error");
+        } else if(nread == 0) {
+            break;
+        }
 
         crc = crc32_update(crc, buffer, nread);
     }
     fat12_close(&file);
 
     crc = crc32_finish(crc);
-    assert(crc == 0x1CAD98B);
     printf("\ncrc32: 0x%08X\n", crc);
+
     free(fat_buffer);
     return 0;
 }
