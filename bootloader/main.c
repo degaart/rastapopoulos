@@ -125,65 +125,46 @@ void main()
         panic("Failed to open kernel.elf");
     }
 
-    char buffer[512];
-    uint32_t crc = CRC32_INIT;
-    while (true) {
-        int nread = fat12_read(&file, buffer, sizeof(buffer));
-        if (nread == -1) {
-            panic("I/O error");
-        } else if(nread == 0) {
-            break;
-        }
-
-        crc = crc32_update(crc, buffer, nread);
-    }
-    crc = crc32_finish(crc);
-
-    /* Open and read kernel.crc */
-    struct File crc_file;
-    uint32_t kernel_crc;
-    ret = fat12_open(bpb, fat_buffer, &crc_file, "kernel.crc");
-    if (!ret) {
-        panic("Failed to open kernel.crc");
-    } else {
-        int nread = fat12_read(&crc_file, &kernel_crc, sizeof(kernel_crc));
-        if (nread == -1) {
-            panic("I/O error");
-        } else if (nread != sizeof(kernel_crc)) {
-            panic("Invalid kernel.crc");
-        }
-    }
-    fat12_close(&crc_file);
-
-    if (crc != kernel_crc) {
-        panic("Invalid kernel crc. Expected 0x%lx, got 0x%lx", kernel_crc, crc);
-    }
-
-    uint32_t off = fat12_seek(&file, 0);
-    assert(off == 0);
-
-    crc = CRC32_INIT;
-    while (true) {
-        int nread = fat12_read(&file, buffer, sizeof(buffer));
-        if (nread == -1) {
-            panic("I/O error");
-        } else if(nread == 0) {
-            break;
-        }
-
-        crc = crc32_update(crc, buffer, nread);
-    }
-    crc = crc32_finish(crc);
-    if (crc != kernel_crc) {
-        panic("Second crc verification failed. Expected 0x%lx, got 0x%lx", kernel_crc, crc);
-    }
-
     /*
      * Multiboot1 header: fits within the first 8kb of the image,
      * and must be dword-aligned
      * So, read the first 8kb of the image
      */
-    void* read_buffer = malloc(8192);
+    size_t remaining = 8192;
+    void* read_buffer = malloc(remaining);
+    void* read_ptr = read_buffer;
+    while (remaining) {
+        int nread = fat12_read(&file, read_ptr, remaining);
+        if (nread == -1) {
+            panic("I/O error");
+        } else if (nread == 0) {
+            break;
+        }
+        remaining -= nread;
+        read_ptr += nread;
+    }
+
+    /* Sliding-window search of the multiboot signature */
+    const struct multiboot_header* hdr = NULL;
+    for (read_ptr = read_buffer; read_ptr < read_buffer + 8192 - sizeof(struct multiboot_header); read_ptr += 4) {
+        const struct multiboot_header* ptr = read_ptr;
+        if (ptr->magic == MULTIBOOT_HEADER_MAGIC) {
+            if (ptr->flags + ptr->magic + ptr->checksum != 0) {
+                panic("Invalid multiboot checksum");
+            }
+            hdr = ptr;
+            break;
+        }
+    }
+
+    if (!hdr) {
+        panic("Multiboot header not found");
+    }
+    if (hdr->flags != (MULTIBOOT_PAGE_ALIGN|MULTIBOOT_MEMORY_INFO)) {
+        panic("Unsupported multiboot flags: 0x%lx", hdr->flags);
+    }
+
+    /* Now, we need to parse the elf file, while not reading all of it into memory */
 
     printf("OK\n");
 }
