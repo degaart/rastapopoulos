@@ -1,5 +1,5 @@
 #include "allocator.h"
-#include "format.h"
+#include "rastaldr.h"
 
 extern void halt(void);
 
@@ -64,8 +64,7 @@ void* malloc(size_t size)
         }
         link = &block->next;
     }
-    printf("Out of memory\n");
-    halt();
+    panic("Out of memory");
     return 0;
 }
 

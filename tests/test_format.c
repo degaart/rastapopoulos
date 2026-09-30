@@ -13,8 +13,7 @@ struct Buffer
 static void write_char(void* data, char ch)
 {
     struct Buffer* buf = data;
-    if (!buf->rem)
-    {
+    if (!buf->rem) {
         return;
     }
     *buf->ptr = ch;
@@ -25,7 +24,7 @@ static void write_char(void* data, char ch)
 int main()
 {
     char str[128];
-    struct Buffer buffer = { str, sizeof(str) - 1 };
+    struct Buffer buffer = {str, sizeof(str) - 1};
     format(write_char, &buffer, "%lu", 0xDEADBEEFul);
     *buffer.ptr = '\0';
     printf("%s\n", str);

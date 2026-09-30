@@ -1,40 +1,50 @@
 .PHONY: all clean test
+.SUFFIXES:
 
+AS := nasm
 CC := cc
-CFLAGS := -Wall -fsanitize=address -fno-omit-frame-pointer \
-		  -g -I../bootloader \
-		  -Wno-main
-LDFLAGS := -fsanitize=address -fno-omit-frame-pointer -g
-OBJS := build/format.o \
-		build/test_format.o \
-		build/test_fat12.o \
-		build/fat12.o
+LD := ld
+GCC_INCLUDE_DIR := $(shell gcc -print-file-name=include)
+CFLAGS := -nostdinc -isystem "$(GCC_INCLUDE_DIR)" \
+		  -ffreestanding \
+		  -g \
+		  -I../librastaldr \
+		  -Wall -Wno-main
+LDFLAGS := -nostdlib -g -T test.ld
+LIBRASTALDR_SRCS := $(wildcard ../librastaldr/*.c)
+LIBRASTALDR_HDRS := $(wildcard ../librastaldr/*.h)
+LIBRASTALDR_ASM_SRCS := $(wildcard ../librastaldr/*.asm)
+LIBRASTALDR_ASM_HDRS := $(wildcard ../librastaldr/*.inc)
+LIBRASTALDR_OBJS := $(addprefix build/,$(notdir $(LIBRASTALDR_SRCS:.c=.o)))
+LIBRASTALDR_OBJS := $(LIBRASTALDR_OBJS) $(addprefix build/,$(notdir $(LIBRASTALDR_ASM_SRCS:.asm=.o)))
+HEADERS := $(wildcard *.h *.inc) $(LIBRASTALDR_HDRS)
+PROGRAMS := build/test_elf \
+			build/test_fat12 \
+			build/test_format
 
-all: build/test_format build/test_fat12
+all: $(PROGRAMS)
+
+build/%: build/%.o $(LIBRASTALDR_OBJS) build/rastaldr_glue.o build/start.o | build
+	$(LD) -o $@ $^ $(LDFLAGS)
+
+# build/test_elf: build/test_elf.o $(LIBRASTALDR_OBJS) build/rastaldr_glue.o build/start.o | build
+# 	$(LD) -o $@ $^ $(LDFLAGS)
+
+build/%.o: %.c $(HEADERS) | build
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+build/%.o: ../librastaldr/%.c $(LIBRASTALDR_HDRS) | build
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+build/%.o: ../librastaldr/%.asm $(LIBRASTALDDR_ASM_HDRS) | build
+	$(AS) -f elf64 -o $@ $<
+
+build/start.o: start.asm | build
+	$(AS) -o $@ -f elf64 $<
 
 test: all
-	build/test_format
-
-build/test_format: build/test_format.o build/format.o | build
-	$(CC) -o $@ $^ $(LDFLAGS)
-
-build/format.o: ../bootloader/format.c | build
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-build/test_format.o: test_format.c | build
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-build/test_fat12: build/test_fat12.o build/fat12.o build/crc32.o | build
-	$(CC) -o $@ $^ $(LDFLAGS)
-
-build/test_fat12.o: test_fat12.c | build
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-build/fat12.o: ../bootloader/fat12.c | build
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-build/crc32.o: ../bootloader/crc32.c | build
-	$(CC) -c -o $@ $< $(CFLAGS)
+	build/test_elf
+	build/test_fat12
 
 build:
 	mkdir -p build

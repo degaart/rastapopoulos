@@ -19,6 +19,7 @@ _start:
     mov sp, 0x8000
     jmp 0x0:clear_bss
 
+
     ; clear bss
 clear_bss:
     extern __bss_start

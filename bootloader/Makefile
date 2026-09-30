@@ -13,7 +13,7 @@ CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
 		  -mshort-jumps -march=i8088 \
-		  -I. \
+		  -I../librastaldr \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \
@@ -21,15 +21,14 @@ LDFLAGS := -nostdlib \
 		   -Wl,--gc-sections \
 		   -lgcc
 HEADERS := $(wildcard *.h *.inc)
-OBJS := build/start.o \
-		build/main.o \
-		build/format.o \
-		build/allocator.o \
-		build/int13.o \
-		build/string.o \
-		build/crc32.o \
-		build/fat12.o \
-		build/stdio.o
+
+SRCS := $(wildcard *.c) $(wildcard ../librastaldr/*.c)
+HDRS := $(wildcard *.h) $(wildcard ../librastaldr/*.h)
+ASM_SRCS := $(filter-out bootsect.asm,$(wildcard *.asm)) $(wildcard ../librastaldr/*.asm)
+ASM_HDRS := $(wildcard *.inc) $(wildcard ../librastaldr/*.inc)
+
+OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
+		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
 
 all: $(IMAGE)
 
@@ -49,16 +48,19 @@ $(IMAGE): build/bootsect.bin build/rastaldr.bin | build
 	mcopy -o -i $(IMAGE) build/kernel.crc ::/KERNEL.CRC
 	cp $(IMAGE) $(HOSTDATA)
 
-build/bootsect.bin: bootsect.asm $(HEADERS) | build
+build/bootsect.bin: bootsect.asm $(ASM_HDRS) | build
 	$(AS) -fbin -o $@ $<
 
 build/rastaldr.bin: $(OBJS) | build
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-build/%.o: %.asm $(HEADERS) | build
+build/%.o: %.asm $(ASM_HDRS) | build
 	$(AS) -felf32 -o $@ $<
 
-build/%.o: %.c $(HEADERS) | build
+build/%.o: %.c $(HDRS) | build
+	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
+
+build/%.o: ../librastaldr/%.c $(HDRS) | build
 	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
 
 build:

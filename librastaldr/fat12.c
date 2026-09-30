@@ -143,6 +143,11 @@ int fat12_read(struct File* file, void* buffer, size_t size)
         return result;
     }
 
+    /* Reset to offset 0 of buffer exhausted */
+    if (file->buffer_offset >= cluster_size) {
+        file->buffer_offset = 0;
+    }
+
     /*
      * fill buffer and fulfill from int, in a loop
      * until EOF of request fully fulfilled
@@ -152,7 +157,6 @@ int fat12_read(struct File* file, void* buffer, size_t size)
             file->buffer = malloc(cluster_size);
         }
 
-        file->buffer_offset = 0;
         if (!read_cluster(file->bpb, file->buffer, file->cluster)) {
             printf("Failed to read cluster 0x%x\n", file->cluster);
             return -1;
@@ -185,26 +189,24 @@ void fat12_close(struct File* file)
 
 uint32_t fat12_seek(struct File* file, uint32_t offset)
 {
-    if (offset > file->size) {
-        offset = file->size;
-        file->cluster = FAT12_END;
-    } else {
-        file->offset = 0;
-        file->cluster = file->first_cluster;
-    }
-
-    file->buffer_offset = 0;
-
-    uint32_t cluster_size = file->bpb->sectors_per_cluster * file->bpb->bytes_per_sector;
-    while (offset - file->offset > cluster_size) {
-        file->cluster = next_cluster(file->fat, file->cluster);
-        file->offset += cluster_size;
-    }
-
-
     free(file->buffer);
     file->buffer = NULL;
-    file->buffer_offset = offset - file->offset;
-    return offset;
+
+    uint32_t cluster_size = file->bpb->sectors_per_cluster * file->bpb->bytes_per_sector;
+    uint32_t nclusters = offset / cluster_size;
+    file->buffer_offset = offset % cluster_size;
+    file->offset = offset;
+    file->cluster = file->first_cluster;
+
+    uint32_t result = 0;
+    for (uint32_t i = 0; i < nclusters; i++) {
+        file->cluster = next_cluster(file->fat, file->cluster);
+        if (file->cluster >= FAT12_END) {
+            break;
+        }
+        result += cluster_size;
+    }
+    result += file->buffer_offset;
+    return result;
 }
 
