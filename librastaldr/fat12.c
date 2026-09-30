@@ -143,11 +143,6 @@ int fat12_read(struct File* file, void* buffer, size_t size)
         return result;
     }
 
-    /* Reset to offset 0 of buffer exhausted */
-    if (file->buffer_offset >= cluster_size) {
-        file->buffer_offset = 0;
-    }
-
     /*
      * fill buffer and fulfill from int, in a loop
      * until EOF of request fully fulfilled
@@ -170,6 +165,12 @@ int fat12_read(struct File* file, void* buffer, size_t size)
         if (nread > file->size - file->offset) {
             nread = file->size - file->offset;
         }
+
+        /* Reset to offset 0 if buffer exhausted */
+        if (file->buffer_offset >= cluster_size) {
+            file->buffer_offset = 0;
+        }
+
         memcpy(buffer, file->buffer + file->buffer_offset, nread);
         file->buffer_offset += nread;
         file->offset += nread;

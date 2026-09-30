@@ -7,18 +7,21 @@
 AS := nasm
 CPP := cpp
 CC := ia16-elf-gcc
-STRIP := i686-elf-strip
+STRIP := ia16-elf-strip
+OBJCOPY := ia16-elf-objcopy
 IMAGE := build/rastapopoulos.img
 CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
 		  -mshort-jumps -march=i8088 \
 		  -I../librastaldr \
-		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
+		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable \
+		  -g
 LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \
 		   -Wl,-Map=build/rastaldr.map \
 		   -Wl,--gc-sections \
+		   -g \
 		   -lgcc
 HEADERS := $(wildcard *.h *.inc)
 
@@ -51,7 +54,10 @@ $(IMAGE): build/bootsect.bin build/rastaldr.bin | build
 build/bootsect.bin: bootsect.asm $(ASM_HDRS) | build
 	$(AS) -fbin -o $@ $<
 
-build/rastaldr.bin: $(OBJS) | build
+build/rastaldr.bin: build/rastaldr.elf | build
+	$(OBJCOPY) -O binary build/rastaldr.elf build/rastaldr.bin
+
+build/rastaldr.elf: $(OBJS) | build
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 build/%.o: %.asm $(ASM_HDRS) | build
@@ -74,6 +80,13 @@ run: all
 		-drive file=$(IMAGE),format=raw,if=floppy \
 		-boot a \
 		--no-reboot
+
+debug: all
+	qemu-system-i386 \
+		-drive file=$(IMAGE),format=raw,if=floppy \
+		-boot a \
+		--no-reboot \
+		-S -s
 
 bochs:
 	bochs -q -dbg_gui

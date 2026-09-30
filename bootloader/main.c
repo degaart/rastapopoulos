@@ -144,7 +144,7 @@ void main()
      * So, read the first 8kb of the image
      */
     size_t remaining = 8192;
-    void* read_buffer = malloc(remaining);
+    uint8_t* read_buffer = malloc(remaining);
     void* read_ptr = read_buffer;
     while (remaining) {
         int nread = fat12_read(&file, read_ptr, remaining);
@@ -153,9 +153,18 @@ void main()
         } else if (nread == 0) {
             break;
         }
+
+        printf("nread: %d\n", nread);
+
         remaining -= nread;
         read_ptr += nread;
     }
+
+    for (int i = 0x1000; i < 0x1000+16; i++)
+    {
+        printf("%02x ", read_buffer[i]);
+    }
+    printf("\n");
 
     /* Sliding-window search of the multiboot signature */
     const struct multiboot_header* hdr = NULL;
