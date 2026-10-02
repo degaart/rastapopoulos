@@ -144,7 +144,7 @@ void main()
      */
     size_t remaining = 8192;
     uint8_t* read_buffer = malloc(remaining);
-    void* read_ptr = read_buffer;
+    uint8_t* read_ptr = read_buffer;
     while (remaining) {
         int nread = fat12_read(&file, read_ptr, remaining);
         if (nread == -1) {
@@ -169,7 +169,7 @@ void main()
     for (read_ptr = read_buffer;
          read_ptr < read_buffer + 8192 - sizeof(struct multiboot_header);
          read_ptr += 4) {
-        const struct multiboot_header* ptr = read_ptr;
+        const struct multiboot_header* ptr = (const struct multiboot_header*)read_ptr;
         if (ptr->magic == MULTIBOOT_HEADER_MAGIC) {
             if (ptr->flags + ptr->magic + ptr->checksum != 0) {
                 panic("Invalid multiboot checksum");
@@ -188,7 +188,7 @@ void main()
 
     /* Now, we need to parse the elf file, while not reading all of it into
      * memory */
-    const Elf32_Ehdr* elf_hdr = read_buffer;
+    const Elf32_Ehdr* elf_hdr = (const Elf32_Ehdr*)read_buffer;
     if (elf_hdr->e_ident[0] != 0x7f || elf_hdr->e_ident[1] != 'E' ||
         elf_hdr->e_ident[2] != 'L' || elf_hdr->e_ident[3] != 'F') {
         panic("Invalid ELF magic");
