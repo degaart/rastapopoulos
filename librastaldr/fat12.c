@@ -1,8 +1,8 @@
 #include "fat12.h"
 #include "rastaldr.h"
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static bool read_cluster(const struct BPB* bpb, void* buffer, unsigned cluster)
 {
@@ -22,19 +22,18 @@ static bool read_cluster(const struct BPB* bpb, void* buffer, unsigned cluster)
     return read_sectors(bpb, buffer, lba, bpb->sectors_per_cluster);
 }
 
-bool fat12_open(const struct BPB* bpb,
-          const void* fat,
-          struct File* file, const char* filename)
+bool fat12_open(const struct BPB* bpb, const void* fat, struct File* file,
+                const char* filename)
 {
     /* transform filename */
-    char name_buffer[8+3];
+    char name_buffer[8 + 3];
     memset(name_buffer, ' ', sizeof(name_buffer));
 
     char* ext = strrchr(filename, '.');
     if (ext) {
         if (strlen(ext) > 4) {
             return false;
-        } else if(ext - filename > 8) {
+        } else if (ext - filename > 8) {
             return false;
         }
         memcpy(name_buffer, filename, ext - filename);
@@ -46,7 +45,7 @@ bool fat12_open(const struct BPB* bpb,
         memcpy(name_buffer, filename, strlen(filename));
     }
 
-    for (int i = 0; i < 8+3; i++) {
+    for (int i = 0; i < 8 + 3; i++) {
         if (name_buffer[i] >= 'a' && name_buffer[i] <= 'z') {
             name_buffer[i] = name_buffer[i] - 'a' + 'A';
         }
@@ -59,7 +58,8 @@ bool fat12_open(const struct BPB* bpb,
         (bpb->root_entries * 32) / bpb->bytes_per_sector;
     struct Dirent* root_dir_buffer =
         malloc(root_dir_sectors * bpb->bytes_per_sector);
-    bool ret = read_sectors(bpb, root_dir_buffer, root_dir_lba, root_dir_sectors);
+    bool ret =
+        read_sectors(bpb, root_dir_buffer, root_dir_lba, root_dir_sectors);
     if (!ret) {
         panic("Failed to read root dir");
     }
@@ -70,7 +70,8 @@ bool fat12_open(const struct BPB* bpb,
     for (; entry->filename[0]; entry++) {
         if (entry->filename[0] == FAT12_FREE) {
             continue;
-        } else if (!memcmp(entry->filename, name_buffer, sizeof(name_buffer))) {
+        } else if (!memcmp(entry->filename, name_buffer,
+                           sizeof(name_buffer))) {
             file_entry = entry;
             break;
         }
@@ -88,24 +89,31 @@ bool fat12_open(const struct BPB* bpb,
 
     file->size = entry->file_size;
     file->offset = 0;
-    file->first_cluster = (uint32_t)entry->first_cluster_low | ((uint32_t)entry->first_cluster_hi << 16);
+    file->first_cluster = (uint32_t)entry->first_cluster_low |
+                          ((uint32_t)entry->first_cluster_hi << 16);
     file->cluster = entry->first_cluster_low;
     file->bpb = bpb;
     file->fat = fat;
-    file->buffer = NULL;
+    file->buffer_size = bpb->bytes_per_sector * bpb->sectors_per_cluster;
+    file->buffer = malloc(file->buffer_size);
     file->buffer_offset = 0;
 
+    if (!read_cluster(file->bpb, file->buffer, file->cluster)) {
+        free(root_dir_buffer);
+        printf("Failed to read cluster 0x%x\n", file->cluster);
+        return -1;
+    }
     free(root_dir_buffer);
     return true;
 }
 
-static uint32_t next_cluster(const uint8_t* fat, uint32_t cluster) {
+static uint32_t next_cluster(const uint8_t* fat, uint32_t cluster)
+{
     size_t offset = cluster + (cluster / 2);
-    uint16_t value =
-        fat[offset] | ((uint16_t)fat[offset + 1] << 8);
-    if (cluster & 1) {       /* odd */
+    uint16_t value = fat[offset] | ((uint16_t)fat[offset + 1] << 8);
+    if (cluster & 1) { /* odd */
         cluster = value >> 4;
-    } else {                            /* even */
+    } else { /* even */
         cluster = value & 0xfff;
     }
     return cluster;
@@ -113,70 +121,39 @@ static uint32_t next_cluster(const uint8_t* fat, uint32_t cluster) {
 
 int fat12_read(struct File* file, void* buffer, size_t size)
 {
+    /* adjust size for EOF */
+    if (size > file->size - file->offset) {
+        size = file->size - file->offset;
+    }
+
     int result = 0;
-
-    /* early EOF check */
-    if (file->offset >= file->size) {
-        return 0;
-    }
-
-    /* Fulfill from buffer first */
-    size_t cluster_size = file->bpb->sectors_per_cluster * file->bpb->bytes_per_sector;
-    if (file->buffer && file->buffer_offset < cluster_size) {
-        unsigned nread = cluster_size - file->buffer_offset;
-        if (nread > size) {
-            nread = size;
-        }
-        if (nread > file->size - file->offset) {
-            nread = file->size - file->offset;
-        }
-        memcpy(buffer, file->buffer + file->buffer_offset, nread);
-        file->buffer_offset += nread;
-        file->offset += nread;
-        result += nread;
-        buffer += nread;
-        size -= nread;
-    }
-
-    /* early bail if request fulfilled */
-    if (!size) {
-        return result;
-    }
-
-    /*
-     * fill buffer and fulfill from int, in a loop
-     * until EOF of request fully fulfilled
-     */
-    while (size && file->offset < file->size) {
-        if (!file->buffer) {
-            file->buffer = malloc(cluster_size);
+    while (size) {
+        uint32_t buffer_avail = file->buffer_size - file->buffer_offset;
+        if (buffer_avail > 0) {
+            int nread = size <= buffer_avail ? size : buffer_avail;
+            if (nread > file->size - file->offset)
+                nread = file->size - file->offset;
+            memcpy(buffer, file->buffer + file->buffer_offset, nread);
+            buffer += nread;
+            size -= nread;
+            file->offset += nread;
+            file->buffer_offset += nread;
+            result += nread;
         }
 
-        if (!read_cluster(file->bpb, file->buffer, file->cluster)) {
-            printf("Failed to read cluster 0x%x\n", file->cluster);
-            return -1;
-        }
-        file->cluster = next_cluster(file->fat, file->cluster);
+        if (file->buffer_offset >= file->buffer_size) {
+            /* fill buffer again */
+            file->cluster = next_cluster(file->fat, file->cluster);
+            if (file->cluster >= FAT12_END) {
+                break;
+            }
 
-        unsigned nread = cluster_size;
-        if (nread > size) {
-            nread = size;
-        }
-        if (nread > file->size - file->offset) {
-            nread = file->size - file->offset;
-        }
-
-        /* Reset to offset 0 if buffer exhausted */
-        if (file->buffer_offset >= cluster_size) {
+            if (!read_cluster(file->bpb, file->buffer, file->cluster)) {
+                printf("Failed to read cluster 0x%x\n", file->cluster);
+                return -1;
+            }
             file->buffer_offset = 0;
         }
-
-        memcpy(buffer, file->buffer + file->buffer_offset, nread);
-        file->buffer_offset += nread;
-        file->offset += nread;
-        result += nread;
-        buffer += nread;
-        size -= nread;
     }
     return result;
 }
@@ -190,24 +167,35 @@ void fat12_close(struct File* file)
 
 uint32_t fat12_seek(struct File* file, uint32_t offset)
 {
-    free(file->buffer);
-    file->buffer = NULL;
+    /* TODO: optimization: Do not start at the first cluster if offset >=
+     * file->offset */
+    uint32_t cluster_size =
+        file->bpb->sectors_per_cluster * file->bpb->bytes_per_sector;
 
-    uint32_t cluster_size = file->bpb->sectors_per_cluster * file->bpb->bytes_per_sector;
-    uint32_t nclusters = offset / cluster_size;
-    file->buffer_offset = offset % cluster_size;
-    file->offset = offset;
+    file->offset = 0;
     file->cluster = file->first_cluster;
-
-    uint32_t result = 0;
-    for (uint32_t i = 0; i < nclusters; i++) {
+    while (offset >= cluster_size) {
         file->cluster = next_cluster(file->fat, file->cluster);
         if (file->cluster >= FAT12_END) {
             break;
         }
-        result += cluster_size;
+        file->offset += cluster_size;
+        offset -= cluster_size;
     }
-    result += file->buffer_offset;
-    return result;
+
+    if (file->cluster < FAT12_END) {
+        if (!read_cluster(file->bpb, file->buffer, file->cluster)) {
+            printf("Failed to read cluster 0x%x\n", file->cluster);
+            return -1;
+        }
+    }
+
+    if (file->offset + offset > file->size) {
+        offset = file->size - file->offset;
+    }
+
+    file->offset += offset;
+    file->buffer_offset = offset;
+    return file->offset;
 }
 

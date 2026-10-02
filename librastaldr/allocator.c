@@ -1,5 +1,6 @@
 #include "allocator.h"
 #include "rastaldr.h"
+#include <stdio.h>
 
 extern void halt(void);
 
@@ -70,7 +71,7 @@ void* malloc(size_t size)
 
 size_t heap_info()
 {
-    size_t ret;
+    size_t ret = 0;
     struct FreeBlock** link = &free_list;
     struct FreeBlock* block;
     while ((block = *link) != 0) {

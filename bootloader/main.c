@@ -1,13 +1,12 @@
-#include <rastaldr.h>
-#include <fat12.h>
 #include <allocator.h>
-#include <multiboot.h>
 #include <elf.h>
-#include <stdio.h>
+#include <fat12.h>
+#include <multiboot.h>
+#include <rastaldr.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
+#include <stdio.h>
 
 void _panic(const char* file, int line, const char* fmt, ...)
 {
@@ -86,7 +85,7 @@ void read_fully(struct File* file, size_t offset, void* buffer, size_t size)
         int nread = fat12_read(file, ptr, size);
         if (nread == -1) {
             panic("I/O error");
-        } else if(nread == 0) {
+        } else if (nread == 0) {
             panic("Unexpected EOF");
         }
 
@@ -160,15 +159,16 @@ void main()
         read_ptr += nread;
     }
 
-    for (int i = 0x1000; i < 0x1000+16; i++)
-    {
+    for (int i = 0x1000; i < 0x1000 + 16; i++) {
         printf("%02x ", read_buffer[i]);
     }
     printf("\n");
 
     /* Sliding-window search of the multiboot signature */
     const struct multiboot_header* hdr = NULL;
-    for (read_ptr = read_buffer; read_ptr < read_buffer + 8192 - sizeof(struct multiboot_header); read_ptr += 4) {
+    for (read_ptr = read_buffer;
+         read_ptr < read_buffer + 8192 - sizeof(struct multiboot_header);
+         read_ptr += 4) {
         const struct multiboot_header* ptr = read_ptr;
         if (ptr->magic == MULTIBOOT_HEADER_MAGIC) {
             if (ptr->flags + ptr->magic + ptr->checksum != 0) {
@@ -182,24 +182,21 @@ void main()
     if (!hdr) {
         panic("Multiboot header not found");
     }
-    if (hdr->flags != (MULTIBOOT_PAGE_ALIGN|MULTIBOOT_MEMORY_INFO)) {
+    if (hdr->flags != (MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO)) {
         panic("Unsupported multiboot flags: 0x%lx", hdr->flags);
     }
 
-    /* Now, we need to parse the elf file, while not reading all of it into memory */
+    /* Now, we need to parse the elf file, while not reading all of it into
+     * memory */
     const Elf32_Ehdr* elf_hdr = read_buffer;
-    if (elf_hdr->e_ident[0] != 0x7f ||
-            elf_hdr->e_ident[1] != 'E' ||
-            elf_hdr->e_ident[2] != 'L' ||
-            elf_hdr->e_ident[3] != 'F') {
+    if (elf_hdr->e_ident[0] != 0x7f || elf_hdr->e_ident[1] != 'E' ||
+        elf_hdr->e_ident[2] != 'L' || elf_hdr->e_ident[3] != 'F') {
         panic("Invalid ELF magic");
     } else if (elf_hdr->e_ident[EI_CLASS] != ELFCLASS32 ||
-            elf_hdr->e_ident[EI_DATA] != ELFDATA2LSB ||
-            elf_hdr->e_ident[EI_VERSION] != EV_CURRENT ||
-            elf_hdr->e_type != ET_EXEC ||
-            elf_hdr->e_machine != EM_386 ||
-            elf_hdr->e_version != EV_CURRENT ||
-            elf_hdr->e_phoff == 0) {
+               elf_hdr->e_ident[EI_DATA] != ELFDATA2LSB ||
+               elf_hdr->e_ident[EI_VERSION] != EV_CURRENT ||
+               elf_hdr->e_type != ET_EXEC || elf_hdr->e_machine != EM_386 ||
+               elf_hdr->e_version != EV_CURRENT || elf_hdr->e_phoff == 0) {
         panic("Unsupported ELF file");
     }
 
@@ -208,12 +205,10 @@ void main()
     read_fully(&file, elf_hdr->e_phoff, elf_phdrs, phdrs_size);
     for (int i = 0; i < elf_hdr->e_phnum; i++) {
         if (elf_phdrs[i].p_type == PT_LOAD) {
-            printf("%d off=0x%lx vaddr=0x%lx fsize=0x%lx msize=0x%lx align=0x%lx\n",
-                   i,
-                   elf_phdrs[i].p_offset,
-                   elf_phdrs[i].p_vaddr,
-                   elf_phdrs[i].p_filesz,
-                   elf_phdrs[i].p_memsz,
+            printf("%d off=0x%lx vaddr=0x%lx fsize=0x%lx msize=0x%lx "
+                   "align=0x%lx\n",
+                   i, elf_phdrs[i].p_offset, elf_phdrs[i].p_vaddr,
+                   elf_phdrs[i].p_filesz, elf_phdrs[i].p_memsz,
                    elf_phdrs[i].p_align);
         }
     }

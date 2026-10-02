@@ -8,108 +8,157 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-static void test_complete_read(const struct BPB* bpb, const void* fat_buffer)
+#define FILENAME "KERNEL.ELF"
+
+static void test_open(const struct BPB* bpb, const void* fat,
+                      const void* host_file, uint32_t host_file_size)
 {
-    printf("*** Testing complete streaming read ***\n");
+    printf("%s\n", __FUNCTION__);
 
-    /* Open kernel */
-    struct File file;
-    bool ret = fat12_open(bpb, fat_buffer, &file, "kernel.elf");
-    if (!ret) {
-        panic("Failed to open kernel.elf");
+    struct File f;
+    if (!fat12_open(bpb, fat, &f, FILENAME)) {
+        panic("fat12_open failed");
     }
-
-    char buffer[512];
-    uint32_t crc = CRC32_INIT;
-    while (true) {
-        int nread = fat12_read(&file, buffer, sizeof(buffer));
-        if (nread == -1) {
-            panic("I/O error");
-        } else if (nread == 0) {
-            break;
-        }
-
-        crc = crc32_update(crc, buffer, nread);
-    }
-
-    crc = crc32_finish(crc);
-    assert(crc == 0x91cbd015);
-    printf("\ncrc32: 0x%08x\n", crc);
-
-    fat12_seek(&file, 0);
-
-    crc = CRC32_INIT;
-    while (true) {
-        int nread = fat12_read(&file, buffer, sizeof(buffer));
-        if (nread == -1) {
-            panic("I/O error");
-        } else if (nread == 0) {
-            break;
-        }
-
-        crc = crc32_update(crc, buffer, nread);
-    }
-    fat12_close(&file);
-
-    crc = crc32_finish(crc);
-    printf("\ncrc32: 0x%08x\n", crc);
-    assert(crc == 0x91cbd015);
+    assert(f.size == host_file_size);
+    fat12_close(&f);
 }
 
-static void test_read_multiboot(const struct BPB* bpb,
-                                const void* fat_buffer)
+static void test_complete_read(const struct BPB* bpb, const void* fat,
+                               const uint8_t* host_file,
+                               uint32_t host_file_size)
 {
-    printf("*** Testing multiboot read ***\n");
+    printf("%s\n", __FUNCTION__);
 
-    struct File file;
-    if (!fat12_open(bpb, fat_buffer, &file, "kernel.elf"))
-    {
-        panic("Failed to open kernel.elf\n");
+    struct File f;
+    if (!fat12_open(bpb, fat, &f, FILENAME)) {
+        panic("fat12_open failed");
     }
 
-    size_t remaining = 8192;
-    void* read_buffer = malloc(remaining);
-    void* read_ptr = read_buffer;
-    while (remaining) {
-        int nread = fat12_read(&file, read_ptr, remaining);
+    uint32_t offset = 0;
+    uint8_t buffer[512];
+    while (true) {
+        if (offset == 2048)
+            printf("Here\n");
+        int nread = fat12_read(&f, buffer, sizeof(buffer));
         if (nread == -1) {
             panic("I/O error");
         } else if (nread == 0) {
             break;
         }
 
-        printf("nread: %d\n", nread);
+        for (int i = 0; i < nread; i++) {
+            if (buffer[i] != host_file[i]) {
+                panic("Comparison failed at offset %u: expected 0x%02x, got "
+                      "0x%02x",
+                      offset + i, host_file[i], buffer[i]);
+            }
+        }
 
-        remaining -= nread;
-        read_ptr += nread;
+        offset += nread;
+        host_file += nread;
+        assert(offset <= f.size);
     }
 
-    /* Sliding-window search of the multiboot signature */
-    const struct multiboot_header* hdr = NULL;
-    for (read_ptr = read_buffer; read_ptr < read_buffer + 8192 - sizeof(struct multiboot_header); read_ptr += 4) {
-        const struct multiboot_header* ptr = read_ptr;
-        if (ptr->magic == MULTIBOOT_HEADER_MAGIC) {
-            if (ptr->flags + ptr->magic + ptr->checksum != 0) {
-                panic("Invalid multiboot checksum");
-            }
-            hdr = ptr;
-            break;
+    assert(offset == f.size);
+    fat12_close(&f);
+}
+
+static void test_offset_read(const struct BPB* bpb, const void* fat,
+                             const void* host_file, uint32_t host_file_size)
+{
+    printf("%s\n", __FUNCTION__);
+
+    struct File f;
+    if (!fat12_open(bpb, fat, &f, FILENAME)) {
+        panic("fat12_open failed");
+    }
+
+    uint8_t buffer[512];
+    assert(fat12_seek(&f, 8) == 8);
+    assert(fat12_read(&f, buffer, 4) == 4);
+
+    for (int i = 0; i < 4; i++) {
+        assert(buffer[i] == ((uint8_t*)host_file)[i + 8]);
+    }
+
+    assert(fat12_seek(&f, f.size) == f.size);
+
+    assert(fat12_seek(&f, f.size - 4) == f.size - 4)
+        assert(fat12_read(&f, buffer, 4) == 4);
+    assert(*((uint32_t*)buffer) == *((uint32_t*)(host_file + f.size - 4)));
+
+    assert(fat12_seek(&f, f.size + 1) == f.size);
+    assert(fat12_seek(&f, f.size + 1024) == f.size);
+
+    fat12_close(&f);
+}
+
+static void test_truncated_read(const struct BPB* bpb, const void* fat,
+                                const void* host_file, uint32_t host_file_size)
+{
+    printf("%s\n", __FUNCTION__);
+
+    struct File f;
+    if (!fat12_open(bpb, fat, &f, FILENAME)) {
+        panic("fat12_open failed");
+    }
+
+    assert(fat12_seek(&f, f.size - 16) == f.size - 16);
+
+    uint8_t buffer[512];
+    assert(fat12_read(&f, buffer, sizeof(buffer)) == 16);
+    assert(!memcmp(buffer, host_file + f.size - 16, 16));
+    assert(f.offset == f.size);
+    assert(fat12_read(&f, buffer, sizeof(buffer)) == 0);
+
+    fat12_close(&f);
+}
+
+static void test_large_read(const struct BPB* bpb, const void* fat,
+                            const uint8_t* host_file, uint32_t host_file_size)
+{
+    printf("%s\n", __FUNCTION__);
+
+    struct File f;
+    if (!fat12_open(bpb, fat, &f, FILENAME)) {
+        panic("fat12_open failed");
+    }
+
+    assert(fat12_seek(&f, 1) == 1);
+
+    uint32_t read_size = (host_file_size > 8192 ? 8192 : host_file_size) - 1;
+    uint8_t* buffer = malloc(read_size);
+    assert(fat12_read(&f, buffer, read_size) == read_size);
+
+    for (int i = 0; i < read_size; i++) {
+        if (buffer[i] != host_file[i + 1]) {
+            panic(
+                "Comparison failed at offset %u: expected 0x%02x, got 0x%02x",
+                i, host_file[i], buffer[i]);
         }
     }
 
-    if (!hdr) {
-        panic("Multiboot header not found");
-    }
-    if (hdr->flags != (MULTIBOOT_PAGE_ALIGN|MULTIBOOT_MEMORY_INFO)) {
-        panic("Unsupported multiboot flags: 0x%lx", hdr->flags);
-    }
+    assert(f.offset == f.size);
+    assert(fat12_read(&f, buffer, 1) == 0);
 
-    fat12_close(&file);
+    free(buffer);
+    fat12_close(&f);
 }
 
 int main()
 {
+    /*
+     * Testcase1: Reading the entirety of KERNEL.ELF should yield the same
+     *            content as reading ../bootloader/build/kernel.stripped.elf
+     * Testcase2: Reading 16 bytes from offset 512 of KERNEL.ELF should yield
+     *            the same content as ../bootloader/build/kernel.stripped.elf
+     * Testcase3: Reading the last 16 bytes of KERNEL.ELF should yield the same
+     *            content as ../bootloader/build/kernel.stripped.elf
+     */
+
+    /* Init 32K heap */
     static const int HEAP_SIZE = 32768;
     void* heap = mmap(NULL, HEAP_SIZE, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -118,7 +167,29 @@ int main()
     }
 
     heap_init(heap, HEAP_SIZE);
+    size_t heap_free = heap_info();
 
+    /* Mmap the entirety of ../bootloader/build/kernel.stripped.elf */
+    int host_file_fd =
+        open("../bootloader/build/kernel.stripped.elf", O_RDONLY);
+    if (host_file_fd == -1) {
+        panic("open failed");
+    }
+
+    struct stat st;
+    if (fstat(host_file_fd, &st) == -1) {
+        panic("fstat failed");
+    }
+
+    const void* host_file_buf =
+        mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, host_file_fd, 0);
+    if (!host_file_buf) {
+        panic("mmap failed");
+    }
+
+    close(host_file_fd);
+
+    /* Init fat12 */
     const struct BPB* bpb = read_bpb();
     if (!bpb) {
         panic("Failed to read bpb");
@@ -132,10 +203,15 @@ int main()
         panic("Failed to read FAT");
     }
 
-    test_complete_read(bpb, fat_buffer);
-    test_read_multiboot(bpb, fat_buffer);
+    test_open(bpb, fat_buffer, host_file_buf, st.st_size);
+    test_complete_read(bpb, fat_buffer, host_file_buf, st.st_size);
+    test_offset_read(bpb, fat_buffer, host_file_buf, st.st_size);
+    test_truncated_read(bpb, fat_buffer, host_file_buf, st.st_size);
+    test_large_read(bpb, fat_buffer, host_file_buf, st.st_size);
 
     free(fat_buffer);
+    printf("heap_info: %lu, heap_free: %lu\n", heap_info(), heap_free);
+    assert(heap_info() == heap_free);
     return 0;
 }
 

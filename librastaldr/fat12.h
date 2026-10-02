@@ -34,15 +34,14 @@ struct File
     uint32_t size;
     uint32_t offset;
     uint32_t first_cluster;
-    uint32_t cluster;
-
+    uint32_t cluster; /* current cluster loaded in buffer */
     void* buffer;
+    uint32_t buffer_size;
     uint32_t buffer_offset;
 };
 
-bool fat12_open(const struct BPB* bpb,
-          const void* fat,
-          struct File* file, const char* filename);
+bool fat12_open(const struct BPB* bpb, const void* fat, struct File* file,
+                const char* filename);
 int fat12_read(struct File* file, void* buffer, size_t size);
 void fat12_close(struct File* file);
 uint32_t fat12_seek(struct File* file, uint32_t offset);

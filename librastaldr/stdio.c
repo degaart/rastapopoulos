@@ -1,6 +1,6 @@
 #include "stdio.h"
-#include <stdarg.h>
 #include "format.h"
+#include <stdarg.h>
 #include <stddef.h>
 
 static void format_out(void* unused, char ch)
@@ -17,9 +17,8 @@ int printf(const char* fmt, ...)
     return ret;
 }
 
-int vprintf( const char* restrict format, va_list vlist )
+int vprintf(const char* restrict format, va_list vlist)
 {
     return vformat(format_out, NULL, format, vlist);
 }
-
 

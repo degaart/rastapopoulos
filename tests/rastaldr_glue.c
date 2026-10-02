@@ -1,9 +1,9 @@
-#include "format.h"
 #include "rastaldr_glue.h"
 #include "fat12.h"
-#include <stdlib.h>
+#include "format.h"
 #include <rastaldr.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 int _fd;
 
@@ -33,7 +33,7 @@ void read_fully(struct File* file, size_t offset, void* buffer, size_t size)
         int nread = fat12_read(file, ptr, size);
         if (nread == -1) {
             panic("I/O error");
-        } else if(nread == 0) {
+        } else if (nread == 0) {
             panic("Unexpected EOF");
         }
 
@@ -108,11 +108,7 @@ void _panic(const char* file, int line, const char* fmt, ...)
 
 int lseek(int fd, int offset, int whence)
 {
-    int64_t ret = syscall4(SYSCALL_LSEEK,
-                           fd,
-                           offset,
-                           whence,
-                           0);
+    int64_t ret = syscall4(SYSCALL_LSEEK, fd, offset, whence, 0);
     if (ret < 0) {
         return -1;
     }
@@ -184,5 +180,23 @@ int read(int fd, void* buf, size_t count)
         return -1;
     }
     return ret;
+}
+
+int fstat(int fd, struct stat* statbuf)
+{
+    int64_t ret = syscall4(SYSCALL_FSTAT, fd, (uint64_t)statbuf, 0, 0);
+    if (ret < 0) {
+        return -1;
+    }
+    return (int)ret;
+}
+
+int close(int fd)
+{
+    int64_t ret = syscall4(SYSCALL_CLOSE, fd, 0, 0, 0);
+    if (ret < 0) {
+        return -1;
+    }
+    return (int)ret;
 }
 

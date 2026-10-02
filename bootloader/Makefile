@@ -92,5 +92,5 @@ bochs:
 	bochs -q -dbg_gui
 
 format:
-	clang-format -i *.c *.h
+	clang-format -i $(wildcard *.c) $(wildcard *.h) $(wildcard ../librastaldr/*.c) $(wildcard ../librastaldr/*.h)
 

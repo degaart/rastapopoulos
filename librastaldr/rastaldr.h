@@ -1,8 +1,8 @@
 #pragma once
 
+#include "attr_format.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include "attr_format.h"
 
 struct BPB
 {
@@ -28,7 +28,8 @@ struct BPB
     uint8_t filesystem_type[8];
 } __attribute__((packed));
 
-void _panic(const char* file, int line, const char* fmt, ...) ATTR_FORMAT(3, 4) __attribute__((noreturn));
+void _panic(const char* file, int line, const char* fmt, ...) ATTR_FORMAT(3, 4)
+    __attribute__((noreturn));
 #define panic(...) _panic(__FILE__, __LINE__, __VA_ARGS__)
 bool read_sectors(const struct BPB* bpb, void* buffer, uint16_t lba,
                   uint16_t count);

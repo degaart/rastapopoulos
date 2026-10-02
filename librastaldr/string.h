@@ -4,9 +4,9 @@
 #include <stdint.h>
 
 #ifdef RASTA_BOOTLOADER
-#   define CDECL __attribute__((cdecl))
+#    define CDECL __attribute__((cdecl))
 #else
-#   define CDECL
+#    define CDECL
 #endif
 
 void* memset(void* dest, int ch, size_t count);
@@ -25,5 +25,5 @@ int strcpy_s(char* restrict dest, size_t destsz, const char* restrict src);
 int strncpy_s(char* restrict dest, size_t destsz, const char* restrict src,
               size_t count);
 int strcat_s(char* restrict dest, size_t destsz, const char* restrict src);
-void CDECL hmemcpy(uint32_t dst, const void *src, size_t len);
+void CDECL hmemcpy(uint32_t dst, const void* src, size_t len);
 

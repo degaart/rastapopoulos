@@ -1,4 +1,4 @@
-.PHONY: all clean test
+.PHONY: all clean test format
 .SUFFIXES:
 
 AS := nasm
@@ -43,12 +43,14 @@ build/start.o: start.asm | build
 	$(AS) -o $@ -f elf64 $<
 
 test: all
-	build/test_elf
-	build/test_fat12
+	for i in $(PROGRAMS); do $$i; done
 
 build:
 	mkdir -p build
 
 clean:
 	rm -rf build
+
+format:
+	clang-format -i $(wildcard *.c) $(wildcard *.h) $(wildcard ../librastaldr/*.c) $(wildcard ../librastaldr/*.h)
 

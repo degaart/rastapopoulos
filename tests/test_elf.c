@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-
 void main()
 {
     static const int HEAP_SIZE = 32768;
