@@ -1,3 +1,4 @@
+#include "a20.h"
 #include <allocator.h>
 #include <elf.h>
 #include <fat12.h>
@@ -122,6 +123,24 @@ void main()
         panic("Invalid sector size: %u", bpb->bytes_per_sector);
     }
 
+    /* Enable A20 */
+    printf("A20 enabled: %s\n", a20_enabled() ? "yes" : "no");
+    if (!a20_enabled()) {
+        printf("Enabling A20 by calling BIOS\n");
+        if (!a20_enable_bios() || !a20_enabled()) {
+            printf("Enabling A20 using the fast method\n");
+            a20_enable_fast();
+            if (!a20_enabled()) {
+                printf("Enabling A20 using the keyboard controller\n");
+                a20_enable_8042();
+            }
+        }
+    }
+
+    if (!a20_enabled()) {
+        panic("Failed to enable A20");
+    }
+
     /* Read FAT */
     size_t fat_size = bpb->sectors_per_fat * bpb->bytes_per_sector;
     uint8_t* fat_buffer = malloc(fat_size);
@@ -169,7 +188,8 @@ void main()
     for (read_ptr = read_buffer;
          read_ptr < read_buffer + 8192 - sizeof(struct multiboot_header);
          read_ptr += 4) {
-        const struct multiboot_header* ptr = (const struct multiboot_header*)read_ptr;
+        const struct multiboot_header* ptr =
+            (const struct multiboot_header*)read_ptr;
         if (ptr->magic == MULTIBOOT_HEADER_MAGIC) {
             if (ptr->flags + ptr->magic + ptr->checksum != 0) {
                 panic("Invalid multiboot checksum");
