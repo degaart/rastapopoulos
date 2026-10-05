@@ -1,6 +1,7 @@
 #include "a20.h"
 #include "gdt.h"
 #include "hmemcpy.h"
+#include "hmemset.h"
 #include <allocator.h>
 #include <elf.h>
 #include <fat12.h>
@@ -108,16 +109,32 @@ static void load_program(struct File* file, const Elf32_Phdr* phdr)
     static const int buffer_size = 4096;
     uint8_t* buffer = malloc(buffer_size);
     uint32_t off = phdr->p_offset;
-    for (uint32_t dst = phdr->p_vaddr; dst < phdr->p_vaddr + phdr->p_filesz;) {
-        int nread = fat12_read(file, buffer, buffer_size);
-        if (nread == 0) {
-            panic("Unexpected EOF at offset 0x%lx", off);
-        }
-        hmemcpy(dst, buffer, nread);
 
-        off += nread;
-        dst += buffer_size;
+    if (phdr->p_filesz) {
+        printf("Load from disk: 0x%lx - 0x%lx\n", phdr->p_vaddr,
+               phdr->p_vaddr + phdr->p_filesz);
+        for (uint32_t dst = phdr->p_vaddr;
+             dst < phdr->p_vaddr + phdr->p_filesz;) {
+            int nread = fat12_read(file, buffer, buffer_size);
+            if (nread == 0) {
+                panic("Unexpected EOF at offset 0x%lx", off);
+            }
+            hmemcpy(dst, buffer, nread);
+
+            off += nread;
+            dst += buffer_size;
+        }
     }
+
+    /* Zero the remaining bytes of p_memsz */
+    if (phdr->p_memsz > phdr->p_filesz) {
+        uint32_t remaining = phdr->p_memsz - phdr->p_filesz;
+        printf("Zeroing 0x%lx - 0x%lx (0x%lx bytes)\n",
+               phdr->p_vaddr + phdr->p_filesz,
+               phdr->p_vaddr + phdr->p_filesz + remaining, remaining);
+        hmemset(phdr->p_vaddr + phdr->p_filesz, 0, remaining);
+    }
+
     free(buffer);
 }
 
@@ -166,10 +183,6 @@ void main()
     if (!a20_enabled()) {
         panic("Failed to enable A20");
     }
-
-    debugbreak();
-    uint32_t canary = 0xDEADBEEF;
-    hmemcpy(0x100000, &canary, sizeof(canary));
 
     /* Read FAT */
     size_t fat_size = bpb->sectors_per_fat * bpb->bytes_per_sector;

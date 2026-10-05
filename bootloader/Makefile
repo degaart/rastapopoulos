@@ -14,7 +14,7 @@ CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
 		  -mshort-jumps -march=i8088 \
-		  -I../librastaldr \
+		  -I../librastaldr -I../common \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable \
 		  -g
 LDFLAGS := -nostdlib \
@@ -23,12 +23,19 @@ LDFLAGS := -nostdlib \
 		   -Wl,--gc-sections \
 		   -g \
 		   -lgcc
-HEADERS := $(wildcard *.h *.inc)
 
-SRCS := $(wildcard *.c) $(wildcard ../librastaldr/*.c)
-HDRS := $(wildcard *.h) $(wildcard ../librastaldr/*.h)
-ASM_SRCS := $(filter-out bootsect.asm,$(wildcard *.asm)) $(wildcard ../librastaldr/*.asm)
-ASM_HDRS := $(wildcard *.inc) $(wildcard ../librastaldr/*.inc)
+SRCS := $(wildcard *.c) \
+		$(wildcard ../librastaldr/*.c) \
+		$(wildcard ../common/*.c)
+HDRS := $(wildcard *.h) \
+		$(wildcard ../librastaldr/*.h) \
+		$(wildcard ../common/*.h)
+ASM_SRCS := $(filter-out bootsect.asm,$(wildcard *.asm)) \
+			$(wildcard ../librastaldr/*.asm) \
+			$(wildcard ../common/*.asm)
+ASM_HDRS := $(wildcard *.inc) \
+			$(wildcard ../librastaldr/*.inc) \
+			$(wildcard ../common/*.inc)
 
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
@@ -67,6 +74,9 @@ build/%.o: %.c $(HDRS) | build
 	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
 
 build/%.o: ../librastaldr/%.c $(HDRS) | build
+	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
+
+build/%.o: ../common/%.c $(HDRS) | build
 	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
 
 build:
