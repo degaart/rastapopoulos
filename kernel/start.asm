@@ -5,11 +5,6 @@ MBFLAGS     equ MBALIGN | MEMINFO
 MAGIC       equ 0x1BADB002
 CHECKSUM    equ -(MAGIC + MBFLAGS)
 
-; VGA text-mode cell contents
-%define VGA_CHARACTER   '*'
-%define VGA_FOREGROUND  0x0f
-%define VGA_BACKGROUND  0x00
-
 ; Multiboot header
 section .multiboot
 align 4
@@ -32,9 +27,7 @@ _start:
     ; set up stack
     mov esp, stack_top
 
-    ; Write a white '*' on black at the top-left VGA text cell.
-    mov word [0xb8000], (VGA_BACKGROUND << 12) | (VGA_FOREGROUND << 8) | VGA_CHARACTER
-
+    ; call C entry point
     extern kmain
     call kmain
 
