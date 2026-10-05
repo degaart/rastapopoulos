@@ -1,0 +1,30 @@
+diff --git a/gas/config/tc-i386.c b/gas/config/tc-i386.c
+index c46a0811..878df99b 100644
+--- a/gas/config/tc-i386.c
++++ b/gas/config/tc-i386.c
+@@ -15111,6 +15111,9 @@ x86_dwarf2_addr_size (void)
+ #if defined (OBJ_MAYBE_ELF) || defined (OBJ_ELF)
+   if (x86_elf_abi == X86_64_X32_ABI)
+     return 4;
++  /* IA-16 uses ELF32 containers, but its DWARF addresses are 16 bits.  */
++  if (strcmp (TARGET_CPU, "ia16") == 0 && flag_code != CODE_64BIT)
++    return 2;
+ #endif
+   return bfd_arch_bits_per_address (stdoutput) / 8;
+ }
+diff --git a/gas/testsuite/gas/i386/i386.exp b/gas/testsuite/gas/i386/i386.exp
+index c7822c4c..e61b9d61 100644
+--- a/gas/testsuite/gas/i386/i386.exp
++++ b/gas/testsuite/gas/i386/i386.exp
+@@ -17,6 +17,11 @@
+ #
+ # i386 tests
+ #
++if { [istarget "ia16-*-*"] } then {
++    run_dump_test "ia16-dwarf-line-addr"
++    return
++}
++
+ if { ![istarget "i*86-*-*"] && ![istarget "x86_64-*-*"] } then {
+     return
+ }

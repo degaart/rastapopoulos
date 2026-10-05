@@ -1,0 +1,19 @@
+# vim: ft=bash
+VERSION='17.2'
+SOURCE_URL="https://ftp.gnu.org/gnu/gdb/gdb-${VERSION}.tar.xz"
+
+build()
+{
+    "$1/gdb-${VERSION}/configure" \
+        --target="$TARGET" \
+        --prefix="$PREFIX" \
+        --disable-werror \
+        --with-gmp="$PREFIX" \
+        --with-mpc="$PREFIX" \
+        --without-guile
+    make -j$(nproc)
+    make install
+}
+
+
+

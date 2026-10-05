@@ -1,0 +1,12 @@
+binutils
+gmp
+mpfr
+mpc
+gcc
+nasm
+gdb
+binutils-ia16
+gcc-ia16
+bochs
+
+

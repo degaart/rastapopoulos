@@ -1,0 +1,16 @@
+# vim: ft=bash
+VERSION='3.1'
+SOURCE_URL='https://github.com/bochs-emu/Bochs/archive/refs/tags/REL_3_1_FINAL.tar.gz'
+
+build()
+{
+    "$1/Bochs-REL_3_1_FINAL/bochs/configure" \
+        --prefix="$PREFIX" \
+        --enable-debugger \
+        --enable-debugger-gui \
+        --enable-iodebug \
+        --enable-x86-debugger
+    make -j$(nproc)
+    make install
+}
+

@@ -1,0 +1,17 @@
+# vim: ft=bash
+VERSION='2.47'
+SOURCE_URL='https://ftp.gnu.org/gnu/binutils/binutils-2.47.tar.xz'
+
+build()
+{
+    "$1/binutils-2.47/configure" \
+        --target="$TARGET" \
+        --prefix="$PREFIX" \
+        --with-sysroot \
+        --disable-nls \
+        --disable-werror \
+        --enable-default-execstack=no
+    make -j$(nproc)
+    make install
+}
+

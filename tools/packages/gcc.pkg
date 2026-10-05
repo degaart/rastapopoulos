@@ -1,0 +1,27 @@
+# vim: ft=bash
+VERSION='16.2.0'
+SOURCE_URL="https://ftp.fu-berlin.de/unix/languages/gcc/releases/gcc-${VERSION}/gcc-${VERSION}.tar.xz"
+
+build()
+{
+    "$1/gcc-${VERSION}/configure" \
+        --prefix="$PREFIX" \
+        --target=$TARGET \
+        --disable-nls \
+        --enable-languages=c,c++ \
+        --without-headers \
+        --enable-initfini-array \
+        --disable-hosted-libstdcxx \
+        --with-gmp="$PREFIX" \
+        --with-mpc="$PREFIX" \
+        --with-mpfr="$PREFIX"
+
+    local nprocs="$(nproc)"
+    make all-gcc -j$nprocs
+    make all-target-libgcc -j$nprocs
+    make all-target-libstdc++-v3 -j$nprocs
+    make install-gcc
+    make install-target-libgcc
+    make install-target-libstdc++-v3
+}
+

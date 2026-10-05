@@ -1,0 +1,12 @@
+# vim: ft=bash
+VERSION='3.02'
+SOURCE_URL="https://www.nasm.us/pub/nasm/releasebuilds/${VERSION}/nasm-${VERSION}.tar.xz"
+
+build()
+{
+    "$1/nasm-$VERSION/configure" \
+        --prefix="$PREFIX"
+    make -j$(nproc)
+    make install
+}
+

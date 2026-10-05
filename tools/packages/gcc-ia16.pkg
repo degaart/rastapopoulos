@@ -1,0 +1,25 @@
+# vim: ft=bash
+GIT_URL="https://gitlab.com/tkchia/gcc-ia16.git"
+GIT_COMMIT='9a5539544a9095ad35c4f57a23f2b79461032cb2'
+
+build()
+{
+    "$1/gcc-ia16/configure" \
+        --prefix="$PREFIX" \
+        --target=ia16-elf \
+        --disable-nls \
+        --enable-languages=c \
+        --without-headers \
+        --with-gmp="$PREFIX" \
+        --with-mpc="$PREFIX" \
+        --with-mpfr="$PREFIX"  \
+        --disable-libssp \
+        --disable-libquadmath
+
+    local nprocs=$(nproc)
+    make all-gcc -j$nprocs
+    make all-target-libgcc -j$nprocs
+    make install-gcc
+    make install-target-libgcc
+}
+

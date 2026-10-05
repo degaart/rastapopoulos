@@ -1,0 +1,15 @@
+# vim: ft=bash
+VERSION='6.3.0'
+SOURCE_URL="https://ftp.gnu.org/gnu/gmp/gmp-${VERSION}.tar.xz"
+
+build()
+{
+    sed -i '/long long t1;/,+1s/()/(...)/' "$1/gmp-6.3.0/configure"
+    "$1/gmp-${VERSION}/configure" \
+        --prefix="$PREFIX" \
+        --enable-cxx \
+        --disable-static
+    make -j$(nproc)
+    make install
+}
+

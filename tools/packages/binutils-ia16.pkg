@@ -1,0 +1,17 @@
+# vim: ft=bash
+GIT_URL="https://github.com/tkchia/binutils-ia16.git"
+GIT_COMMIT='904e46a417122e7f2077ba6f8427b4b219b80c04'
+
+build()
+{
+    "$1/binutils-ia16/configure" \
+        --prefix="$PREFIX" \
+        --target=ia16-elf \
+        --with-sysroot="$PREFIX/i16-elf" \
+        --disable-nls \
+        --disable-werror \
+        -enable-x86-hpa-segelf=yes
+    make -j$(nproc)
+    make install
+}
+

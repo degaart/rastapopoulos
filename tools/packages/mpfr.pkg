@@ -1,0 +1,15 @@
+# vim: ft=bash
+VERSION='4.2.2'
+SOURCE_URL="https://ftp.gnu.org/gnu/mpfr/mpfr-${VERSION}.tar.xz"
+
+build()
+{
+    "$1/mpfr-${VERSION}/configure" \
+        --prefix="$PREFIX" \
+        --disable-static \
+        --with-gmp="$PREFIX" \
+        --enable-thread-safe
+    make -j$(nproc)
+    make install
+}
+

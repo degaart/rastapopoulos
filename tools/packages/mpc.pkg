@@ -1,0 +1,14 @@
+# vim: ft=bash
+VERSION='1.4.1'
+SOURCE_URL="https://ftp.gnu.org/gnu/mpc/mpc-${VERSION}.tar.xz"
+
+build()
+{
+    "$1/mpc-${VERSION}/configure" \
+        --prefix="$PREFIX" \
+        --disable-static \
+        --with-gmp="$PREFIX"
+    make -j$(nproc)
+    make install
+}
+
