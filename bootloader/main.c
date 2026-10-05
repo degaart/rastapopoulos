@@ -1,4 +1,6 @@
 #include "a20.h"
+#include "gdt.h"
+#include "hmemcpy.h"
 #include <allocator.h>
 #include <elf.h>
 #include <fat12.h>
@@ -8,6 +10,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+
+extern void exec_kernel(uint32_t entry) __attribute__((noreturn));
 
 void _panic(const char* file, int line, const char* fmt, ...)
 {
@@ -95,6 +99,28 @@ void read_fully(struct File* file, size_t offset, void* buffer, size_t size)
     }
 }
 
+static void load_program(struct File* file, const Elf32_Phdr* phdr)
+{
+    if (fat12_seek(file, phdr->p_offset) != phdr->p_offset) {
+        panic("Failed to seek to %lu", phdr->p_offset);
+    }
+
+    static const int buffer_size = 4096;
+    uint8_t* buffer = malloc(buffer_size);
+    uint32_t off = phdr->p_offset;
+    for (uint32_t dst = phdr->p_vaddr; dst < phdr->p_vaddr + phdr->p_filesz;) {
+        int nread = fat12_read(file, buffer, buffer_size);
+        if (nread == 0) {
+            panic("Unexpected EOF at offset 0x%lx", off);
+        }
+        hmemcpy(dst, buffer, nread);
+
+        off += nread;
+        dst += buffer_size;
+    }
+    free(buffer);
+}
+
 void main()
 {
     /* Get conventional memory size */
@@ -140,6 +166,10 @@ void main()
     if (!a20_enabled()) {
         panic("Failed to enable A20");
     }
+
+    debugbreak();
+    uint32_t canary = 0xDEADBEEF;
+    hmemcpy(0x100000, &canary, sizeof(canary));
 
     /* Read FAT */
     size_t fat_size = bpb->sectors_per_fat * bpb->bytes_per_sector;
@@ -225,14 +255,22 @@ void main()
     read_fully(&file, elf_hdr->e_phoff, elf_phdrs, phdrs_size);
     for (int i = 0; i < elf_hdr->e_phnum; i++) {
         if (elf_phdrs[i].p_type == PT_LOAD) {
-            printf("%d off=0x%lx vaddr=0x%lx fsize=0x%lx msize=0x%lx "
-                   "align=0x%lx\n",
-                   i, elf_phdrs[i].p_offset, elf_phdrs[i].p_vaddr,
-                   elf_phdrs[i].p_filesz, elf_phdrs[i].p_memsz,
-                   elf_phdrs[i].p_align);
+            load_program(&file, &elf_phdrs[i]);
         }
     }
 
+    /* setup GDT */
+    struct Gdt gdt;
+    gdt_set_entry(&gdt.null, 0, 0, 0, 0);
+    gdt_set_entry(&gdt.code, 0, 0xfffff, GDT_ACCESS_CODE, GDT_FLAGS_32BIT_4K);
+    gdt_set_entry(&gdt.data, 0, 0xfffff, GDT_ACCESS_DATA, GDT_FLAGS_32BIT_4K);
+
+    struct Gdtr gdtr = {.limit = sizeof(gdt) - 1,
+                        .base = (uint32_t)(uintptr_t)&gdt};
+    gdt_load(&gdtr);
+
+    /* Jump into kernel */
+    exec_kernel(elf_hdr->e_entry);
     printf("OK\n");
 }
 
