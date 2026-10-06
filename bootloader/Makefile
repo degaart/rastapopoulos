@@ -14,7 +14,7 @@ CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
 		  -I../librastaldr -I../common \
-		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable \
+		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function \
 		  -g
 LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \

@@ -28,19 +28,10 @@ struct Regs
 {
     uint16_t ax, bx, cx, dx;
     uint16_t si, di, bp, es;
-    uint16_t cf;
+    uint16_t flags;
 };
 
-void int13(struct Regs* regs);
-
-unsigned int12()
-{
-    /* gcc-ia16 specifies bx, bp and flags should be preserved inside asm
-     * blocks */
-    unsigned ax;
-    asm volatile("int 0x12\n\t" : "=a"(ax) : : "bx", "bp", "cc", "memory");
-    return ax;
-}
+void bioscall(uint16_t number, struct Regs* regs);
 
 bool read_sector(const struct BPB* bpb, void* buffer, unsigned lba)
 {
@@ -61,8 +52,8 @@ bool read_sector(const struct BPB* bpb, void* buffer, unsigned lba)
     regs.dx = bpb->boot_drive | (head << 8);
     regs.es = 0x0;
 
-    int13(&regs);
-    return regs.cf == 0;
+    bioscall(0x13, &regs);
+    return (regs.flags & 0x1) == 0;
 }
 
 bool read_sectors(const struct BPB* bpb, void* buffer, uint16_t lba,
@@ -141,7 +132,10 @@ static void load_program(struct File* file, const Elf32_Phdr* phdr)
 void main()
 {
     /* Get conventional memory size */
-    unsigned long mem_size = int12() * 1024UL;
+    struct Regs regs = {0};
+    bioscall(0x12, &regs);
+
+    unsigned long mem_size = regs.ax * 1024UL;
     printf("Conventional memory: %lu bytes\n", mem_size);
 
     /*
@@ -248,6 +242,9 @@ void main()
     if (hdr->flags != (MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO)) {
         panic("Unsupported multiboot flags: 0x%lx", hdr->flags);
     }
+
+    /* Fill the boot information structure */
+    struct multiboot_info mi = {0};
 
     /* Now, we need to parse the elf file, while not reading all of it into
      * memory */
