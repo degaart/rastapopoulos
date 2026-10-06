@@ -256,6 +256,9 @@ void main()
         printf("Upper memory: %lu Kb\n", mi.mem_upper);
     }
 
+    mi.boot_device = boot_drive;
+    mi.flags |= MULTIBOOT_INFO_BOOTDEV;
+
     /* Now, we need to parse the elf file, while not reading all of it into
      * memory */
     const Elf32_Ehdr* elf_hdr = (const Elf32_Ehdr*)read_buffer;
