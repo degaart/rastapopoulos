@@ -44,7 +44,7 @@ all: $(IMAGE)
 
 $(IMAGE): build/bootsect.bin build/rastaldr.bin | build
 	if ! [ -f $(IMAGE) ]; then \
-		dd if=/dev/zero of=$(IMAGE) bs=512 count=320 status=none; \
+		dd if=/dev/zero of=$(IMAGE) bs=512 count=2880 status=none; \
 		mformat -i $(IMAGE) -k; \
 	fi
 	[ -f build/bpb.bin ] || \

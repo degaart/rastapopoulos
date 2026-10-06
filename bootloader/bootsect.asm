@@ -19,7 +19,7 @@ struc V
     .root_dir_size_sect     resw 1
     .read_retry             resw 1
     .paragraphs_per_cluster resw 1
-    .fat_buffer             resb 512 * 9                    ; intentionally limit to 9 sectors
+    .fat_buffer             resb 512 * 10                   ; intentionally limit to 10 sectors
     .root_buffer            resb 1                          ; variable-length
 endstruc
 
@@ -85,7 +85,7 @@ setupsegs:
     ; read first FAT
     mov ax, 1
     mov cx, [bpb.sectors_per_fat]
-    cmp cx, 9
+    cmp cx, 10
     je  bad
     mov bx, VARS+V.fat_buffer
     call read_sectors
