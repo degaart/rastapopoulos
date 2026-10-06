@@ -10,7 +10,9 @@ build()
         --with-sysroot="$PREFIX/i16-elf" \
         --disable-nls \
         --disable-werror \
-        -enable-x86-hpa-segelf=yes
+        -enable-x86-hpa-segelf=yes \
+        --disable-libctf --disable-gdb --disable-libdecnumber \
+        --disable-readline --disable-sim --disable-nls
     make -j$(nproc)
     make install
 }

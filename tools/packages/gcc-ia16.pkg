@@ -14,12 +14,16 @@ build()
         --with-mpc="$PREFIX" \
         --with-mpfr="$PREFIX"  \
         --disable-libssp \
-        --disable-libquadmath
+        --disable-libquadmath \
+        --disable-libstdcxx \
+        --disable-libssp
 
     local nprocs=$(nproc)
-    make all-gcc -j$nprocs
-    make all-target-libgcc -j$nprocs
-    make install-gcc
-    make install-target-libgcc
+    make -j$nprocs
+    make install
+    #make all-gcc -j$nprocs
+    #make all-target-libgcc -j$nprocs
+    #make install-gcc
+    #make install-target-libgcc
 }
 

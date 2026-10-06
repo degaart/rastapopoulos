@@ -13,7 +13,6 @@ IMAGE := build/rastapopoulos.img
 CFLAGS := -DRASTA -DRASTA_BOOTLOADER \
 		  -ffreestanding -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections -march=i8086 -mcmodel=tiny \
-		  -mshort-jumps -march=i8088 \
 		  -I../librastaldr -I../common \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable \
 		  -g

@@ -8,35 +8,44 @@ GCC_INCLUDE_DIR := $(shell gcc -print-file-name=include)
 CFLAGS := -nostdinc -isystem "$(GCC_INCLUDE_DIR)" \
 		  -ffreestanding \
 		  -g \
-		  -I../librastaldr \
+		  -I../librastaldr -I../common \
 		  -Wall -Wno-main
 LDFLAGS := -nostdlib -g -T test.ld
-LIBRASTALDR_SRCS := $(wildcard ../librastaldr/*.c)
-LIBRASTALDR_HDRS := $(wildcard ../librastaldr/*.h)
-LIBRASTALDR_ASM_SRCS := $(wildcard ../librastaldr/*.asm)
-LIBRASTALDR_ASM_HDRS := $(wildcard ../librastaldr/*.inc)
-LIBRASTALDR_OBJS := $(addprefix build/,$(notdir $(LIBRASTALDR_SRCS:.c=.o)))
-LIBRASTALDR_OBJS := $(LIBRASTALDR_OBJS) $(addprefix build/,$(notdir $(LIBRASTALDR_ASM_SRCS:.asm=.o)))
-HEADERS := $(wildcard *.h *.inc) $(LIBRASTALDR_HDRS)
+
+SRCS := $(wildcard ../librastaldr/*.c) \
+		$(wildcard ../common/*.c)
+HDRS := $(wildcard *.h) \
+		$(wildcard ../librastaldr/*.h) \
+		$(wildcard ../common/*.h)
+ASM_SRCS := $(wildcard ../librastaldr/*.asm) \
+			$(wildcard ../common/*.asm)
+ASM_HDRS := $(wildcard *.inc) \
+			$(wildcard ../librastaldr/*.inc) \
+			$(wildcard ../common/*.inc)
+OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
+		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
 PROGRAMS := build/test_elf \
 			build/test_fat12 \
 			build/test_format
 
 all: $(PROGRAMS)
 
-build/%: build/%.o $(LIBRASTALDR_OBJS) build/rastaldr_glue.o build/start.o | build
+build/%: build/%.o $(OBJS) build/rastaldr_glue.o build/start.o | build
 	$(LD) -o $@ $^ $(LDFLAGS)
 
-# build/test_elf: build/test_elf.o $(LIBRASTALDR_OBJS) build/rastaldr_glue.o build/start.o | build
-# 	$(LD) -o $@ $^ $(LDFLAGS)
-
-build/%.o: %.c $(HEADERS) | build
+build/%.o: %.c $(HDRS) | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-build/%.o: ../librastaldr/%.c $(LIBRASTALDR_HDRS) | build
+build/%.o: ../librastaldr/%.c $(HDRS) | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-build/%.o: ../librastaldr/%.asm $(LIBRASTALDDR_ASM_HDRS) | build
+build/%.o: ../librastaldr/%.asm $(ASM_HDRS) | build
+	$(AS) -f elf64 -o $@ $<
+
+build/%.o: ../common/%.c $(HDRS) | build
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+build/%.o: ../common/%.asm $(ASM_HDRS) | build
 	$(AS) -f elf64 -o $@ $<
 
 build/start.o: start.asm | build
