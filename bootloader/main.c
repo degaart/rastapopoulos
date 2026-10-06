@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 extern void exec_kernel(uint32_t entry) __attribute__((noreturn));
 
@@ -245,6 +246,15 @@ void main()
 
     /* Fill the boot information structure */
     struct multiboot_info mi = {0};
+
+    regs.ax = 0x8800;
+    bioscall(0x15, &regs);
+    if ((regs.flags & 1) == 0) {
+        mi.mem_lower = mem_size / 1024;
+        mi.mem_upper = regs.ax;
+        mi.flags |= MULTIBOOT_INFO_MEMORY;
+        printf("Upper memory: %lu Kb\n", mi.mem_upper);
+    }
 
     /* Now, we need to parse the elf file, while not reading all of it into
      * memory */

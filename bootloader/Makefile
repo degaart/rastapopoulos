@@ -20,6 +20,7 @@ LDFLAGS := -nostdlib \
 		   -T rastaldr.ld \
 		   -Wl,-Map=build/rastaldr.map \
 		   -Wl,--gc-sections \
+		   -Wl,--no-warn-rwx-segments \
 		   -g \
 		   -lgcc
 

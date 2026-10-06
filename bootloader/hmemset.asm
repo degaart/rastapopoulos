@@ -34,7 +34,6 @@ SECTION .text
 ; ---------------------------------------------------------------------------
 global hmemset
 hmemset:
-    xchg bx, bx
     push bp
     mov  bp, sp
 
