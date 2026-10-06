@@ -87,6 +87,7 @@ clean:
 
 run: all
 	qemu-system-i386 \
+		-m 128 \
 		-drive file=$(IMAGE),format=raw,if=floppy \
 		-boot a \
 		--no-reboot

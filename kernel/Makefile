@@ -30,7 +30,7 @@ ASM_SRCS := $(wildcard *.asm) \
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
 
-all: $(IMAGE)
+all: $(IMAGE) $(BINARY)
 
 $(IMAGE): $(BINARY)
 	[ -f $(IMAGE) ] || make -C ../bootloader

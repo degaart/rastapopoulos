@@ -246,13 +246,34 @@ void main()
 
     /* Fill the boot information structure */
     struct multiboot_info mi = {0};
+    mi.mem_lower = mem_size / 1024;
 
-    regs.ax = 0x8800;
+    regs.ax = 0xe801;
     bioscall(0x15, &regs);
     if ((regs.flags & 1) == 0) {
-        mi.mem_lower = mem_size / 1024;
-        mi.mem_upper = regs.ax;
+        uint32_t low_kb;
+        uint32_t high_64k;
+        if (regs.cx != 0 || regs.dx != 0) {
+            low_kb = regs.cx;
+            high_64k = regs.dx;
+        } else {
+            low_kb = regs.ax;
+            high_64k = regs.bx;
+        }
+        mi.mem_upper = low_kb + high_64k * 64;
         mi.flags |= MULTIBOOT_INFO_MEMORY;
+    }
+
+    if ((mi.flags & MULTIBOOT_INFO_MEMORY) == 0) {
+        regs.ax = 0x8800;
+        bioscall(0x15, &regs);
+        if ((regs.flags & 1) == 0) {
+            mi.mem_upper = regs.ax;
+            mi.flags |= MULTIBOOT_INFO_MEMORY;
+        }
+    }
+
+    if (mi.flags & MULTIBOOT_INFO_MEMORY) {
         printf("Upper memory: %lu Kb\n", mi.mem_upper);
     }
 
