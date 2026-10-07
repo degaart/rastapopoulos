@@ -15,7 +15,8 @@
 #include <string.h>
 #include <util.h>
 
-extern void exec_kernel(uint32_t entry) __attribute__((noreturn));
+extern void exec_kernel(uint32_t entry, const struct multiboot_info*)
+    __attribute__((noreturn));
 
 void _panic(const char* file, int line, const char* fmt, ...)
 {
@@ -383,7 +384,8 @@ void main()
     gdt_load(&gdtr);
 
     /* Jump into kernel */
-    exec_kernel(elf_hdr.e_entry);
+    printf("mi: %p\n", &mi);
+    exec_kernel(elf_hdr.e_entry, &mi);
     printf("OK\n");
 }
 

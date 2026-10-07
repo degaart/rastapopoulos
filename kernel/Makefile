@@ -9,11 +9,11 @@ CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -fdata-sections -ffunction-sections \
 		  -march=i386 -O0 -g \
 		  -fno-strict-aliasing \
-		  -I../common \
+		  -I../common -I../third-party \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -Tkernel.ld \
 		   -Wl,-Map=build/kernel.map \
-		   -ffreestanding -nostdlib -g
+		   -ffreestanding -nostdlib -g -lgcc
 
 BINARY := build/kernel.elf
 IMAGE := ../bootloader/build/rastapopoulos.img
@@ -33,10 +33,7 @@ OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 all: $(IMAGE) $(BINARY)
 
 $(IMAGE): $(BINARY)
-	[ -f $(IMAGE) ] || make -C ../bootloader
-	mcopy -o -i $(IMAGE) $(BINARY) ::KERNEL.ELF
-	../tools/build/calc_crc32 < $(BINARY) > build/kernel.crc
-	mcopy -o -i $(IMAGE) build/kernel.crc ::/KERNEL.CRC
+	make -C ../bootloader
 
 $(BINARY): $(OBJS) | build
 	$(CC) -o $@ $^ $(LDFLAGS)

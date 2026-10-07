@@ -42,10 +42,10 @@ void vga_init(void)
     cursor = vga_get_cursor_pos();
 }
 
-void vga_write(const char* text, uint8_t fg, uint8_t bg)
+void vga_write(const char* text, int len, uint8_t fg, uint8_t bg)
 {
     const uint16_t attr = (fg << 8) | bg;
-    while (*text) {
+    while ((len == -1 && *text) || len > 0) {
         char c = *text++;
         if (c == '\n') {
             cursor.x = 0;
@@ -75,6 +75,9 @@ void vga_write(const char* text, uint8_t fg, uint8_t bg)
 
             cursor.y = VGA_HEIGHT - 1;
         }
+
+        if (len != -1)
+            len--;
     }
     vga_set_cursor_pos(cursor);
 }

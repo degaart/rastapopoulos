@@ -31,5 +31,5 @@ struct VGAPoint
 struct VGAPoint vga_get_cursor_pos(void);
 void vga_set_cursor_pos(struct VGAPoint p);
 void vga_init(void);
-void vga_write(const char* text, uint8_t fg, uint8_t bg);
+void vga_write(const char* text, int len, uint8_t fg, uint8_t bg);
 

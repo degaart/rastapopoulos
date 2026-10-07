@@ -1,8 +1,9 @@
 bits 16
 section .text
 
-; void exec_kernel(uint32_t entry)
+; void exec_kernel(uint32_t entry, const void* multiboot_info)
 ; [bp+4] = entry
+; [bp+8] = multiboot_info
 ;
 ; Assumes A20 is alreay enabled and GDT is already
 ; set up correctly with 0x08 pointing to the code segment
@@ -31,9 +32,10 @@ pm_entry:
     mov  gs, ax
     mov  ss, ax
 
-    mov  esp, 0x80000           ; end of conventional memory
-
+    and  esp, 0xffff
     and  ebp, 0xffff
+    mov  eax, 0x2BADB002            ; multiboot signature
+    movzx ebx, WORD [ebp+8]
     jmp  [ebp+4]
 
 halt:

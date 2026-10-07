@@ -24,12 +24,18 @@ section .text
 global _start:function (_start.end - _start)
 _start:
     ; 32-bit protected mode, interrupts disabled, paging disabled
+    ; eax = 0x2BADB002
+    ; ebx = multiboot info
+
     ; set up stack
     mov esp, stack_top
 
     ; call C entry point
+    push ebx
+    push eax
     extern kmain
     call kmain
+    add esp, 8
 
     ; infinite loop
 .hlt:
