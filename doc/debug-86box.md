@@ -48,7 +48,7 @@ hbreak *0x7c00
 
 ## Useful gdb commands
 
-- `si`: step info asm instruction
+- `si`: step into asm instruction
 - `ni`: step over asm instruction
 - `info registers`
 
