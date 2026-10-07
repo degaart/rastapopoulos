@@ -31,9 +31,12 @@ void isr_handler(struct isr_regs* regs)
            "    eip: 0x%lx cs: 0x%lx\n"
            "    eflags: 0x%lx\n"
            "    esp: 0x%lx ss: 0x%lx\n"
-           "    cr0: 0x%lx cr2: 0x%lx\n",
+           "    cr0: 0x%lx cr2: 0x%lx\n"
+           "    eax: 0x%lx ebx: 0x%lx ecx: 0x%lx edx: 0x%lx\n"
+           "    esi: 0x%lx edi: 0x%lx ebp: 0x%lx\n",
            regs->interrupt_number, regs->error_code, regs->eip, regs->cs,
-           regs->eflags, regs->esp, ss, cr0, cr2);
+           regs->eflags, regs->esp, ss, cr0, cr2, regs->eax, regs->ebx,
+           regs->ecx, regs->edx, regs->esi, regs->edi, regs->ebp);
     while (true)
         ;
 }
