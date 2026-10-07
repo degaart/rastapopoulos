@@ -65,7 +65,18 @@ void* malloc(size_t size)
         }
         link = &block->next;
     }
-    panic("Out of memory");
+
+    size_t largest = 0;
+    link = &free_list;
+    while ((block = *link) != 0) {
+        if (block->size > largest) {
+            largest = block->size;
+        }
+        link = &block->next;
+    }
+    panic("Out of memory. Trying to allocate %u bytes, but largest available "
+          "block is %u bytes",
+          size, largest);
     return 0;
 }
 

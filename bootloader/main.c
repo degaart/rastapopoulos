@@ -1,4 +1,5 @@
 #include "a20.h"
+#include "e820.h"
 #include "gdt.h"
 #include "hmemcpy.h"
 #include "hmemset.h"
@@ -12,6 +13,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <util.h>
 
 extern void exec_kernel(uint32_t entry) __attribute__((noreturn));
 
@@ -130,6 +132,54 @@ static void load_program(struct File* file, const Elf32_Phdr* phdr)
     free(buffer);
 }
 
+static int multiboot_get_mmap(struct multiboot_mmap_entry** entries)
+{
+    STAILQ_HEAD(E820EntryHead, E820Entry)
+    e820_entries = STAILQ_HEAD_INITIALIZER(e820_entries);
+    STAILQ_INIT(&e820_entries);
+
+    int count = 0;
+    uint32_t cookie = 0;
+    do {
+        struct E820Entry* entry = malloc(sizeof(struct E820Entry));
+        bool bret = e820(&cookie, entry, sizeof(struct E820Entry));
+        if (!bret) {
+            free(entry);
+            break;
+        }
+
+        STAILQ_INSERT_TAIL(&e820_entries, entry, entries);
+        count++;
+    } while (cookie);
+
+    if (!count)
+        return 0;
+
+    int idx = 0;
+    size_t mmap_size = sizeof(struct multiboot_mmap_entry) * count;
+    struct multiboot_mmap_entry* mmap_entries = malloc(mmap_size);
+    struct E820Entry *entry, *tmp;
+    STAILQ_FOREACH_SAFE(entry, &e820_entries, entries, tmp)
+    {
+        mmap_entries[idx].size = sizeof(struct multiboot_mmap_entry);
+        mmap_entries[idx].addr =
+            entry->base.lo | ((uint64_t)entry->base.hi << 32);
+        mmap_entries[idx].len =
+            entry->length.lo | ((uint64_t)entry->length.hi << 32);
+        mmap_entries[idx].type = entry->type;
+        idx++;
+    }
+
+    while (!STAILQ_EMPTY(&e820_entries)) {
+        struct E820Entry* entry = STAILQ_FIRST(&e820_entries);
+        STAILQ_REMOVE_HEAD(&e820_entries, entries);
+        free(entry);
+    }
+
+    *entries = mmap_entries;
+    return count;
+}
+
 void main()
 {
     /* Get conventional memory size */
@@ -147,6 +197,7 @@ void main()
     extern void* __bss_end;
     size_t heap_size =
         (mem_size > 65535 ? 65535 : mem_size) - (uintptr_t)&__bss_end;
+    heap_size -= 4096; /* 4k stack */
     printf("Heap: %p %u bytes\n", &__bss_end, heap_size);
     heap_init(&__bss_end, heap_size);
 
@@ -197,45 +248,36 @@ void main()
     /*
      * Multiboot1 header: fits within the first 8kb of the image,
      * and must be dword-aligned
-     * So, read the first 8kb of the image
      */
-    size_t remaining = 8192;
-    uint8_t* read_buffer = malloc(remaining);
-    uint8_t* read_ptr = read_buffer;
-    while (remaining) {
-        int nread = fat12_read(&file, read_ptr, remaining);
+    int multiboot_buffer_size = 512;
+    uint8_t* multiboot_buffer = malloc(multiboot_buffer_size);
+    struct multiboot_header* hdr = NULL;
+    for (int block = 0; block < 8192 / multiboot_buffer_size; block++) {
+        int nread = fat12_read(&file, multiboot_buffer, multiboot_buffer_size);
         if (nread == -1) {
             panic("I/O error");
-        } else if (nread == 0) {
+        } else if (nread < sizeof(struct multiboot_header)) {
             break;
         }
 
-        printf("nread: %d\n", nread);
-
-        remaining -= nread;
-        read_ptr += nread;
-    }
-
-    for (int i = 0x1000; i < 0x1000 + 16; i++) {
-        printf("%02x ", read_buffer[i]);
-    }
-    printf("\n");
-
-    /* Sliding-window search of the multiboot signature */
-    const struct multiboot_header* hdr = NULL;
-    for (read_ptr = read_buffer;
-         read_ptr < read_buffer + 8192 - sizeof(struct multiboot_header);
-         read_ptr += 4) {
         const struct multiboot_header* ptr =
-            (const struct multiboot_header*)read_ptr;
-        if (ptr->magic == MULTIBOOT_HEADER_MAGIC) {
-            if (ptr->flags + ptr->magic + ptr->checksum != 0) {
-                panic("Invalid multiboot checksum");
+            (const struct multiboot_header*)multiboot_buffer;
+        for (;
+             ptr <
+             (const struct multiboot_header*)(multiboot_buffer + nread -
+                                              sizeof(struct multiboot_header));
+             ptr += sizeof(uint32_t)) {
+            if (ptr->magic == MULTIBOOT_HEADER_MAGIC) {
+                if (ptr->flags + ptr->magic + ptr->checksum != 0) {
+                    panic("Invalid multiboot checksum");
+                }
+                hdr = malloc(sizeof(struct multiboot_header));
+                memcpy(hdr, ptr, sizeof(struct multiboot_header));
+                break;
             }
-            hdr = ptr;
-            break;
         }
     }
+    free(multiboot_buffer);
 
     if (!hdr) {
         panic("Multiboot header not found");
@@ -280,24 +322,48 @@ void main()
     mi.boot_device = boot_drive;
     mi.flags |= MULTIBOOT_INFO_BOOTDEV;
 
+    struct multiboot_mmap_entry* mmap_entries;
+    int mmap_count = multiboot_get_mmap(&mmap_entries);
+    if (mmap_count) {
+        mi.flags |= MULTIBOOT_INFO_MEM_MAP;
+        mi.mmap_length = sizeof(struct multiboot_mmap_entry) * mmap_count;
+        mi.mmap_addr = (uint32_t)(uintptr_t)mmap_entries;
+
+        printf("Memory map:\n");
+        for (int i = 0; i < mmap_count; i++) {
+            printf("    addr: 0x%lx%lx len: 0x%lx%lx type: 0x%lx\n",
+                   (uint32_t)(mmap_entries[i].addr << 32),
+                   (uint32_t)mmap_entries[i].addr,
+                   (uint32_t)(mmap_entries[i].len << 32),
+                   (uint32_t)mmap_entries[i].len, mmap_entries[i].type);
+        }
+    }
+
     /* Now, we need to parse the elf file, while not reading all of it into
      * memory */
-    const Elf32_Ehdr* elf_hdr = (const Elf32_Ehdr*)read_buffer;
-    if (elf_hdr->e_ident[0] != 0x7f || elf_hdr->e_ident[1] != 'E' ||
-        elf_hdr->e_ident[2] != 'L' || elf_hdr->e_ident[3] != 'F') {
+    if (fat12_seek(&file, 0) != 0) {
+        panic("fat12_seek failed");
+    }
+
+    Elf32_Ehdr elf_hdr;
+    if (fat12_read(&file, &elf_hdr, sizeof(elf_hdr)) != sizeof(elf_hdr)) {
+        panic("I/O error");
+    }
+    if (elf_hdr.e_ident[0] != 0x7f || elf_hdr.e_ident[1] != 'E' ||
+        elf_hdr.e_ident[2] != 'L' || elf_hdr.e_ident[3] != 'F') {
         panic("Invalid ELF magic");
-    } else if (elf_hdr->e_ident[EI_CLASS] != ELFCLASS32 ||
-               elf_hdr->e_ident[EI_DATA] != ELFDATA2LSB ||
-               elf_hdr->e_ident[EI_VERSION] != EV_CURRENT ||
-               elf_hdr->e_type != ET_EXEC || elf_hdr->e_machine != EM_386 ||
-               elf_hdr->e_version != EV_CURRENT || elf_hdr->e_phoff == 0) {
+    } else if (elf_hdr.e_ident[EI_CLASS] != ELFCLASS32 ||
+               elf_hdr.e_ident[EI_DATA] != ELFDATA2LSB ||
+               elf_hdr.e_ident[EI_VERSION] != EV_CURRENT ||
+               elf_hdr.e_type != ET_EXEC || elf_hdr.e_machine != EM_386 ||
+               elf_hdr.e_version != EV_CURRENT || elf_hdr.e_phoff == 0) {
         panic("Unsupported ELF file");
     }
 
-    size_t phdrs_size = elf_hdr->e_phentsize * elf_hdr->e_phnum;
+    size_t phdrs_size = elf_hdr.e_phentsize * elf_hdr.e_phnum;
     Elf32_Phdr* elf_phdrs = malloc(phdrs_size);
-    read_fully(&file, elf_hdr->e_phoff, elf_phdrs, phdrs_size);
-    for (int i = 0; i < elf_hdr->e_phnum; i++) {
+    read_fully(&file, elf_hdr.e_phoff, elf_phdrs, phdrs_size);
+    for (int i = 0; i < elf_hdr.e_phnum; i++) {
         if (elf_phdrs[i].p_type == PT_LOAD) {
             load_program(&file, &elf_phdrs[i]);
         }
@@ -314,7 +380,7 @@ void main()
     gdt_load(&gdtr);
 
     /* Jump into kernel */
-    exec_kernel(elf_hdr->e_entry);
+    exec_kernel(elf_hdr.e_entry);
     printf("OK\n");
 }
 
