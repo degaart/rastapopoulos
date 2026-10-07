@@ -42,7 +42,7 @@ OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 
 all: $(IMAGE)
 
-$(IMAGE): build/bootsect.bin build/rastaldr.bin | build
+$(IMAGE): build/bootsect.bin build/rastaldr.bin ../kernel/build/kernel.elf | build
 	if ! [ -f $(IMAGE) ]; then \
 		dd if=/dev/zero of=$(IMAGE) bs=512 count=2880 status=none; \
 		mformat -i $(IMAGE) -k; \

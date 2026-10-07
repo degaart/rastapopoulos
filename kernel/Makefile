@@ -71,3 +71,7 @@ debug: all
 format:
 	clang-format -i $(HDRS) $(SRCS)
 
+bochs: all
+	bochs -q -dbg_gui
+
+

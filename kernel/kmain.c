@@ -1,11 +1,14 @@
 #include "../librastaldr/multiboot.h"
 #include "kernel.h"
 #include "vga.h"
+#include <gdt.h>
 #include <string.h>
 
 #define STB_SPRINTF_NOFLOAT
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
+
+#define debugbreak() asm volatile("xchg bx, bx" ::: "memory")
 
 static char* sprintfcb(const char* buf, void* user, int len)
 {
@@ -80,7 +83,16 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
         printf("PANIC: Unsupported bootloader\n");
         return;
     }
-
     dump_multiboot(mb_info);
+
+    struct Gdt gdt;
+    gdt_set_entry(&gdt.null, 0, 0, 0, 0);
+    gdt_set_entry(&gdt.code, 0, 0xfffff, GDT_ACCESS_CODE, GDT_FLAGS_32BIT_4K);
+    gdt_set_entry(&gdt.data, 0, 0xfffff, GDT_ACCESS_DATA, GDT_FLAGS_32BIT_4K);
+
+    struct Gdtr gdtr = {.limit = sizeof(gdt) - 1,
+                        .base = (uint32_t)(uintptr_t)&gdt};
+    gdt_load(&gdtr);
+    printf("OK\n");
 }
 

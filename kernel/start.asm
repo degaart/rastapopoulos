@@ -28,6 +28,7 @@ _start:
     ; ebx = multiboot info
 
     ; set up stack
+    cli
     mov esp, stack_top
 
     ; call C entry point
