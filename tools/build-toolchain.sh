@@ -85,5 +85,5 @@ done < "$SCRIPT_PATH/packages/packages.idx"
 
 echo "export PREFIX='$PREFIX'" > "$PREFIX/environment.sh"
 echo 'export PATH="$PREFIX/bin:$PREFIX/sbin:$PATH"' >> "$PREFIX/environment.sh"
-
+[ -n "${HOSTDATA:-}" ] && echo "export HOSTDATA=\"$HOSTDATA\"" >> "$PREFIX/environment.sh"
 
