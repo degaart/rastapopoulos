@@ -1,4 +1,5 @@
 #include "../librastaldr/multiboot.h"
+#include "early_malloc.h"
 #include "idt.h"
 #include "kernel.h"
 #include "vga.h"
@@ -79,6 +80,8 @@ static void dump_multiboot(const struct multiboot_info* info)
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 {
+    early_malloc_init();
+
     vga_init();
     printf("RastapopoulOS kernel running\n");
     if (mb_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
@@ -102,14 +105,10 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     idt_init();
 
-    asm volatile("int 0x80" ::: "memory");
-    asm volatile("xor edx, edx\n"
-                 "mov eax, 10\n"
-                 "div edx"
-                 :
-                 :
-                 : "eax", "edx");
+    uint64_t* long1 = early_malloc(sizeof(uint64_t));
+    uint64_t* long2 = early_malloc(sizeof(uint64_t));
 
+    printf("long1: %p, long2: %p\n", long1, long2);
     printf("OK\n");
 }
 

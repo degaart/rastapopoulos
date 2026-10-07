@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+/* A must be a power of two */
+#define ALIGN_UP(V, A) (((V) + (A) - 1) & (~((A) - 1)))
+
 static inline __attribute__((always_inline)) uint8_t inb(uint16_t port)
 {
     uint8_t value;
