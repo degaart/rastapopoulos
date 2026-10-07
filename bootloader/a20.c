@@ -1,56 +1,6 @@
 #include "a20.h"
 
 /*
- * Check A20 is enabled by writing temporary values
- * to 0000:0500 and checking whether it does not alias
- * FFFF:0500
- */
-bool a20_enabled(void)
-{
-    unsigned int result;
-
-    __asm__ volatile("push ds\n\t"
-                     "push es\n\t"
-
-                     "xor ax, ax\n\t"
-                     "mov ds, ax\n\t"
-
-                     "mov ax, 0xffff\n\t"
-                     "mov es, ax\n\t"
-
-                     "mov al, BYTE PTR ds:[0x0500]\n\t"
-                     "push ax\n\t"
-
-                     "mov al, BYTE PTR es:[0x0510]\n\t"
-                     "push ax\n\t"
-
-                     "mov BYTE PTR ds:[0x0500], 0x00\n\t"
-                     "mov BYTE PTR es:[0x0510], 0xff\n\t"
-
-                     "xor ax, ax\n\t"
-                     "cmp BYTE PTR ds:[0x0500], 0x00\n\t"
-                     ".byte 0x0f, 0x94, 0xc0\n\t" /* sete al */
-                     "mov dx, ax\n\t"
-
-                     "pop ax\n\t"
-                     "mov BYTE PTR es:[0x0510], al\n\t"
-
-                     "pop ax\n\t"
-                     "mov BYTE PTR ds:[0x0500], al\n\t"
-
-                     "mov ax, dx\n\t"
-
-                     "pop es\n\t"
-                     "pop ds\n\t"
-
-                     : "=a"(result)
-                     :
-                     : "dx", "cc", "memory");
-
-    return result;
-}
-
-/*
  * Enable A20 by calling bios int 15h
  */
 bool a20_enable_bios(void)
