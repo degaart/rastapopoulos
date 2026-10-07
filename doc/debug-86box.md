@@ -51,6 +51,9 @@ hbreak *0x7c00
 - `si`: step into asm instruction
 - `ni`: step over asm instruction
 - `info registers`
+- `hbreak *<linear address>`: add breakpoint
+- To step over `int` instructions, add a temporary breakpoint just after the int instruction: `tbreak *($cs*16+$eip+2)`
+
 
 
 
