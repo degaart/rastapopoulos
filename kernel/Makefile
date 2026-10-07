@@ -8,6 +8,7 @@ CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables \
 		  -fdata-sections -ffunction-sections \
 		  -march=i386 -O0 -g \
+		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
 		  -I../common -I../third-party \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable

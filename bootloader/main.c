@@ -374,7 +374,7 @@ void main()
     }
 
     /* setup GDT */
-    struct Gdt gdt;
+    struct Gdt gdt = {0};
     gdt_set_entry(&gdt.null, 0, 0, 0, 0);
     gdt_set_entry(&gdt.code, 0, 0xfffff, GDT_ACCESS_CODE, GDT_FLAGS_32BIT_4K);
     gdt_set_entry(&gdt.data, 0, 0xfffff, GDT_ACCESS_DATA, GDT_FLAGS_32BIT_4K);

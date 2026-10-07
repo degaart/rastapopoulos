@@ -1,4 +1,5 @@
 #include "../librastaldr/multiboot.h"
+#include "idt.h"
 #include "kernel.h"
 #include "vga.h"
 #include <gdt.h>
@@ -9,6 +10,7 @@
 #include <stb/stb_sprintf.h>
 
 #define debugbreak() asm volatile("xchg bx, bx" ::: "memory")
+extern void halt(void) __attribute__((noreturn));
 
 static char* sprintfcb(const char* buf, void* user, int len)
 {
@@ -85,14 +87,29 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     }
     dump_multiboot(mb_info);
 
-    struct Gdt gdt;
+    struct Gdt gdt = {0};
     gdt_set_entry(&gdt.null, 0, 0, 0, 0);
     gdt_set_entry(&gdt.code, 0, 0xfffff, GDT_ACCESS_CODE, GDT_FLAGS_32BIT_4K);
     gdt_set_entry(&gdt.data, 0, 0xfffff, GDT_ACCESS_DATA, GDT_FLAGS_32BIT_4K);
+    gdt_set_entry(&gdt.usercode, 0, 0xfffff, GDT_ACCESS_USERCODE,
+                  GDT_FLAGS_32BIT_4K);
+    gdt_set_entry(&gdt.userdata, 0, 0xfffff, GDT_ACCESS_USERDATA,
+                  GDT_FLAGS_32BIT_4K);
 
     struct Gdtr gdtr = {.limit = sizeof(gdt) - 1,
                         .base = (uint32_t)(uintptr_t)&gdt};
     gdt_load(&gdtr);
+
+    idt_init();
+
+    asm volatile("int 0x80" ::: "memory");
+    asm volatile("xor edx, edx\n"
+                 "mov eax, 10\n"
+                 "div edx"
+                 :
+                 :
+                 : "eax", "edx");
+
     printf("OK\n");
 }
 
