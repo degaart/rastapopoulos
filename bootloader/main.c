@@ -339,6 +339,9 @@ void main()
         }
     }
 
+    mi.flags |= MULTIBOOT_INFO_BOOT_LOADER_NAME;
+    mi.boot_loader_name = (uintptr_t)"RASTALDR";
+
     /* Now, we need to parse the elf file, while not reading all of it into
      * memory */
     if (fat12_seek(&file, 0) != 0) {
