@@ -1,4 +1,5 @@
 #include "idt.h"
+#include "kernel.h"
 #include "vga.h"
 
 #define CODESEG 0x08
@@ -21,7 +22,18 @@ void idt_set_gate(uint8_t interrupt, uint32_t handler_address,
 
 void isr_handler(struct isr_regs* regs)
 {
-    printf("Exception %lu occurend\n", regs->interrupt_number);
+    uint32_t ss = read_ss();
+    uint32_t cr0 = read_cr0();
+    uint32_t cr2 = read_cr2();
+    printf("Unhandled interrupt:\n"
+           "    vector: 0x%lx\n"
+           "    error_code: 0x%lx\n"
+           "    eip: 0x%lx cs: 0x%lx\n"
+           "    eflags: 0x%lx\n"
+           "    esp: 0x%lx ss: 0x%lx\n"
+           "    cr0: 0x%lx cr2: 0x%lx\n",
+           regs->interrupt_number, regs->error_code, regs->eip, regs->cs,
+           regs->eflags, regs->esp, ss, cr0, cr2);
     while (true)
         ;
 }

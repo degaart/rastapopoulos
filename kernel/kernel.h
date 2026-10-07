@@ -17,3 +17,24 @@ static inline __attribute__((always_inline)) void outb(uint16_t port,
     __asm__ volatile("out %1, %0" : : "a"(value), "Nd"(port));
 }
 
+static inline uint32_t read_cr0(void)
+{
+    uint32_t value;
+    __asm__ volatile("mov %%cr0, %0" : "=r"(value));
+    return value;
+}
+
+static inline uint32_t read_cr2(void)
+{
+    uint32_t value;
+    __asm__ volatile("mov %%cr2, %0" : "=r"(value));
+    return value;
+}
+
+static inline uint16_t read_ss(void)
+{
+    uint16_t value;
+    __asm__ volatile("mov %%ss, %0" : "=r"(value));
+    return value;
+}
+
