@@ -57,5 +57,4 @@ void idt_set_gate(uint8_t interrupt, uint32_t handler_address,
 
 void isr_handler(struct isr_regs* regs);
 extern void idt_load(struct idtr* idtr);
-extern void isr0(void);
 

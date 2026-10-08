@@ -3,7 +3,6 @@
 
 #define ALIGNMENT sizeof(uint64_t)
 
-extern char __kernel_end[];
 static void* early_arena = __kernel_end;
 
 void early_malloc_init(void)

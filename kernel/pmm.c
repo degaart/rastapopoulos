@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define PMM_ADDRESS_LIMIT 0xffffffffull
+#define PMM_ADDRESS_LIMIT 0xffffffff
 
 struct Region
 {
@@ -115,6 +115,15 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
         panic("Logic error");
     if (!bitset_set(&region->bitset, 0))
         panic("Logic error");
+
+    /* Reserve kernel area */
+    uintptr_t start = ALIGN_DOWN((uintptr_t)__kernel_start, PMM_FRAME_SIZE);
+    uintptr_t end = (uintptr_t)early_malloc_tail();
+    for (uintptr_t frame = (uintptr_t)__kernel_start; frame < end;
+         frame += PMM_FRAME_SIZE) {
+        if (!pmm_reserve((void*)frame))
+            panic("Failed to reserve frame 0x%lx", frame);
+    }
 }
 
 void pmm_dump(void)
@@ -176,5 +185,21 @@ size_t pmm_info(void)
         result += bitset_count_unset(&region->bitset);
     }
     return result * PMM_FRAME_SIZE;
+}
+
+bool pmm_reserve(void* frame)
+{
+    struct Region* region;
+    STAILQ_FOREACH(region, &regions, node)
+    {
+        if (frame >= region->start && frame < region->start + region->len) {
+            size_t bit = (uintptr_t)(frame - region->start) / PMM_FRAME_SIZE;
+            if (!bitset_set(&region->bitset, bit)) {
+                return false;
+            }
+            return true;
+        }
+    }
+    return false;
 }
 

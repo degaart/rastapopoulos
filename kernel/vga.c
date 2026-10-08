@@ -5,7 +5,7 @@
 #define VGA_CRTC_INDEX 0x3D4
 #define VGA_CRTC_DATA  0x3D5
 
-static volatile uint16_t* vga_buffer = (volatile uint16_t*)0xb8000;
+static volatile uint16_t* vga_buffer = (volatile uint16_t*)VGA_BASE;
 static struct VGAPoint cursor;
 
 struct VGAPoint vga_get_cursor_pos(void)

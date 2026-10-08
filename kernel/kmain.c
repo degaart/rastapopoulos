@@ -3,6 +3,7 @@
 #include "kernel.h"
 #include "pmm.h"
 #include "vga.h"
+#include "vmm.h"
 #include <gdt.h>
 #include <multiboot.h>
 #include <string.h>
@@ -136,24 +137,16 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
         mmap_entries[1].type = MULTIBOOT_MEMORY_AVAILABLE;
     }
     pmm_init(mmap_entries, mmap_len);
-    pmm_dump();
     printf("Free memory: %zu bytes\n", pmm_info());
 
-    void* frame = pmm_alloc();
-    if (!frame)
-        panic("Failed to allocate frame");
-    printf("Frame: %p\n", frame);
-    printf("Free memory: %zu bytes\n", pmm_info());
-    pmm_free(frame);
-    printf("Free memory: %zu bytes\n", pmm_info());
+    if (!vmm_init())
+        panic("vmm_init failed");
+    if (!vmm_map((void*)VGA_BASE, (void*)VGA_BASE, VMM_WRITABLE))
+        panic("vmm_map failed");
 
-    void* new_frame = pmm_alloc();
-    if (new_frame != frame)
-        panic("Error in pmm implementation");
-    printf("Free memory: %zu bytes\n", pmm_info());
-    pmm_free(new_frame);
+    volatile uint8_t* unmapped = (uint8_t*)0x7c00;
+    *unmapped = 0xcc;
 
-    printf("Free memory: %zu bytes\n", pmm_info());
     printf("OK\n");
 }
 
