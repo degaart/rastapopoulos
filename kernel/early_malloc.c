@@ -22,3 +22,7 @@ void* early_malloc_tail(void)
     return early_arena;
 }
 
+void early_free(void*)
+{
+}
+

@@ -14,7 +14,7 @@ typedef struct
 size_t bitset_storage_size(size_t bit_count);
 
 /*
- * Initializes all valid bits to unset.
+ * Initializes all valid bits to unset
  * storage must be uint32_t-aligned and sufficiently large
  * storage may be NULL when bit_count is zero
  */
@@ -24,7 +24,7 @@ void bitset_init(Bitset* set, uint32_t* storage, size_t bit_count);
 bool bitset_set(Bitset* set, size_t bit);
 bool bitset_unset(Bitset* set, size_t bit);
 
-/* Returns false if the bit is unset or the index is out of bounds. */
+/* Returns false if the bit is unset or the index is out of bounds */
 bool bitset_test(const Bitset* set, size_t bit);
 
 /*

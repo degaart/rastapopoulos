@@ -51,7 +51,7 @@ bool bitset_unset(Bitset* set, size_t bit)
     return true;
 }
 
-size_t bitset_find_first_unset(const Bitset* set)
+size_t bitset_find(const Bitset* set)
 {
     size_t words = bitset_word_count(set->bit_count);
 

@@ -1,9 +1,10 @@
-#include "../librastaldr/multiboot.h"
 #include "early_malloc.h"
 #include "idt.h"
 #include "kernel.h"
+#include "pmm.h"
 #include "vga.h"
 #include <gdt.h>
+#include <multiboot.h>
 #include <string.h>
 
 #define STB_SPRINTF_NOFLOAT
@@ -28,6 +29,19 @@ __attribute__((format(printf, 1, 2))) int printf(const char* fmt, ...)
     int ret = stbsp_vsprintfcb(sprintfcb, NULL, buf, fmt, args);
     va_end(args);
     return ret;
+}
+
+void __panic(const char* file, int line, const char* fmt, ...)
+{
+    printf("PANIC at %s:%d -- ", file, line);
+
+    char buf[STB_SPRINTF_MIN];
+    va_list args;
+    va_start(args, fmt);
+    stbsp_vsprintfcb(sprintfcb, NULL, buf, fmt, args);
+    va_end(args);
+
+    halt();
 }
 
 static void dump_multiboot(const struct multiboot_info* info)
@@ -102,13 +116,44 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     struct Gdtr gdtr = {.limit = sizeof(gdt) - 1,
                         .base = (uint32_t)(uintptr_t)&gdt};
     gdt_load(&gdtr);
-
     idt_init();
 
-    uint64_t* long1 = early_malloc(sizeof(uint64_t));
-    uint64_t* long2 = early_malloc(sizeof(uint64_t));
+    struct multiboot_mmap_entry* mmap_entries =
+        (struct multiboot_mmap_entry*)mb_info->mmap_addr;
+    size_t mmap_len = mb_info->mmap_length;
+    if (mmap_len == 0) {
+        mmap_len = sizeof(struct multiboot_mmap_entry) * 2;
+        mmap_entries = early_malloc(mmap_len);
 
-    printf("long1: %p, long2: %p\n", long1, long2);
+        mmap_entries[0].size = sizeof(struct multiboot_mmap_entry);
+        mmap_entries[0].addr = 0;
+        mmap_entries[0].len = mb_info->mem_lower * 1024;
+        mmap_entries[0].type = MULTIBOOT_MEMORY_AVAILABLE;
+
+        mmap_entries[1].size = sizeof(struct multiboot_mmap_entry);
+        mmap_entries[1].addr = 0x100000; /* 1Mb */
+        mmap_entries[1].len = mb_info->mem_upper * 1024;
+        mmap_entries[1].type = MULTIBOOT_MEMORY_AVAILABLE;
+    }
+    pmm_init(mmap_entries, mmap_len);
+    pmm_dump();
+    printf("Free memory: %zu bytes\n", pmm_info());
+
+    void* frame = pmm_alloc();
+    if (!frame)
+        panic("Failed to allocate frame");
+    printf("Frame: %p\n", frame);
+    printf("Free memory: %zu bytes\n", pmm_info());
+    pmm_free(frame);
+    printf("Free memory: %zu bytes\n", pmm_info());
+
+    void* new_frame = pmm_alloc();
+    if (new_frame != frame)
+        panic("Error in pmm implementation");
+    printf("Free memory: %zu bytes\n", pmm_info());
+    pmm_free(new_frame);
+
+    printf("Free memory: %zu bytes\n", pmm_info());
     printf("OK\n");
 }
 

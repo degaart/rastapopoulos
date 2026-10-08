@@ -19,6 +19,8 @@ stack_bottom:
 resb 16384
 stack_top:
 
+extern halt
+
 ; start function
 section .text
 global _start:function (_start.end - _start)
@@ -37,12 +39,6 @@ _start:
     extern kmain
     call kmain
     add esp, 8
-
-    ; infinite loop
-.hlt:
-    cli
-    hlt
-    jmp .hlt
-
+    jmp  halt
 .end:
 

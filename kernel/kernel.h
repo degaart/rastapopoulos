@@ -3,7 +3,8 @@
 #include <stdint.h>
 
 /* A must be a power of two */
-#define ALIGN_UP(V, A) (((V) + (A) - 1) & (~((A) - 1)))
+#define ALIGN_UP(V, A)   (((V) + (A) - 1) & (~((A) - 1)))
+#define ALIGN_DOWN(V, A) ((V) & ~((A) - 1))
 
 static inline __attribute__((always_inline)) uint8_t inb(uint16_t port)
 {
@@ -40,4 +41,9 @@ static inline uint16_t read_ss(void)
     __asm__ volatile("mov %%ss, %0" : "=r"(value));
     return value;
 }
+
+#define panic(...) __panic(__FILE__, __LINE__, __VA_ARGS__)
+
+__attribute__((format(printf, 3, 4))) void __panic(const char* file, int line,
+                                                   const char* fmt, ...);
 
