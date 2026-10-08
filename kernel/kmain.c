@@ -63,6 +63,8 @@ static void dump_multiboot(const struct multiboot_info* info)
 
 static void test_heap(void)
 {
+    printf("Free mem before tests: %zu bytes\n", pmm_info());
+
     kfree(NULL);
     assert(!kmalloc(0));
     assert(!kmemalign(0, 1));
@@ -74,62 +76,15 @@ static void test_heap(void)
     for (size_t a = 1; a <= (1u << 20); a *= 2) {
         const size_t sizes[] = {1, 3, 15, 16, 17, 4095, 4096, 4097, 65537};
         for (size_t i = 0; i < sizeof(sizes) / sizeof(*sizes); ++i) {
-            printf("a=%zu, size=%zu\n", a, sizes[i]);
-            if (a == 2 && sizes[i] == 16)
-                printf("Here\n");
+            // printf("a=%zu, size=%zu\n", a, sizes[i]);
             void* p = kmemalign(a, sizes[i]);
-            memset(p, 0, sizes[i]);
+            if (p)
+                memset(p, 0, sizes[i]);
             kfree(p);
         }
     }
 
-#if 0
-    fail_next = 1;
-    assert(!heap_alloc(100));
-    empty();
-    void *a = allocate(100, 16);
-    size_t before = mapped;
-    fail_next = 1;
-    assert(!heap_alloc(100000));
-    assert(mapped == before);
-    for (size_t i = 0; i < 100; ++i) assert(((unsigned char *)a)[i] == 0x5a);
-    validate();
-    heap_free(a);
-    empty();
-    /* Coalescing from both sides, then reuse without growth. */
-    a = allocate(1000, 16);
-    void *b = allocate(1000, 16), *c = allocate(1000, 16);
-    void *d = allocate(1000, 16);
-    heap_free(a); heap_free(c); heap_free(b);
-    validate();
-    before = grows;
-    a = allocate(2800, 16);
-    assert(grows == before);
-    heap_free(a); heap_free(d); empty();
-    /* Partial trim must preserve live data and allow regrowth. */
-    a = allocate(100, 16); b = allocate(100000, 4096);
-    before = mapped;
-    heap_free(b);
-    assert(mapped < before && mapped > 0);
-    for (size_t i = 0; i < 100; ++i) assert(((unsigned char *)a)[i] == 0x5a);
-    b = allocate(200000, 64);
-    heap_free(a); heap_free(b); empty();
-    /* No-split path and extension after an allocated last block. */
-    a = allocate(1, 16);
-    size_t overhead = sizeof(HeapBlock *) + 15;
-    b = allocate(heap_last->size - overhead, 16);
-    assert(!heap_last->free);
-    c = allocate(5000, 16);
-    heap_free(a); heap_free(b); heap_free(c); empty();
-    /* Exhaustion, failed-growth atomicity, then full recovery. */
-    void *large[64]; size_t count = 0;
-    while (count < 64 && (large[count] = heap_alloc(1024 * 1024))) ++count;
-    assert(count > 0 && count < 64);
-    validate();
-    while (count) heap_free(large[--count]);
-    empty();
-    puts("deterministic cases: PASS");
-#endif
+    printf("Free mem after tests: %zu bytes\n", pmm_info());
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)

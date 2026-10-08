@@ -2,6 +2,7 @@
 #include "early_malloc.h"
 #include "kernel.h"
 #include "pmm.h"
+#include "stdio.h"
 
 #define ENTRY_COUNT       1024
 #define PAGE_MASK         0xfffff000
@@ -183,6 +184,7 @@ bool vmm_unmap(void* virtual_address)
     uint32_t table_frame = pd[di] & PAGE_MASK;
     pd[di] = 0;
     flush_tlb();
+
     pmm_free((void*)(uintptr_t)table_frame);
     return true;
 }

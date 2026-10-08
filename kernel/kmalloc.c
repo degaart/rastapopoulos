@@ -44,7 +44,6 @@ static void cleanup_tail(void* start, size_t len)
 
 void* heap_grow(size_t bytes)
 {
-    printf("Heap grow! %zu bytes\n", bytes);
     if (bytes & (VMM_PAGE_SIZE - 1))
         return NULL;
 
@@ -52,11 +51,13 @@ void* heap_grow(size_t bytes)
     while (bytes) {
         void* frame = pmm_alloc();
         if (!frame) {
+            // printf("Out of memory while growing heap %zu bytes\n", bytes);
             cleanup_tail(initial_tail, heap_tail - initial_tail);
             return NULL;
         }
 
         if (!vmm_map(frame, heap_tail, VMM_WRITABLE)) {
+            // printf("Out of memory while growing heap %zu bytes\n", bytes);
             cleanup_tail(initial_tail, heap_tail - initial_tail);
             return NULL;
         }
@@ -69,13 +70,16 @@ void* heap_grow(size_t bytes)
 
 void heap_shrink(size_t bytes)
 {
-    printf("Heap shrink! %zu bytes\n", bytes);
     if (bytes & (VMM_PAGE_SIZE - 1))
         panic("Logic error");
     while (bytes) {
         void* page = heap_tail - VMM_PAGE_SIZE;
+        void* frame;
+        if (!vmm_frame(page, &frame))
+            panic("Failed to get frame for address 0x%p", page);
         if (!vmm_unmap(page))
             panic("Logic error");
+        pmm_free(frame);
         heap_tail -= VMM_PAGE_SIZE;
         bytes -= VMM_PAGE_SIZE;
     }
