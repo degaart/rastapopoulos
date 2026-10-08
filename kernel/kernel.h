@@ -70,3 +70,5 @@ static inline void write_cr3(uint32_t value)
 __attribute__((format(printf, 3, 4))) void __panic(const char* file, int line,
                                                    const char* fmt, ...);
 
+extern void halt(void) __attribute__((noreturn));
+

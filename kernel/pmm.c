@@ -1,11 +1,11 @@
 #include "pmm.h"
-#include "../librastaldr/stdio.h"
 #include "bitset.h"
 #include "early_malloc.h"
 #include "kernel.h"
 #include <freebsd/queue.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define PMM_ADDRESS_LIMIT 0xffffffff
 
