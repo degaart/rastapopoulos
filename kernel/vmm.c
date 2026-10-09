@@ -187,7 +187,6 @@ bool vmm_unmap(void* virtual_address)
     flush_tlb();
 
     pmm_free((void*)(uintptr_t)table_frame);
-    trace("Here, pmm_info: %zu\n", pmm_info());
     return true;
 }
 
@@ -244,6 +243,5 @@ void vmm_dump_pd(void)
         if (pd[i])
             count++;
     }
-    printf("Here, count=%d\n", count);
 }
 

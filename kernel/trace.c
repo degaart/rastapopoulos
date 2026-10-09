@@ -33,5 +33,7 @@ void _trace(const char* file, int line, const char* fmt, ...)
     va_start(args, fmt);
     stbsp_vsprintfcb(tracecb, NULL, buf, fmt, args);
     va_end(args);
+
+    serial_putchar('\n');
 }
 

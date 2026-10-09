@@ -4,6 +4,7 @@
 #include "kernel.h"
 #include "kmalloc.h"
 #include "pmm.h"
+#include "trace.h"
 #include "vga.h"
 #include "vmm.h"
 #include <assert.h>
@@ -67,33 +68,26 @@ extern void vmm_dump_pd(void);
 static void test_heap(void)
 {
     printf("Free mem before tests: %zu bytes\n", pmm_info());
-    vmm_dump_pd();
 
-#if 0
     kfree(NULL);
     assert(!kmalloc(0));
     assert(!kmemalign(0, 1));
     assert(!kmemalign(3, 1));
     assert(!kmalloc(SIZE_MAX));
     assert(!kmemalign(4096, SIZE_MAX - 16));
-#endif
     assert(!kmemalign((SIZE_MAX / 2) + 1, 1));
 
-#if 0
     for (size_t a = 1; a <= (1u << 20); a *= 2) {
         const size_t sizes[] = {1, 3, 15, 16, 17, 4095, 4096, 4097, 65537};
         for (size_t i = 0; i < sizeof(sizes) / sizeof(*sizes); ++i) {
-            // printf("a=%zu, size=%zu\n", a, sizes[i]);
             void* p = kmemalign(a, sizes[i]);
             if (p)
                 memset(p, 0, sizes[i]);
             kfree(p);
         }
     }
-#endif
 
     printf("Free mem after tests: %zu bytes\n", pmm_info());
-    vmm_dump_pd();
 
     struct HeapInfo hi = heap_info();
     printf("Heap info:\n"

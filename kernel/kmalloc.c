@@ -3,6 +3,7 @@
 #include "heap.h"
 #include "kernel.h"
 #include "pmm.h"
+#include "trace.h"
 #include "vmm.h"
 #include <stdio.h>
 
@@ -34,12 +35,21 @@ void* kmemalign(size_t alignment, size_t size)
 
 static void cleanup_tail(void* start, size_t len)
 {
+    void* rollback_start = start;
+    trace("heap rollback: start=%p pages=%zu free_before=%zu", start,
+          len / VMM_PAGE_SIZE, pmm_info());
     while (len) {
+        void* frame;
+        if (!vmm_frame(start, &frame))
+            panic("Failed to get frame for address 0x%p", start);
         if (!vmm_unmap(start))
             panic("Logic error");
+        pmm_free(frame);
         len -= VMM_PAGE_SIZE;
         start += VMM_PAGE_SIZE;
     }
+    heap_tail = rollback_start;
+    trace("heap rollback complete: free_after=%zu", pmm_info());
 }
 
 void* heap_grow(size_t bytes)
@@ -51,13 +61,16 @@ void* heap_grow(size_t bytes)
     while (bytes) {
         void* frame = pmm_alloc();
         if (!frame) {
-            // printf("Out of memory while growing heap %zu bytes\n", bytes);
+            trace("heap_grow: physical allocation failed, mapped_pages=%zu",
+                  (heap_tail - initial_tail) / VMM_PAGE_SIZE);
             cleanup_tail(initial_tail, heap_tail - initial_tail);
             return NULL;
         }
 
         if (!vmm_map(frame, heap_tail, VMM_WRITABLE)) {
-            // printf("Out of memory while growing heap %zu bytes\n", bytes);
+            trace("heap_grow: mapping failed at %p, mapped_pages=%zu",
+                  heap_tail, (heap_tail - initial_tail) / VMM_PAGE_SIZE);
+            pmm_free(frame);
             cleanup_tail(initial_tail, heap_tail - initial_tail);
             return NULL;
         }
