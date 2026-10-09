@@ -59,7 +59,8 @@ run: all
 		-drive file=$(IMAGE),format=raw,if=floppy \
 		-boot a \
 		--no-reboot \
-		-device isa-debug-exit,iobase=0xf4,iosize=0x04
+		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+		-serial stdio
 
 debug: all
 	qemu-system-i386 \
@@ -67,6 +68,7 @@ debug: all
 		-boot a \
 		--no-reboot \
 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+		-serial stdio \
 		-S -s
 
 format:

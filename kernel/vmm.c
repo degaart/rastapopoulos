@@ -3,6 +3,7 @@
 #include "kernel.h"
 #include "pmm.h"
 #include "stdio.h"
+#include "trace.h"
 
 #define ENTRY_COUNT       1024
 #define PAGE_MASK         0xfffff000
@@ -186,6 +187,7 @@ bool vmm_unmap(void* virtual_address)
     flush_tlb();
 
     pmm_free((void*)(uintptr_t)table_frame);
+    trace("Here, pmm_info: %zu\n", pmm_info());
     return true;
 }
 
@@ -231,5 +233,17 @@ bool vmm_frame(const void* virtual_address, void** frame_out)
 
     *frame_out = (void*)(uintptr_t)(entry & PAGE_MASK);
     return true;
+}
+
+void vmm_dump_pd(void)
+{
+    volatile uint32_t* pd = directory();
+
+    int count = 0;
+    for (int i = 0; i < 1024; i++) {
+        if (pd[i])
+            count++;
+    }
+    printf("Here, count=%d\n", count);
 }
 

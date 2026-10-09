@@ -195,3 +195,23 @@ void heap_free(void* ptr)
     heap_trim();
 }
 
+struct HeapInfo heap_info(void)
+{
+    struct HeapInfo info = {0};
+
+    for (const struct HeapBlock* block = heap_first; block;
+         block = block->next) {
+        info.total_size += sizeof(*block) + block->size;
+        info.overhead += sizeof(*block);
+
+        if (block->free) {
+            info.free_size += block->size;
+        } else {
+            info.overhead += sizeof(struct HeapBlock*);
+            info.allocated_size += block->size - sizeof(struct HeapBlock*);
+        }
+    }
+
+    return info;
+}
+

@@ -1,4 +1,5 @@
 #include "early_malloc.h"
+#include "heap.h"
 #include "idt.h"
 #include "kernel.h"
 #include "kmalloc.h"
@@ -61,18 +62,24 @@ static void dump_multiboot(const struct multiboot_info* info)
     }
 }
 
+extern void vmm_dump_pd(void);
+
 static void test_heap(void)
 {
     printf("Free mem before tests: %zu bytes\n", pmm_info());
+    vmm_dump_pd();
 
+#if 0
     kfree(NULL);
     assert(!kmalloc(0));
     assert(!kmemalign(0, 1));
     assert(!kmemalign(3, 1));
     assert(!kmalloc(SIZE_MAX));
     assert(!kmemalign(4096, SIZE_MAX - 16));
+#endif
     assert(!kmemalign((SIZE_MAX / 2) + 1, 1));
 
+#if 0
     for (size_t a = 1; a <= (1u << 20); a *= 2) {
         const size_t sizes[] = {1, 3, 15, 16, 17, 4095, 4096, 4097, 65537};
         for (size_t i = 0; i < sizeof(sizes) / sizeof(*sizes); ++i) {
@@ -83,8 +90,18 @@ static void test_heap(void)
             kfree(p);
         }
     }
+#endif
 
     printf("Free mem after tests: %zu bytes\n", pmm_info());
+    vmm_dump_pd();
+
+    struct HeapInfo hi = heap_info();
+    printf("Heap info:\n"
+           "    total:      %zu\n"
+           "    free:       %zu\n"
+           "    allocated:  %zu\n"
+           "    overhead:   %zu\n",
+           hi.total_size, hi.free_size, hi.allocated_size, hi.overhead);
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)

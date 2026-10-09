@@ -72,16 +72,19 @@ void heap_shrink(size_t bytes)
 {
     if (bytes & (VMM_PAGE_SIZE - 1))
         panic("Logic error");
-    while (bytes) {
-        void* page = heap_tail - VMM_PAGE_SIZE;
+
+    void* new_tail = heap_tail - bytes;
+    for (void* ptr = new_tail; ptr < heap_tail; ptr += VMM_PAGE_SIZE) {
         void* frame;
-        if (!vmm_frame(page, &frame))
-            panic("Failed to get frame for address 0x%p", page);
-        if (!vmm_unmap(page))
+        if (!vmm_frame(ptr, &frame))
+            panic("Failed to get frame for address 0x%p", ptr);
+
+        if (!vmm_unmap(ptr))
             panic("Logic error");
+
         pmm_free(frame);
-        heap_tail -= VMM_PAGE_SIZE;
-        bytes -= VMM_PAGE_SIZE;
     }
+
+    heap_tail = new_tail;
 }
 
