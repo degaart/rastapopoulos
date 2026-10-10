@@ -65,6 +65,11 @@ static inline void write_cr3(uint32_t value)
     __asm__ volatile("mov cr3, %0" : : "r"(value) : "memory");
 }
 
+static inline void io_wait(void)
+{
+    outb(0x80, 0);
+}
+
 #define panic(...) __panic(__FILE__, __LINE__, __VA_ARGS__)
 
 __attribute__((format(printf, 3, 4))) void __panic(const char* file, int line,

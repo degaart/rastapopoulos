@@ -1,17 +1,17 @@
 #include "idt.h"
 #include "kernel.h"
 #include "vga.h"
+#include <stdio.h>
 
 #define CODESEG 0x08
 
 static struct idt_entry idt[256];
 static struct idtr idtr;
 extern uint32_t isr_stub_table[];
+static idt_handler_t handlers[256];
 
-int printf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
-
-void idt_set_gate(uint8_t interrupt, uint32_t handler_address,
-                  uint16_t selector, uint8_t flags)
+static void idt_set_gate(uint8_t interrupt, uint32_t handler_address,
+                         uint16_t selector, uint8_t flags)
 {
     idt[interrupt].offset_low = handler_address & 0xFFFF;
     idt[interrupt].selector = selector;
@@ -22,6 +22,11 @@ void idt_set_gate(uint8_t interrupt, uint32_t handler_address,
 
 void isr_handler(struct isr_regs* regs)
 {
+    if (handlers[regs->interrupt_number]) {
+        handlers[regs->interrupt_number](regs->interrupt_number, regs);
+        return;
+    }
+
     uint32_t ss = read_ss();
     uint32_t cr0 = read_cr0();
     uint32_t cr2 = read_cr2();
@@ -51,5 +56,14 @@ void idt_init(void)
                      IDT_INT_GATE_32 | IDT_PRESENT);
     }
     idt_load(&idtr);
+}
+
+idt_handler_t idt_set_handler(int vector, idt_handler_t handler)
+{
+    if (vector < 0 || vector > 255)
+        panic("Invalid interrupt vector %d", vector);
+    idt_handler_t result = handlers[vector];
+    handlers[vector] = handler;
+    return result;
 }
 

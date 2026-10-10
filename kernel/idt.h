@@ -50,11 +50,9 @@ struct isr_regs
 
 } __attribute__((packed));
 
+typedef void (*idt_handler_t)(int, struct isr_regs*);
+
 void idt_init(void);
-
-void idt_set_gate(uint8_t interrupt, uint32_t handler_address,
-                  uint16_t selector, uint8_t flags);
-
-void isr_handler(struct isr_regs* regs);
+idt_handler_t idt_set_handler(int vector, idt_handler_t handler);
 extern void idt_load(struct idtr* idtr);
 

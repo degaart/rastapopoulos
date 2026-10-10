@@ -3,6 +3,7 @@
 #include "idt.h"
 #include "kernel.h"
 #include "kmalloc.h"
+#include "pic.h"
 #include "pmm.h"
 #include "trace.h"
 #include "vga.h"
@@ -63,9 +64,7 @@ static void dump_multiboot(const struct multiboot_info* info)
     }
 }
 
-extern void vmm_dump_pd(void);
-
-static void test_heap(void)
+void test_heap(void)
 {
     printf("Free mem before tests: %zu bytes\n", pmm_info());
 
@@ -96,6 +95,11 @@ static void test_heap(void)
            "    allocated:  %zu\n"
            "    overhead:   %zu\n",
            hi.total_size, hi.free_size, hi.allocated_size, hi.overhead);
+}
+
+static void timer_irq_handler(int num, struct isr_regs* regs)
+{
+    pic_eoi(num);
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
@@ -151,7 +155,13 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     if (!heap_init())
         panic("heap_init failed");
-    test_heap();
-    printf("OK\n");
+
+    pic_init();
+    pic_set_irq_handler(0, timer_irq_handler);
+
+    asm volatile("sti" ::: "memory");
+    printf("READY\n");
+    while (1)
+        ;
 }
 
