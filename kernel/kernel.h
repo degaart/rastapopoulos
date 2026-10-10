@@ -55,6 +55,19 @@ static inline uint16_t read_ss(void)
     return value;
 }
 
+static inline uint32_t read_eflags(void)
+{
+    uint32_t eflags;
+    asm volatile("pushf\n\t"
+                 "pop %0\n\t"
+                 "sti"
+                 : "=r"(eflags)
+                 :
+                 : "memory");
+
+    return eflags;
+}
+
 static inline void write_cr0(uint32_t value)
 {
     asm volatile("mov cr0, %0" : : "r"(value) : "memory");

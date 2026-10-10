@@ -26,6 +26,7 @@ int strncpy_s(char* restrict dest, size_t destsz, const char* restrict src,
               size_t count);
 int strcat_s(char* restrict dest, size_t destsz, const char* restrict src);
 void CDECL hmemcpy(uint32_t dst, const void* src, size_t len);
+size_t uint32_to_string(uint32_t value, char* buffer, size_t buffer_len);
 
 #ifndef RASTA_BOOTLOADER
 size_t uint64_to_string(uint64_t value, char* buffer, size_t buffer_len);

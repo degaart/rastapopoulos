@@ -243,6 +243,75 @@ int strcat_s(char* restrict dest, size_t destsz, const char* restrict src)
     return 0;
 }
 
+size_t uint32_to_string(uint32_t value, char* buffer, size_t buffer_len)
+{
+    static char const digits[] = "00010203040506070809"
+                                 "10111213141516171819"
+                                 "20212223242526272829"
+                                 "30313233343536373839"
+                                 "40414243444546474849"
+                                 "50515253545556575859"
+                                 "60616263646566676869"
+                                 "70717273747576777879"
+                                 "80818283848586878889"
+                                 "90919293949596979899";
+
+    if (buffer == NULL || buffer_len == 0) {
+        return 0;
+    }
+
+    size_t length;
+
+    if (value < 100000u) {
+        if (value < 100u) {
+            length = value < 10u ? 1 : 2;
+        } else if (value < 10000u) {
+            length = value < 1000u ? 3 : 4;
+        } else {
+            length = 5;
+        }
+    } else {
+        if (value < 10000000u) {
+            length = value < 1000000u ? 6 : 7;
+        } else if (value < 1000000000u) {
+            length = value < 100000000u ? 8 : 9;
+        } else {
+            length = 10;
+        }
+    }
+
+    if (buffer_len <= length) {
+        buffer[0] = '\0';
+        return 0;
+    }
+
+    char* p = buffer + length;
+    *p = '\0';
+
+    while (value >= 100u) {
+        uint32_t quotient = value / 100u;
+        unsigned int index = (unsigned int)(value - quotient * 100u) * 2u;
+
+        p -= 2;
+        p[0] = digits[index];
+        p[1] = digits[index + 1];
+
+        value = quotient;
+    }
+
+    if (value < 10u) {
+        *--p = (char)('0' + value);
+    } else {
+        unsigned int index = (unsigned int)value * 2u;
+
+        p -= 2;
+        p[0] = digits[index];
+        p[1] = digits[index + 1];
+    }
+
+    return length;
+}
+
 #ifndef RASTA_BOOTLOADER
 size_t uint64_to_string(uint64_t value, char* buffer, size_t buffer_len)
 {

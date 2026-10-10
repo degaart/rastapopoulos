@@ -56,7 +56,7 @@ $(IMAGE): build/bootsect.bin build/rastaldr.bin ../kernel/build/kernel.elf | bui
 	mcopy -o -i $(IMAGE) build/kernel.stripped.elf ::/KERNEL.ELF
 	../tools/build/calc_crc32 < build/kernel.stripped.elf > build/kernel.crc
 	mcopy -o -i $(IMAGE) build/kernel.crc ::/KERNEL.CRC
-	[ -n "$(HOSTDATA)" ] && cp $(IMAGE) "$(HOSTDATA)"
+	if [ -n "$(HOSTDATA)" ]; then cp $(IMAGE) "$(HOSTDATA)"; fi
 
 build/bootsect.bin: bootsect.asm $(ASM_HDRS) | build
 	$(AS) -fbin -o $@ $<

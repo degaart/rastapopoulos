@@ -3,6 +3,7 @@
 #include "idt.h"
 #include "kernel.h"
 #include "kmalloc.h"
+#include "kthread.h"
 #include "pic.h"
 #include "pit.h"
 #include "pmm.h"
@@ -103,6 +104,94 @@ static void timer_irq_handler(int num, struct isr_regs* regs)
     pic_eoi(num);
 }
 
+#define QUANTUM 1
+
+static void thread1_entry(void* param)
+{
+    printf("Thread 1 started\n");
+
+    char buffer[16];
+    int counter = 0;
+    int y = 10;
+    while (1) {
+        int len = uint32_to_string(counter, buffer, sizeof(buffer));
+        int x = (VGA_WIDTH - len) / 2;
+        for (int i = 0; i < len; i++) {
+            vga_write_at(x + i, y, buffer[i], VGA_COLOR_WHITE,
+                         VGA_COLOR_GREEN);
+        }
+        counter++;
+
+        if ((counter % QUANTUM) == 0) {
+            thread_yield();
+        }
+    }
+}
+
+static void thread2_entry(void* param)
+{
+    printf("Thread 2 started\n");
+
+    char buffer[16];
+    int counter = 0;
+    int y = 11;
+    while (1) {
+        int len = uint32_to_string(counter, buffer, sizeof(buffer));
+        int x = (VGA_WIDTH - len) / 2;
+        for (int i = 0; i < len; i++) {
+            vga_write_at(x + i, y, buffer[i], VGA_COLOR_DARK_GREY,
+                         VGA_COLOR_YELLOW);
+        }
+        counter++;
+
+        if ((counter % QUANTUM) == 0) {
+            thread_yield();
+        }
+    }
+}
+
+static void thread3_entry(void* param)
+{
+    printf("Thread 3 started\n");
+
+    char buffer[16];
+    int counter = 0;
+    int y = 12;
+    while (1) {
+        int len = uint32_to_string(counter, buffer, sizeof(buffer));
+        int x = (VGA_WIDTH - len) / 2;
+        for (int i = 0; i < len; i++) {
+            vga_write_at(x + i, y, buffer[i], VGA_COLOR_BLACK, VGA_COLOR_CYAN);
+        }
+        counter++;
+
+        if ((counter % QUANTUM) == 0) {
+            thread_yield();
+        }
+    }
+}
+
+static void thread4_entry(void* param)
+{
+    printf("Thread 4 started\n");
+
+    char buffer[16];
+    int counter = 0;
+    int y = 13;
+    while (1) {
+        int len = uint32_to_string(counter, buffer, sizeof(buffer));
+        int x = (VGA_WIDTH - len) / 2;
+        for (int i = 0; i < len; i++) {
+            vga_write_at(x + i, y, buffer[i], VGA_COLOR_BLACK, VGA_COLOR_RED);
+        }
+        counter++;
+
+        if ((counter % QUANTUM) == 0) {
+            thread_yield();
+        }
+    }
+}
+
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 {
     early_malloc_init();
@@ -148,7 +237,6 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     }
     pmm_init(mmap_entries, mmap_len);
     printf("Free memory: %zu bytes\n", pmm_info());
-    printf("sizeof(uint32_t): %zu\n", sizeof(uint32_t));
 
     if (!vmm_init())
         panic("vmm_init failed");
@@ -162,6 +250,13 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     pic_set_irq_handler(0, timer_irq_handler);
     enable_interrupts();
     pit_init(100);
+
+    disable_interrupts();
+    thread_create(thread1_entry, NULL);
+    thread_create(thread2_entry, NULL);
+    thread_create(thread3_entry, NULL);
+    thread_create(thread4_entry, NULL);
+    thread_yield();
     printf("READY\n");
     while (1)
         ;
