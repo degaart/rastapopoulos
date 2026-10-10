@@ -44,14 +44,15 @@ void vga_init(void)
 
 void vga_write(const char* text, int len, uint8_t fg, uint8_t bg)
 {
-    const uint16_t attr = (fg << 8) | bg;
+    const uint16_t attr = (bg << 4) | fg;
     while ((len == -1 && *text) || len > 0) {
         char c = *text++;
         if (c == '\n') {
             cursor.x = 0;
             cursor.y++;
         } else {
-            vga_buffer[cursor.y * VGA_WIDTH + cursor.x] = attr | (uint8_t)c;
+            vga_buffer[cursor.y * VGA_WIDTH + cursor.x] =
+                (attr << 8) | (uint8_t)c;
 
             cursor.x++;
 
@@ -70,7 +71,7 @@ void vga_write(const char* text, int len, uint8_t fg, uint8_t bg)
             /* Clear the last row. */
             for (size_t i = VGA_WIDTH * (VGA_HEIGHT - 1);
                  i < VGA_WIDTH * VGA_HEIGHT; ++i) {
-                vga_buffer[i] = attr | ' ';
+                vga_buffer[i] = (attr << 8) | ' ';
             }
 
             cursor.y = VGA_HEIGHT - 1;
@@ -80,5 +81,11 @@ void vga_write(const char* text, int len, uint8_t fg, uint8_t bg)
             len--;
     }
     vga_set_cursor_pos(cursor);
+}
+
+void vga_write_at(int x, int y, char ch, uint8_t fg, uint8_t bg)
+{
+    const uint16_t attr = (bg << 4) | fg;
+    vga_buffer[y * VGA_WIDTH + x] = (attr << 8) | (uint8_t)ch;
 }
 

@@ -4,6 +4,7 @@
 #include "kernel.h"
 #include "kmalloc.h"
 #include "pic.h"
+#include "pit.h"
 #include "pmm.h"
 #include "trace.h"
 #include "vga.h"
@@ -147,6 +148,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     }
     pmm_init(mmap_entries, mmap_len);
     printf("Free memory: %zu bytes\n", pmm_info());
+    printf("sizeof(uint32_t): %zu\n", sizeof(uint32_t));
 
     if (!vmm_init())
         panic("vmm_init failed");
@@ -158,8 +160,8 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     pic_init();
     pic_set_irq_handler(0, timer_irq_handler);
-
-    asm volatile("sti" ::: "memory");
+    enable_interrupts();
+    pit_init(100);
     printf("READY\n");
     while (1)
         ;

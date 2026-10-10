@@ -36,3 +36,13 @@ void __panic(const char* file, int line, const char* fmt, ...)
     halt();
 }
 
+int snprintf(char* restrict buffer, size_t bufsz, const char* restrict format,
+             ...)
+{
+    va_list args;
+    va_start(args, format);
+    int result = stbsp_vsnprintf(buffer, bufsz, format, args);
+    va_end(args);
+    return result;
+}
+

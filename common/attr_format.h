@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef RASTA
+#ifdef RASTA_KERNEL
 #    define ATTR_FORMAT(string_index, first_to_check)                         \
         __attribute__((format(printf, string_index, first_to_check)))
 #else

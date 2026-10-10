@@ -243,3 +243,53 @@ int strcat_s(char* restrict dest, size_t destsz, const char* restrict src)
     return 0;
 }
 
+#ifndef RASTA_BOOTLOADER
+size_t uint64_to_string(uint64_t value, char* buffer, size_t buffer_len)
+{
+    if (buffer == NULL || buffer_len == 0) {
+        return 0;
+    }
+
+    uint32_t lo = (uint32_t)value;
+    uint32_t hi = (uint32_t)(value >> 32);
+    char temporary[20];
+    char* end = temporary + sizeof temporary;
+    char* p = end;
+
+    const uint32_t base = 1000000000u;
+    while (hi != 0) {
+        uint32_t quotient_hi = hi / base;
+        uint32_t remainder = hi % base;
+        asm volatile("div{l %[base]| %[base]}"
+                     : "+a"(lo), "+d"(remainder)
+                     : [base] "r"(base)
+                     : "cc");
+
+        hi = quotient_hi;
+        for (unsigned int i = 0; i < 9; ++i) {
+            uint32_t quotient = remainder / 10u;
+            *--p = (char)('0' + remainder - quotient * 10u);
+            remainder = quotient;
+        }
+    }
+
+    do {
+        uint32_t quotient = lo / 10u;
+        *--p = (char)('0' + lo - quotient * 10u);
+        lo = quotient;
+    } while (lo != 0);
+
+    size_t length = (size_t)(end - p);
+    if (buffer_len <= length) {
+        return 0;
+    }
+
+    for (size_t i = 0; i < length; ++i) {
+        buffer[i] = p[i];
+    }
+
+    buffer[length] = '\0';
+    return length;
+}
+#endif
+
