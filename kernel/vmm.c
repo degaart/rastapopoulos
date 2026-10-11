@@ -130,6 +130,7 @@ bool vmm_map(void* frame, void* virtual_address, uint32_t flags)
         (physical & OFFSET_MASK) != 0 || !valid_flags(flags))
         return false;
 
+    bool iflag = enter_critical_section();
     uint32_t di = (uint32_t)(address >> 22);
     uint32_t ti = (uint32_t)((address >> 12) & 0x3ff);
     volatile uint32_t* pd = directory();
@@ -137,8 +138,10 @@ bool vmm_map(void* frame, void* virtual_address, uint32_t flags)
 
     if (!(pd[di] & PAGE_PRESENT)) {
         void* new_table = allocate_table_frame();
-        if (new_table == 0)
+        if (new_table == 0) {
+            leave_critical_section(iflag);
             return false;
+        }
 
         pd[di] = (uint32_t)(uintptr_t)new_table | PAGE_PRESENT | VMM_WRITABLE |
                  VMM_USER;
@@ -147,37 +150,45 @@ bool vmm_map(void* frame, void* virtual_address, uint32_t flags)
         clear_page(pt);
     }
 
-    if (pt[ti] & PAGE_PRESENT)
+    if (pt[ti] & PAGE_PRESENT) {
+        leave_critical_section(iflag);
         return false;
+    }
 
     pt[ti] = (uint32_t)physical | PAGE_PRESENT | flags;
     flush_tlb();
+    leave_critical_section(iflag);
     return true;
 }
 
 bool vmm_unmap(void* virtual_address)
 {
     uintptr_t address = (uintptr_t)virtual_address;
-
     if (!initialized || !valid_page_address(address))
         return false;
 
+    bool iflag = enter_critical_section();
     uint32_t di = (uint32_t)(address >> 22);
     uint32_t ti = (uint32_t)((address >> 12) & 0x3ff);
     volatile uint32_t* pd = directory();
 
-    if (!(pd[di] & PAGE_PRESENT))
+    if (!(pd[di] & PAGE_PRESENT)) {
+        leave_critical_section(iflag);
         return false;
+    }
 
     volatile uint32_t* pt = table(di);
-    if (!(pt[ti] & PAGE_PRESENT))
+    if (!(pt[ti] & PAGE_PRESENT)) {
+        leave_critical_section(iflag);
         return false;
+    }
 
     pt[ti] = 0;
 
     for (uint32_t i = 0; i < ENTRY_COUNT; ++i) {
         if (pt[i] & PAGE_PRESENT) {
             flush_tlb();
+            leave_critical_section(iflag);
             return true;
         }
     }
@@ -187,6 +198,7 @@ bool vmm_unmap(void* virtual_address)
     flush_tlb();
 
     pmm_free((void*)(uintptr_t)table_frame);
+    leave_critical_section(iflag);
     return true;
 }
 
@@ -200,37 +212,47 @@ bool vmm_remap(void* virtual_address, uint32_t flags)
     uint32_t di = (uint32_t)(address >> 22);
     uint32_t ti = (uint32_t)((address >> 12) & 0x3ff);
 
-    if (!(directory()[di] & PAGE_PRESENT))
+    bool iflag = enter_critical_section();
+    if (!(directory()[di] & PAGE_PRESENT)) {
+        leave_critical_section(iflag);
         return false;
+    }
 
     volatile uint32_t* pt = table(di);
     uint32_t entry = pt[ti];
-    if (!(entry & PAGE_PRESENT))
+    if (!(entry & PAGE_PRESENT)) {
+        leave_critical_section(iflag);
         return false;
+    }
 
     pt[ti] = (entry & ~PERMISSION_MASK) | flags;
     flush_tlb();
+    leave_critical_section(iflag);
     return true;
 }
 
 bool vmm_frame(const void* virtual_address, void** frame_out)
 {
     uintptr_t address = (uintptr_t)virtual_address;
-
     if (!initialized || frame_out == 0 || address >= VMM_RECURSIVE_BASE)
         return false;
 
+    bool iflag = enter_critical_section();
     uint32_t di = (uint32_t)(address >> 22);
     uint32_t ti = (uint32_t)((address >> 12) & 0x3ff);
-
-    if (!(directory()[di] & PAGE_PRESENT))
+    if (!(directory()[di] & PAGE_PRESENT)) {
+        leave_critical_section(iflag);
         return false;
+    }
 
     uint32_t entry = table(di)[ti];
-    if (!(entry & PAGE_PRESENT))
+    if (!(entry & PAGE_PRESENT)) {
+        leave_critical_section(iflag);
         return false;
+    }
 
     *frame_out = (void*)(uintptr_t)(entry & PAGE_MASK);
+    leave_critical_section(iflag);
     return true;
 }
 

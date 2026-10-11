@@ -140,7 +140,9 @@ void pmm_dump(void)
 
 void* pmm_alloc(void)
 {
+    bool iflag = enter_critical_section();
     struct Region* region;
+    void* result = NULL;
     STAILQ_FOREACH(region, &regions, node)
     {
         size_t bit = bitset_find(&region->bitset);
@@ -148,9 +150,12 @@ void* pmm_alloc(void)
             continue;
         if (!bitset_set(&region->bitset, bit))
             panic("Logic error");
-        return region->start + (bit * PMM_FRAME_SIZE);
+        result = region->start + (bit * PMM_FRAME_SIZE);
+        break;
     }
-    return NULL;
+
+    leave_critical_section(iflag);
+    return result;
 }
 
 void pmm_free(void* frame)
@@ -158,6 +163,7 @@ void pmm_free(void* frame)
     if ((uintptr_t)frame & (PMM_FRAME_SIZE - 1))
         panic("Invalid frame: 0x%p", frame);
 
+    bool iflag = enter_critical_section();
     int found = 0;
     struct Region* region;
     STAILQ_FOREACH(region, &regions, node)
@@ -174,32 +180,39 @@ void pmm_free(void* frame)
         panic("Frame 0x%p was already free", frame);
     else if (found > 1)
         panic("Frame 0x%p was found in multiple regions", frame);
+    leave_critical_section(iflag);
 }
 
 size_t pmm_info(void)
 {
+    bool iflag = enter_critical_section();
     size_t result = 0;
     struct Region* region;
     STAILQ_FOREACH(region, &regions, node)
     {
         result += bitset_count_unset(&region->bitset);
     }
+    leave_critical_section(iflag);
     return result * PMM_FRAME_SIZE;
 }
 
 bool pmm_reserve(void* frame)
 {
+    bool iflag = enter_critical_section();
     struct Region* region;
     STAILQ_FOREACH(region, &regions, node)
     {
         if (frame >= region->start && frame < region->start + region->len) {
             size_t bit = (uintptr_t)(frame - region->start) / PMM_FRAME_SIZE;
             if (!bitset_set(&region->bitset, bit)) {
+                leave_critical_section(iflag);
                 return false;
             }
+            leave_critical_section(iflag);
             return true;
         }
     }
+    leave_critical_section(iflag);
     return false;
 }
 
