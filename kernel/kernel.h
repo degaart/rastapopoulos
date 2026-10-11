@@ -112,6 +112,17 @@ static inline bool disable_interrupts(void)
     return (eflags & EFLAGS_IF) != 0;
 }
 
+static inline bool enter_critical_section(void)
+{
+    return disable_interrupts();
+}
+
+static inline void leave_critical_section(bool flag)
+{
+    if (flag)
+        enable_interrupts();
+}
+
 static inline void hlt(void)
 {
     asm volatile("hlt" ::: "memory");

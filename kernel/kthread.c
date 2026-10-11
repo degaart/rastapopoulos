@@ -15,22 +15,22 @@ static struct Thread* idle_thread;
 void scheduler_enqueue(struct Thread* thread)
 {
     thread->state = THREAD_READY;
+
+    bool flag = enter_critical_section();
     STAILQ_INSERT_TAIL(&ready_queue, thread, entry);
+    leave_critical_section(flag);
 }
 
 struct Thread* scheduler_dequeue(void)
 {
+    bool flag = enter_critical_section();
     struct Thread* next = STAILQ_FIRST(&ready_queue);
     if (next)
         STAILQ_REMOVE_HEAD(&ready_queue, entry);
     else
         next = idle_thread;
+    leave_critical_section(flag);
     return next;
-}
-
-static void panic_thunk(void)
-{
-    panic("In panic_thunk");
 }
 
 /* Create initial thread and makes it the idle thread */
@@ -58,7 +58,7 @@ struct Thread* thread_create(thread_entry_t entry, void* arg)
 
     uint32_t* esp = thread->stack + 4096 - sizeof(uint32_t);
     *esp-- = (uintptr_t)arg;
-    *esp-- = (uintptr_t)panic_thunk;
+    *esp-- = (uintptr_t)thread_exit;
     *esp-- = (uintptr_t)entry; /* return address */
     *esp-- = 0;                /* ebp */
     *esp-- = 0;                /* ebx */
@@ -73,12 +73,14 @@ struct Thread* thread_create(thread_entry_t entry, void* arg)
 
 static void cleanup_terminated()
 {
+    bool flag = enter_critical_section();
     while (!STAILQ_EMPTY(&terminated_queue)) {
         struct Thread* thread = STAILQ_FIRST(&terminated_queue);
         assert(thread != idle_thread);
         kfree(thread->stack);
         kfree(thread);
     }
+    leave_critical_section(flag);
 }
 
 void thread_yield(void)
@@ -86,6 +88,7 @@ void thread_yield(void)
     if ((read_eflags() & EFLAGS_IF) == 0)
         panic("IF was disabled");
 
+    bool flag = enter_critical_section();
     struct Thread* next = scheduler_dequeue();
     if (next != current_thread) {
         next->state = THREAD_RUNNING;
@@ -96,6 +99,7 @@ void thread_yield(void)
         scheduler_enqueue(old);
         context_switch(&old->esp, next->esp);
     }
+    leave_critical_section(flag);
 
     cleanup_terminated();
 }
@@ -105,6 +109,7 @@ void thread_exit(void)
     if (current_thread == idle_thread)
         panic("Idle thread exited");
 
+    bool flag = enter_critical_section();
     struct Thread* next = scheduler_dequeue();
     assert(next != current_thread)
 
@@ -114,6 +119,7 @@ void thread_exit(void)
 
     uint32_t old_esp;
     context_switch(&old_esp, next->esp);
+    leave_critical_section(flag);
 
     cleanup_terminated();
 }

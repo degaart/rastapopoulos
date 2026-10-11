@@ -122,7 +122,6 @@ static void thread1_entry(void* param)
             thread_yield();
         }
     }
-    thread_exit();
 }
 
 static void thread2_entry(void* param)
@@ -143,7 +142,6 @@ static void thread2_entry(void* param)
             thread_yield();
         }
     }
-    thread_exit();
 }
 
 static void thread3_entry(void* param)
@@ -163,7 +161,6 @@ static void thread3_entry(void* param)
             thread_yield();
         }
     }
-    thread_exit();
 }
 
 static void thread4_entry(void* param)
@@ -183,7 +180,6 @@ static void thread4_entry(void* param)
             thread_yield();
         }
     }
-    thread_exit();
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
