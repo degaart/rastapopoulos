@@ -104,16 +104,12 @@ static void timer_irq_handler(int num, struct isr_regs* regs)
     pic_eoi(num);
 }
 
-#define QUANTUM 1
-
 static void thread1_entry(void* param)
 {
-    printf("Thread 1 started\n");
-
     char buffer[16];
     int counter = 0;
     int y = 10;
-    while (1) {
+    while (counter < 40000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -122,20 +118,19 @@ static void thread1_entry(void* param)
         }
         counter++;
 
-        if ((counter % QUANTUM) == 0) {
+        if ((counter % 100) == 0) {
             thread_yield();
         }
     }
+    thread_exit();
 }
 
 static void thread2_entry(void* param)
 {
-    printf("Thread 2 started\n");
-
     char buffer[16];
     int counter = 0;
     int y = 11;
-    while (1) {
+    while (counter < 40000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -144,20 +139,19 @@ static void thread2_entry(void* param)
         }
         counter++;
 
-        if ((counter % QUANTUM) == 0) {
+        if ((counter % 200) == 0) {
             thread_yield();
         }
     }
+    thread_exit();
 }
 
 static void thread3_entry(void* param)
 {
-    printf("Thread 3 started\n");
-
     char buffer[16];
     int counter = 0;
     int y = 12;
-    while (1) {
+    while (counter < 40000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -165,20 +159,19 @@ static void thread3_entry(void* param)
         }
         counter++;
 
-        if ((counter % QUANTUM) == 0) {
+        if ((counter % 300) == 0) {
             thread_yield();
         }
     }
+    thread_exit();
 }
 
 static void thread4_entry(void* param)
 {
-    printf("Thread 4 started\n");
-
     char buffer[16];
     int counter = 0;
     int y = 13;
-    while (1) {
+    while (counter < 40000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -186,10 +179,11 @@ static void thread4_entry(void* param)
         }
         counter++;
 
-        if ((counter % QUANTUM) == 0) {
+        if ((counter % 400) == 0) {
             thread_yield();
         }
     }
+    thread_exit();
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
@@ -251,14 +245,26 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     enable_interrupts();
     pit_init(100);
 
-    disable_interrupts();
+    thread_init();
     thread_create(thread1_entry, NULL);
     thread_create(thread2_entry, NULL);
     thread_create(thread3_entry, NULL);
     thread_create(thread4_entry, NULL);
-    thread_yield();
-    printf("READY\n");
-    while (1)
-        ;
+
+    uint32_t idle_counter = 0;
+    while (1) {
+        char buf[16];
+        int len = uint32_to_string(idle_counter++, buf, sizeof(buf));
+        for (int i = 0; i < len; i++) {
+            vga_write_at(VGA_WIDTH + i - len, 1, buf[i], VGA_COLOR_LIGHT_GREY,
+                         VGA_COLOR_BLACK);
+        }
+
+        if ((read_eflags() & EFLAGS_IF) == 0)
+            panic("Interrupts disabled in idle thread");
+        hlt();
+        thread_yield();
+    }
+    panic("Idle thread exited");
 }
 

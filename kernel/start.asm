@@ -15,9 +15,11 @@ align 4
 ; boot stack
 section .bss
 align 16
-stack_bottom:
+initial_stack_bottom:
 resb 16384
-stack_top:
+
+global initial_stack_top
+initial_stack_top:
 
 extern halt
 
@@ -31,7 +33,7 @@ _start:
 
     ; set up stack
     cli
-    mov esp, stack_top
+    mov esp, initial_stack_top
 
     ; call C entry point
     push ebx

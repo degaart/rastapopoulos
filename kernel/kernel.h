@@ -9,6 +9,7 @@
 
 extern uint8_t __kernel_start[];
 extern uint8_t __kernel_end[];
+extern uint8_t initial_stack_top[];
 
 /* A must be a power of two */
 #define ALIGN_UP(V, A)   (((V) + (A) - 1) & (~((A) - 1)))
@@ -109,6 +110,11 @@ static inline bool disable_interrupts(void)
                  : "memory");
 
     return (eflags & EFLAGS_IF) != 0;
+}
+
+static inline void hlt(void)
+{
+    asm volatile("hlt" ::: "memory");
 }
 
 #define panic(...) __panic(__FILE__, __LINE__, __VA_ARGS__)
