@@ -1,3 +1,4 @@
+#include "serial.h"
 #include "kernel.h"
 #include <stdint.h>
 
@@ -29,8 +30,17 @@ void serial_putchar(char c)
 
 void serial_write(const char* text)
 {
-    while (*text) {
-        serial_putchar(*text++);
+    serial_write_string(text, -1);
+}
+
+void serial_write_string(const char* text, int len)
+{
+    if (len < 0) {
+        while (*text)
+            serial_putchar(*text++);
+    } else {
+        while (len--)
+            serial_putchar(*text++);
     }
 }
 

@@ -136,3 +136,6 @@ __attribute__((format(printf, 3, 4))) void __panic(const char* file, int line,
 extern void halt(void) __attribute__((noreturn));
 #define debugbreak() asm volatile("xchg bx, bx" ::: "memory")
 
+extern void ring3_jump(void* ring3_eip, void* ring3_esp, uint32_t ring3_cs,
+                       uint32_t ring3_ds) __attribute__((noreturn));
+

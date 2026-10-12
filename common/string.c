@@ -245,7 +245,7 @@ int strcat_s(char* restrict dest, size_t destsz, const char* restrict src)
 
 size_t uint32_to_string(uint32_t value, char* buffer, size_t buffer_len)
 {
-    static char const digits[] = "00010203040506070809"
+    static const char digits[] = "00010203040506070809"
                                  "10111213141516171819"
                                  "20212223242526272829"
                                  "30313233343536373839"

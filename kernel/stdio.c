@@ -1,4 +1,5 @@
 #include "kernel.h"
+#include "trace.h"
 #include "vga.h"
 #include <stdio.h>
 
@@ -23,17 +24,10 @@ int printf(const char* fmt, ...)
     return ret;
 }
 
-void __panic(const char* file, int line, const char* fmt, ...)
+int vprintf(const char* restrict fmt, va_list args)
 {
-    printf("PANIC at %s:%d -- ", file, line);
-
     char buf[STB_SPRINTF_MIN];
-    va_list args;
-    va_start(args, fmt);
-    stbsp_vsprintfcb(sprintfcb, NULL, buf, fmt, args);
-    va_end(args);
-
-    halt();
+    return stbsp_vsprintfcb(sprintfcb, NULL, buf, fmt, args);
 }
 
 int snprintf(char* restrict buffer, size_t bufsz, const char* restrict format,

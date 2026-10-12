@@ -21,15 +21,36 @@
 
 struct TSS tss;
 
+static void gpf_handler(int, struct isr_regs* regs)
+{
+    uint32_t ext = regs->error_code & 1;
+    uint32_t idt = (regs->error_code >> 1) & 1;
+    uint32_t ti = (regs->error_code >> 2) & 1;
+    uint32_t desc = regs->error_code & ~7u;
+    uint32_t cr0 = read_cr0();
+    uint32_t ss = read_ss();
+
+    panic("General protection fault:\n"
+          "    ext: %lu idt: %lu ti: %lu desc: 0x%lx\n"
+          "    eip: 0x%lx cs: 0x%lx eflags: 0x%lx\n"
+          "    esp: 0x%lx ss: 0x%lx\n"
+          "    cr0: 0x%lx\n"
+          "    eax: 0x%lx ebx: 0x%lx ecx: 0x%lx edx: 0x%lx\n"
+          "    esi: 0x%lx edi: 0x%lx ebp: 0x%lx\n",
+          ext, idt, ti, desc, regs->eip, regs->cs, regs->eflags, regs->esp, ss,
+          cr0, regs->eax, regs->ebx, regs->ecx, regs->edx, regs->esi,
+          regs->edi, regs->ebp);
+}
+
 static void dump_multiboot(const struct multiboot_info* info)
 {
-    printf("Multiboot info:\n");
+    trace("Multiboot info:");
     if (info->flags & MULTIBOOT_INFO_MEMORY) {
-        printf("    mem_lower: 0x%lx, mem_upper: 0x%lx\n", info->mem_lower,
-               info->mem_upper);
+        trace("    mem_lower: 0x%lx, mem_upper: 0x%lx", info->mem_lower,
+              info->mem_upper);
     }
     if (info->flags & MULTIBOOT_INFO_BOOTDEV) {
-        printf("    boot_device: 0x%lx\n", info->boot_device);
+        trace("    boot_device: 0x%lx", info->boot_device);
     }
     if (info->flags & MULTIBOOT_INFO_MEM_MAP) {
         const struct multiboot_mmap_entry* entry =
@@ -60,18 +81,18 @@ static void dump_multiboot(const struct multiboot_info* info)
                 break;
             }
 
-            printf("    mmap: 0x%08llx-0x%08llx 0x%08llx %s\n", entry->addr,
-                   entry->addr + entry->len - 1, entry->len, type);
+            trace("    mmap: 0x%08llx-0x%08llx 0x%08llx %s", entry->addr,
+                  entry->addr + entry->len - 1, entry->len, type);
         }
     }
     if (info->flags & MULTIBOOT_INFO_BOOT_LOADER_NAME) {
-        printf("    bootloader: %s\n", (char*)info->boot_loader_name);
+        trace("    bootloader: %s", (char*)info->boot_loader_name);
     }
 }
 
 void test_heap(void)
 {
-    printf("Free mem before tests: %zu bytes\n", pmm_info());
+    trace("Free mem before tests: %zu bytes", pmm_info());
 
     kfree(NULL);
     assert(!kmalloc(0));
@@ -91,15 +112,20 @@ void test_heap(void)
         }
     }
 
-    printf("Free mem after tests: %zu bytes\n", pmm_info());
+    trace("Free mem after tests: %zu bytes", pmm_info());
 
     struct HeapInfo hi = heap_info();
-    printf("Heap info:\n"
-           "    total:      %zu\n"
-           "    free:       %zu\n"
-           "    allocated:  %zu\n"
-           "    overhead:   %zu\n",
-           hi.total_size, hi.free_size, hi.allocated_size, hi.overhead);
+    trace("Heap info:\n"
+          "    total:      %zu\n"
+          "    free:       %zu\n"
+          "    allocated:  %zu\n"
+          "    overhead:   %zu",
+          hi.total_size, hi.free_size, hi.allocated_size, hi.overhead);
+}
+
+static void tss_load(uint16_t tss_seg)
+{
+    asm volatile("ltr %0" : : "r"(tss_seg) : "memory");
 }
 
 static void thread1_entry(void* param)
@@ -110,7 +136,7 @@ static void thread1_entry(void* param)
     char buffer[16];
     int counter = 0;
     int y = 10;
-    while (pit_get_ticks() < 2000) {
+    while (pit_get_ticks() < 1000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -128,7 +154,7 @@ static void thread2_entry(void* param)
     char buffer[16];
     int counter = 0;
     int y = 11;
-    while (pit_get_ticks() < 3000) {
+    while (pit_get_ticks() < 2000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -146,7 +172,7 @@ static void thread3_entry(void* param)
     char buffer[16];
     int counter = 0;
     int y = 12;
-    while (pit_get_ticks() < 4000) {
+    while (pit_get_ticks() < 3000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -163,7 +189,7 @@ static void thread4_entry(void* param)
     char buffer[16];
     int counter = 0;
     int y = 13;
-    while (pit_get_ticks() < 5000) {
+    while (pit_get_ticks() < 4000) {
         int len = uint32_to_string(counter, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         for (int i = 0; i < len; i++) {
@@ -172,6 +198,20 @@ static void thread4_entry(void* param)
         counter++;
     }
     trace("Thread4 exited");
+}
+
+extern uint8_t usercode_start[];
+extern uint8_t usercode_end[];
+
+#define USER_BASE  0x00400000
+#define USER_STACK 0xc0000000
+
+static void user_entry(void* param)
+{
+    trace("Jumping to ring3");
+    ring3_jump((void*)USER_BASE, (void*)(USER_STACK + VMM_PAGE_SIZE),
+               USERCODESEG | 0x3, USERDATASEG | 0x3);
+    trace("Here");
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
@@ -183,8 +223,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     vga_init();
     printf("RastapopoulOS kernel running\n");
     if (mb_magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-        printf("PANIC: Unsupported bootloader\n");
-        return;
+        panic("Unsupported bootloader");
     }
     dump_multiboot(mb_info);
 
@@ -206,7 +245,9 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     struct Gdtr gdtr = {.limit = sizeof(gdt) - 1,
                         .base = (uint32_t)(uintptr_t)&gdt};
     gdt_load(&gdtr);
+    tss_load(TSSSEG);
     idt_init();
+    idt_set_handler(0xd, gpf_handler);
     trace("IDT installed");
 
     struct multiboot_mmap_entry* mmap_entries =
@@ -228,7 +269,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     }
     pmm_init(mmap_entries, mmap_len);
     trace("PMM initialized");
-    printf("Free memory: %zu bytes\n", pmm_info());
+    trace("Free memory: %zu bytes", pmm_info());
 
     if (!vmm_init())
         panic("vmm_init failed");
@@ -250,6 +291,37 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     thread_create("thread3", thread3_entry, NULL);
     thread_create("thread4", thread4_entry, NULL);
     sysinfo_init();
+
+    void* frame = pmm_alloc();
+    if (!frame)
+        panic("Out of memory");
+
+    /* Code */
+    if (!vmm_map(frame, (void*)USER_BASE, VMM_USER))
+        panic("Failed to map page");
+
+    uint8_t* ptr = (void*)USER_BASE;
+    memset(ptr, 0xcc, VMM_PAGE_SIZE);
+
+    size_t usercode_len = usercode_end - usercode_start;
+    assert(usercode_len <= VMM_PAGE_SIZE);
+    memcpy(ptr, usercode_start, usercode_len);
+
+    /* Stack */
+    frame = pmm_alloc();
+    if (!frame)
+        panic("Out of memory");
+
+    if (!vmm_map(frame, (void*)USER_STACK, VMM_USER | VMM_WRITABLE))
+        panic("Failed to map page");
+    ptr = (void*)USER_STACK;
+    memset(ptr, 0xcc, VMM_PAGE_SIZE);
+
+    /* VGA mem */
+    if (!vmm_remap((void*)VGA_BASE, VMM_USER | VMM_WRITABLE))
+        panic("Failed to remap page");
+
+    thread_create("user", user_entry, NULL);
 
     schedule();
     trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",

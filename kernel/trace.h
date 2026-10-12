@@ -1,6 +1,8 @@
+#include <stdarg.h>
 #include <stdio.h>
 
 int serial_printf(const char* fmt, ...) ATTR_FORMAT(1, 2);
+int serial_vprintf(const char* fmt, va_list args);
 void _trace(const char* file, int line, const char* fmt, ...)
     ATTR_FORMAT(3, 4);
 
