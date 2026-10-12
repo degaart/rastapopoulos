@@ -2,6 +2,7 @@
 #include "bitset.h"
 #include "early_malloc.h"
 #include "kernel.h"
+#include "trace.h"
 #include <freebsd/queue.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -128,13 +129,13 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
 
 void pmm_dump(void)
 {
-    printf("PMM regions:\n");
+    trace("PMM regions:");
 
     struct Region* region;
     STAILQ_FOREACH(region, &regions, node)
     {
-        printf("    %p-%p 0x%lx\n", region->start,
-               region->start + region->len - 1, region->len);
+        trace("    %p-%p 0x%lx", region->start,
+              region->start + region->len - 1, region->len);
     }
 }
 

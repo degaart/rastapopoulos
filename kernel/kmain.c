@@ -211,7 +211,7 @@ static void user_entry(void* param)
     trace("Jumping to ring3");
     ring3_jump((void*)USER_BASE, (void*)(USER_STACK + VMM_PAGE_SIZE),
                USERCODESEG | 0x3, USERDATASEG | 0x3);
-    trace("Here");
+    panic("ring3_jump returned");
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
