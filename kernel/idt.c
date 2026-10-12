@@ -20,7 +20,7 @@ static void idt_set_gate(uint8_t interrupt, uint32_t handler_address,
     idt[interrupt].offset_high = (handler_address >> 16) & 0xFFFF;
 }
 
-void isr_handler(struct isr_regs* regs)
+void idt_isr_handler(struct isr_regs* regs)
 {
     if (handlers[regs->interrupt_number]) {
         handlers[regs->interrupt_number](regs->interrupt_number, regs);

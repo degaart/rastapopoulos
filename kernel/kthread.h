@@ -19,11 +19,11 @@ struct Thread
     STAILQ_ENTRY(Thread) entry;
 };
 
-typedef void (*thread_entry_t)(void*);
-
 void thread_init(void);
-struct Thread* thread_create(thread_entry_t entry, void* arg);
+struct Thread* thread_create(void (*entry)(void*), void* arg);
 void context_switch(uint32_t* old_esp, uint32_t new_esp);
 void thread_yield(void);
 void thread_exit(void);
+void schedule(void);
+void thread_dump(void);
 

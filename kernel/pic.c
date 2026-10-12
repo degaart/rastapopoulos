@@ -26,7 +26,7 @@
 
 static irq_handler_t handlers[16];
 
-static void isr_handler(int number, struct isr_regs* regs)
+static void pic_isr_handler(int number, struct isr_regs* regs)
 {
     int irq = number - 32;
     if (irq < 0 || irq >= ARRAY_SIZE(handlers))
@@ -46,7 +46,9 @@ static void isr_handler(int number, struct isr_regs* regs)
     }
 
     if (!handlers[irq]) {
-        trace("WARNING: No handler for IRQ %d", irq);
+        pic_mask_irq(irq);
+        pic_eoi(irq);
+        trace("WARNING: Masked unhandled IRQ %d", irq);
         return;
     }
 
@@ -78,12 +80,12 @@ void pic_init(void)
     outb(PIC2_DATA, ICW4_8086);
     io_wait();
 
-    // Unmask both PICs.
-    outb(PIC1_DATA, 0);
-    outb(PIC2_DATA, 0);
+    /* Enable IRQ lines only after their handlers have been installed. */
+    outb(PIC1_DATA, 0xff);
+    outb(PIC2_DATA, 0xff);
 
     for (int i = 32; i < 32 + 16; i++) {
-        idt_set_handler(i, isr_handler);
+        idt_set_handler(i, pic_isr_handler);
     }
 }
 
@@ -96,7 +98,7 @@ void pic_eoi(int irq)
         panic("IRQ %d is not being serviced", irq);
     }
 
-    if (irq >= 0)
+    if (irq >= 8)
         outb(PIC2_COMMAND, PIC_EOI);
     outb(PIC1_COMMAND, PIC_EOI);
 }
@@ -108,6 +110,13 @@ irq_handler_t pic_set_irq_handler(int num, irq_handler_t handler)
 
     irq_handler_t result = handlers[num];
     handlers[num] = handler;
+    if (handler) {
+        pic_unmask_irq(num);
+        if (num >= 8)
+            pic_unmask_irq(CASCADE_IRQ);
+    } else {
+        pic_mask_irq(num);
+    }
     return result;
 }
 

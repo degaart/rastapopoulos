@@ -5,18 +5,22 @@
 #include <assert.h>
 #include <string.h>
 
+#define SCHEDULER_QUANTUM 10
+
 static STAILQ_HEAD(ThreadList,
                    Thread) ready_queue = STAILQ_HEAD_INITIALIZER(ready_queue);
 static STAILQ_HEAD(ThreadList, Thread)
     terminated_queue = STAILQ_HEAD_INITIALIZER(terminated_queue);
 static struct Thread* current_thread;
 static struct Thread* idle_thread;
+static uint64_t scheduler_ticks;
 
 void scheduler_enqueue(struct Thread* thread)
 {
-    thread->state = THREAD_READY;
+    assert(thread != idle_thread);
 
     bool flag = enter_critical_section();
+    thread->state = THREAD_READY;
     STAILQ_INSERT_TAIL(&ready_queue, thread, entry);
     leave_critical_section(flag);
 }
@@ -33,8 +37,18 @@ struct Thread* scheduler_dequeue(void)
     return next;
 }
 
+void schedule(void)
+{
+    scheduler_ticks++;
+    if (scheduler_ticks >= SCHEDULER_QUANTUM) {
+        scheduler_ticks = 0;
+        if (!STAILQ_EMPTY(&ready_queue))
+            thread_yield();
+    }
+}
+
 /* Create initial thread and makes it the idle thread */
-void thread_init()
+void thread_init(void)
 {
     struct Thread* thread = kmalloc(sizeof(struct Thread));
     if (!thread)
@@ -47,35 +61,54 @@ void thread_init()
     current_thread = thread;
 }
 
-struct Thread* thread_create(thread_entry_t entry, void* arg)
+static void cleanup_terminated(void);
+
+static void thread_start(void (*entry)(void*), void* arg)
 {
+    cleanup_terminated();
+    entry(arg);
+    thread_exit();
+}
+
+struct Thread* thread_create(void (*entry)(void*), void* arg)
+{
+    bool const flag = enter_critical_section();
     struct Thread* thread = kmalloc(sizeof(struct Thread));
     if (!thread) {
+        leave_critical_section(flag);
         return NULL;
     }
     memset(thread, 0, sizeof(*thread));
     thread->stack = kmalloc(4096);
+    if (!thread->stack) {
+        kfree(thread);
+        leave_critical_section(flag);
+        return NULL;
+    }
 
     uint32_t* esp = thread->stack + 4096 - sizeof(uint32_t);
     *esp-- = (uintptr_t)arg;
+    *esp-- = (uintptr_t)entry;
     *esp-- = (uintptr_t)thread_exit;
-    *esp-- = (uintptr_t)entry; /* return address */
-    *esp-- = 0;                /* ebp */
-    *esp-- = 0;                /* ebx */
-    *esp-- = 0;                /* esi */
-    *esp-- = 0;                /* edi */
-    *esp = read_eflags();
+    *esp-- = (uintptr_t)thread_start; /* return address */
+    *esp-- = 0;                       /* ebp */
+    *esp-- = 0;                       /* ebx */
+    *esp-- = 0;                       /* esi */
+    *esp-- = 0;                       /* edi */
+    *esp = read_eflags() | EFLAGS_IF;
     thread->esp = (uint32_t)(uintptr_t)esp;
 
     scheduler_enqueue(thread);
+    leave_critical_section(flag);
     return thread;
 }
 
-static void cleanup_terminated()
+static void cleanup_terminated(void)
 {
     bool flag = enter_critical_section();
     while (!STAILQ_EMPTY(&terminated_queue)) {
         struct Thread* thread = STAILQ_FIRST(&terminated_queue);
+        STAILQ_REMOVE_HEAD(&terminated_queue, entry);
         assert(thread != idle_thread);
         kfree(thread->stack);
         kfree(thread);
@@ -85,23 +118,22 @@ static void cleanup_terminated()
 
 void thread_yield(void)
 {
-    if ((read_eflags() & EFLAGS_IF) == 0)
-        panic("IF was disabled");
-
-    bool flag = enter_critical_section();
+    bool const flag = enter_critical_section();
     struct Thread* next = scheduler_dequeue();
+
     if (next != current_thread) {
         next->state = THREAD_RUNNING;
 
         struct Thread* old = current_thread;
         current_thread = next;
 
-        scheduler_enqueue(old);
+        if (old != idle_thread)
+            scheduler_enqueue(old);
         context_switch(&old->esp, next->esp);
     }
-    leave_critical_section(flag);
 
     cleanup_terminated();
+    leave_critical_section(flag);
 }
 
 void thread_exit(void)
@@ -109,18 +141,31 @@ void thread_exit(void)
     if (current_thread == idle_thread)
         panic("Idle thread exited");
 
-    bool flag = enter_critical_section();
+    enter_critical_section();
     struct Thread* next = scheduler_dequeue();
-    assert(next != current_thread)
+    assert(next != current_thread);
 
-        next->state = THREAD_RUNNING;
+    next->state = THREAD_RUNNING;
     current_thread->state = THREAD_TERMINATED;
+    STAILQ_INSERT_TAIL(&terminated_queue, current_thread, entry);
     current_thread = next;
+    scheduler_ticks = 0;
 
     uint32_t old_esp;
     context_switch(&old_esp, next->esp);
-    leave_critical_section(flag);
 
-    cleanup_terminated();
+    panic("Terminated thread resumed");
+}
+
+void thread_dump(void)
+{
+    struct Thread* first = STAILQ_FIRST(&ready_queue);
+    if (first) {
+        trace("Ready queue: 0x%p", first);
+    } else {
+        trace("Ready queue empty");
+    }
+    trace("current_thread: 0x%p, idle_thread: 0x%p", current_thread,
+          idle_thread);
 }
 

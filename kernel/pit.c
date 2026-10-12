@@ -1,5 +1,6 @@
 #include "pit.h"
 #include "kernel.h"
+#include "kthread.h"
 #include "pic.h"
 #include "vga.h"
 #include <stdio.h>
@@ -39,12 +40,13 @@
 
 volatile uint64_t ticks = 0;
 
-static void irq_handler(int irq, struct isr_regs* regs)
+static void pit_irq_handler(int irq, struct isr_regs* regs)
 {
     ticks++;
 
-    char buf[13];
-    size_t len = uint64_to_string(ticks, buf, sizeof(buf));
+    char buf[64];
+    /* Keep IRQ0 bounded: pmm_info() scans every physical-memory frame. */
+    int len = snprintf(buf, sizeof(buf), "%llu", ticks);
 
     int x = VGA_WIDTH - len;
     for (int i = 0; i < len; i++) {
@@ -52,6 +54,7 @@ static void irq_handler(int irq, struct isr_regs* regs)
     }
 
     pic_eoi(irq);
+    schedule();
 }
 
 void pit_init(uint32_t frequency)
@@ -69,11 +72,14 @@ void pit_init(uint32_t frequency)
     outb(PIT_CHANNEL0_DATA, divisor >> 8);
     io_wait();
 
-    pic_set_irq_handler(IRQ_TIMER, irq_handler);
+    pic_set_irq_handler(IRQ_TIMER, pit_irq_handler);
 }
 
 uint64_t pit_get_ticks(void)
 {
-    return ticks;
+    bool const flag = enter_critical_section();
+    uint64_t const result = ticks;
+    leave_critical_section(flag);
+    return result;
 }
 

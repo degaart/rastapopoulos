@@ -16,7 +16,7 @@ section .text
 ; This is our common ISR stub. It saves the processor state, sets
 ; up for kernel mode segments, calls the C-level fault handler,
 ; and finally restores the stack frame.
-extern isr_handler
+extern idt_isr_handler
 isr_common_stub:
     pusha                       ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
 
@@ -35,7 +35,7 @@ isr_common_stub:
     mov     ebx, esp            ; save esp
     and     esp, -4             ; align to 4 bytes
     push    ebx                 ; arg=value of esp (before alignment)
-    call    isr_handler
+    call    idt_isr_handler
     mov     esp, ebx            ; restore esp, discard args
 
     pop     eax                 ; reload the original data segment descriptor

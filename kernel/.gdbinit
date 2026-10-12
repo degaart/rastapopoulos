@@ -281,5 +281,16 @@ tui new-layout src-vars \
     status 0 \
     cmd 1
 
+# Keep assembly on the left and registers on the right.
+tui new-layout asm \
+    {-horizontal asm 2 regs 1} 4 \
+    status 0 \
+    cmd 1
+
 layout src-vars
+
+set disassembly-flavor intel
+file build/kernel.elf
+target remote localhost:1234
+
 

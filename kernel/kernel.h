@@ -60,8 +60,7 @@ static inline uint32_t read_eflags(void)
 {
     uint32_t eflags;
     asm volatile("pushf\n\t"
-                 "pop %0\n\t"
-                 "sti"
+                 "pop %0"
                  : "=r"(eflags)
                  :
                  : "memory");
@@ -134,4 +133,5 @@ __attribute__((format(printf, 3, 4))) void __panic(const char* file, int line,
                                                    const char* fmt, ...);
 
 extern void halt(void) __attribute__((noreturn));
+#define debugbreak() asm volatile("xchg bx, bx" ::: "memory")
 
