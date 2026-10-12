@@ -1,4 +1,4 @@
-.PHONY: all clean run format bochs
+.PHONY: all clean run format bochs 86box
 .SUFFIXES:
 .SECONDARY:
 
@@ -77,5 +77,12 @@ format:
 
 bochs: all
 	bochs -q -dbg_gui
+
+86box: all
+	$(HOME)/Applications/86box/bin/86Box \
+		-N \
+		-L /dev/null \
+		--vmname rasta386 \
+		--vmpath "$(HOME)/.local/share/86Box/Virtual Machines/rasta386" > /dev/null 2>&1
 
 

@@ -8,6 +8,7 @@
 #include "pit.h"
 #include "pmm.h"
 #include "ps2kbd.h"
+#include "serial.h"
 #include "trace.h"
 #include "vga.h"
 #include "vmm.h"
@@ -100,6 +101,7 @@ void test_heap(void)
 
 static void thread1_entry(void* param)
 {
+    trace("Thread1 started");
     if ((read_eflags() & EFLAGS_IF) == 0)
         panic("IF=0");
     char buffer[16];
@@ -119,6 +121,7 @@ static void thread1_entry(void* param)
 
 static void thread2_entry(void* param)
 {
+    trace("Thread2 started");
     char buffer[16];
     int counter = 0;
     int y = 11;
@@ -136,6 +139,7 @@ static void thread2_entry(void* param)
 
 static void thread3_entry(void* param)
 {
+    trace("Thread3 started");
     char buffer[16];
     int counter = 0;
     int y = 12;
@@ -152,6 +156,7 @@ static void thread3_entry(void* param)
 
 static void thread4_entry(void* param)
 {
+    trace("Thread4 started");
     char buffer[16];
     int counter = 0;
     int y = 13;
@@ -168,6 +173,8 @@ static void thread4_entry(void* param)
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 {
+    serial_init();
+    trace("Kernel entered");
     early_malloc_init();
 
     vga_init();
@@ -191,6 +198,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
                         .base = (uint32_t)(uintptr_t)&gdt};
     gdt_load(&gdtr);
     idt_init();
+    trace("IDT installed");
 
     struct multiboot_mmap_entry* mmap_entries =
         (struct multiboot_mmap_entry*)mb_info->mmap_addr;
@@ -210,6 +218,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
         mmap_entries[1].type = MULTIBOOT_MEMORY_AVAILABLE;
     }
     pmm_init(mmap_entries, mmap_len);
+    trace("PMM initialized");
     printf("Free memory: %zu bytes\n", pmm_info());
 
     if (!vmm_init())
@@ -219,6 +228,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     if (!heap_init())
         panic("heap_init failed");
+    trace("Heap initialized");
 
     pic_init();
     pit_init(100);
@@ -232,7 +242,11 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     thread_create(thread4_entry, NULL);
 
     schedule();
+    trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",
+          (read_eflags() & EFLAGS_IF) != 0, inb(0x21), pic_get_irr(),
+          pic_get_isr());
     enable_interrupts();
+    trace("Idle thread resumed: ticks=%llu", pit_get_ticks());
     uint32_t idle_counter = 0;
     while (1) {
         char buf[16];

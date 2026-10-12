@@ -2,6 +2,7 @@
 #include "kernel.h"
 #include "kthread.h"
 #include "pic.h"
+#include "trace.h"
 #include "vga.h"
 #include <stdio.h>
 #include <string.h>
@@ -43,6 +44,10 @@ volatile uint64_t ticks = 0;
 static void pit_irq_handler(int irq, struct isr_regs* regs)
 {
     ticks++;
+    if (ticks == 1)
+        trace("First IRQ0 received");
+    if (ticks % 100 == 0 && ticks <= 5100)
+        trace("IRQ0 ticks=%llu", ticks);
 
     char buf[64];
     /* Keep IRQ0 bounded: pmm_info() scans every physical-memory frame. */
