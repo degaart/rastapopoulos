@@ -15,6 +15,8 @@ align 4
 ; boot stack
 section .bss
 align 16
+
+global initial_stack_bottom
 initial_stack_bottom:
 resb 16384
 

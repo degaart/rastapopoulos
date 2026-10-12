@@ -312,6 +312,52 @@ size_t uint32_to_string(uint32_t value, char* buffer, size_t buffer_len)
     return length;
 }
 
+size_t strlcpy(char* restrict dst, const char* restrict src, size_t size)
+{
+    const char* ptr = src;
+    size_t nleft = size;
+    if (nleft != 0) {
+        while (--nleft != 0) {
+            if ((*dst++ = *src++) == '\0')
+                break;
+        }
+    }
+
+    if (nleft == 0) {
+        if (size != 0)
+            *dst = '\0';
+        while (*src++)
+            ;
+    }
+    return src - ptr - 1;
+}
+
+size_t strlcat(char* restrict dst, const char* restrict src, size_t size)
+{
+    const char* odst = dst;
+    const char* osrc = src;
+
+    size_t n = size;
+    while (n-- != 0 && *dst != '\0')
+        dst++;
+
+    size_t dlen = dst - odst;
+    n = size - dlen;
+    if (n-- == 0)
+        return (dlen + strlen(src));
+
+    while (*src != '\0') {
+        if (n != 0) {
+            *dst++ = *src;
+            n--;
+        }
+        src++;
+    }
+    *dst = '\0';
+
+    return dlen + (src - osrc);
+}
+
 #ifndef RASTA_BOOTLOADER
 size_t uint64_to_string(uint64_t value, char* buffer, size_t buffer_len)
 {

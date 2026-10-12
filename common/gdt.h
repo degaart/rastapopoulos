@@ -1,6 +1,13 @@
 #pragma once
 
+#include "tss.h"
 #include <stdint.h>
+
+#define CODESEG     0x08
+#define DATASEG     0x10
+#define USERCODESEG 0x18
+#define USERDATASEG 0x20
+#define TSSSEG      0x28
 
 #define GDT_ACCESS_ACCESSED        0x01
 #define GDT_ACCESS_DATA_WRITABLE   0x02
@@ -37,6 +44,9 @@
 
 #define GDT_FLAGS_32BIT_4K (GDT_FLAG_32BIT | GDT_FLAG_GRANULARITY_4K)
 
+#define GDT_ACCESS_TSS 0x89
+#define GDT_FLAGS_TSS  0x0
+
 struct GdtEntry
 {
     uint16_t limit_low;
@@ -60,6 +70,7 @@ struct Gdt
     struct GdtEntry data;
     struct GdtEntry usercode;
     struct GdtEntry userdata;
+    struct GdtEntry tss;
 } __attribute__((packed));
 
 void gdt_set_entry(struct GdtEntry* entry, uint32_t base, uint32_t limit,

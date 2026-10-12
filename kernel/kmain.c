@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <string.h>
 
+struct TSS tss;
+
 static void dump_multiboot(const struct multiboot_info* info)
 {
     printf("Multiboot info:\n");
@@ -194,6 +196,12 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
                   GDT_FLAGS_32BIT_4K);
     gdt_set_entry(&gdt.userdata, 0, 0xfffff, GDT_ACCESS_USERDATA,
                   GDT_FLAGS_32BIT_4K);
+    gdt_set_entry(&gdt.tss, (uintptr_t)&tss, sizeof(tss) - 1, GDT_ACCESS_TSS,
+                  GDT_FLAGS_TSS);
+
+    memset(&tss, 0, sizeof(tss));
+    tss.ss0 = DATASEG;
+    tss.iomap_base = sizeof(struct TSS);
 
     struct Gdtr gdtr = {.limit = sizeof(gdt) - 1,
                         .base = (uint32_t)(uintptr_t)&gdt};
@@ -237,10 +245,10 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     ps2kbd_init();
 
     thread_init();
-    thread_create(thread1_entry, NULL);
-    thread_create(thread2_entry, NULL);
-    thread_create(thread3_entry, NULL);
-    thread_create(thread4_entry, NULL);
+    thread_create("thread1", thread1_entry, NULL);
+    thread_create("thread2", thread2_entry, NULL);
+    thread_create("thread3", thread3_entry, NULL);
+    thread_create("thread4", thread4_entry, NULL);
     sysinfo_init();
 
     schedule();

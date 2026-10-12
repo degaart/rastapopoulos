@@ -1,9 +1,8 @@
 #include "idt.h"
 #include "kernel.h"
 #include "vga.h"
+#include <gdt.h>
 #include <stdio.h>
-
-#define CODESEG 0x08
 
 static struct idt_entry idt[256];
 static struct idtr idtr;

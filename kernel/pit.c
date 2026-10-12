@@ -52,6 +52,17 @@ static void pit_irq_handler(int irq, struct isr_regs* regs)
         trace("First IRQ0 received");
     event_signal(sysinfo_event);
     pic_eoi(irq);
+
+    char thread_name[16];
+    size_t len = current_thread_name(thread_name, sizeof(thread_name));
+    for (size_t i = VGA_WIDTH - sizeof(thread_name); i < VGA_WIDTH - len; i++)
+        vga_write_at(i, 0, ' ', VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+
+    for (size_t i = 0; i < len; i++) {
+        vga_write_at(VGA_WIDTH - len + i, 0, thread_name[i], VGA_COLOR_WHITE,
+                     VGA_COLOR_BLUE);
+    }
+
     schedule();
 }
 

@@ -2,6 +2,7 @@
 #include "kernel.h"
 #include "kmalloc.h"
 #include "trace.h"
+#include "tss.h"
 #include <assert.h>
 #include <string.h>
 
@@ -54,8 +55,11 @@ void thread_init(void)
     if (!thread)
         panic("Out of memory");
     memset(thread, 0, sizeof(*thread));
-    thread->stack =
-        NULL; /* It really is initial_stack_top but we should never free it */
+    strlcpy(thread->name, "idle", sizeof(thread->name));
+
+    thread->stack_size = 16384;
+    thread->stack = initial_stack_bottom;
+    thread->stack_top = initial_stack_top;
     thread->state = THREAD_RUNNING;
     idle_thread = thread;
     current_thread = thread;
@@ -70,7 +74,7 @@ static void thread_start(void (*entry)(void*), void* arg)
     thread_exit();
 }
 
-struct Thread* thread_create(thread_entry_t entry, void* arg)
+struct Thread* thread_create(const char* name, thread_entry_t entry, void* arg)
 {
     bool const flag = enter_critical_section();
     struct Thread* thread = kmalloc(sizeof(struct Thread));
@@ -78,13 +82,18 @@ struct Thread* thread_create(thread_entry_t entry, void* arg)
         leave_critical_section(flag);
         return NULL;
     }
+
     memset(thread, 0, sizeof(*thread));
-    thread->stack = kmalloc(4096);
+    strlcpy(thread->name, name, sizeof(thread->name));
+
+    thread->stack_size = 4096;
+    thread->stack = kmalloc(thread->stack_size);
     if (!thread->stack) {
         kfree(thread);
         leave_critical_section(flag);
         return NULL;
     }
+    thread->stack_top = thread->stack + thread->stack_size;
 
     uint32_t* esp = thread->stack + 4096 - sizeof(uint32_t);
     *esp-- = (uintptr_t)arg;
@@ -129,6 +138,8 @@ void thread_yield(void)
 
         if (old != idle_thread)
             scheduler_enqueue(old);
+
+        tss.esp0 = (uintptr_t)next->stack_top;
         context_switch(&old->esp, next->esp);
     }
 
@@ -152,6 +163,7 @@ void thread_exit(void)
     scheduler_ticks = 0;
 
     uint32_t old_esp;
+    tss.esp0 = (uintptr_t)next->stack_top;
     context_switch(&old_esp, next->esp);
 
     panic("Terminated thread resumed");
@@ -193,6 +205,8 @@ void event_wait(struct Event* event)
 
         next->state = THREAD_RUNNING;
         current_thread = next;
+
+        tss.esp0 = (uintptr_t)next->stack_top;
         context_switch(&event->waiter->esp, next->esp);
     }
     event->pending = false;
@@ -210,5 +224,13 @@ void event_signal(struct Event* event)
         scheduler_enqueue(waiter);
     }
     leave_critical_section(iflag);
+}
+
+size_t current_thread_name(char* buf, size_t size)
+{
+    bool iflag = enter_critical_section();
+    size_t result = strlcpy(buf, current_thread->name, size);
+    leave_critical_section(iflag);
+    return result;
 }
 

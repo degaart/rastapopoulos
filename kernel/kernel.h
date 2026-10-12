@@ -10,6 +10,7 @@
 extern uint8_t __kernel_start[];
 extern uint8_t __kernel_end[];
 extern uint8_t initial_stack_top[];
+extern uint8_t initial_stack_bottom[];
 
 /* A must be a power of two */
 #define ALIGN_UP(V, A)   (((V) + (A) - 1) & (~((A) - 1)))
