@@ -70,7 +70,7 @@ static void thread_start(void (*entry)(void*), void* arg)
     thread_exit();
 }
 
-struct Thread* thread_create(void (*entry)(void*), void* arg)
+struct Thread* thread_create(thread_entry_t entry, void* arg)
 {
     bool const flag = enter_critical_section();
     struct Thread* thread = kmalloc(sizeof(struct Thread));
