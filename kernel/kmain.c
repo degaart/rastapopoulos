@@ -9,6 +9,7 @@
 #include "pmm.h"
 #include "ps2kbd.h"
 #include "serial.h"
+#include "sysinfo.h"
 #include "trace.h"
 #include "vga.h"
 #include "vmm.h"
@@ -240,6 +241,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     thread_create(thread2_entry, NULL);
     thread_create(thread3_entry, NULL);
     thread_create(thread4_entry, NULL);
+    sysinfo_init();
 
     schedule();
     trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",

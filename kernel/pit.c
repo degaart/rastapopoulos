@@ -2,6 +2,7 @@
 #include "kernel.h"
 #include "kthread.h"
 #include "pic.h"
+#include "sysinfo.h"
 #include "trace.h"
 #include "vga.h"
 #include <stdio.h>
@@ -41,23 +42,15 @@
 
 volatile uint64_t ticks = 0;
 
+/*
+ * WARNING: Do not run time-hungry operations in this IRQ handler
+ */
 static void pit_irq_handler(int irq, struct isr_regs* regs)
 {
     ticks++;
     if (ticks == 1)
         trace("First IRQ0 received");
-    if (ticks % 100 == 0 && ticks <= 5100)
-        trace("IRQ0 ticks=%llu", ticks);
-
-    char buf[64];
-    /* Keep IRQ0 bounded: pmm_info() scans every physical-memory frame. */
-    int len = snprintf(buf, sizeof(buf), "%llu", ticks);
-
-    int x = VGA_WIDTH - len;
-    for (int i = 0; i < len; i++) {
-        vga_write_at(x + i, 0, buf[i], VGA_COLOR_WHITE, VGA_COLOR_BLUE);
-    }
-
+    event_signal(sysinfo_event);
     pic_eoi(irq);
     schedule();
 }

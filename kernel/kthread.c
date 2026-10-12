@@ -5,7 +5,7 @@
 #include <assert.h>
 #include <string.h>
 
-#define SCHEDULER_QUANTUM 10
+#define SCHEDULER_QUANTUM 1
 
 static STAILQ_HEAD(ThreadList,
                    Thread) ready_queue = STAILQ_HEAD_INITIALIZER(ready_queue);
@@ -167,5 +167,48 @@ void thread_dump(void)
     }
     trace("current_thread: 0x%p, idle_thread: 0x%p", current_thread,
           idle_thread);
+}
+
+struct Event* event_create(void)
+{
+    struct Event* event = kmalloc(sizeof(struct Event));
+    memset(event, 0, sizeof(*event));
+    return event;
+}
+
+void event_free(struct Event* event)
+{
+    kfree(event);
+}
+
+void event_wait(struct Event* event)
+{
+    bool iflag = enter_critical_section();
+    while (!event->pending) {
+        event->waiter = current_thread;
+        current_thread->state = THREAD_BLOCKED;
+
+        struct Thread* next = scheduler_dequeue();
+        assert(next != current_thread);
+
+        next->state = THREAD_RUNNING;
+        current_thread = next;
+        context_switch(&event->waiter->esp, next->esp);
+    }
+    event->pending = false;
+    leave_critical_section(iflag);
+}
+
+void event_signal(struct Event* event)
+{
+    bool iflag = enter_critical_section();
+    event->pending = true;
+    if (event->waiter != NULL) {
+        struct Thread* waiter = event->waiter;
+        assert(waiter->state == THREAD_BLOCKED);
+        event->waiter = NULL;
+        scheduler_enqueue(waiter);
+    }
+    leave_critical_section(iflag);
 }
 
