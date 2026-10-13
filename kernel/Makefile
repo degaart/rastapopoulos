@@ -42,6 +42,9 @@ $(BINARY): $(OBJS) | build
 build/%.o: %.asm $(ASM_HDRS) | build
 	$(AS) -felf32 -o $@ $<
 
+build/usercode.o: usercode.asm $(ASM_HDRS) ../user/build/user.bin | build
+	$(AS) -felf32 -o $@ $<
+
 build/%.o: %.c $(HDRS) $(COMMON_HDRS) | build
 	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
 

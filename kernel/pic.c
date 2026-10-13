@@ -85,7 +85,7 @@ void pic_init(void)
     outb(PIC2_DATA, 0xff);
 
     for (int i = 32; i < 32 + 16; i++) {
-        idt_set_handler(i, pic_isr_handler);
+        idt_set_handler(i, pic_isr_handler, 0);
     }
 }
 

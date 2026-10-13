@@ -49,18 +49,25 @@ void idt_init(void)
     idtr.base = (uint32_t)(uintptr_t)idt;
 
     for (int i = 0; i < 256; i++) {
-        idt_set_gate(i, isr_stub_table[i], CODESEG,
-                     IDT_INT_GATE_32 | IDT_PRESENT);
+        unsigned flags = IDT_INT_GATE_32 | IDT_PRESENT;
+        if (i == 3 ||
+            i == 3) /* int 3 and int 4 need to be callable from ring3 */
+            flags |= IDT_DPL3;
+        idt_set_gate(i, isr_stub_table[i], CODESEG, flags);
     }
     idt_load(&idtr);
 }
 
-idt_handler_t idt_set_handler(int vector, idt_handler_t handler)
+idt_handler_t idt_set_handler(int vector, idt_handler_t handler, unsigned dpl)
 {
     if (vector < 0 || vector > 255)
         panic("Invalid interrupt vector %d", vector);
+    else if (dpl > 3)
+        panic("Invalid interrupt vector DPL: %u", dpl);
     idt_handler_t result = handlers[vector];
     handlers[vector] = handler;
+    idt_set_gate(vector, isr_stub_table[vector], CODESEG,
+                 IDT_INT_GATE_32 | IDT_PRESENT | (dpl << 5));
     return result;
 }
 

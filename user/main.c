@@ -23,6 +23,8 @@
 #define VGA_HEIGHT 25
 
 static volatile uint16_t* vga_buffer = (volatile uint16_t*)VGA_BASE;
+int32_t syscall(uint32_t number, uint32_t param1, uint32_t param2,
+                uint32_t param3, uint32_t param4, uint32_t param5);
 
 static size_t uint32_to_string(uint32_t value, char* buffer, size_t buffer_len)
 {
@@ -104,7 +106,9 @@ void main(void)
     char buffer[16];
     uint32_t counter = 0;
     while (1) {
-        size_t len = uint32_to_string(counter, buffer, sizeof(buffer));
+        int32_t ticks = syscall(0, 0, 0, 0, 0, 0);
+
+        size_t len = uint32_to_string(ticks, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         int y = 14;
         for (size_t i = 0; i < len; i++) {

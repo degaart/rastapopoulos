@@ -53,6 +53,6 @@ struct isr_regs
 typedef void (*idt_handler_t)(int, struct isr_regs*);
 
 void idt_init(void);
-idt_handler_t idt_set_handler(int vector, idt_handler_t handler);
+idt_handler_t idt_set_handler(int vector, idt_handler_t handler, unsigned dpl);
 extern void idt_load(struct idtr* idtr);
 

@@ -9,6 +9,7 @@
 #include "pmm.h"
 #include "ps2kbd.h"
 #include "serial.h"
+#include "syscall.h"
 #include "sysinfo.h"
 #include "trace.h"
 #include "vga.h"
@@ -247,7 +248,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     gdt_load(&gdtr);
     tss_load(TSSSEG);
     idt_init();
-    idt_set_handler(0xd, gpf_handler);
+    idt_set_handler(0xd, gpf_handler, 0);
     trace("IDT installed");
 
     struct multiboot_mmap_entry* mmap_entries =
@@ -284,6 +285,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     pit_init(100);
 
     ps2kbd_init();
+    syscall_init();
 
     thread_init();
     thread_create("thread1", thread1_entry, NULL);
