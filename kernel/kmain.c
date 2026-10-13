@@ -98,15 +98,58 @@ static void tss_load(uint16_t tss_seg)
 
 extern uint8_t usercode_start[];
 extern uint8_t usercode_end[];
+extern uint8_t ring3_trampoline[];
+extern uint8_t ring3_trampoline_end[];
 
-#define USER_BASE  0x00400000
-#define USER_STACK 0xc0000000
+#define RING3_TRAMPOLINE_BASE 0x1000
+#define USER_BASE             0x00400000
+#define USER_STACK            0xc0000000
 
 static void user_entry(void* param)
 {
     trace("Jumping to ring3");
-    ring3_jump((void*)USER_BASE, (void*)(USER_STACK + VMM_PAGE_SIZE),
-               USERCODESEG | 0x3, USERDATASEG | 0x3);
+
+    /* Map ring3 trampoline */
+    void* frame = pmm_alloc();
+    if (!frame)
+        panic("Out of memory");
+    if (!vmm_map(frame, (void*)RING3_TRAMPOLINE_BASE, VMM_USER))
+        panic("Failed to map page 0x%x", RING3_TRAMPOLINE_BASE);
+    memcpy((void*)RING3_TRAMPOLINE_BASE, ring3_trampoline,
+           ring3_trampoline_end - ring3_trampoline);
+
+    /* Map user code + data + bss */
+    size_t usercode_len = usercode_end - usercode_start;
+    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + usercode_len;
+         ptr += VMM_PAGE_SIZE) {
+        frame = pmm_alloc();
+        if (!frame)
+            panic("Out of memory");
+        if (!vmm_map(frame, (void*)ptr, VMM_USER | VMM_WRITABLE))
+            panic("Failed to map page 0x%lx", ptr);
+    }
+
+    uint8_t* ptr = (void*)USER_BASE;
+    memcpy(ptr, usercode_start, usercode_len);
+
+    /* Stack */
+    frame = pmm_alloc();
+    if (!frame)
+        panic("Out of memory");
+
+    if (!vmm_map(frame, (void*)USER_STACK, VMM_USER | VMM_WRITABLE))
+        panic("Failed to map page");
+    ptr = (void*)USER_STACK;
+    memset(ptr, 0xcc, VMM_PAGE_SIZE);
+
+    /* VGA mem */
+    if (!vmm_remap((void*)VGA_BASE, VMM_USER | VMM_WRITABLE))
+        panic("Failed to remap page");
+
+    uint32_t esp = USER_STACK + VMM_PAGE_SIZE;
+    ring3_jump((void*)RING3_TRAMPOLINE_BASE,
+               (void*)(USER_STACK + VMM_PAGE_SIZE), USERCODESEG | 0x3,
+               USERDATASEG | 0x3);
     panic("ring3_jump returned");
 }
 
@@ -184,35 +227,6 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     thread_init();
     sysinfo_init();
-
-    size_t usercode_len = usercode_end - usercode_start;
-    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + usercode_len;
-         ptr += VMM_PAGE_SIZE) {
-        void* frame = pmm_alloc();
-        if (!frame)
-            panic("Out of memory");
-
-        /* Code */
-        if (!vmm_map(frame, (void*)ptr, VMM_USER | VMM_WRITABLE))
-            panic("Failed to map page 0x%lx", ptr);
-    }
-
-    uint8_t* ptr = (void*)USER_BASE;
-    memcpy(ptr, usercode_start, usercode_len);
-
-    /* Stack */
-    void* frame = pmm_alloc();
-    if (!frame)
-        panic("Out of memory");
-
-    if (!vmm_map(frame, (void*)USER_STACK, VMM_USER | VMM_WRITABLE))
-        panic("Failed to map page");
-    ptr = (void*)USER_STACK;
-    memset(ptr, 0xcc, VMM_PAGE_SIZE);
-
-    /* VGA mem */
-    if (!vmm_remap((void*)VGA_BASE, VMM_USER | VMM_WRITABLE))
-        panic("Failed to remap page");
 
     thread_create("user", user_entry, NULL);
 

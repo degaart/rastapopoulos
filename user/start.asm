@@ -19,6 +19,5 @@ _start:
     jmp  .loop
 .call_main:
     call main
-.halt:
-    jmp  .halt
+    ret
 

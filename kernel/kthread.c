@@ -147,6 +147,8 @@ static void cleanup_terminated(void)
     bool flag = enter_critical_section();
     while (!STAILQ_EMPTY(&terminated_queue)) {
         struct Thread* thread = STAILQ_FIRST(&terminated_queue);
+        trace("Destroying thread \"%s\"", thread->name);
+
         STAILQ_REMOVE_HEAD(&terminated_queue, entry);
         assert(thread != idle_thread);
         kfree(thread->stack);

@@ -81,10 +81,10 @@ static void syscall_kbd_observer(void*)
 
     if (evt.type == KEY_PRESSED) {
         bitset_set(&kbd_bitset, evt.scancode);
-        trace("KEY_PRESSED 0x%x", evt.scancode);
+        // trace("KEY_PRESSED 0x%x", evt.scancode);
     } else {
         bitset_unset(&kbd_bitset, evt.scancode);
-        trace("KEY_RELEASED 0x%x", evt.scancode);
+        // trace("KEY_RELEASED 0x%x", evt.scancode);
     }
 }
 
