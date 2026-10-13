@@ -1,180 +1,268 @@
-#include <stddef.h>
+#include "rasta.h"
 #include <stdint.h>
 
-#define VGA_BASE                0xb8000
-#define VGA_COLOR_BLACK         0x0
-#define VGA_COLOR_BLUE          0x1
-#define VGA_COLOR_GREEN         0x2
-#define VGA_COLOR_CYAN          0x3
-#define VGA_COLOR_RED           0x4
-#define VGA_COLOR_MAGENTA       0x5
-#define VGA_COLOR_BROWN         0x6
-#define VGA_COLOR_LIGHT_GREY    0x7
-#define VGA_COLOR_DARK_GREY     0x8
-#define VGA_COLOR_LIGHT_BLUE    0x9
-#define VGA_COLOR_LIGHT_GREEN   0xA
-#define VGA_COLOR_LIGHT_CYAN    0xB
-#define VGA_COLOR_LIGHT_RED     0xC
-#define VGA_COLOR_LIGHT_MAGENTA 0xD
-#define VGA_COLOR_YELLOW        0xE
-#define VGA_COLOR_WHITE         0xF
-
-#define VGA_WIDTH  80
-#define VGA_HEIGHT 25
-
-#define KEY_LEFT  0xE04B
-#define KEY_RIGHT 0xE04D
-#define KEY_UP    0xE048
-#define KEY_DOWN  0xE050
-#define KEY_ESC   0x01
-
-static volatile uint16_t* vga_buffer = (volatile uint16_t*)VGA_BASE;
-int32_t syscall(uint32_t number, uint32_t param1, uint32_t param2,
-                uint32_t param3, uint32_t param4, uint32_t param5);
-int64_t syscall64(uint32_t number, uint32_t param1, uint32_t param2,
-                  uint32_t param3, uint32_t param4, uint32_t param5);
-
-static uint64_t sys_getticks(void)
+enum
 {
-    int64_t ticks = syscall64(0, 0, 0, 0, 0, 0);
-    return ticks;
+    WIDTH = 80,
+    HEIGHT = 25,
+    CELLS = WIDTH * HEIGHT,
+    CAPACITY = (WIDTH - 2) * (HEIGHT - 2),
+    STEP_TICKS = 10
+};
+
+enum
+{
+    RESULT_EXIT,
+    RESULT_LOST,
+    RESULT_WON
+};
+
+static volatile uint16_t* const vga = (volatile uint16_t*)(uintptr_t)0xb8000;
+
+static uint16_t body[CAPACITY];
+static uint8_t occupied[CELLS];
+static unsigned tail, length;
+static uint16_t food;
+static uint32_t random_state;
+
+static uint16_t saved[CELLS];
+static uint16_t drawn[CELLS];
+static uint8_t owned[CELLS];
+
+static void put(unsigned pos, unsigned ch, unsigned color)
+{
+    uint16_t current = vga[pos];
+    uint16_t value = (uint16_t)((color << 8) | ch);
+
+    /* Save external contents, without saving our own graphics. */
+    if (!owned[pos] || current != drawn[pos])
+        saved[pos] = current;
+
+    drawn[pos] = value;
+    owned[pos] = 1;
+    vga[pos] = value;
 }
 
-static void sys_sleep(uint32_t ticks)
+static void restore(unsigned pos)
 {
-    syscall(1, ticks, 0, 0, 0, 0);
-}
+    if (owned[pos]) {
+        /*
+         * Leave visible external changes alone.
+         * This comparison cannot prevent concurrent write races.
+         */
+        if (vga[pos] == drawn[pos])
+            vga[pos] = saved[pos];
 
-static int sys_key_down(unsigned scancode)
-{
-    return syscall(2, scancode, 0, 0, 0, 0);
-}
-
-static size_t uint32_to_string(uint32_t value, char* buffer, size_t buffer_len)
-{
-    static const char digits[] = "00010203040506070809"
-                                 "10111213141516171819"
-                                 "20212223242526272829"
-                                 "30313233343536373839"
-                                 "40414243444546474849"
-                                 "50515253545556575859"
-                                 "60616263646566676869"
-                                 "70717273747576777879"
-                                 "80818283848586878889"
-                                 "90919293949596979899";
-
-    if (buffer == NULL || buffer_len == 0) {
-        return 0;
+        owned[pos] = 0;
     }
+}
 
-    size_t length;
+static void restore_all(void)
+{
+    unsigned pos;
 
-    if (value < 100000u) {
-        if (value < 100u) {
-            length = value < 10u ? 1 : 2;
-        } else if (value < 10000u) {
-            length = value < 1000u ? 3 : 4;
-        } else {
-            length = 5;
+    for (pos = 0; pos < CELLS; ++pos)
+        restore(pos);
+}
+
+static void message(const char* text)
+{
+    unsigned pos;
+
+    for (pos = 2; pos < WIDTH - 2; ++pos) {
+        unsigned ch = ' ';
+
+        if (*text)
+            ch = (unsigned char)*text++;
+
+        put(pos, ch, 0x0f);
+    }
+}
+
+static uint32_t random_next(void)
+{
+    uint32_t x = random_state;
+
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    random_state = x;
+    return x;
+}
+
+/* Called only when at least one playable cell is empty. */
+static void place_food(void)
+{
+    unsigned choice = random_next() % (CAPACITY - length);
+    unsigned x, y;
+
+    for (y = 1; y < HEIGHT - 1; ++y) {
+        for (x = 1; x < WIDTH - 1; ++x) {
+            unsigned pos = y * WIDTH + x;
+
+            if (!occupied[pos]) {
+                if (choice == 0) {
+                    food = (uint16_t)pos;
+                    put(pos, '*', 0x0c);
+                    return;
+                }
+                --choice;
+            }
         }
-    } else {
-        if (value < 10000000u) {
-            length = value < 1000000u ? 6 : 7;
-        } else if (value < 1000000000u) {
-            length = value < 100000000u ? 8 : 9;
-        } else {
-            length = 10;
+    }
+}
+
+static int play_game(void)
+{
+    unsigned x, y, i;
+    int dx = 1, dy = 0;
+    int pending_dx = 1, pending_dy = 0;
+    int turn_queued = 0;
+    uint32_t last_step;
+
+    restore_all();
+
+    tail = 0;
+    length = 3;
+    random_state = sys_getticks() ^ UINT32_C(0x9e3779b9);
+    if (random_state == 0)
+        random_state = 1;
+
+    /* Preserve the interior; draw only the border. */
+    for (y = 0; y < HEIGHT; ++y) {
+        for (x = 0; x < WIDTH; ++x) {
+            unsigned pos = y * WIDTH + x;
+            int wall = x == 0 || x == WIDTH - 1 || y == 0 || y == HEIGHT - 1;
+
+            occupied[pos] = 0;
+            if (wall)
+                put(pos, '#', 0x07);
         }
     }
 
-    if (buffer_len <= length) {
-        buffer[0] = '\0';
-        return 0;
+    message("SNAKE - Arrows move, Esc exits");
+
+    for (i = 0; i < length; ++i) {
+        unsigned pos = (HEIGHT / 2) * WIDTH + WIDTH / 2 - 2 + i;
+
+        body[i] = (uint16_t)pos;
+        occupied[pos] = 1;
+        put(pos, i == length - 1 ? '@' : 'o', 0x0a);
     }
 
-    char* p = buffer + length;
-    *p = '\0';
+    place_food();
+    last_step = sys_getticks();
 
-    while (value >= 100u) {
-        uint32_t quotient = value / 100u;
-        unsigned int index = (unsigned int)(value - quotient * 100u) * 2u;
+    for (;;) {
+        uint32_t now;
+        unsigned head, next, old_tail;
+        int nx, ny, growing;
 
-        p -= 2;
-        p[0] = digits[index];
-        p[1] = digits[index + 1];
+        if (sys_key_down(KEY_ESC))
+            return RESULT_EXIT;
 
-        value = quotient;
+        /* Queue at most one perpendicular turn per movement step. */
+        if (!turn_queued) {
+            if (dx != 0 && sys_key_down(KEY_UP)) {
+                pending_dx = 0;
+                pending_dy = -1;
+                turn_queued = 1;
+            } else if (dx != 0 && sys_key_down(KEY_DOWN)) {
+                pending_dx = 0;
+                pending_dy = 1;
+                turn_queued = 1;
+            } else if (dy != 0 && sys_key_down(KEY_LEFT)) {
+                pending_dx = -1;
+                pending_dy = 0;
+                turn_queued = 1;
+            } else if (dy != 0 && sys_key_down(KEY_RIGHT)) {
+                pending_dx = 1;
+                pending_dy = 0;
+                turn_queued = 1;
+            }
+        }
+
+        now = sys_getticks();
+        if ((uint32_t)(now - last_step) < STEP_TICKS) {
+            sys_sleep(1);
+            continue;
+        }
+        last_step = now;
+
+        dx = pending_dx;
+        dy = pending_dy;
+        turn_queued = 0;
+
+        head = body[(tail + length - 1) % CAPACITY];
+        nx = (int)(head % WIDTH) + dx;
+        ny = (int)(head / WIDTH) + dy;
+
+        if (nx <= 0 || nx >= WIDTH - 1 || ny <= 0 || ny >= HEIGHT - 1)
+            return RESULT_LOST;
+
+        next = (unsigned)ny * WIDTH + (unsigned)nx;
+        old_tail = body[tail];
+        growing = next == food;
+
+        /* Entering the departing tail cell is legal. */
+        if (occupied[next] && (growing || next != old_tail))
+            return RESULT_LOST;
+
+        put(head, 'o', 0x0a);
+
+        if (!growing) {
+            occupied[old_tail] = 0;
+            restore(old_tail);
+            tail = (tail + 1) % CAPACITY;
+            --length;
+        }
+
+        body[(tail + length) % CAPACITY] = (uint16_t)next;
+        ++length;
+        occupied[next] = 1;
+        put(next, '@', 0x0a);
+
+        if (growing) {
+            if (length == CAPACITY)
+                return RESULT_WON;
+
+            place_food();
+        }
     }
-
-    if (value < 10u) {
-        *--p = (char)('0' + value);
-    } else {
-        unsigned int index = (unsigned int)value * 2u;
-
-        p -= 2;
-        p[0] = digits[index];
-        p[1] = digits[index + 1];
-    }
-
-    return length;
 }
 
-static void putchar(int x, int y, int ch, int fg, int bg)
-{
-    if (x < 0 || x >= VGA_WIDTH)
-        return;
-    if (y < 0 || y >= VGA_HEIGHT)
-        return;
-
-    uint16_t attr = (fg << 4) | bg;
-    vga_buffer[y * VGA_WIDTH + x] = (attr << 8) | ch;
-}
-
+/* Call from your OS's program entry point. */
 void main(void)
 {
-    char buffer[16];
-    uint32_t counter = 0;
-    int fg = VGA_COLOR_BLACK;
-    int bg = VGA_COLOR_WHITE;
-    int x = VGA_WIDTH / 2;
-    int y = 14;
+    for (;;) {
+        int result = play_game();
+        int enter_released;
 
-    while (1) {
-        uint32_t ticks = (uint32_t)sys_getticks();
-        if (sys_key_down(KEY_LEFT))
-            x--;
-        if (sys_key_down(KEY_RIGHT))
-            x++;
-        if (sys_key_down(KEY_UP))
-            y--;
-        if (sys_key_down(KEY_DOWN))
-            y++;
-
-        if (x < 0)
-            x = 0;
-        if (x >= VGA_WIDTH)
-            x = VGA_WIDTH - 1;
-        if (y < 0)
-            y = 0;
-        if (y >= VGA_HEIGHT)
-            y = VGA_HEIGHT - 1;
-
-        size_t len = uint32_to_string(ticks, buffer, sizeof(buffer));
-        int px = x - (len / 2);
-        for (size_t i = 0; i < len; i++) {
-            putchar(px + i, y, buffer[i], fg, bg);
+        if (result == RESULT_EXIT) {
+            restore_all();
+            return;
         }
-        sys_sleep(10);
 
-        counter++;
-        if (counter >= 100) {
-            counter = 0;
-            fg++;
-            if (fg > VGA_COLOR_WHITE)
-                fg = 0;
-            bg--;
-            if (bg < 0)
-                bg = VGA_COLOR_WHITE;
+        message(result == RESULT_WON
+                    ? "YOU WIN! - Enter: restart | Esc: exit"
+                    : "GAME OVER - Enter: restart | Esc: exit");
+
+        /* Require a fresh Enter press after the game ends. */
+        enter_released = !sys_key_down(KEY_ENTER);
+
+        for (;;) {
+            if (sys_key_down(KEY_ESC)) {
+                restore_all();
+                return;
+            }
+
+            if (!sys_key_down(KEY_ENTER)) {
+                enter_released = 1;
+            } else if (enter_released) {
+                break;
+            }
+
+            sys_sleep(1);
         }
     }
 }

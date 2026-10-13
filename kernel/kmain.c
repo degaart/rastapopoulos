@@ -205,6 +205,7 @@ extern uint8_t usercode_start[];
 extern uint8_t usercode_end[];
 
 #define USER_BASE  0x00400000
+#define USER_END   0x00404510
 #define USER_STACK 0xc0000000
 
 static void user_entry(void* param)
@@ -294,23 +295,25 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     thread_create("thread4", thread4_entry, NULL);
     sysinfo_init();
 
-    void* frame = pmm_alloc();
-    if (!frame)
-        panic("Out of memory");
+    for (uintptr_t ptr = USER_BASE; ptr < USER_END; ptr += VMM_PAGE_SIZE) {
+        void* frame = pmm_alloc();
+        if (!frame)
+            panic("Out of memory");
 
-    /* Code */
-    if (!vmm_map(frame, (void*)USER_BASE, VMM_USER))
-        panic("Failed to map page");
+        /* Code */
+        if (!vmm_map(frame, (void*)ptr, VMM_USER | VMM_WRITABLE))
+            panic("Failed to map page 0x%lx", ptr);
+    }
 
     uint8_t* ptr = (void*)USER_BASE;
-    memset(ptr, 0xcc, VMM_PAGE_SIZE);
+    memset(ptr, 0xcc, USER_END - USER_BASE);
 
     size_t usercode_len = usercode_end - usercode_start;
-    assert(usercode_len <= VMM_PAGE_SIZE);
+    assert(usercode_len <= USER_END - USER_BASE);
     memcpy(ptr, usercode_start, usercode_len);
 
     /* Stack */
-    frame = pmm_alloc();
+    void* frame = pmm_alloc();
     if (!frame)
         panic("Out of memory");
 
