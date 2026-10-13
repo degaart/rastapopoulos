@@ -10,7 +10,6 @@
 #include "ps2kbd.h"
 #include "serial.h"
 #include "syscall.h"
-#include "sysinfo.h"
 #include "trace.h"
 #include "vga.h"
 #include "vmm.h"
@@ -226,8 +225,6 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     syscall_init();
 
     thread_init();
-    sysinfo_init();
-
     thread_create("user", user_entry, NULL);
 
     schedule();
@@ -236,15 +233,8 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
           pic_get_isr());
     enable_interrupts();
     trace("Idle thread resumed: ticks=%llu", pit_get_ticks());
-    uint32_t idle_counter = 0;
-    while (1) {
-        char buf[16];
-        int len = uint32_to_string(idle_counter++, buf, sizeof(buf));
-        for (int i = 0; i < len; i++) {
-            vga_write_at(VGA_WIDTH + i - len, 1, buf[i], VGA_COLOR_LIGHT_GREY,
-                         VGA_COLOR_BLACK);
-        }
 
+    while (1) {
         if ((read_eflags() & EFLAGS_IF) == 0)
             panic("Interrupts disabled in idle thread");
         hlt();

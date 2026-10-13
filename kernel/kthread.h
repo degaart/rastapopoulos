@@ -47,4 +47,5 @@ void event_free(struct Event* event);
 void event_wait(struct Event* event);
 void event_signal(struct Event* event);
 size_t current_thread_name(char* buf, size_t size);
+void thread_get_info(char* buffer, size_t len);
 

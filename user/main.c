@@ -1,13 +1,16 @@
 #include "rasta.h"
-#include <stdint.h>
 
 enum
 {
     WIDTH = 80,
     HEIGHT = 25,
+    TOP = 1,
+    BOTTOM = HEIGHT - 1,
     CELLS = WIDTH * HEIGHT,
-    CAPACITY = (WIDTH - 2) * (HEIGHT - 2),
-    STEP_TICKS = 10
+    CAPACITY = (WIDTH - 2) * (BOTTOM - TOP - 1),
+    START_STEP_TICKS = 20,
+    MIN_STEP_TICKS = 2,
+    SCORE_X = 63
 };
 
 enum
@@ -21,57 +24,77 @@ static volatile uint16_t* const vga = (volatile uint16_t*)(uintptr_t)0xb8000;
 
 static uint16_t body[CAPACITY];
 static uint8_t occupied[CELLS];
-static unsigned tail, length;
+static unsigned tail, length, score;
 static uint16_t food;
 static uint32_t random_state;
 
-static uint16_t saved[CELLS];
-static uint16_t drawn[CELLS];
-static uint8_t owned[CELLS];
-
 static void put(unsigned pos, unsigned ch, unsigned color)
 {
-    uint16_t current = vga[pos];
-    uint16_t value = (uint16_t)((color << 8) | ch);
-
-    if (!owned[pos] || current != drawn[pos])
-        saved[pos] = current;
-
-    drawn[pos] = value;
-    owned[pos] = 1;
-    vga[pos] = value;
+    vga[pos] = (uint16_t)((color << 8) | ch);
 }
 
-static void restore(unsigned pos)
+static void draw_screen(void)
 {
-    if (owned[pos]) {
-        if (vga[pos] == drawn[pos])
-            vga[pos] = saved[pos];
+    unsigned x, y;
 
-        owned[pos] = 0;
+    for (y = TOP; y < HEIGHT; ++y)
+        for (x = 0; x < WIDTH; ++x)
+            put(y * WIDTH + x, ' ', 0x07);
+
+    for (x = 1; x < WIDTH - 1; ++x) {
+        put(TOP * WIDTH + x, 0xc4, 0x07);
+        put(BOTTOM * WIDTH + x, 0xc4, 0x07);
     }
+
+    for (y = TOP + 1; y < BOTTOM; ++y) {
+        put(y * WIDTH, 0xb3, 0x07);
+        put(y * WIDTH + WIDTH - 1, 0xb3, 0x07);
+    }
+
+    put(TOP * WIDTH, 0xda, 0x07);
+    put(TOP * WIDTH + WIDTH - 1, 0xbf, 0x07);
+    put(BOTTOM * WIDTH, 0xc0, 0x07);
+    put(BOTTOM * WIDTH + WIDTH - 1, 0xd9, 0x07);
 }
 
-static void restore_all(void)
+static void draw_score(void)
 {
-    unsigned pos;
+    static const char label[] = " Score: ";
+    unsigned pos = TOP * WIDTH + SCORE_X;
+    unsigned value = score;
+    unsigned divisor = 1000;
+    unsigned i;
+    int started = 0;
 
-    for (pos = 0; pos < CELLS; ++pos)
-        restore(pos);
+    for (i = 0; i < sizeof(label) - 1; ++i)
+        put(pos++, (unsigned char)label[i], 0x0e);
+
+    while (divisor != 0) {
+        unsigned digit = value / divisor;
+
+        if (digit != 0 || divisor == 1)
+            started = 1;
+
+        put(pos++, started ? '0' + digit : ' ', 0x0e);
+        value %= divisor;
+        divisor /= 10;
+    }
+
+    put(pos, ' ', 0x0e);
 }
 
 static void message(const char* text)
 {
-    unsigned pos;
+    unsigned x;
 
-    for (pos = 2; pos < WIDTH - 2; ++pos) {
-        unsigned ch = ' ';
-
+    for (x = 2; x < SCORE_X; ++x) {
         if (*text)
-            ch = (unsigned char)*text++;
-
-        put(pos, ch, 0x0f);
+            put(TOP * WIDTH + x, (unsigned char)*text++, 0x0f);
+        else
+            put(TOP * WIDTH + x, 0xc4, 0x07);
     }
+
+    draw_score();
 }
 
 static uint32_t random_next(void)
@@ -90,7 +113,7 @@ static void place_food(void)
     unsigned choice = random_next() % (CAPACITY - length);
     unsigned x, y;
 
-    for (y = 1; y < HEIGHT - 1; ++y) {
+    for (y = TOP + 1; y < BOTTOM; ++y) {
         for (x = 1; x < WIDTH - 1; ++x) {
             unsigned pos = y * WIDTH + x;
 
@@ -108,35 +131,28 @@ static void place_food(void)
 
 static int play_game(void)
 {
-    unsigned x, y, i;
+    unsigned i;
+    unsigned step_ticks = START_STEP_TICKS;
     int dx = 1, dy = 0;
     int pending_dx = 1, pending_dy = 0;
     int turn_queued = 0;
-    uint32_t last_step;
-
-    restore_all();
+    uint64_t last_step;
 
     tail = 0;
     length = 3;
-    random_state = sys_getticks() ^ UINT32_C(0x9e3779b9);
+    score = 0;
+    random_state = (uint32_t)sys_getticks() ^ UINT32_C(0x9e3779b9);
     if (random_state == 0)
         random_state = 1;
 
-    for (y = 0; y < HEIGHT; ++y) {
-        for (x = 0; x < WIDTH; ++x) {
-            unsigned pos = y * WIDTH + x;
-            int wall = x == 0 || x == WIDTH - 1 || y == 0 || y == HEIGHT - 1;
+    for (i = 0; i < CELLS; ++i)
+        occupied[i] = 0;
 
-            occupied[pos] = 0;
-            if (wall)
-                put(pos, '#', 0x07);
-        }
-    }
-
-    message("SNAKE - Arrows move, Esc exits");
+    draw_screen();
+    message(" SNAKE - Arrows move, Esc exits ");
 
     for (i = 0; i < length; ++i) {
-        unsigned pos = (HEIGHT / 2) * WIDTH + WIDTH / 2 - 2 + i;
+        unsigned pos = ((TOP + BOTTOM) / 2) * WIDTH + WIDTH / 2 - 2 + i;
 
         body[i] = (uint16_t)pos;
         occupied[pos] = 1;
@@ -147,7 +163,7 @@ static int play_game(void)
     last_step = sys_getticks();
 
     for (;;) {
-        uint32_t now;
+        uint64_t now;
         unsigned head, next, old_tail;
         int nx, ny, growing;
 
@@ -175,7 +191,7 @@ static int play_game(void)
         }
 
         now = sys_getticks();
-        if ((uint32_t)(now - last_step) < STEP_TICKS) {
+        if ((uint64_t)(now - last_step) < step_ticks) {
             sys_sleep(1);
             continue;
         }
@@ -189,7 +205,7 @@ static int play_game(void)
         nx = (int)(head % WIDTH) + dx;
         ny = (int)(head / WIDTH) + dy;
 
-        if (nx <= 0 || nx >= WIDTH - 1 || ny <= 0 || ny >= HEIGHT - 1)
+        if (nx <= 0 || nx >= WIDTH - 1 || ny <= TOP || ny >= BOTTOM)
             return RESULT_LOST;
 
         next = (unsigned)ny * WIDTH + (unsigned)nx;
@@ -203,7 +219,7 @@ static int play_game(void)
 
         if (!growing) {
             occupied[old_tail] = 0;
-            restore(old_tail);
+            put(old_tail, ' ', 0x07);
             tail = (tail + 1) % CAPACITY;
             --length;
         }
@@ -214,38 +230,38 @@ static int play_game(void)
         put(next, '@', 0x0a);
 
         if (growing) {
+            ++score;
+            draw_score();
+
             if (length == CAPACITY)
                 return RESULT_WON;
+
+            if (step_ticks > MIN_STEP_TICKS)
+                --step_ticks;
 
             place_food();
         }
     }
 }
 
-void main(void)
+int main(void)
 {
     for (;;) {
         int result = play_game();
         int enter_released;
 
-        if (result == RESULT_EXIT) {
-            restore_all();
+        if (result == RESULT_EXIT)
             sys_exit();
-            return;
-        }
 
         message(result == RESULT_WON
-                    ? "YOU WIN! - Enter: restart | Esc: exit"
-                    : "GAME OVER - Enter: restart | Esc: exit");
+                    ? " YOU WIN! - Enter: restart | Esc: exit "
+                    : " GAME OVER - Enter: restart | Esc: exit ");
 
         enter_released = !sys_key_down(KEY_ENTER);
 
         for (;;) {
-            if (sys_key_down(KEY_ESC)) {
-                restore_all();
+            if (sys_key_down(KEY_ESC))
                 sys_exit();
-                return;
-            }
 
             if (!sys_key_down(KEY_ENTER)) {
                 enter_released = 1;
@@ -256,6 +272,5 @@ void main(void)
             sys_sleep(1);
         }
     }
-    sys_exit();
 }
 

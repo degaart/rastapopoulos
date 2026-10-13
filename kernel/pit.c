@@ -2,7 +2,6 @@
 #include "kernel.h"
 #include "kthread.h"
 #include "pic.h"
-#include "sysinfo.h"
 #include "trace.h"
 #include "vga.h"
 #include <stdio.h>
@@ -50,17 +49,22 @@ static void pit_irq_handler(int irq, struct isr_regs* regs)
     ticks++;
     if (ticks == 1)
         trace("First IRQ0 received");
-    event_signal(sysinfo_event);
     pic_eoi(irq);
 
-    char thread_name[16];
-    size_t len = current_thread_name(thread_name, sizeof(thread_name));
-    for (size_t i = VGA_WIDTH - sizeof(thread_name); i < VGA_WIDTH - len; i++)
-        vga_write_at(i, 0, ' ', VGA_COLOR_WHITE, VGA_COLOR_BLACK);
+    int i;
+    char buffer[81];
+    size_t len = uint64_to_string(ticks, buffer, sizeof(buffer));
+    buffer[len++] = ' ';
 
-    for (size_t i = 0; i < len; i++) {
-        vga_write_at(VGA_WIDTH - len + i, 0, thread_name[i], VGA_COLOR_WHITE,
-                     VGA_COLOR_BLUE);
+    if (sizeof(buffer) - len) {
+        thread_get_info(buffer + len, sizeof(buffer) - len);
+    }
+
+    for (i = 0; i < 80 && buffer[i]; i++) {
+        vga_write_at(i, 0, buffer[i], VGA_COLOR_WHITE, VGA_COLOR_BLUE);
+    }
+    for (; i < 80; i++) {
+        vga_write_at(i, 0, ' ', VGA_COLOR_WHITE, VGA_COLOR_BLUE);
     }
 
     schedule();

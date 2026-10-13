@@ -300,3 +300,52 @@ size_t current_thread_name(char* buf, size_t size)
     return result;
 }
 
+static void strappend(char** buffer, size_t* remaining, char const* text)
+{
+    while (*remaining && *text) {
+        *(*buffer)++ = *text++;
+        --*remaining;
+    }
+    **buffer = '\0';
+}
+
+void thread_get_info(char* buffer, size_t len)
+{
+    if (!len)
+        return;
+
+    bool iflag = enter_critical_section();
+    size_t remaining = len - 1;
+    strappend(&buffer, &remaining, "C:");
+    strappend(&buffer, &remaining, current_thread->name);
+    strappend(&buffer, &remaining, " R:");
+
+    size_t ready_remaining = remaining > 3 ? remaining - 3 : 0;
+    size_t ready_capacity = ready_remaining;
+    struct Thread* thread;
+    bool first = true;
+    STAILQ_FOREACH(thread, &ready_queue, entry)
+    {
+        if (!ready_remaining)
+            break;
+        if (!first)
+            strappend(&buffer, &ready_remaining, " ");
+        strappend(&buffer, &ready_remaining, thread->name);
+        first = false;
+    }
+    remaining -= ready_capacity - ready_remaining;
+
+    strappend(&buffer, &remaining, " T:");
+    first = true;
+    STAILQ_FOREACH(thread, &terminated_queue, entry)
+    {
+        if (!remaining)
+            break;
+        if (!first)
+            strappend(&buffer, &remaining, " ");
+        strappend(&buffer, &remaining, thread->name);
+        first = false;
+    }
+    leave_critical_section(iflag);
+}
+
