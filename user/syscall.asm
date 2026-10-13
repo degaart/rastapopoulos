@@ -36,3 +36,14 @@ syscall:
     pop  ebp
     ret
 
+; int64_t syscall64(uint32_t number,
+;                   uint32_t param1,
+;                   uint32_t param2,
+;                   uint32_t param3,
+;                   uint32_t param4,
+;                   uint32_t param5);
+global syscall64:function
+syscall64:
+    jmp syscall
+    int3
+

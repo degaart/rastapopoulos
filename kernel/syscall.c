@@ -7,9 +7,11 @@
 #define SYSCALL_SLEEP    1
 #define SYSCALL_KEYDOWN  2
 
-static int32_t syscall_getticks(void)
+static int32_t syscall_getticks(uint32_t* edx)
 {
-    return ((int64_t)pit_get_ticks() & 0x7fffffff);
+    uint64_t ticks = pit_get_ticks();
+    *edx = ticks >> 32;
+    return ticks & 0xffffffff;
 }
 
 static int32_t syscall_sleep(uint32_t ticks)
@@ -32,13 +34,18 @@ static int32_t syscall_keydown(uint32_t scancode)
  *  esi: 4th arg
  *  edi: 5th arg
  * Result in eax. Negative values denote errors
+ * 64-bit result in eax:edx
  */
 void syscall_handler(int, struct isr_regs* regs)
 {
     switch (regs->eax) {
     case SYSCALL_GETTICKS:
-        regs->eax = syscall_getticks();
+    {
+        uint32_t hi;
+        regs->eax = syscall_getticks(&hi);
+        regs->edx = hi;
         break;
+    }
     case SYSCALL_SLEEP:
         regs->eax = syscall_sleep(regs->ebx);
         break;

@@ -25,10 +25,12 @@
 static volatile uint16_t* vga_buffer = (volatile uint16_t*)VGA_BASE;
 int32_t syscall(uint32_t number, uint32_t param1, uint32_t param2,
                 uint32_t param3, uint32_t param4, uint32_t param5);
+int64_t syscall64(uint32_t number, uint32_t param1, uint32_t param2,
+                  uint32_t param3, uint32_t param4, uint32_t param5);
 
-static uint32_t sys_getticks(void)
+static uint64_t sys_getticks(void)
 {
-    int32_t ticks = syscall(0, 0, 0, 0, 0, 0);
+    int64_t ticks = syscall64(0, 0, 0, 0, 0, 0);
     return ticks;
 }
 
@@ -120,7 +122,7 @@ void main(void)
     int bg = VGA_COLOR_WHITE;
 
     while (1) {
-        int32_t ticks = sys_getticks();
+        uint32_t ticks = (uint32_t)sys_getticks();
 
         size_t len = uint32_to_string(ticks, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
