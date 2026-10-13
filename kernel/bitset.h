@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct
+typedef struct Bitset
 {
     uint32_t* words;
     size_t bit_count;

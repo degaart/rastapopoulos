@@ -1,11 +1,18 @@
 #include "syscall.h"
+#include "bitset.h"
 #include "idt.h"
+#include "kernel.h"
+#include "kmalloc.h"
 #include "kthread.h"
 #include "pit.h"
+#include "ps2kbd.h"
+#include "trace.h"
 
 #define SYSCALL_GETTICKS 0
 #define SYSCALL_SLEEP    1
 #define SYSCALL_KEYDOWN  2
+
+static struct Bitset kbd_bitset;
 
 static int32_t syscall_getticks(uint32_t* edx)
 {
@@ -22,7 +29,10 @@ static int32_t syscall_sleep(uint32_t ticks)
 
 static int32_t syscall_keydown(uint32_t scancode)
 {
-    return -1;
+    if (scancode > 0xffff)
+        return -1;
+    bool ret = bitset_test(&kbd_bitset, scancode);
+    return ret ? 1 : 0;
 }
 
 /*
@@ -58,8 +68,31 @@ void syscall_handler(int, struct isr_regs* regs)
     }
 }
 
+static void syscall_kbd_observer(void*)
+{
+    struct KeyEvent evt;
+    if (!ps2kbd_get_event(&evt))
+        return;
+
+    if (evt.type == KEY_PRESSED) {
+        bitset_set(&kbd_bitset, evt.scancode);
+        trace("KEY_PRESSED 0x%x", evt.scancode);
+    } else {
+        bitset_unset(&kbd_bitset, evt.scancode);
+        trace("KEY_RELEASED 0x%x", evt.scancode);
+    }
+}
+
 void syscall_init(void)
 {
     idt_set_handler(0x80, syscall_handler, 3);
+    ps2kbd_add_observer(syscall_kbd_observer, NULL);
+
+    size_t bitset_count = 65536;
+    size_t bitset_len = bitset_storage_size(bitset_count);
+    uint32_t* bitset_storage = kmalloc(bitset_len);
+    if (!bitset_storage)
+        panic("Out of memory");
+    bitset_init(&kbd_bitset, bitset_storage, bitset_count);
 }
 
