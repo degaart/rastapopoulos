@@ -20,6 +20,7 @@ struct Thread
     void* stack;
     void* stack_top;
     char name[16];
+    uint64_t sleep_deadline;
 
     STAILQ_ENTRY(Thread) entry;
 };
@@ -38,6 +39,7 @@ struct Thread* thread_create(const char* name, thread_entry_t entry,
 void context_switch(uint32_t* old_esp, uint32_t new_esp);
 void thread_yield(void);
 void thread_exit(void);
+void thread_sleep(uint32_t ticks);
 void schedule(void);
 void thread_dump(void);
 struct Event* event_create(void);

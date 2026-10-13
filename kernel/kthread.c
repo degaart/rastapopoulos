@@ -1,6 +1,7 @@
 #include "kthread.h"
 #include "kernel.h"
 #include "kmalloc.h"
+#include "pit.h"
 #include "trace.h"
 #include "tss.h"
 #include <assert.h>
@@ -12,6 +13,8 @@ static STAILQ_HEAD(ThreadList,
                    Thread) ready_queue = STAILQ_HEAD_INITIALIZER(ready_queue);
 static STAILQ_HEAD(ThreadList, Thread)
     terminated_queue = STAILQ_HEAD_INITIALIZER(terminated_queue);
+static STAILQ_HEAD(ThreadList, Thread)
+    sleeping_queue = STAILQ_HEAD_INITIALIZER(sleeping_queue);
 static struct Thread* current_thread;
 static struct Thread* idle_thread;
 static uint64_t scheduler_ticks;
@@ -40,8 +43,35 @@ struct Thread* scheduler_dequeue(void)
 
 void schedule(void)
 {
+    assert((read_eflags() & EFLAGS_IF) == 0);
+
+    uint64_t current_ticks = pit_get_ticks();
+
+    /*
+     * STAILQ_REMOVE scans from head, which can have a perf impact when used
+     * with STAILQ_FOREACH_SAFE
+     * Instead, we scan linearly and use STAILQ_REMOVE_AFTER
+     */
+    struct Thread* prev = NULL;
+    struct Thread* thread = STAILQ_FIRST(&sleeping_queue);
+    while (thread) {
+        struct Thread* next = STAILQ_NEXT(thread, entry);
+        if (thread->sleep_deadline <= current_ticks) {
+            if (prev)
+                STAILQ_REMOVE_AFTER(&sleeping_queue, prev, entry);
+            else
+                STAILQ_REMOVE_HEAD(&sleeping_queue, entry);
+            scheduler_enqueue(thread);
+        } else {
+            prev = thread;
+        }
+        thread = next;
+    }
+
     scheduler_ticks++;
-    if (scheduler_ticks >= SCHEDULER_QUANTUM) {
+    if (current_thread == idle_thread && !STAILQ_EMPTY(&ready_queue)) {
+        thread_yield();
+    } else if (scheduler_ticks >= SCHEDULER_QUANTUM) {
         scheduler_ticks = 0;
         if (!STAILQ_EMPTY(&ready_queue))
             thread_yield();
@@ -139,6 +169,7 @@ void thread_yield(void)
         if (old != idle_thread)
             scheduler_enqueue(old);
 
+        scheduler_ticks = 0;
         tss.esp0 = (uintptr_t)next->stack_top;
         context_switch(&old->esp, next->esp);
     }
@@ -167,6 +198,38 @@ void thread_exit(void)
     context_switch(&old_esp, next->esp);
 
     panic("Terminated thread resumed");
+}
+
+void thread_sleep(uint32_t ticks)
+{
+    assert(current_thread != idle_thread);
+
+    bool iflag = enter_critical_section();
+    if (ticks == 0) {
+        if (!STAILQ_EMPTY(&ready_queue)) {
+            /* if another thread is ready, switch to it, otherwise return
+             * immediately */
+            thread_yield();
+        }
+        leave_critical_section(iflag);
+        return;
+    }
+
+    current_thread->sleep_deadline = pit_get_ticks() + ticks;
+    current_thread->state = THREAD_BLOCKED;
+    STAILQ_INSERT_TAIL(&sleeping_queue, current_thread, entry);
+
+    struct Thread* next = scheduler_dequeue();
+    assert(next != current_thread);
+
+    next->state = THREAD_RUNNING;
+    struct Thread* old = current_thread;
+    current_thread = next;
+
+    scheduler_ticks = 0;
+    tss.esp0 = (uintptr_t)next->stack_top;
+    context_switch(&old->esp, next->esp);
+    leave_critical_section(iflag);
 }
 
 void thread_dump(void)
@@ -206,6 +269,7 @@ void event_wait(struct Event* event)
         next->state = THREAD_RUNNING;
         current_thread = next;
 
+        scheduler_ticks = 0;
         tss.esp0 = (uintptr_t)next->stack_top;
         context_switch(&event->waiter->esp, next->esp);
     }

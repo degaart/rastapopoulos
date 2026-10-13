@@ -1,5 +1,6 @@
 #include "syscall.h"
 #include "idt.h"
+#include "kthread.h"
 #include "pit.h"
 
 #define SYSCALL_GETTICKS 0
@@ -13,6 +14,7 @@ static int32_t syscall_getticks(void)
 
 static int32_t syscall_sleep(uint32_t ticks)
 {
+    thread_sleep(ticks);
     return -1;
 }
 

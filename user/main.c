@@ -26,6 +26,17 @@ static volatile uint16_t* vga_buffer = (volatile uint16_t*)VGA_BASE;
 int32_t syscall(uint32_t number, uint32_t param1, uint32_t param2,
                 uint32_t param3, uint32_t param4, uint32_t param5);
 
+static uint32_t sys_getticks(void)
+{
+    int32_t ticks = syscall(0, 0, 0, 0, 0, 0);
+    return ticks;
+}
+
+static void sys_sleep(uint32_t ticks)
+{
+    syscall(1, ticks, 0, 0, 0, 0);
+}
+
 static size_t uint32_to_string(uint32_t value, char* buffer, size_t buffer_len)
 {
     static const char digits[] = "00010203040506070809"
@@ -105,17 +116,29 @@ void main(void)
 {
     char buffer[16];
     uint32_t counter = 0;
+    int fg = VGA_COLOR_BLACK;
+    int bg = VGA_COLOR_WHITE;
+
     while (1) {
-        int32_t ticks = syscall(0, 0, 0, 0, 0, 0);
+        int32_t ticks = sys_getticks();
 
         size_t len = uint32_to_string(ticks, buffer, sizeof(buffer));
         int x = (VGA_WIDTH - len) / 2;
         int y = 14;
         for (size_t i = 0; i < len; i++) {
-            putchar(x + i, y, buffer[i], VGA_COLOR_LIGHT_GREEN,
-                    VGA_COLOR_BLACK);
+            putchar(x + i, y, buffer[i], fg, bg);
         }
         counter++;
+        if (counter >= 100) {
+            counter = 0;
+            fg++;
+            if (fg > VGA_COLOR_WHITE)
+                fg = 0;
+            bg--;
+            if (bg < 0)
+                bg = VGA_COLOR_WHITE;
+            sys_sleep(50);
+        }
     }
 }
 
