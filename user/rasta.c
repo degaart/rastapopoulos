@@ -3,17 +3,23 @@
 
 uint64_t sys_getticks(void)
 {
-    int64_t ticks = syscall64(0, 0, 0, 0, 0, 0);
+    int64_t ticks = syscall64(SYSCALL_GETTICKS, 0, 0, 0, 0, 0);
     return ticks;
 }
 
 void sys_sleep(uint32_t ticks)
 {
-    syscall(1, ticks, 0, 0, 0, 0);
+    syscall(SYSCALL_SLEEP, ticks, 0, 0, 0, 0);
 }
 
 int sys_key_down(unsigned scancode)
 {
-    return syscall(2, scancode, 0, 0, 0, 0);
+    return syscall(SYSCALL_KEYDOWN, scancode, 0, 0, 0, 0);
 }
 
+void sys_exit(void)
+{
+    syscall(SYSCALL_EXIT, 0, 0, 0, 0, 0);
+    while (1)
+        ;
+}

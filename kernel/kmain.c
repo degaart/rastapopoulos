@@ -91,121 +91,15 @@ static void dump_multiboot(const struct multiboot_info* info)
     }
 }
 
-void test_heap(void)
-{
-    trace("Free mem before tests: %zu bytes", pmm_info());
-
-    kfree(NULL);
-    assert(!kmalloc(0));
-    assert(!kmemalign(0, 1));
-    assert(!kmemalign(3, 1));
-    assert(!kmalloc(SIZE_MAX));
-    assert(!kmemalign(4096, SIZE_MAX - 16));
-    assert(!kmemalign((SIZE_MAX / 2) + 1, 1));
-
-    for (size_t a = 1; a <= (1u << 20); a *= 2) {
-        const size_t sizes[] = {1, 3, 15, 16, 17, 4095, 4096, 4097, 65537};
-        for (size_t i = 0; i < sizeof(sizes) / sizeof(*sizes); ++i) {
-            void* p = kmemalign(a, sizes[i]);
-            if (p)
-                memset(p, 0, sizes[i]);
-            kfree(p);
-        }
-    }
-
-    trace("Free mem after tests: %zu bytes", pmm_info());
-
-    struct HeapInfo hi = heap_info();
-    trace("Heap info:\n"
-          "    total:      %zu\n"
-          "    free:       %zu\n"
-          "    allocated:  %zu\n"
-          "    overhead:   %zu",
-          hi.total_size, hi.free_size, hi.allocated_size, hi.overhead);
-}
-
 static void tss_load(uint16_t tss_seg)
 {
     asm volatile("ltr %0" : : "r"(tss_seg) : "memory");
-}
-
-static void thread1_entry(void* param)
-{
-    trace("Thread1 started");
-    if ((read_eflags() & EFLAGS_IF) == 0)
-        panic("IF=0");
-    char buffer[16];
-    int counter = 0;
-    int y = 10;
-    while (pit_get_ticks() < 1000) {
-        int len = uint32_to_string(counter, buffer, sizeof(buffer));
-        int x = (VGA_WIDTH - len) / 2;
-        for (int i = 0; i < len; i++) {
-            vga_write_at(x + i, y, buffer[i], VGA_COLOR_WHITE,
-                         VGA_COLOR_GREEN);
-        }
-        counter++;
-    }
-    trace("Thread1 exited");
-}
-
-static void thread2_entry(void* param)
-{
-    trace("Thread2 started");
-    char buffer[16];
-    int counter = 0;
-    int y = 11;
-    while (pit_get_ticks() < 2000) {
-        int len = uint32_to_string(counter, buffer, sizeof(buffer));
-        int x = (VGA_WIDTH - len) / 2;
-        for (int i = 0; i < len; i++) {
-            vga_write_at(x + i, y, buffer[i], VGA_COLOR_DARK_GREY,
-                         VGA_COLOR_YELLOW);
-        }
-        counter++;
-    }
-    trace("Thread2 exited");
-}
-
-static void thread3_entry(void* param)
-{
-    trace("Thread3 started");
-    char buffer[16];
-    int counter = 0;
-    int y = 12;
-    while (pit_get_ticks() < 3000) {
-        int len = uint32_to_string(counter, buffer, sizeof(buffer));
-        int x = (VGA_WIDTH - len) / 2;
-        for (int i = 0; i < len; i++) {
-            vga_write_at(x + i, y, buffer[i], VGA_COLOR_BLACK, VGA_COLOR_CYAN);
-        }
-        counter++;
-    }
-    trace("Thread3 exited");
-}
-
-static void thread4_entry(void* param)
-{
-    trace("Thread4 started");
-    char buffer[16];
-    int counter = 0;
-    int y = 13;
-    while (pit_get_ticks() < 4000) {
-        int len = uint32_to_string(counter, buffer, sizeof(buffer));
-        int x = (VGA_WIDTH - len) / 2;
-        for (int i = 0; i < len; i++) {
-            vga_write_at(x + i, y, buffer[i], VGA_COLOR_BLACK, VGA_COLOR_RED);
-        }
-        counter++;
-    }
-    trace("Thread4 exited");
 }
 
 extern uint8_t usercode_start[];
 extern uint8_t usercode_end[];
 
 #define USER_BASE  0x00400000
-#define USER_END   0x00404510
 #define USER_STACK 0xc0000000
 
 static void user_entry(void* param)
@@ -289,13 +183,11 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     syscall_init();
 
     thread_init();
-    thread_create("thread1", thread1_entry, NULL);
-    thread_create("thread2", thread2_entry, NULL);
-    thread_create("thread3", thread3_entry, NULL);
-    thread_create("thread4", thread4_entry, NULL);
     sysinfo_init();
 
-    for (uintptr_t ptr = USER_BASE; ptr < USER_END; ptr += VMM_PAGE_SIZE) {
+    size_t usercode_len = usercode_end - usercode_start;
+    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + usercode_len;
+         ptr += VMM_PAGE_SIZE) {
         void* frame = pmm_alloc();
         if (!frame)
             panic("Out of memory");
@@ -306,10 +198,6 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     }
 
     uint8_t* ptr = (void*)USER_BASE;
-    memset(ptr, 0xcc, USER_END - USER_BASE);
-
-    size_t usercode_len = usercode_end - usercode_start;
-    assert(usercode_len <= USER_END - USER_BASE);
     memcpy(ptr, usercode_start, usercode_len);
 
     /* Stack */

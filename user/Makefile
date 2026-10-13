@@ -24,7 +24,7 @@ OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 all: build/user.bin
 
 build/user.bin: build/user.elf
-	$(OBJCOPY) $< $@ -O binary -S -g
+	$(OBJCOPY) --set-section-flags .bss=alloc,load,contents $< $@ -O binary -S -g
 
 build/user.elf: $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)

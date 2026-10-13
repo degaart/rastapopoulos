@@ -34,7 +34,6 @@ static void put(unsigned pos, unsigned ch, unsigned color)
     uint16_t current = vga[pos];
     uint16_t value = (uint16_t)((color << 8) | ch);
 
-    /* Save external contents, without saving our own graphics. */
     if (!owned[pos] || current != drawn[pos])
         saved[pos] = current;
 
@@ -46,10 +45,6 @@ static void put(unsigned pos, unsigned ch, unsigned color)
 static void restore(unsigned pos)
 {
     if (owned[pos]) {
-        /*
-         * Leave visible external changes alone.
-         * This comparison cannot prevent concurrent write races.
-         */
         if (vga[pos] == drawn[pos])
             vga[pos] = saved[pos];
 
@@ -90,7 +85,6 @@ static uint32_t random_next(void)
     return x;
 }
 
-/* Called only when at least one playable cell is empty. */
 static void place_food(void)
 {
     unsigned choice = random_next() % (CAPACITY - length);
@@ -128,7 +122,6 @@ static int play_game(void)
     if (random_state == 0)
         random_state = 1;
 
-    /* Preserve the interior; draw only the border. */
     for (y = 0; y < HEIGHT; ++y) {
         for (x = 0; x < WIDTH; ++x) {
             unsigned pos = y * WIDTH + x;
@@ -161,7 +154,6 @@ static int play_game(void)
         if (sys_key_down(KEY_ESC))
             return RESULT_EXIT;
 
-        /* Queue at most one perpendicular turn per movement step. */
         if (!turn_queued) {
             if (dx != 0 && sys_key_down(KEY_UP)) {
                 pending_dx = 0;
@@ -204,7 +196,6 @@ static int play_game(void)
         old_tail = body[tail];
         growing = next == food;
 
-        /* Entering the departing tail cell is legal. */
         if (occupied[next] && (growing || next != old_tail))
             return RESULT_LOST;
 
@@ -231,7 +222,6 @@ static int play_game(void)
     }
 }
 
-/* Call from your OS's program entry point. */
 void main(void)
 {
     for (;;) {
@@ -240,6 +230,7 @@ void main(void)
 
         if (result == RESULT_EXIT) {
             restore_all();
+            sys_exit();
             return;
         }
 
@@ -247,12 +238,12 @@ void main(void)
                     ? "YOU WIN! - Enter: restart | Esc: exit"
                     : "GAME OVER - Enter: restart | Esc: exit");
 
-        /* Require a fresh Enter press after the game ends. */
         enter_released = !sys_key_down(KEY_ENTER);
 
         for (;;) {
             if (sys_key_down(KEY_ESC)) {
                 restore_all();
+                sys_exit();
                 return;
             }
 
@@ -265,5 +256,6 @@ void main(void)
             sys_sleep(1);
         }
     }
+    sys_exit();
 }
 

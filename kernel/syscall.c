@@ -8,10 +8,6 @@
 #include "ps2kbd.h"
 #include "trace.h"
 
-#define SYSCALL_GETTICKS 0
-#define SYSCALL_SLEEP    1
-#define SYSCALL_KEYDOWN  2
-
 static struct Bitset kbd_bitset;
 
 static int32_t syscall_getticks(uint32_t* edx)
@@ -33,6 +29,12 @@ static int32_t syscall_keydown(uint32_t scancode)
         return -1;
     bool ret = bitset_test(&kbd_bitset, scancode);
     return ret ? 1 : 0;
+}
+
+static int32_t syscall_exit(void)
+{
+    thread_exit();
+    return 0;
 }
 
 /*
@@ -61,6 +63,9 @@ void syscall_handler(int, struct isr_regs* regs)
         break;
     case SYSCALL_KEYDOWN:
         regs->eax = syscall_keydown(regs->ebx);
+        break;
+    case SYSCALL_EXIT:
+        regs->eax = syscall_exit();
         break;
     default:
         regs->eax = (uint32_t)-1;
