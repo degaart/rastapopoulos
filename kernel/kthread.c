@@ -88,7 +88,7 @@ void thread_init(void)
     strlcpy(thread->name, "idle", sizeof(thread->name));
 
     thread->stack_size = 16384;
-    thread->stack = initial_stack_bottom;
+    thread->stack = initial_stack;
     thread->stack_top = initial_stack_top;
     thread->state = THREAD_RUNNING;
     idle_thread = thread;

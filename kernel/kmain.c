@@ -1,3 +1,4 @@
+#include "bitset.h"
 #include "early_malloc.h"
 #include "heap.h"
 #include "idt.h"
@@ -152,10 +153,15 @@ static void user_entry(void* param)
     panic("ring3_jump returned");
 }
 
-void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
+void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info,
+           const struct Bitset* bootstrap_memmap)
 {
     serial_init();
     trace("Kernel entered");
+    trace("mb_magic: 0x%lx, mb_info: 0x%p, bootstrap_memmap: 0x%p", mb_magic,
+          mb_info, bootstrap_memmap);
+    while (1)
+        ;
     early_malloc_init();
 
     vga_init();

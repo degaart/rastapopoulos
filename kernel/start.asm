@@ -1,32 +1,7 @@
-; Constants
-MBALIGN     equ 1 << 0                      ; page-align modules
-MEMINFO     equ 1 << 1                      ; provide memmap
-MBFLAGS     equ MBALIGN | MEMINFO
-MAGIC       equ 0x1BADB002
-CHECKSUM    equ -(MAGIC + MBFLAGS)
-
-; Multiboot header
-section .multiboot
-align 4
-    dd MAGIC
-    dd MBFLAGS
-    dd CHECKSUM
-
-; boot stack
-section .bss
-align 16
-
-global initial_stack_bottom
-initial_stack_bottom:
-resb 16384
-
-global initial_stack_top
-initial_stack_top:
-
-extern halt
+extern bootstrap
 
 ; start function
-section .text
+section .bootstrap.text
 global _start:function (_start.end - _start)
 _start:
     ; 32-bit protected mode, interrupts disabled, paging disabled
@@ -35,14 +10,24 @@ _start:
 
     ; set up stack
     cli
-    mov esp, initial_stack_top
+    mov  esp, bootstrap_stack_top
+    and  esp, -16                        ; align to 16 bytes
 
-    ; call C entry point
+    ; call C bootstrapper
     push ebx
     push eax
-    extern kmain
-    call kmain
-    add esp, 8
-    jmp  halt
+    call bootstrap
+    add  esp, 2*4
+    jmp  bootstrap_halt
 .end:
+
+global bootstrap_halt:function
+bootstrap_halt:
+    cli
+    jmp  bootstrap_halt
+
+section .bootstrap.bss nobits alloc write align=16
+; bootstrap stack
+bootstrap_stack: resb 16384
+bootstrap_stack_top:
 

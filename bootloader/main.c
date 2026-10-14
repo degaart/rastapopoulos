@@ -106,10 +106,10 @@ static void load_program(struct File* file, const Elf32_Phdr* phdr)
     uint32_t off = phdr->p_offset;
 
     if (phdr->p_filesz) {
-        printf("Load from disk: 0x%lx - 0x%lx\n", phdr->p_vaddr,
-               phdr->p_vaddr + phdr->p_filesz);
-        for (uint32_t dst = phdr->p_vaddr;
-             dst < phdr->p_vaddr + phdr->p_filesz;) {
+        printf("Load from disk: 0x%lx - 0x%lx\n", phdr->p_paddr,
+               phdr->p_paddr + phdr->p_filesz - 1);
+        for (uint32_t dst = phdr->p_paddr;
+             dst < phdr->p_paddr + phdr->p_filesz;) {
             int nread = fat12_read(file, buffer, buffer_size);
             if (nread == 0) {
                 panic("Unexpected EOF at offset 0x%lx", off);
@@ -125,9 +125,9 @@ static void load_program(struct File* file, const Elf32_Phdr* phdr)
     if (phdr->p_memsz > phdr->p_filesz) {
         uint32_t remaining = phdr->p_memsz - phdr->p_filesz;
         printf("Zeroing 0x%lx - 0x%lx (0x%lx bytes)\n",
-               phdr->p_vaddr + phdr->p_filesz,
-               phdr->p_vaddr + phdr->p_filesz + remaining, remaining);
-        hmemset(phdr->p_vaddr + phdr->p_filesz, 0, remaining);
+               phdr->p_paddr + phdr->p_filesz,
+               phdr->p_paddr + phdr->p_filesz + remaining - 1, remaining);
+        hmemset(phdr->p_paddr + phdr->p_filesz, 0, remaining);
     }
 
     free(buffer);
@@ -384,7 +384,7 @@ void main()
     gdt_load(&gdtr);
 
     /* Jump into kernel */
-    printf("mi: %p\n", &mi);
+    printf("Executing kernel at 0x%lx\n", elf_hdr.e_entry);
     exec_kernel(elf_hdr.e_entry, &mi);
     printf("OK\n");
 }
