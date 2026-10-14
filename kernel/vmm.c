@@ -76,7 +76,7 @@ bool vmm_init(void)
     uintptr_t start = (uintptr_t)__kernel_start;
     uintptr_t end = (uintptr_t)early_malloc_tail();
 
-    if (initialized || !(cr0 & CR0_PE) || (cr0 & CR0_PG))
+    if (initialized || !(cr0 & CR0_PE) || !(cr0 & CR0_PG))
         return false;
 
     if (start >= end || end > VMM_RECURSIVE_BASE)
@@ -102,14 +102,14 @@ bool vmm_init(void)
 
             clear_page(pt);
 
-            pd[di] = (uint32_t)(uintptr_t)pt | PAGE_PRESENT | VMM_WRITABLE |
-                     VMM_USER;
+            pd[di] = (uint32_t)(uintptr_t)pt | PAGE_PRESENT | VMM_WRITABLE;
         }
 
         volatile uint32_t* pt =
             (volatile uint32_t*)(uintptr_t)(pd[di] & PAGE_MASK);
 
-        pt[ti] = (uint32_t)address | PAGE_PRESENT | VMM_WRITABLE;
+        pt[ti] =
+            (uint32_t)(address - KERNEL_OFFSET) | PAGE_PRESENT | VMM_WRITABLE;
     }
 
     pd[RECURSIVE_INDEX] =

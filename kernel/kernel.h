@@ -5,12 +5,18 @@
 #define CR0_PE 0x1
 #define CR0_PG 0x80000000
 
+#define KERNEL_OFFSET 0xc0000000
+
 #define EFLAGS_IF (1 << 9)
 
 extern uint8_t __kernel_start[];
 extern uint8_t __kernel_end[];
 extern uint8_t initial_stack_top[];
 extern uint8_t initial_stack[];
+extern uint8_t __kernel_phys_start[];
+extern uint8_t __bootstrap_start[];
+extern uint8_t __bootstrap_end[];
+extern uint8_t __kernel_phys_end[];
 
 /* A must be a power of two */
 #define ALIGN_UP(V, A)   (((V) + (A) - 1) & (~((A) - 1)))

@@ -110,7 +110,10 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
         early_free(next);
     }
 
-    /* Force page0 to be allocated */
+    /*
+     * Force page0 to be allocated
+     * This is correct: we need the IVT when using v86
+     */
     region = STAILQ_FIRST(&regions);
     if (region->start != 0)
         panic("Logic error");
@@ -118,9 +121,11 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
         panic("Logic error");
 
     /* Reserve kernel area */
-    uintptr_t start = ALIGN_DOWN((uintptr_t)__kernel_start, PMM_FRAME_SIZE);
-    uintptr_t end = (uintptr_t)early_malloc_tail();
-    for (uintptr_t frame = (uintptr_t)__kernel_start; frame < end;
+    uintptr_t start =
+        ALIGN_DOWN((uintptr_t)__kernel_phys_start, PMM_FRAME_SIZE);
+    uintptr_t end = (uintptr_t)early_malloc_tail() - KERNEL_OFFSET;
+    trace("Kernel area: 0x%lx - 0x%lx", start, end - 1);
+    for (uintptr_t frame = (uintptr_t)__kernel_phys_start; frame < end;
          frame += PMM_FRAME_SIZE) {
         if (!pmm_reserve((void*)frame))
             panic("Failed to reserve frame 0x%lx", frame);

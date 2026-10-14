@@ -103,7 +103,7 @@ extern uint8_t ring3_trampoline_end[];
 
 #define RING3_TRAMPOLINE_BASE 0x1000
 #define USER_BASE             0x00400000
-#define USER_STACK            0xc0000000
+#define USER_STACK            (KERNEL_OFFSET - VMM_PAGE_SIZE)
 
 static void user_entry(void* param)
 {
@@ -160,9 +160,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info,
     trace("Kernel entered");
     trace("mb_magic: 0x%lx, mb_info: 0x%p, bootstrap_memmap: 0x%p", mb_magic,
           mb_info, bootstrap_memmap);
-    while (1)
-        ;
-    early_malloc_init();
+    early_malloc_init(bootstrap_memmap);
 
     vga_init();
     printf("RastapopoulOS kernel running\n");

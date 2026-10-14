@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gdt.h"
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -262,33 +263,6 @@ static int format(FormatOutputFn output, void* data, const char* fmt, ...)
     return count;
 }
 
-static void _trace_output(void* data, char ch)
-{
-    serial_putchar(ch);
-}
-
-static void _trace(const char* file, int line, const char* fmt, ...)
-{
-    format(_trace_output, NULL, "[%s:%d] ", file, line);
-    va_list args;
-    va_start(args, fmt);
-    vformat(_trace_output, NULL, fmt, args);
-    va_end(args);
-
-    serial_putchar('\n');
-}
-
-static void _panic(const char* file, int line, const char* fmt, ...)
-{
-    format(_trace_output, NULL, "[%s:%d] PANIC -- ", file, line);
-    va_list args;
-    va_start(args, fmt);
-    vformat(_trace_output, NULL, fmt, args);
-    va_end(args);
-    serial_putchar('\n');
-    bootstrap_halt();
-}
-
 static void bootstrap_gdt_set_entry(struct GdtEntry* entry, uint32_t base,
                                     uint32_t limit, uint8_t access,
                                     uint8_t flags)
@@ -326,5 +300,166 @@ static inline void* memset(void* dest, int ch, size_t count)
         *out++ = (unsigned char)ch;
 
     return dest;
+}
+
+#define VGA_BASE                0xb8000
+#define VGA_COLOR_BLACK         0x0
+#define VGA_COLOR_BLUE          0x1
+#define VGA_COLOR_GREEN         0x2
+#define VGA_COLOR_CYAN          0x3
+#define VGA_COLOR_RED           0x4
+#define VGA_COLOR_MAGENTA       0x5
+#define VGA_COLOR_BROWN         0x6
+#define VGA_COLOR_LIGHT_GREY    0x7
+#define VGA_COLOR_DARK_GREY     0x8
+#define VGA_COLOR_LIGHT_BLUE    0x9
+#define VGA_COLOR_LIGHT_GREEN   0xA
+#define VGA_COLOR_LIGHT_CYAN    0xB
+#define VGA_COLOR_LIGHT_RED     0xC
+#define VGA_COLOR_LIGHT_MAGENTA 0xD
+#define VGA_COLOR_YELLOW        0xE
+#define VGA_COLOR_WHITE         0xF
+
+#define VGA_WIDTH  80
+#define VGA_HEIGHT 25
+
+#define VGA_CRTC_INDEX 0x3D4
+#define VGA_CRTC_DATA  0x3D5
+
+struct VGAPoint
+{
+    uint8_t x;
+    uint8_t y;
+};
+static volatile uint16_t* vga_buffer = (volatile uint16_t*)VGA_BASE;
+static struct VGAPoint cursor;
+
+static inline struct VGAPoint vga_get_cursor_pos(void)
+{
+    uint16_t pos;
+
+    outb(VGA_CRTC_INDEX, 0x0E);
+    pos = (uint16_t)inb(VGA_CRTC_DATA) << 8;
+
+    outb(VGA_CRTC_INDEX, 0x0F);
+    pos |= inb(VGA_CRTC_DATA);
+
+    struct VGAPoint result = {.x = pos % 80, .y = pos / 80};
+    return result;
+}
+
+static inline void vga_set_cursor_pos(struct VGAPoint p)
+{
+    if (p.x >= VGA_WIDTH)
+        p.x = VGA_WIDTH - 1;
+    if (p.y >= VGA_HEIGHT)
+        p.y = VGA_HEIGHT - 1;
+    uint16_t pos = (uint16_t)p.y * 80 + p.x;
+
+    outb(VGA_CRTC_INDEX, 0x0E);
+    outb(VGA_CRTC_DATA, (uint8_t)(pos >> 8));
+
+    outb(VGA_CRTC_INDEX, 0x0F);
+    outb(VGA_CRTC_DATA, (uint8_t)(pos & 0xFF));
+}
+
+static inline void vga_init(void)
+{
+    cursor = vga_get_cursor_pos();
+}
+
+static inline void vga_write(char c, uint8_t fg, uint8_t bg)
+{
+    const uint16_t attr = (bg << 4) | fg;
+    if (c == '\n') {
+        cursor.x = 0;
+        cursor.y++;
+    } else {
+        vga_buffer[cursor.y * VGA_WIDTH + cursor.x] = (attr << 8) | (uint8_t)c;
+
+        cursor.x++;
+
+        if (cursor.x >= VGA_WIDTH) {
+            cursor.x = 0;
+            cursor.y++;
+        }
+    }
+
+    if (cursor.y >= VGA_HEIGHT) {
+        /* Scroll screen up by one row. */
+        for (size_t i = 0; i < VGA_WIDTH * (VGA_HEIGHT - 1); ++i) {
+            vga_buffer[i] = vga_buffer[i + VGA_WIDTH];
+        }
+
+        /* Clear the last row. */
+        for (size_t i = VGA_WIDTH * (VGA_HEIGHT - 1);
+             i < VGA_WIDTH * VGA_HEIGHT; ++i) {
+            vga_buffer[i] = (attr << 8) | ' ';
+        }
+
+        cursor.y = VGA_HEIGHT - 1;
+    }
+
+    vga_set_cursor_pos(cursor);
+}
+
+static inline void vga_write_at(int x, int y, char ch, uint8_t fg, uint8_t bg)
+{
+    uint16_t attr = (bg << 4) | fg;
+    vga_buffer[y * VGA_WIDTH + x] = (attr << 8) | (uint8_t)ch;
+}
+
+static void print_output(void* data, char ch)
+{
+    vga_write(ch, VGA_COLOR_CYAN, VGA_COLOR_BLACK);
+}
+
+static inline void printf(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vformat(print_output, NULL, fmt, args);
+    va_end(args);
+}
+
+static void _trace_output(void* data, char ch)
+{
+    serial_putchar(ch);
+}
+
+static void _trace(const char* file, int line, const char* fmt, ...)
+{
+    format(_trace_output, NULL, "[%s:%d] ", file, line);
+
+    va_list args;
+    va_start(args, fmt);
+    vformat(_trace_output, NULL, fmt, args);
+    va_end(args);
+
+    serial_putchar('\n');
+
+    va_start(args, fmt);
+    vformat(print_output, NULL, fmt, args);
+    va_end(args);
+    print_output(NULL, '\n');
+}
+
+static void _panic(const char* file, int line, const char* fmt, ...)
+{
+    format(_trace_output, NULL, "[%s:%d] PANIC -- ", file, line);
+    printf("[%s:%d] PANIC -- ", file, line);
+
+    va_list args;
+    va_start(args, fmt);
+    vformat(_trace_output, NULL, fmt, args);
+    va_end(args);
+    serial_putchar('\n');
+
+    va_start(args, fmt);
+    vformat(print_output, NULL, fmt, args);
+    va_end(args);
+    print_output(NULL, '\n');
+
+    bootstrap_halt();
 }
 

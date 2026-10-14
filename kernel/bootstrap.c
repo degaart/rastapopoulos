@@ -6,7 +6,6 @@
  */
 #include "bitset.h"
 #include "bootstrap_util.h"
-#include "gdt.h"
 #include "multiboot.h"
 
 #define BOOTSTRAP_START 0x100000
@@ -78,9 +77,13 @@ static void map(uintptr_t va, uintptr_t pa, unsigned flags)
 void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
 {
     serial_init();
-    trace("Bootstrapping kernel");
+    vga_init();
+
+    if (mbsgn != MULTIBOOT_BOOTLOADER_MAGIC)
+        panic("Unsupported bootloader (magic=0x%x)", mbsgn);
 
     /* Setup initial GDT */
+    trace("Bootstrapping kernel");
     struct Gdt gdt = {0};
     bootstrap_gdt_set_entry(&gdt.null, 0, 0, 0, 0);
     bootstrap_gdt_set_entry(&gdt.code, 0, 0xfffff, GDT_ACCESS_CODE,
@@ -131,10 +134,6 @@ void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
                 entry->addr < UINT32_MAX) {
                 uint32_t e_addr = entry->addr;
                 uint32_t e_len = entry->len;
-                trace("e_addr: 0x%x, __kernel_phys_end: 0x%x "
-                      "e_addr >= (uintptr_t)__kernel_phys_end: %d",
-                      e_addr, __kernel_phys_end,
-                      e_addr >= (uintptr_t)__kernel_phys_end);
                 for (uintptr_t frame = (uintptr_t)__kernel_phys_end;
                      frame < e_addr + e_len && frame < BOOTSTRAP_END;
                      frame += PAGE_SIZE) {
@@ -159,7 +158,6 @@ void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
     trace("__kernel_phys_end: 0x%x", __kernel_phys_end);
 
     size_t next_frame = bitset_find(&memmap);
-    trace("next_frame: 0x%x", next_frame * PAGE_SIZE);
 
     /* Recursive PDE */
     pagedir[RECURSIVE_INDEX] = (uintptr_t)pagedir | PDE_PRESENT | PDE_WRITABLE;
@@ -188,7 +186,7 @@ void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
     trace("higher_half_start: 0x%x", (uintptr_t)higher_half_start);
     assert((uintptr_t)higher_half_start > KERNEL_OFFSET);
 
-    uint32_t eax = (uintptr_t)mbsgn + KERNEL_OFFSET;
+    uint32_t eax = mbsgn;
     uint32_t ebx = (uintptr_t)mbinfo + KERNEL_OFFSET;
     uint32_t ecx = (uintptr_t)&memmap + KERNEL_OFFSET;
     asm volatile("jmp higher_half_start"
