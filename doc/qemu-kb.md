@@ -1,6 +1,6 @@
 # QEMU KB
 
-## Get virtual address mapping
+## Get virtual address mappings
 
 ```
 info mem

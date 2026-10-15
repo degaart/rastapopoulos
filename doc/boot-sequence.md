@@ -37,11 +37,11 @@
 
 - Kernel entry point: _start in start.asm
 - Loaded at 0x100000 (1Mb) with paging disabled
-- Setups a bitset memmap as dynamic allocation system
-- Dynamic allocation starts at kernel end, which is loaded at the lower half of the address space for this stage
 - Sets up a new flat GDT
-- Identity maps 0Mb - 4Mb
-- Maps 0Mb - 4Mb to 0xc0000000 - 0xc0000000 + 4Mb
+- Setup a temporary pagetable
+- Identity-map the first 4Mb, taking gaps into account
+- Maps the HIGHER_HALF identically to the first 4Mb
+- Pagetable for the lower-half and the higher-half is shared
 - Enables paging
 - Now, 0Mb - 4Mb has the same contents as 0xc0000000 - 0xc0000000 + 4Mb
 - Jumps to higher-half entry point
@@ -53,5 +53,5 @@
 - Higher half entry point: higher_half_start
 - Runs at 0xcxxxxxx which is mapped to the first 4 megabytes of the address space
 - Setups an initial_stack in the higher half bss (16kb)
-- Calls kmain with multiboot signature, multiboot info address, and bootstrap mem map as arguments
+- Calls kmain with multiboot signature, multiboot info address
 
