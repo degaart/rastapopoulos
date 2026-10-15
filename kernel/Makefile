@@ -6,7 +6,6 @@ AS := nasm
 CC := i686-elf-gcc
 CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables \
-		  -fdata-sections -ffunction-sections \
 		  -march=i386 -O0 -g \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
@@ -14,7 +13,6 @@ CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -Tkernel.ld \
 		   -Wl,-Map=build/kernel.map \
-		   -Wl,--gc-sections \
 		   -ffreestanding -nostdlib -g -lgcc
 
 BINARY := build/kernel.elf
