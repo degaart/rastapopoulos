@@ -47,7 +47,7 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
             continue;
 
         /* Clip without computing a potentially overflowing start + len */
-        uint64_t len = ALIGN_DOWN(entry->len, PMM_FRAME_SIZE);
+        uint64_t len = ALIGN_DOWN(entry->len, PAGE_SIZE);
         if (len > PMM_ADDRESS_LIMIT - entry->addr)
             len = PMM_ADDRESS_LIMIT - entry->addr;
 
@@ -58,7 +58,7 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
         region->start = (void*)(uintptr_t)entry->addr;
         region->len = (size_t)len;
 
-        size_t bitcount = len / PMM_FRAME_SIZE;
+        size_t bitcount = len / PAGE_SIZE;
         size_t bitset_size = bitset_storage_size(bitcount);
         uint32_t* storage = early_malloc(bitset_size);
         if (!storage)
@@ -113,11 +113,10 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
         panic("Logic error");
 
     /* Reserve kernel area */
-    uintptr_t start =
-        ALIGN_DOWN((uintptr_t)__kernel_phys_start, PMM_FRAME_SIZE);
+    uintptr_t start = ALIGN_DOWN((uintptr_t)__kernel_phys_start, PAGE_SIZE);
     uintptr_t end = (uintptr_t)early_malloc_tail() - KERNEL_OFFSET;
     trace("Kernel area: 0x%lx - 0x%lx", start, end - 1);
-    for (uintptr_t frame = start; frame < end; frame += PMM_FRAME_SIZE) {
+    for (uintptr_t frame = start; frame < end; frame += PAGE_SIZE) {
         if (!pmm_reserve((void*)frame))
             panic("Failed to reserve frame 0x%lx", frame);
     }
@@ -147,7 +146,7 @@ void* pmm_alloc(void)
             continue;
         if (!bitset_set(&region->bitset, bit))
             panic("Logic error");
-        result = region->start + (bit * PMM_FRAME_SIZE);
+        result = region->start + (bit * PAGE_SIZE);
         break;
     }
 
@@ -157,7 +156,7 @@ void* pmm_alloc(void)
 
 void pmm_free(void* frame)
 {
-    if ((uintptr_t)frame & (PMM_FRAME_SIZE - 1))
+    if ((uintptr_t)frame & (PAGE_SIZE - 1))
         panic("Invalid frame: 0x%p", frame);
 
     bool iflag = enter_critical_section();
@@ -166,7 +165,7 @@ void pmm_free(void* frame)
     STAILQ_FOREACH(region, &regions, node)
     {
         if (frame >= region->start && frame < region->start + region->len) {
-            size_t bit = (uintptr_t)(frame - region->start) / PMM_FRAME_SIZE;
+            size_t bit = (uintptr_t)(frame - region->start) / PAGE_SIZE;
             if (!bitset_unset(&region->bitset, bit))
                 panic("Logic error");
             found++;
@@ -190,7 +189,7 @@ size_t pmm_info(void)
         result += bitset_count_unset(&region->bitset);
     }
     leave_critical_section(iflag);
-    return result * PMM_FRAME_SIZE;
+    return result * PAGE_SIZE;
 }
 
 bool pmm_reserve(void* frame)
@@ -200,7 +199,7 @@ bool pmm_reserve(void* frame)
     STAILQ_FOREACH(region, &regions, node)
     {
         if (frame >= region->start && frame < region->start + region->len) {
-            size_t bit = (uintptr_t)(frame - region->start) / PMM_FRAME_SIZE;
+            size_t bit = (uintptr_t)(frame - region->start) / PAGE_SIZE;
             if (!bitset_set(&region->bitset, bit)) {
                 leave_critical_section(iflag);
                 return false;

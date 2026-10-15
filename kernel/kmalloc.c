@@ -14,7 +14,7 @@ static void* heap_tail;
 bool heap_init(void)
 {
     heap_tail = early_malloc_tail();
-    heap_tail = (void*)ALIGN_UP((uintptr_t)heap_tail, VMM_PAGE_SIZE);
+    heap_tail = (void*)ALIGN_UP((uintptr_t)heap_tail, PAGE_SIZE);
     return true;
 }
 
@@ -45,7 +45,7 @@ static void cleanup_tail(void* start, size_t len)
 {
     void* rollback_start = start;
     trace("heap rollback: start=%p pages=%zu free_before=%zu", start,
-          len / VMM_PAGE_SIZE, pmm_info());
+          len / PAGE_SIZE, pmm_info());
     while (len) {
         void* frame;
         if (!vmm_frame(start, &frame))
@@ -53,8 +53,8 @@ static void cleanup_tail(void* start, size_t len)
         if (!vmm_unmap(start))
             panic("Logic error");
         pmm_free(frame);
-        len -= VMM_PAGE_SIZE;
-        start += VMM_PAGE_SIZE;
+        len -= PAGE_SIZE;
+        start += PAGE_SIZE;
     }
     heap_tail = rollback_start;
     trace("heap rollback complete: free_after=%zu", pmm_info());
@@ -62,7 +62,7 @@ static void cleanup_tail(void* start, size_t len)
 
 void* heap_grow(size_t bytes)
 {
-    if (bytes & (VMM_PAGE_SIZE - 1))
+    if (bytes & (PAGE_SIZE - 1))
         return NULL;
 
     void* initial_tail = heap_tail;
@@ -70,32 +70,32 @@ void* heap_grow(size_t bytes)
         void* frame = pmm_alloc();
         if (!frame) {
             trace("heap_grow: physical allocation failed, mapped_pages=%zu",
-                  (heap_tail - initial_tail) / VMM_PAGE_SIZE);
+                  (heap_tail - initial_tail) / PAGE_SIZE);
             cleanup_tail(initial_tail, heap_tail - initial_tail);
             return NULL;
         }
 
         if (!vmm_map(frame, heap_tail, VMM_WRITABLE)) {
             trace("heap_grow: mapping failed at %p, mapped_pages=%zu",
-                  heap_tail, (heap_tail - initial_tail) / VMM_PAGE_SIZE);
+                  heap_tail, (heap_tail - initial_tail) / PAGE_SIZE);
             pmm_free(frame);
             cleanup_tail(initial_tail, heap_tail - initial_tail);
             return NULL;
         }
 
-        heap_tail += VMM_PAGE_SIZE;
-        bytes -= VMM_PAGE_SIZE;
+        heap_tail += PAGE_SIZE;
+        bytes -= PAGE_SIZE;
     }
     return initial_tail;
 }
 
 void heap_shrink(size_t bytes)
 {
-    if (bytes & (VMM_PAGE_SIZE - 1))
+    if (bytes & (PAGE_SIZE - 1))
         panic("Logic error");
 
     void* new_tail = heap_tail - bytes;
-    for (void* ptr = new_tail; ptr < heap_tail; ptr += VMM_PAGE_SIZE) {
+    for (void* ptr = new_tail; ptr < heap_tail; ptr += PAGE_SIZE) {
         void* frame;
         if (!vmm_frame(ptr, &frame))
             panic("Failed to get frame for address 0x%p", ptr);

@@ -1,3 +1,4 @@
+#include "address_space.h"
 #include "bitset.h"
 #include "early_malloc.h"
 #include "heap.h"
@@ -103,7 +104,7 @@ extern uint8_t ring3_trampoline_end[];
 
 #define RING3_TRAMPOLINE_BASE 0x1000
 #define USER_BASE             0x00400000
-#define USER_STACK            (KERNEL_OFFSET - VMM_PAGE_SIZE)
+#define USER_STACK            (KERNEL_OFFSET - PAGE_SIZE)
 
 static void user_entry(void* param)
 {
@@ -123,7 +124,7 @@ static void user_entry(void* param)
     /* Map user code + data + bss */
     size_t usercode_len = usercode_end - usercode_start;
     for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + usercode_len;
-         ptr += VMM_PAGE_SIZE) {
+         ptr += PAGE_SIZE) {
         frame = pmm_alloc();
         if (!frame)
             panic("Out of memory");
@@ -142,17 +143,16 @@ static void user_entry(void* param)
     if (!vmm_map(frame, (void*)USER_STACK, VMM_USER | VMM_WRITABLE))
         panic("Failed to map page");
     ptr = (void*)USER_STACK;
-    memset(ptr, 0xcc, VMM_PAGE_SIZE);
+    memset(ptr, 0xcc, PAGE_SIZE);
 
     /* VGA mem */
     if (!vmm_map((void*)VGA_PHYSICAL_BASE, (void*)VGA_PHYSICAL_BASE,
                  VMM_USER | VMM_WRITABLE))
         panic("Failed to map page 0x%x", VGA_PHYSICAL_BASE);
 
-    uint32_t esp = USER_STACK + VMM_PAGE_SIZE;
-    ring3_jump((void*)RING3_TRAMPOLINE_BASE,
-               (void*)(USER_STACK + VMM_PAGE_SIZE), USERCODESEG | 0x3,
-               USERDATASEG | 0x3);
+    uint32_t esp = USER_STACK + PAGE_SIZE;
+    ring3_jump((void*)RING3_TRAMPOLINE_BASE, (void*)(USER_STACK + PAGE_SIZE),
+               USERCODESEG | 0x3, USERDATASEG | 0x3);
     panic("ring3_jump returned");
 }
 
@@ -214,18 +214,21 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     trace("PMM initialized");
     trace("Free memory: %zu bytes", pmm_info());
 
-    /* After vmm initialization, lower-half is unmapped */
+    /* After address_space initialization, lower-half is unmapped */
+    address_space_init();
+    if (!address_space_map(address_space_current(), (void*)VGA_PHYSICAL_BASE,
+                           (void*)VGA_BASE, PAGE_WRITABLE))
+        panic("Failed to map VGA_BASE");
+
     if (!vmm_init())
         panic("vmm_init failed");
-    if (!vmm_map((void*)VGA_PHYSICAL_BASE, (void*)VGA_BASE, VMM_WRITABLE))
-        panic("vmm_map failed");
 
     mb_info = NULL;
     mmap_entries = NULL;
 
     /* Now we can free the bootstrap frames */
     for (void* frame = __bootstrap_start; frame < (void*)__bootstrap_end;
-         frame += PMM_FRAME_SIZE) {
+         frame += PAGE_SIZE) {
         pmm_free(frame);
     }
 

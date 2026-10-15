@@ -7,8 +7,11 @@
 #define CR0_WP 0x10000
 
 #define KERNEL_OFFSET 0xc0000000
+#define PAGE_SIZE     4096
 
 #define EFLAGS_IF (1 << 9)
+
+#define NODISCARD __attribute__((warn_unused_result))
 
 extern uint8_t __kernel_start[];
 extern uint8_t __kernel_end[];
