@@ -52,33 +52,39 @@ SECTIONS
 
     .text ALIGN(4096) : AT(ADDR(.text) - KERNEL_OFFSET)
     {
+        __kernel_text_start = .;
         *(.text .text.*)
+        __kernel_text_end = .;
     } :kernel_text
 
     .rodata ALIGN(4096) : AT(ADDR(.rodata) - KERNEL_OFFSET)
     {
+        __kernel_rodata_start = .;
         *(.rodata .rodata.*)
+        __kernel_rodata_end = .;
     } :kernel_text
 
     .data ALIGN(4096) : AT(ADDR(.data) - KERNEL_OFFSET)
     {
+        __kernel_data_start = .;
         *(.data .data.*)
+        __kernel_data_end = .;
     } :kernel_data
 
     .init_array ALIGN(4) : AT(ADDR(.init_array) - KERNEL_OFFSET)
     {
-        __init_array_start = .;
+        __kernel_init_array_start = .;
         KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
         KEEP(*(.init_array))
-        __init_array_end = .;
+        __kernel_init_array_end = .;
     } :kernel_data
 
     .bss ALIGN(4096) (NOLOAD) : AT(ADDR(.bss) - KERNEL_OFFSET)
     {
-        __bss_start = .;
+        __kernel_bss_start = .;
         *(COMMON)
         *(.bss .bss.*)
-        __bss_end = .;
+        __kernel_bss_end = .;
     } :kernel_data
 
     . = ALIGN(4096);

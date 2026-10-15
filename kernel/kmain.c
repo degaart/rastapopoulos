@@ -113,10 +113,12 @@ static void user_entry(void* param)
     void* frame = pmm_alloc();
     if (!frame)
         panic("Out of memory");
-    if (!vmm_map(frame, (void*)RING3_TRAMPOLINE_BASE, VMM_USER))
+    if (!vmm_map(frame, (void*)RING3_TRAMPOLINE_BASE, VMM_USER | VMM_WRITABLE))
         panic("Failed to map page 0x%x", RING3_TRAMPOLINE_BASE);
     memcpy((void*)RING3_TRAMPOLINE_BASE, ring3_trampoline,
            ring3_trampoline_end - ring3_trampoline);
+    if (!vmm_remap((void*)RING3_TRAMPOLINE_BASE, VMM_USER))
+        panic("Failed to remap page 0x%x", RING3_TRAMPOLINE_BASE);
 
     /* Map user code + data + bss */
     size_t usercode_len = usercode_end - usercode_start;

@@ -108,8 +108,15 @@ bool vmm_init(void)
         volatile uint32_t* pt =
             (volatile uint32_t*)(uintptr_t)(pd[di] & PAGE_MASK);
 
-        pt[ti] =
-            (uint32_t)(address - KERNEL_OFFSET) | PAGE_PRESENT | VMM_WRITABLE;
+        unsigned flags = VMM_WRITABLE;
+        if (address >= (uintptr_t)__kernel_text_start &&
+            address + VMM_PAGE_SIZE < (uintptr_t)__kernel_text_end)
+            flags &= ~VMM_WRITABLE;
+        if (address >= (uintptr_t)__kernel_rodata_start &&
+            address + VMM_PAGE_SIZE < (uintptr_t)__kernel_rodata_end)
+            flags &= ~VMM_WRITABLE;
+
+        pt[ti] = (uint32_t)(address - KERNEL_OFFSET) | PAGE_PRESENT | flags;
     }
 
     pd[RECURSIVE_INDEX] =
@@ -117,6 +124,7 @@ bool vmm_init(void)
 
     write_cr3((uint32_t)(uintptr_t)pd);
     write_cr0(read_cr0() | CR0_PG);
+    write_cr0(read_cr0() | CR0_WP);
     initialized = true;
     return true;
 }

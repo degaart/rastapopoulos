@@ -4,6 +4,7 @@
 
 #define CR0_PE 0x1
 #define CR0_PG 0x80000000
+#define CR0_WP 0x10000
 
 #define KERNEL_OFFSET 0xc0000000
 
@@ -17,6 +18,16 @@ extern uint8_t __kernel_phys_start[];
 extern uint8_t __bootstrap_start[];
 extern uint8_t __bootstrap_end[];
 extern uint8_t __kernel_phys_end[];
+extern uint8_t __kernel_text_start[];
+extern uint8_t __kernel_text_end[];
+extern uint8_t __kernel_rodata_start[];
+extern uint8_t __kernel_rodata_end[];
+extern uint8_t __kernel_data_start[];
+extern uint8_t __kernel_data_end[];
+extern uint8_t __kernel_init_array_start[];
+extern uint8_t __kernel_init_array_end[];
+extern uint8_t __kernel_bss_start[];
+extern uint8_t __kernel_bss_end[];
 
 /* A must be a power of two */
 #define ALIGN_UP(V, A)   (((V) + (A) - 1) & (~((A) - 1)))
