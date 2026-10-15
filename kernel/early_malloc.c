@@ -7,14 +7,8 @@
 
 static void* early_arena = __kernel_end;
 
-void early_malloc_init(const struct Bitset* bootstrap_memmap)
+void early_malloc_init(void)
 {
-    size_t memmap_end = bitset_find(bootstrap_memmap);
-    if (memmap_end == SIZE_MAX)
-        panic("Out of memory");
-
-    early_arena = (void*)((memmap_end * 4096) + KERNEL_OFFSET);
-    trace("Early arena: 0x%p", early_arena);
 }
 
 void* early_malloc(size_t size)

@@ -21,6 +21,8 @@ extern uint8_t __kernel_phys_end[];
 /* A must be a power of two */
 #define ALIGN_UP(V, A)   (((V) + (A) - 1) & (~((A) - 1)))
 #define ALIGN_DOWN(V, A) ((V) & ~((A) - 1))
+#define IS_ALIGNED(value, alignment)                                          \
+    (((uintptr_t)(value) & ((uintptr_t)(alignment) - 1)) == 0)
 
 static inline __attribute__((always_inline)) uint8_t inb(uint16_t port)
 {

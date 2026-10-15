@@ -35,16 +35,8 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
 {
     if (mmap_len % sizeof(*mmap) != 0)
         panic("Invalid memory-map length");
-
     if (mmap_len != 0 && mmap == NULL)
         panic("NULL memory map");
-
-    /* Release existing metadata when reinitializing. */
-    struct Region* region;
-    while ((region = STAILQ_FIRST(&regions)) != NULL) {
-        STAILQ_REMOVE_HEAD(&regions, node);
-        early_free(region);
-    }
 
     for (const struct multiboot_mmap_entry* entry = mmap;
          entry < (struct multiboot_mmap_entry*)((void*)mmap + mmap_len);
@@ -59,7 +51,7 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
         if (len > PMM_ADDRESS_LIMIT - entry->addr)
             len = PMM_ADDRESS_LIMIT - entry->addr;
 
-        region = early_malloc(sizeof(struct Region));
+        struct Region* region = early_malloc(sizeof(struct Region));
         if (!region)
             panic("Out of memory");
 
@@ -87,7 +79,7 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
     }
 
     /* Coalesce overlapping and adjacent regions */
-    region = STAILQ_FIRST(&regions);
+    struct Region* region = STAILQ_FIRST(&regions);
     while (region != NULL) {
         struct Region* next = STAILQ_NEXT(region, node);
         uint64_t end;
@@ -125,8 +117,7 @@ void pmm_init(const struct multiboot_mmap_entry* mmap, size_t mmap_len)
         ALIGN_DOWN((uintptr_t)__kernel_phys_start, PMM_FRAME_SIZE);
     uintptr_t end = (uintptr_t)early_malloc_tail() - KERNEL_OFFSET;
     trace("Kernel area: 0x%lx - 0x%lx", start, end - 1);
-    for (uintptr_t frame = (uintptr_t)__kernel_phys_start; frame < end;
-         frame += PMM_FRAME_SIZE) {
+    for (uintptr_t frame = start; frame < end; frame += PMM_FRAME_SIZE) {
         if (!pmm_reserve((void*)frame))
             panic("Failed to reserve frame 0x%lx", frame);
     }

@@ -1,8 +1,10 @@
 #pragma once
 
+#include "kernel.h"
 #include <stdint.h>
 
-#define VGA_BASE                0xb8000
+#define VGA_PHYSICAL_BASE       0xb8000
+#define VGA_BASE                (VGA_PHYSICAL_BASE + KERNEL_OFFSET)
 #define VGA_COLOR_BLACK         0x0
 #define VGA_COLOR_BLUE          0x1
 #define VGA_COLOR_GREEN         0x2

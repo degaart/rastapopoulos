@@ -19,6 +19,7 @@
 #define PDE_ACCESSED      (1 << 5)
 #define PDE_PAGE_SIZE     (1 << 7)
 #define PDE_ADDRESS_MASK  0xfffff000
+#define PDE_INDEX(VA)     ((VA) >> 22)
 
 #define PTE_PRESENT       (1 << 0)
 #define PTE_WRITABLE      (1 << 1)
@@ -30,48 +31,53 @@
 #define PTE_PAT           (1 << 7)
 #define PTE_GLOBAL        (1 << 8)
 #define PTE_ADDRESS_MASK  0xfffff000
+#define PTE_INDEX(VA)     (((VA) >> 12) & 0x3ff)
 
 #define PAGE_SIZE       4096
 #define RECURSIVE_INDEX 1023
 #define CR0_PG          0x80000000
 #define KERNEL_OFFSET   0xc0000000
+#define LOWHALF_LIMIT   0x400000
+
+#define IS_ALIGNED(value, alignment)                                          \
+    (((uintptr_t)(value) & ((uintptr_t)(alignment) - 1)) == 0)
 
 static uint32_t __attribute__((aligned(PAGE_SIZE))) pagedir[1024];
-static uint32_t memmap_storage[(BOOTSTRAP_END / PAGE_SIZE / 32)];
-static Bitset memmap;
+static uint32_t __attribute__((aligned(PAGE_SIZE))) pagetable[1024];
+
+extern uint8_t __kernel_phys_start[];
 extern uint8_t __kernel_phys_end[];
+extern uint8_t __kernel_start[];
+extern uint8_t __kernel_end[];
 extern void higher_half_start(void);
 
-static void* alloc_page(void)
+static void set_pagetable(void* va, uint32_t* pagetable)
 {
-    size_t frame_idx = bitset_find(&memmap);
-    if (frame_idx == SIZE_MAX)
-        return NULL;
-    bitset_set(&memmap, frame_idx);
-    return (void*)(frame_idx * PAGE_SIZE);
+    uintptr_t addr = (uintptr_t)va;
+    assert(IS_ALIGNED(addr, PAGE_SIZE));
+
+    size_t idx = PDE_INDEX(addr);
+    pagedir[idx] = (uintptr_t)pagetable | PDE_PRESENT | PDE_WRITABLE;
 }
 
-/*
- * pde index: address >> 22
- * pte index: (address >> 12) & 0x3ff
- */
 static void map(uintptr_t va, uintptr_t pa, unsigned flags)
 {
-    size_t pde_idx = va >> 22;
-    if ((pagedir[pde_idx] & PDE_PRESENT) == 0) {
-        uint32_t* pagetable = alloc_page();
-        if (!pagetable)
-            panic("OOM while mapping 0x%x", va);
-        memset(pagetable, 0, sizeof(uint32_t) * 1024);
-        pagedir[pde_idx] = (uintptr_t)pagetable | PDE_PRESENT | PDE_WRITABLE;
-    }
+    assert(IS_ALIGNED(va, PAGE_SIZE));
+    assert(IS_ALIGNED(pa, PAGE_SIZE));
+    assert(va < LOWHALF_LIMIT);
 
-    uint32_t* pagetable = (uint32_t*)(pagedir[pde_idx] & PDE_ADDRESS_MASK);
-    size_t pte_idx = (va >> 12) & 0x3ff;
-    if ((pagetable[pte_idx] & PTE_PRESENT) != 0)
-        panic("Page 0x%x already mapped to 0x%x", va,
-              pagetable[pte_idx] & PTE_ADDRESS_MASK);
-    pagetable[pte_idx] = (pa & PTE_ADDRESS_MASK) | PTE_PRESENT | flags;
+    size_t idx = PTE_INDEX(va);
+    assert((pagetable[idx] & PTE_PRESENT) == 0);
+    pagetable[idx] = pa | PTE_PRESENT | flags;
+}
+
+static void unmap(uintptr_t va)
+{
+    assert(IS_ALIGNED(va, PAGE_SIZE));
+
+    size_t idx = PTE_INDEX(va);
+    assert((pagetable[idx] & PTE_PRESENT) != 0);
+    pagetable[idx] = 0;
 }
 
 void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
@@ -91,38 +97,29 @@ void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
     bootstrap_gdt_set_entry(&gdt.data, 0, 0xfffff, GDT_ACCESS_DATA,
                             GDT_FLAGS_32BIT_4K);
 
-    struct Gdtr gdtr = {/* Skip the last 3 entries of struct Gdt (usercode,
-                           userdata, and tss) */
-                        .limit =
-                            sizeof(gdt) - (sizeof(struct GdtEntry) * 3) - 1,
-                        .base = (uintptr_t)&gdt};
+    struct Gdtr gdtr = {.limit = sizeof(gdt) - 1, .base = (uintptr_t)&gdt};
     asm volatile("lgdt [%0]\n\t"
                  "jmp 0x8:reload_cs\n\t"
                  "reload_cs:"
                  :
                  : "r"(&gdtr)
                  : "memory");
+
     /*
-     * setup initial pagedir
-     * Maps:
-     *       __bootstrap_start       - __bootstrap_start+4Mb
-     *       __kernel_start          - __kernel_end
-     * We map a fixed 4Mb at the bootstrap area because we don't know
-     * how much arena we need beforehand. Hope this works
-     *
-     * TODO: We can reduce memory consumption by not including low memory
-     * in memmap
+     * Initial pagedir:
+     *  Identity map the first 4Mb of the address space
+     *  Then map KERNEL_OFFSET to the first 4Mb
+     *  This should give a ~3Mb address space for kernel code, data, and bss
+     *  Work memory needed:
+     *      - 4k for pagedir
+     *      - 4k for shared pagetable lower-half + higher-half
      */
-    /*
-     * Initialize the bootstrap memmap for use when we allocate PDE and PTEs
-     * Notice we don't touch memory < 1Mb or > 4Mb
-     */
-    assert((uintptr_t)__kernel_phys_end < BOOTSTRAP_END);
-    static const size_t memmap_size = BOOTSTRAP_END / PAGE_SIZE;
-    assert(bitset_storage_size(memmap_size) == sizeof(memmap_storage));
-    bitset_init(&memmap, memmap_storage, memmap_size);
-    if (!bitset_set_range(&memmap, 0, memmap_size))
-        panic("Failed to initialize bootstrap memmap");
+    assert(__kernel_phys_start <
+           (uint8_t*)LOWHALF_LIMIT); /* Kernel too large */
+    pagedir[RECURSIVE_INDEX] = (uintptr_t)pagedir | PDE_PRESENT | PDE_WRITABLE;
+    set_pagetable(0, pagetable);
+    set_pagetable((void*)KERNEL_OFFSET, pagetable);
+
     if (mbinfo->flags & MULTIBOOT_INFO_MEM_MAP) {
         const struct multiboot_mmap_entry* entry =
             (struct multiboot_mmap_entry*)mbinfo->mmap_addr;
@@ -131,52 +128,40 @@ void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
              entry =
                  (struct multiboot_mmap_entry*)((void*)entry + entry->size)) {
             if (entry->type == MULTIBOOT_MEMORY_AVAILABLE &&
-                entry->addr < UINT32_MAX) {
-                uint32_t e_addr = entry->addr;
-                uint32_t e_len = entry->len;
-                for (uintptr_t frame = (uintptr_t)__kernel_phys_end;
-                     frame < e_addr + e_len && frame < BOOTSTRAP_END;
-                     frame += PAGE_SIZE) {
-                    if (!bitset_unset(&memmap, frame / PAGE_SIZE))
-                        panic("Failed to mark frame 0x%x as available", frame);
+                entry->addr <= LOWHALF_LIMIT) {
+                uint32_t addr = entry->addr;
+                uint32_t len = entry->len;
+                if (addr + len > LOWHALF_LIMIT)
+                    len = 0x400000 - addr;
+                for (uintptr_t page = addr; page < addr + len;
+                     page += PAGE_SIZE) {
+                    map(page, page, PTE_WRITABLE);
                 }
             }
         }
     } else if (mbinfo->flags & MULTIBOOT_INFO_MEMORY) {
-        size_t mem_limit = (mbinfo->mem_upper * 1024) + BOOTSTRAP_START;
-        trace("mem_limit: 0x%x", mem_limit);
-        for (uintptr_t frame = (uintptr_t)__kernel_phys_end;
-             frame < mem_limit && frame < BOOTSTRAP_END; frame += PAGE_SIZE) {
-            if (!bitset_unset(&memmap, frame / PAGE_SIZE))
-                panic("Failed to mark frame 0x%x as available", frame);
+        uint32_t lowmem = mbinfo->mem_lower * 1024;
+        trace("Map 0x%x - 0x%x", 0, lowmem - 1);
+        for (uintptr_t page = 0; page < lowmem; page += PAGE_SIZE) {
+            map(page, page, PTE_WRITABLE);
+        }
+
+        uint32_t highmem = mbinfo->mem_upper * 1024;
+        if (highmem > LOWHALF_LIMIT)
+            highmem = LOWHALF_LIMIT - 0x100000;
+
+        trace("highmem: 0x%x", highmem);
+        trace("Map 0x%x - 0x%x", 0x100000, 0x100000 + highmem - 1);
+        for (uintptr_t page = 0x100000; page < 0x100000 + highmem;
+             page += PAGE_SIZE) {
+            map(page, page, PTE_WRITABLE);
         }
     } else {
-        panic("Not memory info. Cannot continue");
-    }
-    trace("Available memory for bootstrap: %u bytes",
-          bitset_count_unset(&memmap) * PAGE_SIZE);
-    trace("__kernel_phys_end: 0x%x", __kernel_phys_end);
-
-    size_t next_frame = bitset_find(&memmap);
-
-    /* Recursive PDE */
-    pagedir[RECURSIVE_INDEX] = (uintptr_t)pagedir | PDE_PRESENT | PDE_WRITABLE;
-
-    /*
-     * Identity-map the first 4Mb
-     * TODO: Also check multiboot info for end of high memory
-     * (for 2MB machines)
-     */
-    for (uintptr_t ptr = 0; ptr < BOOTSTRAP_END; ptr += PAGE_SIZE) {
-        map(ptr, ptr, PTE_PRESENT | PTE_WRITABLE);
+        panic("No memory info. Cannot continue");
     }
 
-    /*
-     * Map the higher-half of address-space to the lower-half
-     */
-    for (uintptr_t ptr = 0; ptr < BOOTSTRAP_END; ptr += PAGE_SIZE) {
-        map(ptr + KERNEL_OFFSET, ptr, PTE_PRESENT | PTE_WRITABLE);
-    }
+    map(VGA_BASE, VGA_BASE, PTE_WRITABLE);
+    unmap(0);
 
     /* Enable paging */
     write_cr3((uintptr_t)pagedir);
@@ -188,11 +173,7 @@ void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
 
     uint32_t eax = mbsgn;
     uint32_t ebx = (uintptr_t)mbinfo + KERNEL_OFFSET;
-    uint32_t ecx = (uintptr_t)&memmap + KERNEL_OFFSET;
-    asm volatile("jmp higher_half_start"
-                 :
-                 : "a"(eax), "b"(ebx), "c"(ecx)
-                 : "memory");
+    asm volatile("jmp higher_half_start" : : "a"(eax), "b"(ebx) : "memory");
     __builtin_unreachable();
 }
 

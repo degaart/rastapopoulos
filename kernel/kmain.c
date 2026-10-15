@@ -143,8 +143,9 @@ static void user_entry(void* param)
     memset(ptr, 0xcc, VMM_PAGE_SIZE);
 
     /* VGA mem */
-    if (!vmm_remap((void*)VGA_BASE, VMM_USER | VMM_WRITABLE))
-        panic("Failed to remap page");
+    if (!vmm_map((void*)VGA_PHYSICAL_BASE, (void*)VGA_PHYSICAL_BASE,
+                 VMM_USER | VMM_WRITABLE))
+        panic("Failed to map page 0x%x", VGA_PHYSICAL_BASE);
 
     uint32_t esp = USER_STACK + VMM_PAGE_SIZE;
     ring3_jump((void*)RING3_TRAMPOLINE_BASE,
@@ -153,14 +154,12 @@ static void user_entry(void* param)
     panic("ring3_jump returned");
 }
 
-void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info,
-           const struct Bitset* bootstrap_memmap)
+void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 {
     serial_init();
     trace("Kernel entered");
-    trace("mb_magic: 0x%lx, mb_info: 0x%p, bootstrap_memmap: 0x%p", mb_magic,
-          mb_info, bootstrap_memmap);
-    early_malloc_init(bootstrap_memmap);
+    trace("mb_magic: 0x%lx, mb_info: 0x%p", mb_magic, mb_info);
+    early_malloc_init();
 
     vga_init();
     printf("RastapopoulOS kernel running\n");
@@ -213,10 +212,20 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info,
     trace("PMM initialized");
     trace("Free memory: %zu bytes", pmm_info());
 
+    /* After vmm initialization, lower-half is unmapped */
     if (!vmm_init())
         panic("vmm_init failed");
-    if (!vmm_map((void*)VGA_BASE, (void*)VGA_BASE, VMM_WRITABLE))
+    if (!vmm_map((void*)VGA_PHYSICAL_BASE, (void*)VGA_BASE, VMM_WRITABLE))
         panic("vmm_map failed");
+
+    mb_info = NULL;
+    mmap_entries = NULL;
+
+    /* Now we can free the bootstrap frames */
+    for (void* frame = __bootstrap_start; frame < (void*)__bootstrap_end;
+         frame += PMM_FRAME_SIZE) {
+        pmm_free(frame);
+    }
 
     if (!heap_init())
         panic("heap_init failed");
