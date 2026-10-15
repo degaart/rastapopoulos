@@ -14,6 +14,7 @@ CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -Tkernel.ld \
 		   -Wl,-Map=build/kernel.map \
+		   -Wl,--gc-sections \
 		   -ffreestanding -nostdlib -g -lgcc
 
 BINARY := build/kernel.elf
