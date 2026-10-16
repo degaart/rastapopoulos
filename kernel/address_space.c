@@ -440,7 +440,6 @@ bool address_space_map(struct AddressSpace* as, void* pa, void* va,
     pageframe[pte_idx] = paddr | PDE_PRESENT | flags;
     unlock_pagetable(pageframe);
     leave_critical_section(iflag);
-    flush_tlb();
     return true;
 }
 

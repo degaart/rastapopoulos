@@ -200,6 +200,11 @@ bool pmm_reserve(void* frame)
     {
         if (frame >= region->start && frame < region->start + region->len) {
             size_t bit = (uintptr_t)(frame - region->start) / PAGE_SIZE;
+            if (bitset_test(&region->bitset, bit)) {
+                leave_critical_section(iflag);
+                return false;
+            }
+
             if (!bitset_set(&region->bitset, bit)) {
                 leave_critical_section(iflag);
                 return false;

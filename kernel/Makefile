@@ -10,6 +10,7 @@ CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
 		  -I../common -I../third-party \
+		  -save-temps=obj -masm=intel \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -Tkernel.ld \
 		   -Wl,-Map=build/kernel.map \
@@ -21,7 +22,8 @@ IMAGE := ../bootloader/build/rastapopoulos.img
 HDRS := $(wildcard *.h) \
 		$(wildcard ../common/*.h)
 SRCS := $(wildcard *.c) \
-		$(wildcard ../common/*.c)
+		$(wildcard ../common/*.c) \
+		$(wildcard test/test_address_spaces.c)
 ASM_HDRS := $(wildcard *.inc) \
 			$(wildcard ../common/*.inc)
 ASM_SRCS := $(wildcard *.asm) \
@@ -44,11 +46,14 @@ build/%.o: %.asm $(ASM_HDRS) | build
 build/usercode.o: usercode.asm $(ASM_HDRS) ../user/build/user.bin | build
 	$(AS) -felf32 -o $@ $<
 
+build/test_address_spaces.o: test/test_address_spaces.c | build
+	$(CC) -c -o $@ $< $(CFLAGS)
+
 build/%.o: %.c $(HDRS) $(COMMON_HDRS) | build
-	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 build/%.o: ../common/%.c $(HDRS) $(COMMON_HDRS) | build
-	$(CC) -c -o $@ $< -save-temps=obj -masm=intel $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 build:
 	mkdir -p $@
@@ -64,6 +69,17 @@ run: all
 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
 		-serial stdio \
 		-s
+
+test: all
+	../tools/build/wrap-test -r=3 -t=15 -- \
+	qemu-system-i386 \
+		-drive file=$(IMAGE),format=raw,if=floppy \
+		-boot a \
+		--no-reboot \
+		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
+		-serial stdio \
+		-s
+
 
 debug: all
 	qemu-system-i386 \

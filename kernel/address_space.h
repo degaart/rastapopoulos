@@ -9,6 +9,15 @@
 #define PAGE_WRITABLE (1 << 1)
 #define PAGE_USER     (1 << 2)
 
+/*
+ * WARNING: Forgetting to destroy an address space
+ * may lead to memory corruption
+ * Suppose address space is allocated on the stack.
+ * It is added to the list of address spaces.
+ * When its storage is deallocated on function exit,
+ * it corrupts the address space list, resulting in
+ * strange bugs!!!
+ */
 struct AddressSpace
 {
     uint32_t* pagedir;

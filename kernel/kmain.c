@@ -236,6 +236,10 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
         panic("heap_init failed");
     trace("Heap initialized");
 
+    void test_address_spaces(void);
+    test_address_spaces();
+    halt();
+
     pic_init();
     pit_init(100);
 

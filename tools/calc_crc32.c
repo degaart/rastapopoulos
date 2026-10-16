@@ -1,4 +1,4 @@
-#include "../bootloader/crc32.h"
+#include "../librastaldr/crc32.c"
 #include <stdio.h>
 #include <unistd.h>
 

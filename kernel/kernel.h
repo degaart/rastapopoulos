@@ -11,7 +11,8 @@
 
 #define EFLAGS_IF (1 << 9)
 
-#define NODISCARD __attribute__((warn_unused_result))
+#define NODISCARD  __attribute__((warn_unused_result))
+#define ALIGNED(a) __attribute__((aligned(a)))
 
 extern uint8_t __kernel_start[];
 extern uint8_t __kernel_end[];
