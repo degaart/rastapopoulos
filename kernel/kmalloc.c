@@ -52,7 +52,6 @@ static void cleanup_tail(void* start, size_t len)
             panic("Failed to get frame for address 0x%p", start);
         if (!vmm_unmap(start))
             panic("Logic error");
-        pmm_free(frame);
         len -= PAGE_SIZE;
         start += PAGE_SIZE;
     }
@@ -102,8 +101,6 @@ void heap_shrink(size_t bytes)
 
         if (!vmm_unmap(ptr))
             panic("Logic error");
-
-        pmm_free(frame);
     }
 
     heap_tail = new_tail;

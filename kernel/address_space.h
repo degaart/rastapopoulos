@@ -8,6 +8,7 @@
 #define PAGE_PRESENT  (1 << 0)
 #define PAGE_WRITABLE (1 << 1)
 #define PAGE_USER     (1 << 2)
+#define PAGE_SHARED   (1 << 9)
 
 /*
  * WARNING: Forgetting to destroy an address space
@@ -25,6 +26,7 @@ struct AddressSpace
     bool destroyable;
     TAILQ_ENTRY(AddressSpace) node;
 };
+TAILQ_HEAD(AddressSpaceList, AddressSpace);
 
 void address_space_init(void);
 bool address_space_create(struct AddressSpace* as) NODISCARD;

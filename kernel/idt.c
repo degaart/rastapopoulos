@@ -1,5 +1,7 @@
 #include "idt.h"
 #include "kernel.h"
+#include "kthread.h"
+#include "process.h"
 #include "vga.h"
 #include <gdt.h>
 #include <stdio.h>
@@ -23,6 +25,10 @@ void idt_isr_handler(struct isr_regs* regs)
 {
     if (handlers[regs->interrupt_number]) {
         handlers[regs->interrupt_number](regs->interrupt_number, regs);
+
+        if (thread_current()->process->exit_requested &&
+            GDT_DPL(regs->cs) != 0)
+            thread_exit();
         return;
     }
 

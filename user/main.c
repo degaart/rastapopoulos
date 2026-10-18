@@ -251,7 +251,7 @@ int main(void)
         int enter_released;
 
         if (result == RESULT_EXIT)
-            sys_exit();
+            sys_exit(0);
 
         message(result == RESULT_WON
                     ? " YOU WIN! - Enter: restart | Esc: exit "
@@ -261,7 +261,7 @@ int main(void)
 
         for (;;) {
             if (sys_key_down(KEY_ESC))
-                sys_exit();
+                sys_exit(0);
 
             if (!sys_key_down(KEY_ENTER)) {
                 enter_released = 1;

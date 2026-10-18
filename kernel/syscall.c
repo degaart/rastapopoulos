@@ -5,6 +5,7 @@
 #include "kmalloc.h"
 #include "kthread.h"
 #include "pit.h"
+#include "process.h"
 #include "ps2kbd.h"
 #include "trace.h"
 
@@ -31,10 +32,14 @@ static int32_t syscall_keydown(uint32_t scancode)
     return ret ? 1 : 0;
 }
 
-static int32_t syscall_exit(void)
+static void syscall_exit(uint8_t status)
+{
+    process_exit(status);
+}
+
+static void syscall_exit_thread(void)
 {
     thread_exit();
-    return 0;
 }
 
 /*
@@ -50,6 +55,9 @@ static int32_t syscall_exit(void)
  */
 void syscall_handler(int, struct isr_regs* regs)
 {
+    if (thread_current()->process->exit_requested)
+        thread_exit();
+
     switch (regs->eax) {
     case SYSCALL_GETTICKS:
     {
@@ -65,12 +73,18 @@ void syscall_handler(int, struct isr_regs* regs)
         regs->eax = syscall_keydown(regs->ebx);
         break;
     case SYSCALL_EXIT:
-        regs->eax = syscall_exit();
-        break;
+        syscall_exit(regs->ebx & 0xff);
+        panic("Unreachable code");
+    case SYSCALL_EXIT_THREAD:
+        syscall_exit_thread();
+        panic("Unreachable code");
     default:
         regs->eax = (uint32_t)-1;
         break;
     }
+
+    if (thread_current()->process->exit_requested)
+        thread_exit();
 }
 
 static void syscall_kbd_observer(void*)

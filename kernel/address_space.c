@@ -25,6 +25,7 @@
 #define PTE_DIRTY         (1 << 6)
 #define PTE_PAT           (1 << 7)
 #define PTE_GLOBAL        (1 << 8)
+#define PTE_SHARED        (1 << 9)
 #define PTE_ADDRESS_MASK  0xfffff000
 #define PTE_INDEX(VA)     (((VA) >> 12) & 0x3ff)
 
@@ -32,8 +33,8 @@
 #define RECURSIVE_BASE  0xffc00000
 #define RECURSIVE_ADDR  0xfffff000
 
-static TAILQ_HEAD(AddressSpaceList, AddressSpace)
-    address_spaces = TAILQ_HEAD_INITIALIZER(address_spaces);
+static struct AddressSpaceList address_spaces =
+    TAILQ_HEAD_INITIALIZER(address_spaces);
 static __attribute__((aligned(PAGE_SIZE))) uint32_t temp_map[1024];
 static bool temp_map_flag;
 static __attribute__((aligned(PAGE_SIZE))) uint32_t initial_pagedir[1024];
@@ -356,16 +357,25 @@ void address_space_destroy(struct AddressSpace* as)
     if (read_cr3() == as->pagedir_phys)
         panic("Attempt to destroy current address space");
 
-    /* Free user-space pagetables */
-    for (int i = 0; i < PDE_INDEX(KERNEL_OFFSET); i++) {
-        uint32_t* pagetable = (uint32_t*)(as->pagedir[i] & PDE_ADDRESS_MASK);
-        if (pagetable)
-            pmm_free(pagetable);
-    }
-
     bool iflag = enter_critical_section();
     TAILQ_REMOVE(&address_spaces, as, node);
     leave_critical_section(iflag);
+
+    /* Free user-space pagetables */
+    for (int i = 0; i < PDE_INDEX(KERNEL_OFFSET); i++) {
+        if (as->pagedir[i] & PDE_PRESENT) {
+            uint32_t* pagetable =
+                lock_pagetable(as->pagedir[i] & PDE_ADDRESS_MASK);
+            for (int j = 0; j < 1024; j++) {
+                if ((pagetable[j] & PTE_PRESENT) &&
+                    !(pagetable[j] & PTE_SHARED)) {
+                    pmm_free((void*)(pagetable[j] & PTE_ADDRESS_MASK));
+                }
+            }
+            pmm_free((void*)(as->pagedir[i] & PDE_ADDRESS_MASK));
+            unlock_pagetable(pagetable);
+        }
+    }
 
     kfree(as->pagedir);
 }
@@ -460,12 +470,17 @@ bool address_space_unmap(struct AddressSpace* as, void* va)
     size_t pte_idx = PTE_INDEX(vaddr);
     uint32_t pagetable_phys = pagedir[pde_idx] & PDE_ADDRESS_MASK;
     uint32_t* pagetable = lock_pagetable(pagetable_phys);
-    if ((pagetable[pte_idx] & PTE_PRESENT) == 0) {
+
+    uint32_t pte = pagetable[pte_idx];
+    if ((pte & PTE_PRESENT) == 0) {
         unlock_pagetable(pagetable);
         leave_critical_section(iflag);
         return false;
     }
 
+    if (!(pte & PTE_SHARED)) {
+        pmm_free((void*)(pte & PTE_ADDRESS_MASK));
+    }
     pagetable[pte_idx] = 0;
 
     /* If all pages in this pagetable are unmapped, remove it from the pagedir

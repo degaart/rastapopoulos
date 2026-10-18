@@ -9,6 +9,7 @@
 #include "pic.h"
 #include "pit.h"
 #include "pmm.h"
+#include "process.h"
 #include "ps2kbd.h"
 #include "serial.h"
 #include "syscall.h"
@@ -108,7 +109,7 @@ extern uint8_t ring3_trampoline_end[];
 
 static void user_entry(void* param)
 {
-    trace("Jumping to ring3");
+    trace("User task running");
 
     /* Map ring3 trampoline */
     void* frame = pmm_alloc();
@@ -147,7 +148,7 @@ static void user_entry(void* param)
 
     /* VGA mem */
     if (!vmm_map((void*)VGA_PHYSICAL_BASE, (void*)VGA_PHYSICAL_BASE,
-                 VMM_USER | VMM_WRITABLE))
+                 VMM_USER | VMM_WRITABLE | VMM_SHARED))
         panic("Failed to map page 0x%x", VGA_PHYSICAL_BASE);
 
     uint32_t esp = USER_STACK + PAGE_SIZE;
@@ -236,18 +237,18 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
         panic("heap_init failed");
     trace("Heap initialized");
 
-    void test_address_spaces(void);
-    test_address_spaces();
-    halt();
-
     pic_init();
     pit_init(100);
 
     ps2kbd_init();
     syscall_init();
 
+    process_init();
     thread_init();
-    thread_create("user", user_entry, NULL);
+
+    struct Process* user_task = process_create("user");
+    if (!thread_create(user_task, "user", user_entry, NULL))
+        panic("Failed to create user task");
 
     schedule();
     trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",
@@ -259,6 +260,7 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     while (1) {
         if ((read_eflags() & EFLAGS_IF) == 0)
             panic("Interrupts disabled in idle thread");
+        process_cleanup_exited();
         hlt();
     }
     panic("Idle thread exited");

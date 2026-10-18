@@ -9,6 +9,9 @@
 #define USERDATASEG 0x20
 #define TSSSEG      0x28
 
+/* Get DPL from a descriptor */
+#define GDT_DPL(descriptor) ((descriptor) & 3)
+
 #define GDT_ACCESS_ACCESSED        0x01
 #define GDT_ACCESS_DATA_WRITABLE   0x02
 #define GDT_ACCESS_CODE_READABLE   0x02

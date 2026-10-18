@@ -22,8 +22,7 @@ IMAGE := ../bootloader/build/rastapopoulos.img
 HDRS := $(wildcard *.h) \
 		$(wildcard ../common/*.h)
 SRCS := $(wildcard *.c) \
-		$(wildcard ../common/*.c) \
-		$(wildcard test/test_address_spaces.c)
+		$(wildcard ../common/*.c)
 ASM_HDRS := $(wildcard *.inc) \
 			$(wildcard ../common/*.inc)
 ASM_SRCS := $(wildcard *.asm) \
