@@ -300,8 +300,10 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     tss_load(TSSSEG);
     idt_init();
     for (int i = 0; i < 32; i++) {
-        if (i != INT_BREAKPOINT)
-            idt_set_handler(i, fault_handler, 0);
+        int dpl = 0;
+        if (i == INT_BREAKPOINT)
+            dpl = 3;
+        idt_set_handler(i, fault_handler, dpl);
     }
     trace("IDT installed");
 

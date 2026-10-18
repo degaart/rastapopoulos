@@ -187,6 +187,9 @@ static int play_game(void)
                 volatile int num = 5, div = 0;
                 volatile int quotient = num / div;
             }
+            if (sys_key_down(SCANCODE_F4)) {
+                asm volatile("int 3");
+            }
             if (dx != 0 && sys_key_down(SCANCODE_UP)) {
                 pending_dx = 0;
                 pending_dy = -1;
