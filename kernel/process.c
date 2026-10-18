@@ -196,6 +196,7 @@ void process_exit(uint8_t status)
     }
     leave_critical_section(iflag);
     thread_exit();
+    __builtin_unreachable();
 }
 
 void process_cleanup_exited(void)

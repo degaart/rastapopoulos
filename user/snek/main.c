@@ -1,10 +1,10 @@
-#include "rasta.h"
+#include <rasta.h>
 
 enum
 {
     WIDTH = 80,
     HEIGHT = 25,
-    TOP = 1,
+    TOP = 2,
     BOTTOM = HEIGHT - 1,
     CELLS = WIDTH * HEIGHT,
     CAPACITY = (WIDTH - 2) * (BOTTOM - TOP - 1),

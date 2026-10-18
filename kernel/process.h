@@ -37,6 +37,6 @@ void process_destroy(struct Process* proc);
 void process_add_thread(struct Process* proc, struct Thread* thread);
 void process_remove_thread(struct Process* proc, struct Thread* thread);
 void process_set_current(struct Process* proc);
-void process_exit(uint8_t status);
+void process_exit(uint8_t status) __attribute__((noreturn));
 void process_cleanup_exited(void);
 

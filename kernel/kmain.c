@@ -98,18 +98,39 @@ static void tss_load(uint16_t tss_seg)
     asm volatile("ltr %0" : : "r"(tss_seg) : "memory");
 }
 
-extern uint8_t usercode_start[];
-extern uint8_t usercode_end[];
+struct Usercode
+{
+    const char* name;
+    size_t len;
+    void* addr;
+} __attribute__((packed));
+
+extern struct Usercode usercode_data[];
 extern uint8_t ring3_trampoline[];
 extern uint8_t ring3_trampoline_end[];
 
-#define RING3_TRAMPOLINE_BASE 0x1000
-#define USER_BASE             0x00400000
-#define USER_STACK            (KERNEL_OFFSET - PAGE_SIZE)
+#define RING3_TRAMPOLINE_BASE  0x1000
+#define RING3_ENVIRONMENT_BASE 0x2000
+#define USER_BASE              0x00400000
+#define USER_STACK             (KERNEL_OFFSET - PAGE_SIZE)
 
 static void user_entry(void* param)
 {
-    trace("User task running");
+    const char* name = param;
+    trace("Loading %s", name);
+
+    const struct Usercode* usercode = NULL;
+    for (int i = 0; usercode_data[i].name; i++) {
+        if (!strcmp(usercode_data[i].name, name)) {
+            usercode = &usercode_data[i];
+            break;
+        }
+    }
+
+    if (!usercode) {
+        trace("Usercode not found: %s", name);
+        process_exit(1);
+    }
 
     /* Map ring3 trampoline */
     void* frame = pmm_alloc();
@@ -122,9 +143,19 @@ static void user_entry(void* param)
     if (!vmm_remap((void*)RING3_TRAMPOLINE_BASE, VMM_USER))
         panic("Failed to remap page 0x%x", RING3_TRAMPOLINE_BASE);
 
+    /* Map environment block */
+    frame = pmm_alloc();
+    if (!frame)
+        panic("Out of memory");
+    if (!vmm_map(frame, (void*)RING3_ENVIRONMENT_BASE,
+                 VMM_USER | VMM_WRITABLE))
+        panic("Failed to map page 0x%x", RING3_ENVIRONMENT_BASE);
+
+    uint8_t* env = (uint8_t*)RING3_ENVIRONMENT_BASE;
+    *env = process_current()->pid;
+
     /* Map user code + data + bss */
-    size_t usercode_len = usercode_end - usercode_start;
-    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + usercode_len;
+    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + usercode->len;
          ptr += PAGE_SIZE) {
         frame = pmm_alloc();
         if (!frame)
@@ -134,7 +165,7 @@ static void user_entry(void* param)
     }
 
     uint8_t* ptr = (void*)USER_BASE;
-    memcpy(ptr, usercode_start, usercode_len);
+    memcpy(ptr, usercode->addr, usercode->len);
 
     /* Stack */
     frame = pmm_alloc();
@@ -246,9 +277,9 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     process_init();
     thread_init();
 
-    struct Process* user_task = process_create("user");
-    if (!thread_create(user_task, "user", user_entry, NULL))
-        panic("Failed to create user task");
+    struct Process* snek_task = process_create("snek");
+    if (!thread_create(snek_task, "snek", user_entry, "snek"))
+        panic("Failed to create snek task");
 
     schedule();
     trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",

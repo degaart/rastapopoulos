@@ -1,5 +1,5 @@
 #include "rasta.h"
-#include "../kernel/syscall.h"
+#include "../../kernel/syscall.h"
 
 uint64_t sys_getticks(void)
 {
