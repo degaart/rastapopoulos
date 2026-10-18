@@ -24,25 +24,102 @@
 
 struct TSS tss;
 
-static void gpf_handler(int, struct isr_regs* regs)
+static void segment_error_info(char* buffer, size_t len, unsigned error_code)
 {
-    uint32_t ext = regs->error_code & 1;
-    uint32_t idt = (regs->error_code >> 1) & 1;
-    uint32_t ti = (regs->error_code >> 2) & 1;
-    uint32_t desc = regs->error_code & ~7u;
-    uint32_t cr0 = read_cr0();
-    uint32_t ss = read_ss();
+    uint32_t ext = error_code & 1;
+    uint32_t idt = (error_code >> 1) & 1;
+    uint32_t ti = (error_code >> 2) & 1;
+    uint32_t desc = error_code & ~7u;
+    snprintf(buffer, len, "%s %s desc: 0x%lx", ext ? "EXT" : "",
+             idt ? "IDT" : (ti ? "LDT" : "GDT"), desc);
+}
 
-    panic("General protection fault:\n"
-          "    ext: %lu idt: %lu ti: %lu desc: 0x%lx\n"
-          "    eip: 0x%lx cs: 0x%lx eflags: 0x%lx\n"
-          "    esp: 0x%lx ss: 0x%lx\n"
-          "    cr0: 0x%lx\n"
-          "    eax: 0x%lx ebx: 0x%lx ecx: 0x%lx edx: 0x%lx\n"
-          "    esi: 0x%lx edi: 0x%lx ebp: 0x%lx\n",
-          ext, idt, ti, desc, regs->eip, regs->cs, regs->eflags, regs->esp, ss,
-          cr0, regs->eax, regs->ebx, regs->ecx, regs->edx, regs->esi,
-          regs->edi, regs->ebp);
+static void page_fault_info(char* buffer, size_t len, unsigned error_code)
+{
+    bool protect = error_code & (1 << 0);
+    bool write = error_code & (1 << 1);
+    bool user = error_code & (1 << 2);
+    bool rsvd = error_code & (1 << 3);
+    bool ins = error_code & (1 << 4);
+    snprintf(buffer, len, "   %s %s %s %s %s",
+             protect ? "ACCESS_VIOLATION" : "UNMAPPED_PAGE",
+             write ? "WRITE" : "READ", user ? "USER" : "SUPERVISOR",
+             rsvd ? "RSVD" : "", ins ? "INSTRUCTION_FETCH" : "DATA_FETCH");
+}
+
+static const char* fault_name(int num)
+{
+#define X(c)                                                                  \
+    case c:                                                                   \
+        return (#c) + 4;
+    switch (num) {
+        X(INT_DIVIDE_ERROR);
+        X(INT_DEBUG_EXCEPTION);
+        X(INT_NMI);
+        X(INT_BREAKPOINT);
+        X(INT_OVERFLOW);
+        X(INT_BOUND_RANGE);
+        X(INT_INVALID_OPCODE);
+        X(INT_DEVICE_UNAVAIL);
+        X(INT_DOUBLE_FAULT);
+        X(INT_INVALID_TSS);
+        X(INT_SEGMENT_NOT_PRESENT);
+        X(INT_STACK_SEGMENT_FAULT);
+        X(INT_GPF);
+        X(INT_PF);
+        X(INT_FP_EXCEPTION);
+        X(INT_ALIGNMENT_CHECK);
+        X(INT_MACHINE_CHECK);
+        X(INT_SIMD_FP_EXCEPTION);
+        X(INT_VIRT_EXCEPTION);
+        X(INT_CONTROL_PROTECTION);
+        X(INT_HYPERVISOR_INJECTION);
+        X(INT_VMM_COMM_EXCEPTION);
+        X(INT_SECURITY_EXCEPTION);
+    }
+    return "UNKNOWN";
+#undef X
+}
+
+static void fault_handler(int num, struct isr_regs* regs)
+{
+    char info_buf[64] = {};
+    const char* name = fault_name(num);
+    bool usermode = GDT_DPL(regs->cs) != 0;
+    switch (num) {
+    case INT_INVALID_TSS:
+    case INT_SEGMENT_NOT_PRESENT:
+    case INT_STACK_SEGMENT_FAULT:
+    case INT_GPF:
+        segment_error_info(info_buf, sizeof(info_buf), regs->error_code);
+        break;
+    case INT_PF:
+        page_fault_info(info_buf, sizeof(info_buf), regs->error_code);
+        break;
+    default:
+        break;
+    }
+
+    char message_buf[192];
+    char* info_ptr = info_buf;
+    for (; *info_ptr && *info_ptr == ' '; info_ptr++)
+        ;
+    snprintf(message_buf, sizeof(message_buf),
+             "Exception 0x%x %s pid %u %s\n"
+             "   %s\n"
+             "   eip: 0x%lx cs: 0x%lx esp: 0x%lx ss: 0x%lx cr2: 0x%lx",
+             num, name, process_current()->pid, process_current()->name,
+             info_ptr, regs->eip, regs->cs,
+             usermode ? regs->user_esp : regs->esp,
+             usermode ? regs->user_ss : read_ss(), read_cr2());
+
+    trace("%s", message_buf);
+
+    if (usermode) {
+        process_exit(UINT8_MAX);
+        return;
+    }
+    panic("%s", message_buf);
 }
 
 static void dump_multiboot(const struct multiboot_info* info)
@@ -222,7 +299,10 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     gdt_load(&gdtr);
     tss_load(TSSSEG);
     idt_init();
-    idt_set_handler(0xd, gpf_handler, 0);
+    for (int i = 0; i < 32; i++) {
+        if (i != INT_BREAKPOINT)
+            idt_set_handler(i, fault_handler, 0);
+    }
     trace("IDT installed");
 
     struct multiboot_mmap_entry* mmap_entries =

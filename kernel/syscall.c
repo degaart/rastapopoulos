@@ -7,6 +7,7 @@
 #include "pit.h"
 #include "process.h"
 #include "ps2kbd.h"
+#include "scancode.h"
 #include "trace.h"
 
 static struct Bitset kbd_bitset;

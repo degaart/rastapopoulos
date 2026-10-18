@@ -1,3 +1,4 @@
+#include "../../kernel/scancode.h"
 #include <rasta.h>
 
 enum
@@ -167,23 +168,38 @@ static int play_game(void)
         unsigned head, next, old_tail;
         int nx, ny, growing;
 
-        if (sys_key_down(KEY_ESC))
+        if (sys_key_down(SCANCODE_ESC))
             return RESULT_EXIT;
 
         if (!turn_queued) {
-            if (dx != 0 && sys_key_down(KEY_UP)) {
+            if (sys_key_down(SCANCODE_F1)) {
+                volatile uint32_t* ptr = (volatile uint32_t*)0x3000;
+                *ptr = 0xDEADBEEF;
+            }
+            if (sys_key_down(SCANCODE_F2)) {
+                asm volatile("mov ax, 0x30\n\t"
+                             "mov es, ax"
+                             :
+                             :
+                             : "ax", "memory");
+            }
+            if (sys_key_down(SCANCODE_F3)) {
+                volatile int num = 5, div = 0;
+                volatile int quotient = num / div;
+            }
+            if (dx != 0 && sys_key_down(SCANCODE_UP)) {
                 pending_dx = 0;
                 pending_dy = -1;
                 turn_queued = 1;
-            } else if (dx != 0 && sys_key_down(KEY_DOWN)) {
+            } else if (dx != 0 && sys_key_down(SCANCODE_DOWN)) {
                 pending_dx = 0;
                 pending_dy = 1;
                 turn_queued = 1;
-            } else if (dy != 0 && sys_key_down(KEY_LEFT)) {
+            } else if (dy != 0 && sys_key_down(SCANCODE_LEFT)) {
                 pending_dx = -1;
                 pending_dy = 0;
                 turn_queued = 1;
-            } else if (dy != 0 && sys_key_down(KEY_RIGHT)) {
+            } else if (dy != 0 && sys_key_down(SCANCODE_RIGHT)) {
                 pending_dx = 1;
                 pending_dy = 0;
                 turn_queued = 1;
@@ -257,13 +273,13 @@ int main(void)
                     ? " YOU WIN! - Enter: restart | Esc: exit "
                     : " GAME OVER - Enter: restart | Esc: exit ");
 
-        enter_released = !sys_key_down(KEY_ENTER);
+        enter_released = !sys_key_down(SCANCODE_ENTER);
 
         for (;;) {
-            if (sys_key_down(KEY_ESC))
+            if (sys_key_down(SCANCODE_ESC))
                 sys_exit(0);
 
-            if (!sys_key_down(KEY_ENTER)) {
+            if (!sys_key_down(SCANCODE_ENTER)) {
                 enter_released = 1;
             } else if (enter_released) {
                 break;
