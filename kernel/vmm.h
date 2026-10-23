@@ -16,4 +16,5 @@ bool vmm_remap(void* virtual_address, uint32_t flags);
 bool vmm_frame(const void* virtual_address, void** frame_out);
 bool vmm_is_valid_userptr(const void* ptr, size_t len, bool for_write);
 bool vmm_is_valid_userstr(const char* str);
+void* vmm_alloc(void* va, uint32_t flags);
 

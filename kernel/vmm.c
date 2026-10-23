@@ -1,6 +1,7 @@
 #include "vmm.h"
 #include "address_space.h"
 #include "early_malloc.h"
+#include "pmm.h"
 
 bool vmm_init(void)
 {
@@ -49,5 +50,17 @@ bool vmm_is_valid_userptr(const void* ptr, size_t len, bool for_write)
 bool vmm_is_valid_userstr(const char* str)
 {
     return address_space_is_valid_userstr(str);
+}
+
+void* vmm_alloc(void* va, uint32_t flags)
+{
+    void* pa = pmm_alloc();
+    if (!pa)
+        return NULL;
+    if (!vmm_map(pa, va, flags)) {
+        pmm_free(pa);
+        return NULL;
+    }
+    return va;
 }
 

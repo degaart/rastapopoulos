@@ -63,7 +63,7 @@ static struct Process* create_with_address_space(const char* name,
     proc->state = PROCESS_CONSTRUCTING;
     STAILQ_INIT(&proc->threads);
     proc->live_threads = 0;
-    proc->exit_status = 255;
+    proc->exit_status = 0;
     proc->exit_requested = false;
     proc->state = PROCESS_ALIVE;
     proc->parent = current_proc;

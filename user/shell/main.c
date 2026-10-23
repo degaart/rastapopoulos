@@ -228,7 +228,6 @@ static void help(char* arguments)
     for (int i = 0; i < commands_size; i++) {
         printf("%s\n", commands[i].name);
     }
-    printf("exec\n");
 }
 
 static void exit(char* arguments)

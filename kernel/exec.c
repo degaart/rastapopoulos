@@ -28,91 +28,146 @@ extern uint8_t ring3_trampoline_end[];
 #define USER_BASE             0x00400000
 #define USER_STACK            (KERNEL_OFFSET - PAGE_SIZE)
 
-struct ExecArgs
+struct Context
 {
     char* filename;
     char* args;
     const struct Usercode* usercode;
+    bool started;
+    int refcount;
 };
 
-static void destroy_exec_args(struct ExecArgs* exec_args)
+static struct Context* context_create(const char* filename, const char* args,
+                                      const struct Usercode* usercode)
 {
-    if (!exec_args)
-        return;
-    kfree(exec_args->args);
-    kfree(exec_args->filename);
-    kfree(exec_args);
+    struct Context* result = kmalloc(sizeof(struct Context));
+    if (!result)
+        return NULL;
+    memset(result, 0, sizeof(*result));
+    result->filename = strdup(filename);
+    if (!result->filename)
+        goto cleanup;
+    result->args = strdup(args);
+    if (!result->args)
+        goto cleanup;
+    result->usercode = usercode;
+    result->started = false;
+    result->refcount = 1;
+    return result;
+
+cleanup:
+    if (result->args)
+        kfree(result->args);
+    if (result->filename)
+        kfree(result->filename);
+    kfree(result);
+    return NULL;
+}
+
+static int context_incref(struct Context* ctx)
+{
+    bool iflag = enter_critical_section();
+    int result = ++ctx->refcount;
+    leave_critical_section(iflag);
+    return result;
+}
+
+static int context_decref(struct Context* ctx)
+{
+    if (!ctx)
+        panic("context_decref with NULL ctx");
+
+    bool iflag = enter_critical_section();
+    if (ctx->refcount <= 0)
+        panic("Calling exec_args_decref with refcount=%d", ctx->refcount);
+    int result = --ctx->refcount;
+    if (ctx->refcount > 0) {
+        leave_critical_section(iflag);
+        return result;
+    }
+
+    if (ctx->args)
+        kfree(ctx->args);
+    if (ctx->filename)
+        kfree(ctx->filename);
+    kfree(ctx);
+    leave_critical_section(iflag);
+    return result;
 }
 
 static void user_entry(void* param)
 {
-    struct ExecArgs* args = param;
-    if (!args || !args->filename || !args->args || !args->usercode) {
-        destroy_exec_args(args);
+    struct Context* ctx = param;
+    context_incref(ctx);
+
+    if (!ctx || !ctx->filename || !ctx->args || !ctx->usercode) {
+        context_decref(ctx);
         return;
     }
-    if (strlen(args->args) > PAGE_SIZE - sizeof(struct ExecArgs) - 1) {
+    if (strlen(ctx->args) > PAGE_SIZE - sizeof(struct Context) - 1) {
         trace("Arguments too large for PSP");
-        destroy_exec_args(args);
+        context_decref(ctx);
         return;
     }
 
     /* Map ring3 trampoline */
-    void* frame = pmm_alloc();
-    if (!frame) {
-        trace("Out of memory");
-        destroy_exec_args(args);
+    if (!vmm_alloc((void*)RING3_TRAMPOLINE_BASE, VMM_USER | VMM_WRITABLE)) {
+        trace("Failed to map page 0x%x", RING3_TRAMPOLINE_BASE);
+        context_decref(ctx);
         return;
     }
-    if (!vmm_map(frame, (void*)RING3_TRAMPOLINE_BASE, VMM_USER | VMM_WRITABLE))
-        panic("Failed to map page 0x%x", RING3_TRAMPOLINE_BASE);
     memcpy((void*)RING3_TRAMPOLINE_BASE, ring3_trampoline,
            ring3_trampoline_end - ring3_trampoline);
-    if (!vmm_remap((void*)RING3_TRAMPOLINE_BASE, VMM_USER))
-        panic("Failed to remap page 0x%x", RING3_TRAMPOLINE_BASE);
+    if (!vmm_remap((void*)RING3_TRAMPOLINE_BASE, VMM_USER)) {
+        trace("Failed to remap page 0x%x", RING3_TRAMPOLINE_BASE);
+        context_decref(ctx);
+        return;
+    }
 
     /* Map Program Segment Prefix */
-    frame = pmm_alloc();
-    if (!frame)
-        panic("Out of memory");
-    if (!vmm_map(frame, (void*)RING3_PSP_BASE, VMM_USER | VMM_WRITABLE))
-        panic("Failed to map page 0x%x", RING3_PSP_BASE);
+    if (!vmm_alloc((void*)RING3_PSP_BASE, VMM_USER | VMM_WRITABLE)) {
+        trace("Failed to map page 0x%x", RING3_PSP_BASE);
+        context_decref(ctx);
+        return;
+    }
 
     struct PSP* psp = (struct PSP*)RING3_PSP_BASE;
     psp->pid = process_current()->pid;
     psp->args = (char*)RING3_PSP_BASE + sizeof(struct PSP);
-    psp->args_len = strlen(args->args);
-    memcpy(psp->args, args->args, psp->args_len + 1);
+    psp->args_len = strlen(ctx->args);
+    memcpy(psp->args, ctx->args, psp->args_len + 1);
 
     /* Map user code + data + bss */
-    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + args->usercode->len;
+    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + ctx->usercode->len;
          ptr += PAGE_SIZE) {
-        frame = pmm_alloc();
-        if (!frame)
-            panic("Out of memory");
-        if (!vmm_map(frame, (void*)ptr, VMM_USER | VMM_WRITABLE))
-            panic("Failed to map page 0x%lx", ptr);
+        if (!vmm_alloc((void*)ptr, VMM_USER | VMM_WRITABLE)) {
+            trace("Failed to map page 0x%lx", ptr);
+            context_decref(ctx);
+            return;
+        }
     }
 
     uint8_t* ptr = (void*)USER_BASE;
-    memcpy(ptr, args->usercode->addr, args->usercode->len);
+    memcpy(ptr, ctx->usercode->addr, ctx->usercode->len);
 
     /* Stack */
-    frame = pmm_alloc();
-    if (!frame)
-        panic("Out of memory");
-
-    if (!vmm_map(frame, (void*)USER_STACK, VMM_USER | VMM_WRITABLE))
-        panic("Failed to map page");
+    if (!vmm_alloc((void*)USER_STACK, VMM_USER | VMM_WRITABLE)) {
+        trace("Failed to map page");
+        context_decref(ctx);
+        return;
+    }
     ptr = (void*)USER_STACK;
     memset(ptr, 0xcc, PAGE_SIZE);
 
     /* VGA mem */
     if (!vmm_map((void*)VGA_PHYSICAL_BASE, (void*)VGA_PHYSICAL_BASE,
-                 VMM_USER | VMM_WRITABLE | VMM_SHARED))
-        panic("Failed to map page 0x%x", VGA_PHYSICAL_BASE);
-
-    destroy_exec_args(args);
+                 VMM_USER | VMM_WRITABLE | VMM_SHARED)) {
+        trace("Failed to map page 0x%x", VGA_PHYSICAL_BASE);
+        context_decref(ctx);
+        return;
+    }
+    ctx->started = true;
+    context_decref(ctx);
 
     uint32_t esp = USER_STACK + PAGE_SIZE;
     ring3_jump((void*)RING3_TRAMPOLINE_BASE, (void*)(USER_STACK + PAGE_SIZE),
@@ -120,10 +175,10 @@ static void user_entry(void* param)
     panic("ring3_jump returned");
 }
 
-bool exec(const char* filename, const char* args)
+int exec(const char* filename, const char* args)
 {
     if (!filename)
-        return false;
+        return -1;
     if (!args)
         args = "";
 
@@ -136,42 +191,40 @@ bool exec(const char* filename, const char* args)
     }
 
     if (!usercode)
-        return false;
+        return -1;
 
     struct Process* process = process_create(filename);
     if (!process)
-        return false;
+        return -1;
 
-    struct ExecArgs* exec_args = kmalloc(sizeof(struct ExecArgs));
-    if (!exec_args)
+    struct Context* ctx = context_create(filename, args, usercode);
+    if (!ctx)
         goto cleanup;
-    memset(exec_args, 0, sizeof(*exec_args));
-
-    exec_args->filename = strdup(filename);
-    if (!exec_args->filename)
-        goto cleanup;
-    exec_args->args = strdup(args);
-    if (!exec_args->args)
-        goto cleanup;
-    exec_args->usercode = usercode;
 
     /* When the child process exits, it's reference count is decreased
      * So, we need to explicitly retain it to avoid access a destroyed process
      */
     process_incref(process);
-    if (!thread_create(process, "main", user_entry, exec_args)) {
+    if (!thread_create(process, "main", user_entry, ctx)) {
         process_decref(process);
         goto cleanup;
     }
 
     event_wait(&process->termination_event);
+
+    int result = -1;
+    if (ctx->started)
+        result = process->exit_status;
+
+    context_decref(ctx);
     process_decref(process);
-    return true;
+    return result;
 cleanup:
     process->state = PROCESS_EXITED;
     process_deactivate(process);
+    if (ctx)
+        context_decref(ctx);
     process_decref(process);
-    destroy_exec_args(exec_args);
-    return false;
+    return -1;
 }
 

@@ -74,10 +74,7 @@ static int32_t syscall_exec(const char* filename, const char* args)
     if (args && !vmm_is_valid_userstr(args))
         return -1;
 
-    bool ret = exec(filename, args);
-    if (!ret)
-        return -1;
-    return 0;
+    return exec(filename, args);
 }
 
 static int32_t syscall_shutdown(void)

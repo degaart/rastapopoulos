@@ -181,8 +181,13 @@ static void init_entry(void* unused)
 {
     trace("Init thread started");
     while (true) {
-        if (!exec("shell", ""))
+        int ret = exec("shell", "");
+        if (ret == -1)
             panic("Failed to exec shell");
+        else if (ret != 0) {
+            trace("Shell exited with status %d", ret);
+            printf("Shell exited with status %d\n", ret);
+        }
     }
 }
 
