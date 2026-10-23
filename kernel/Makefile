@@ -44,6 +44,7 @@ build/%.o: %.asm $(ASM_HDRS) | build
 build/usercode.o: usercode.asm \
 	              $(ASM_HDRS) \
 	              ../user/snek/build/snek.bin \
+	              ../user/shell/build/shell.bin \
 	              | build
 	$(AS) -felf32 -o $@ $<
 

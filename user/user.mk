@@ -12,15 +12,19 @@ CFLAGS := -DRASTA -DRASTA_USER \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
 		  -masm=intel \
-		  -I../lib \
+		  -I../lib -I../../common -I../../third-party \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -T../user.ld \
 		   -Wl,-Map=$(PROGRAM:.bin=.map) \
 		   -Wl,--no-warn-rwx-segments \
 		   -ffreestanding -nostdlib -g -lgcc
 
-HDRS := $(wildcard *.h) $(wildcard ../lib/*.h)
-SRCS := $(wildcard *.c) $(wildcard ../lib/*.c)
+HDRS := $(wildcard *.h) \
+		$(wildcard ../lib/*.h) \
+		$(wildcard ../../common/*.h)
+SRCS := $(wildcard *.c) \
+		$(wildcard ../lib/*.c) \
+		$(wildcard ../../common/*.c)
 ASM_HDRS := $(wildcard *.inc) $(wildcard ../lib/*.inc)
 ASM_SRCS := $(wildcard *.asm) $(wildcard ../lib/*.asm)
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
@@ -49,6 +53,9 @@ build/%.o: %.c $(HDRS) | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 build/%.o: ../lib/%.c $(HDRS) | build
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+build/%.o: ../../common/%.c $(HDRS) | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 build:

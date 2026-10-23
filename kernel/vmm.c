@@ -41,3 +41,13 @@ bool vmm_frame(const void* virtual_address, void** frame_out)
     return address_space_query(as, vaddr, frame_out, NULL);
 }
 
+bool vmm_is_valid_userptr(const void* ptr, size_t len, bool for_write)
+{
+    return address_space_is_valid_userptr(ptr, len, for_write);
+}
+
+bool vmm_is_valid_userstr(const char* str)
+{
+    return address_space_is_valid_userstr(str);
+}
+

@@ -1,5 +1,6 @@
 #include "../../kernel/scancode.h"
 #include <rasta.h>
+#include <stdio.h>
 
 enum
 {
@@ -163,49 +164,50 @@ static int play_game(void)
     place_food();
     last_step = sys_getticks();
 
-    for (;;) {
+    while (true) {
         uint64_t now;
         unsigned head, next, old_tail;
         int nx, ny, growing;
 
-        if (sys_key_down(SCANCODE_ESC))
-            return RESULT_EXIT;
+        struct KeyEvent evt;
+        int overflow;
+        while (sys_get_kbd_event(&evt, &overflow, false) != -1) {
+            if (overflow)
+                continue;
+            if (evt.type != KEY_PRESSED)
+                continue;
 
-        if (!turn_queued) {
-            if (sys_key_down(SCANCODE_F1)) {
-                volatile uint32_t* ptr = (volatile uint32_t*)0x3000;
-                *ptr = 0xDEADBEEF;
-            }
-            if (sys_key_down(SCANCODE_F2)) {
-                asm volatile("mov ax, 0x30\n\t"
-                             "mov es, ax"
-                             :
-                             :
-                             : "ax", "memory");
-            }
-            if (sys_key_down(SCANCODE_F3)) {
-                volatile int num = 5, div = 0;
-                volatile int quotient = num / div;
-            }
-            if (sys_key_down(SCANCODE_F4)) {
-                asm volatile("int 3");
-            }
-            if (dx != 0 && sys_key_down(SCANCODE_UP)) {
-                pending_dx = 0;
-                pending_dy = -1;
-                turn_queued = 1;
-            } else if (dx != 0 && sys_key_down(SCANCODE_DOWN)) {
-                pending_dx = 0;
-                pending_dy = 1;
-                turn_queued = 1;
-            } else if (dy != 0 && sys_key_down(SCANCODE_LEFT)) {
-                pending_dx = -1;
-                pending_dy = 0;
-                turn_queued = 1;
-            } else if (dy != 0 && sys_key_down(SCANCODE_RIGHT)) {
-                pending_dx = 1;
-                pending_dy = 0;
-                turn_queued = 1;
+            switch (evt.scancode) {
+            case SCANCODE_ESC:
+                return RESULT_EXIT;
+            case SCANCODE_UP:
+                if (dx != 0) {
+                    pending_dx = 0;
+                    pending_dy = -1;
+                    turn_queued = 1;
+                }
+                break;
+            case SCANCODE_DOWN:
+                if (dx != 0) {
+                    pending_dx = 0;
+                    pending_dy = 1;
+                    turn_queued = 1;
+                }
+                break;
+            case SCANCODE_LEFT:
+                if (dy != 0) {
+                    pending_dx = -1;
+                    pending_dy = 0;
+                    turn_queued = 1;
+                }
+                break;
+            case SCANCODE_RIGHT:
+                if (dy != 0) {
+                    pending_dx = 1;
+                    pending_dy = 0;
+                    turn_queued = 1;
+                }
+                break;
             }
         }
 
@@ -265,7 +267,7 @@ static int play_game(void)
 
 int main(void)
 {
-    for (;;) {
+    while (true) {
         int result = play_game();
         int enter_released;
 
@@ -276,19 +278,24 @@ int main(void)
                     ? " YOU WIN! - Enter: restart | Esc: exit "
                     : " GAME OVER - Enter: restart | Esc: exit ");
 
-        enter_released = !sys_key_down(SCANCODE_ENTER);
+        struct KeyEvent evt;
+        int overflow;
 
-        for (;;) {
-            if (sys_key_down(SCANCODE_ESC))
-                sys_exit(0);
-
-            if (!sys_key_down(SCANCODE_ENTER)) {
-                enter_released = 1;
-            } else if (enter_released) {
-                break;
+        while (true) {
+            if (sys_get_kbd_event(&evt, &overflow, true) == -1) {
+                printf("sys_get_kbd_event failed\n");
+                return 1;
             }
+            if (overflow)
+                continue;
+            if (evt.type != KEY_RELEASED)
+                continue;
 
-            sys_sleep(1);
+            if (evt.scancode == SCANCODE_ENTER) {
+                break;
+            } else if (evt.scancode == SCANCODE_ESC) {
+                return 0;
+            }
         }
     }
 }

@@ -35,8 +35,8 @@ extern uint8_t __kernel_bss_start[];
 extern uint8_t __kernel_bss_end[];
 
 /* A must be a power of two */
-#define ALIGN_UP(V, A)   (((V) + (A) - 1) & (~((A) - 1)))
-#define ALIGN_DOWN(V, A) ((V) & ~((A) - 1))
+#define ALIGN_DOWN(V, A) ((__typeof(V))(((uintptr_t)(V)) & ~((A) - 1)))
+#define ALIGN_UP(V, A)   ALIGN_DOWN((V) + (A) - 1, A)
 #define IS_ALIGNED(value, alignment)                                          \
     (((uintptr_t)(value) & ((uintptr_t)(alignment) - 1)) == 0)
 

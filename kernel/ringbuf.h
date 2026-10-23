@@ -53,4 +53,12 @@
             queue->read_index = 0;                                            \
         --queue->count;                                                       \
         return true;                                                          \
+    }                                                                         \
+    static inline bool Name##_peek(struct Name* queue, Type* value)           \
+    {                                                                         \
+        if (Name##_empty(queue))                                              \
+            return false;                                                     \
+        *value = queue->data[queue->read_index];                              \
+        return true;                                                          \
     }
+

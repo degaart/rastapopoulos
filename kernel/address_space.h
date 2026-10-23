@@ -3,6 +3,7 @@
 #include "kernel.h"
 #include <freebsd/queue.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define PAGE_PRESENT  (1 << 0)
@@ -38,6 +39,9 @@ bool address_space_map(struct AddressSpace* as, void* pa, void* va,
 bool address_space_unmap(struct AddressSpace* as, void* va) NODISCARD;
 bool address_space_remap(struct AddressSpace* as, void* va,
                          unsigned flags) NODISCARD;
+bool address_space_is_valid_userptr(const void* ptr, size_t len,
+                                    bool for_write);
+bool address_space_is_valid_userstr(const char* str);
 
 /*
  * Query physical address and flags of the specified virtual address

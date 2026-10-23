@@ -1,6 +1,7 @@
 #include "address_space.h"
 #include "bitset.h"
 #include "early_malloc.h"
+#include "exec.h"
 #include "heap.h"
 #include "idt.h"
 #include "kernel.h"
@@ -11,6 +12,7 @@
 #include "pmm.h"
 #include "process.h"
 #include "ps2kbd.h"
+#include "psp.h"
 #include "serial.h"
 #include "syscall.h"
 #include "trace.h"
@@ -175,94 +177,13 @@ static void tss_load(uint16_t tss_seg)
     asm volatile("ltr %0" : : "r"(tss_seg) : "memory");
 }
 
-struct Usercode
+static void init_entry(void* unused)
 {
-    const char* name;
-    size_t len;
-    void* addr;
-} __attribute__((packed));
-
-extern struct Usercode usercode_data[];
-extern uint8_t ring3_trampoline[];
-extern uint8_t ring3_trampoline_end[];
-
-#define RING3_TRAMPOLINE_BASE  0x1000
-#define RING3_ENVIRONMENT_BASE 0x2000
-#define USER_BASE              0x00400000
-#define USER_STACK             (KERNEL_OFFSET - PAGE_SIZE)
-
-static void user_entry(void* param)
-{
-    const char* name = param;
-    trace("Loading %s", name);
-
-    const struct Usercode* usercode = NULL;
-    for (int i = 0; usercode_data[i].name; i++) {
-        if (!strcmp(usercode_data[i].name, name)) {
-            usercode = &usercode_data[i];
-            break;
-        }
+    trace("Init thread started");
+    while (true) {
+        if (!exec("shell", ""))
+            panic("Failed to exec shell");
     }
-
-    if (!usercode) {
-        trace("Usercode not found: %s", name);
-        process_exit(1);
-    }
-
-    /* Map ring3 trampoline */
-    void* frame = pmm_alloc();
-    if (!frame)
-        panic("Out of memory");
-    if (!vmm_map(frame, (void*)RING3_TRAMPOLINE_BASE, VMM_USER | VMM_WRITABLE))
-        panic("Failed to map page 0x%x", RING3_TRAMPOLINE_BASE);
-    memcpy((void*)RING3_TRAMPOLINE_BASE, ring3_trampoline,
-           ring3_trampoline_end - ring3_trampoline);
-    if (!vmm_remap((void*)RING3_TRAMPOLINE_BASE, VMM_USER))
-        panic("Failed to remap page 0x%x", RING3_TRAMPOLINE_BASE);
-
-    /* Map environment block */
-    frame = pmm_alloc();
-    if (!frame)
-        panic("Out of memory");
-    if (!vmm_map(frame, (void*)RING3_ENVIRONMENT_BASE,
-                 VMM_USER | VMM_WRITABLE))
-        panic("Failed to map page 0x%x", RING3_ENVIRONMENT_BASE);
-
-    uint8_t* env = (uint8_t*)RING3_ENVIRONMENT_BASE;
-    *env = process_current()->pid;
-
-    /* Map user code + data + bss */
-    for (uintptr_t ptr = USER_BASE; ptr < USER_BASE + usercode->len;
-         ptr += PAGE_SIZE) {
-        frame = pmm_alloc();
-        if (!frame)
-            panic("Out of memory");
-        if (!vmm_map(frame, (void*)ptr, VMM_USER | VMM_WRITABLE))
-            panic("Failed to map page 0x%lx", ptr);
-    }
-
-    uint8_t* ptr = (void*)USER_BASE;
-    memcpy(ptr, usercode->addr, usercode->len);
-
-    /* Stack */
-    frame = pmm_alloc();
-    if (!frame)
-        panic("Out of memory");
-
-    if (!vmm_map(frame, (void*)USER_STACK, VMM_USER | VMM_WRITABLE))
-        panic("Failed to map page");
-    ptr = (void*)USER_STACK;
-    memset(ptr, 0xcc, PAGE_SIZE);
-
-    /* VGA mem */
-    if (!vmm_map((void*)VGA_PHYSICAL_BASE, (void*)VGA_PHYSICAL_BASE,
-                 VMM_USER | VMM_WRITABLE | VMM_SHARED))
-        panic("Failed to map page 0x%x", VGA_PHYSICAL_BASE);
-
-    uint32_t esp = USER_STACK + PAGE_SIZE;
-    ring3_jump((void*)RING3_TRAMPOLINE_BASE, (void*)(USER_STACK + PAGE_SIZE),
-               USERCODESEG | 0x3, USERDATASEG | 0x3);
-    panic("ring3_jump returned");
 }
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
@@ -359,16 +280,17 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     process_init();
     thread_init();
 
-    struct Process* snek_task = process_create("snek");
-    if (!thread_create(snek_task, "snek", user_entry, "snek"))
-        panic("Failed to create snek task");
-
     schedule();
     trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",
           (read_eflags() & EFLAGS_IF) != 0, inb(0x21), pic_get_irr(),
           pic_get_isr());
     enable_interrupts();
-    trace("Idle thread resumed: ticks=%llu", pit_get_ticks());
+
+    trace("Idle thread started: ticks=%llu", pit_get_ticks());
+
+    if (!thread_create(process_current(), "init", init_entry, NULL)) {
+        panic("Failed to create init thread");
+    }
 
     while (1) {
         if ((read_eflags() & EFLAGS_IF) == 0)

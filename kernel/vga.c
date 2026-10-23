@@ -4,6 +4,7 @@
 
 #define VGA_CRTC_INDEX 0x3D4
 #define VGA_CRTC_DATA  0x3D5
+#define BACKSPACE      0x08
 
 static volatile uint16_t* vga_buffer = (volatile uint16_t*)VGA_BASE;
 static struct VGAPoint cursor;
@@ -47,7 +48,16 @@ void vga_write(const char* text, int len, uint8_t fg, uint8_t bg)
     const uint16_t attr = (bg << 4) | fg;
     while ((len == -1 && *text) || len > 0) {
         char c = *text++;
-        if (c == '\n') {
+        if (c == BACKSPACE) {
+            if (cursor.x) {
+                cursor.x--;
+            } else {
+                cursor.x = VGA_WIDTH - 1;
+                if (cursor.y)
+                    cursor.y--;
+            }
+            vga_write_at(cursor.x, cursor.y, ' ', fg, bg);
+        } else if (c == '\n') {
             cursor.x = 0;
             cursor.y++;
         } else {

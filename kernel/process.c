@@ -1,13 +1,16 @@
 #include "process.h"
 #include "assert.h"
 #include "bitset.h"
+#include "event_queue.h"
 #include "kmalloc.h"
 #include "kthread.h"
+#include "ps2kbd.h"
 #include "string.h"
 #include "trace.h"
 
 struct Process* kernel_task;
 struct Process* current_proc;
+struct Process* active_process;
 static struct ProcessList processes = TAILQ_HEAD_INITIALIZER(processes);
 static struct ProcessList exited_processes =
     TAILQ_HEAD_INITIALIZER(exited_processes);
@@ -62,12 +65,25 @@ static struct Process* create_with_address_space(const char* name,
     proc->live_threads = 0;
     proc->exit_status = 255;
     proc->exit_requested = false;
+    proc->state = PROCESS_ALIVE;
+    proc->parent = current_proc;
+    if (proc->parent) { /* kernel_task should not have an input queue */
+        proc->input_queue = kmalloc(sizeof(*proc->input_queue));
+        if (!proc->input_queue) {
+            kfree(proc->name);
+            kfree(proc);
+            free_pid(pid);
+            return NULL;
+        }
+        KeyEventQueue_init(proc->input_queue);
+    }
+    proc->refcount = 1;
 
     bool iflag = enter_critical_section();
     TAILQ_INSERT_TAIL(&processes, proc, processes);
     leave_critical_section(iflag);
 
-    proc->state = PROCESS_ALIVE;
+    active_process = proc;
     return proc;
 }
 
@@ -112,8 +128,31 @@ struct Process* process_create(const char* name)
     return process;
 }
 
-void process_destroy(struct Process* proc)
+int process_refcount(struct Process* process)
 {
+    return process->refcount;
+}
+
+int process_incref(struct Process* process)
+{
+    bool iflag = enter_critical_section();
+    int result = ++process->refcount;
+    leave_critical_section(iflag);
+    return result;
+}
+
+int process_decref(struct Process* proc)
+{
+    bool iflag = enter_critical_section();
+    assert(proc->refcount > 0);
+    proc->refcount--;
+    if (proc->refcount) {
+        int result = proc->refcount;
+        leave_critical_section(iflag);
+        return result;
+    }
+    leave_critical_section(iflag);
+
     trace("Destroying process %s", proc->name);
 
     assert(proc != kernel_task);
@@ -122,15 +161,25 @@ void process_destroy(struct Process* proc)
     assert(proc->live_threads == 0);
     assert(STAILQ_EMPTY(&proc->threads));
 
-    bool iflag = enter_critical_section();
+    iflag = enter_critical_section();
     TAILQ_REMOVE(&processes, proc, processes);
+
+    struct Process* p;
+    TAILQ_FOREACH(p, &processes, processes)
+    {
+        if (p->parent == proc)
+            p->parent = proc->parent;
+    }
     leave_critical_section(iflag);
+
+    kfree(proc->input_queue);
 
     address_space_destroy(proc->as);
     kfree(proc->as);
     kfree(proc->name);
     free_pid(proc->pid);
     kfree(proc);
+    return 0;
 }
 
 void process_add_thread(struct Process* proc, struct Thread* thread)
@@ -157,7 +206,9 @@ void process_remove_thread(struct Process* proc, struct Thread* thread)
     proc->live_threads--;
 
     if (proc->live_threads == 0) {
+        process_deactivate(proc);
         proc->state = PROCESS_EXITED;
+        event_signal(&proc->termination_event);
         TAILQ_INSERT_TAIL(&exited_processes, proc, exited_processes);
     }
     leave_critical_section(iflag);
@@ -177,6 +228,8 @@ void process_exit(uint8_t status)
 {
     struct Process* proc = process_current();
     assert(proc != kernel_task);
+
+    process_deactivate(current_proc);
 
     proc->exit_status = status;
     proc->exit_requested = true;
@@ -207,9 +260,103 @@ void process_cleanup_exited(void)
     struct Process* tmp;
     TAILQ_FOREACH_SAFE(proc, &exited_processes, exited_processes, tmp)
     {
-        process_destroy(proc);
+        TAILQ_REMOVE(&exited_processes, proc, exited_processes);
+        process_decref(proc);
     }
-    TAILQ_INIT(&exited_processes);
+    leave_critical_section(iflag);
+}
+
+void process_push_input_event(const struct KeyEvent* event)
+{
+    bool iflag = enter_critical_section();
+    if (!active_process->input_queue) {
+        leave_critical_section(iflag);
+        return;
+    }
+    if (!KeyEventQueue_push(active_process->input_queue, event)) {
+        active_process->input_queue_overflow = true;
+        trace("Input queue overflow");
+    }
+    event_signal(&active_process->input_event);
+    leave_critical_section(iflag);
+}
+
+static bool get_input_event(struct KeyEvent* event, bool* overflow, bool block)
+{
+    bool iflag = enter_critical_section();
+    if (!current_proc->input_queue) {
+        leave_critical_section(iflag);
+        return false;
+    }
+
+    while (block && KeyEventQueue_empty(current_proc->input_queue) &&
+           !current_proc->input_queue_overflow &&
+           !current_proc->exit_requested) {
+        event_wait(&current_proc->input_event);
+    }
+
+    if (current_proc->exit_requested) {
+        leave_critical_section(iflag);
+        thread_exit();
+        __builtin_unreachable();
+    } else if (KeyEventQueue_empty(current_proc->input_queue) &&
+               current_proc->input_queue_overflow) {
+        *overflow = true;
+        current_proc->input_queue_overflow = false;
+        leave_critical_section(iflag);
+        return true;
+    }
+
+    *overflow = false;
+    bool result = KeyEventQueue_pop(current_proc->input_queue, event);
+    leave_critical_section(iflag);
+    return result;
+}
+
+bool process_get_input_event(struct KeyEvent* event, bool* overflow)
+{
+    return get_input_event(event, overflow, true);
+}
+
+bool process_peek_input_event(struct KeyEvent* event, bool* overflow)
+{
+    return get_input_event(event, overflow, false);
+}
+
+void process_deactivate(struct Process* process)
+{
+    bool iflag = enter_critical_section();
+    struct Process* ancestor = process->parent;
+    while (ancestor && ancestor->parent) {
+        if (ancestor->input_queue) {
+            active_process = ancestor;
+            leave_critical_section(iflag);
+            return;
+        }
+        ancestor = ancestor->parent;
+    }
+    active_process = kernel_task;
+    leave_critical_section(iflag);
+}
+
+void process_daemonize(struct Process* process)
+{
+    bool iflag = enter_critical_section();
+    kfree(process->input_queue);
+    process->input_queue = NULL;
+    process_deactivate(process);
+    leave_critical_section(iflag);
+}
+
+void process_get_info(char* buffer, size_t len)
+{
+    if (len < 2)
+        return;
+
+    bool iflag = enter_critical_section();
+    snprintf(buffer, len, "CP: %s AP: %s",
+             current_proc ? current_proc->name : "NULL",
+             active_process ? active_process->name : "NULL");
     leave_critical_section(iflag);
 }
 

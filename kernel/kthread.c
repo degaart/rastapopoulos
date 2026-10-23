@@ -340,8 +340,8 @@ void thread_get_info(char* buffer, size_t len)
         return;
 
     bool iflag = enter_critical_section();
-    snprintf(buffer, len, "%s:%s", current_thread->process->name,
-             current_thread->name);
+    snprintf(buffer, len, "CT: %s",
+             current_thread ? current_thread->name : "NULL");
     leave_critical_section(iflag);
 }
 

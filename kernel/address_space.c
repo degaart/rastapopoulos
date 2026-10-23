@@ -549,6 +549,71 @@ bool address_space_remap(struct AddressSpace* as, void* va, unsigned flags)
     return true;
 }
 
+static bool user_page_accessible(uintptr_t addr, bool for_write)
+{
+    uint32_t pde = recursive_pagedir()[PDE_INDEX(addr)];
+    unsigned pde_flags = PDE_PRESENT | PDE_USER;
+    unsigned pte_flags = PTE_PRESENT | PTE_USER;
+    if (for_write) {
+        pde_flags |= PDE_WRITABLE;
+        pte_flags |= PTE_WRITABLE;
+    }
+    if ((pde & pde_flags) != pde_flags)
+        return false;
+    if (pde & PDE_PAGE_SIZE)
+        return true;
+
+    uint32_t pte = recursive_pagetable(PDE_INDEX(addr))[PTE_INDEX(addr)];
+    return (pte & pte_flags) == pte_flags;
+}
+
+bool address_space_is_valid_userptr(const void* ptr, size_t len,
+                                    bool for_write)
+{
+    uintptr_t addr = (uintptr_t)ptr;
+    if (!addr || addr >= KERNEL_OFFSET || len > KERNEL_OFFSET - addr)
+        return false;
+    if (!len)
+        return true;
+
+    uintptr_t end = addr + len;
+    bool iflag = enter_critical_section();
+    for (uintptr_t page = addr & PTE_ADDRESS_MASK; page < end;
+         page += PAGE_SIZE) {
+        if (!user_page_accessible(page, for_write)) {
+            leave_critical_section(iflag);
+            return false;
+        }
+    }
+    leave_critical_section(iflag);
+    return true;
+}
+
+bool address_space_is_valid_userstr(const char* str)
+{
+    uintptr_t addr = (uintptr_t)str;
+    if (!addr || addr >= KERNEL_OFFSET)
+        return false;
+
+    bool iflag = enter_critical_section();
+    while (addr < KERNEL_OFFSET) {
+        if (!user_page_accessible(addr, false)) {
+            leave_critical_section(iflag);
+            return false;
+        }
+        uintptr_t end = (addr & PTE_ADDRESS_MASK) + PAGE_SIZE;
+        if (memchr((const void*)addr, '\0', end - addr)) {
+            leave_critical_section(iflag);
+            return true;
+        }
+        addr = end;
+    }
+    leave_critical_section(iflag);
+    return false;
+}
+
+/* TODO: This can be optimized by using the recursive pagedir if as is the
+ * current address space */
 bool address_space_query(struct AddressSpace* as, const void* va, void** frame,
                          unsigned* flags)
 {

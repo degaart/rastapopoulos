@@ -1,5 +1,7 @@
 #include "syscall.h"
 #include "bitset.h"
+#include "event_queue.h"
+#include "exec.h"
 #include "idt.h"
 #include "kernel.h"
 #include "kmalloc.h"
@@ -9,8 +11,8 @@
 #include "ps2kbd.h"
 #include "scancode.h"
 #include "trace.h"
-
-static struct Bitset kbd_bitset;
+#include "vga.h"
+#include "vmm.h"
 
 static int32_t syscall_getticks(uint32_t* edx)
 {
@@ -25,14 +27,6 @@ static int32_t syscall_sleep(uint32_t ticks)
     return -1;
 }
 
-static int32_t syscall_keydown(uint32_t scancode)
-{
-    if (scancode > 0xffff)
-        return -1;
-    bool ret = bitset_test(&kbd_bitset, scancode);
-    return ret ? 1 : 0;
-}
-
 static void syscall_exit(uint8_t status)
 {
     process_exit(status);
@@ -41,6 +35,55 @@ static void syscall_exit(uint8_t status)
 static void syscall_exit_thread(void)
 {
     thread_exit();
+}
+
+static int32_t syscall_get_kbd_event(struct KeyEvent* evt, int* overflow,
+                                     int block)
+{
+    if (!vmm_is_valid_userptr(evt, sizeof(*evt), true) ||
+        !vmm_is_valid_userptr(overflow, sizeof(*overflow), true)) {
+        return -1;
+    }
+
+    bool result;
+    bool foverflow;
+    if (block)
+        result = process_get_input_event(evt, &foverflow);
+    else
+        result = process_peek_input_event(evt, &foverflow);
+    *overflow = foverflow;
+    return result ? 0 : -1;
+}
+
+static int32_t syscall_write(const char* s, size_t len)
+{
+    if (len > INT32_MAX)
+        return -1;
+    if (!vmm_is_valid_userptr(s, len, false))
+        return -1;
+    vga_write(s, len, VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK);
+    return len;
+}
+
+static int32_t syscall_exec(const char* filename, const char* args)
+{
+    if (!filename)
+        return -1;
+    if (!vmm_is_valid_userstr(filename))
+        return -1;
+    if (args && !vmm_is_valid_userstr(args))
+        return -1;
+
+    bool ret = exec(filename, args);
+    if (!ret)
+        return -1;
+    return 0;
+}
+
+static int32_t syscall_shutdown(void)
+{
+    outb(0xf4, 1);
+    return 0;
 }
 
 /*
@@ -70,15 +113,26 @@ void syscall_handler(int, struct isr_regs* regs)
     case SYSCALL_SLEEP:
         regs->eax = syscall_sleep(regs->ebx);
         break;
-    case SYSCALL_KEYDOWN:
-        regs->eax = syscall_keydown(regs->ebx);
-        break;
     case SYSCALL_EXIT:
         syscall_exit(regs->ebx & 0xff);
         panic("Unreachable code");
     case SYSCALL_EXIT_THREAD:
         syscall_exit_thread();
         panic("Unreachable code");
+    case SYSCALL_GET_KBD_EVENT:
+        regs->eax = syscall_get_kbd_event((struct KeyEvent*)regs->ebx,
+                                          (int*)regs->ecx, regs->edx);
+        break;
+    case SYSCALL_WRITE:
+        regs->eax = syscall_write((const char*)regs->ebx, regs->ecx);
+        break;
+    case SYSCALL_EXEC:
+        regs->eax =
+            syscall_exec((const char*)regs->ebx, (const char*)regs->ecx);
+        break;
+    case SYSCALL_SHUTDOWN:
+        regs->eax = syscall_shutdown();
+        break;
     default:
         regs->eax = (uint32_t)-1;
         break;
@@ -88,31 +142,14 @@ void syscall_handler(int, struct isr_regs* regs)
         thread_exit();
 }
 
-static void syscall_kbd_observer(void*)
-{
-    struct KeyEvent evt;
-    if (!ps2kbd_get_event(&evt))
-        return;
-
-    if (evt.type == KEY_PRESSED) {
-        bitset_set(&kbd_bitset, evt.scancode);
-        // trace("KEY_PRESSED 0x%x", evt.scancode);
-    } else {
-        bitset_unset(&kbd_bitset, evt.scancode);
-        // trace("KEY_RELEASED 0x%x", evt.scancode);
-    }
-}
-
 void syscall_init(void)
 {
     idt_set_handler(0x80, syscall_handler, 3);
-    ps2kbd_add_observer(syscall_kbd_observer, NULL);
 
     size_t bitset_count = 65536;
     size_t bitset_len = bitset_storage_size(bitset_count);
     uint32_t* bitset_storage = kmalloc(bitset_len);
     if (!bitset_storage)
         panic("Out of memory");
-    bitset_init(&kbd_bitset, bitset_storage, bitset_count);
 }
 

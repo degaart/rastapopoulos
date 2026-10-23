@@ -1,41 +1,28 @@
 #include "ps2kbd.h"
+#include "event_queue.h"
 #include "idt.h"
 #include "kernel.h"
 #include "kmalloc.h"
 #include "pic.h"
+#include "process.h"
 #include "ringbuf.h"
 #include "trace.h"
-#include <freebsd/queue.h>
 #include <string.h>
 
-#define PS2_DATA       0x60
-#define PS2_COMMAND    0x64
-#define OUTPUT_FULL    0x01
-#define INPUT_FULL     0x02
-#define AUX_DATA       0x20
-#define DATA_ERROR     0xC0
-#define ACK            0xFA
-#define RESEND         0xFE
-#define POLL_LIMIT     1000000
-#define EVENT_CAPACITY 64
+#define PS2_DATA    0x60
+#define PS2_COMMAND 0x64
+#define OUTPUT_FULL 0x01
+#define INPUT_FULL  0x02
+#define AUX_DATA    0x20
+#define DATA_ERROR  0xC0
+#define ACK         0xFA
+#define RESEND      0xFE
+#define POLL_LIMIT  1000000
 
-RING_BUFFER_DEFINE(KeyEventQueue, struct KeyEvent, EVENT_CAPACITY)
-
-static struct KeyEventQueue events;
-static bool overflow;
 static bool held[512];
 static bool extended;
 static unsigned pause_index;
 static uint8_t const pause_sequence[] = {0xE1, 0x1D, 0x45, 0xE1, 0x9D, 0xC5};
-
-struct Observer
-{
-    ps2kbd_observer_t fn;
-    void* arg;
-    STAILQ_ENTRY(Observer) entry;
-};
-static STAILQ_HEAD(ObserverList,
-                   Observer) observers = STAILQ_HEAD_INITIALIZER(observers);
 
 static bool wait_input(void)
 {
@@ -98,19 +85,7 @@ static bool keyboard_command(uint8_t command)
 static void enqueue(uint16_t scancode, enum KeyEventType type)
 {
     struct KeyEvent event = {.scancode = scancode, .type = type};
-    if (!KeyEventQueue_push(&events, &event))
-        overflow = true;
-}
-
-static void notify_observers(void)
-{
-    bool iflag = enter_critical_section();
-    struct Observer* observer;
-    STAILQ_FOREACH(observer, &observers, entry)
-    {
-        observer->fn(observer->arg);
-    }
-    leave_critical_section(iflag);
+    process_push_input_event(&event);
 }
 
 static void decode_scancode(uint8_t byte)
@@ -119,15 +94,8 @@ static void decode_scancode(uint8_t byte)
         if (byte == pause_sequence[pause_index]) {
             if (++pause_index == sizeof(pause_sequence)) {
                 pause_index = 0;
-
-                /* Pause has no break code. Keep its pair together */
-                if (KeyEventQueue_count(&events) > EVENT_CAPACITY - 2) {
-                    overflow = true;
-                } else {
-                    enqueue(0xE145, KEY_PRESSED);
-                    enqueue(0xE145, KEY_RELEASED);
-                }
-                notify_observers();
+                enqueue(0xE145, KEY_PRESSED);
+                enqueue(0xE145, KEY_RELEASED);
             }
             return;
         }
@@ -162,7 +130,6 @@ static void decode_scancode(uint8_t byte)
     held[index] = pressed;
     uint16_t scancode = code | (is_extended ? 0xE000 : 0);
     enqueue(scancode, pressed ? KEY_PRESSED : KEY_RELEASED);
-    notify_observers();
 }
 
 static void ps2kbd_isr_handler(int num, struct isr_regs* regs)
@@ -177,7 +144,6 @@ static void ps2kbd_isr_handler(int num, struct isr_regs* regs)
         if (status & DATA_ERROR) {
             extended = false;
             pause_index = 0;
-            overflow = true;
         } else {
             decode_scancode(byte);
         }
@@ -189,9 +155,7 @@ void ps2kbd_init(void)
 {
     bool flag = enter_critical_section();
     pic_mask_irq(IRQ_KEYBOARD);
-    KeyEventQueue_init(&events);
     memset(held, 0, sizeof(held));
-    overflow = false;
     extended = false;
     pause_index = 0;
 
@@ -242,46 +206,5 @@ void ps2kbd_init(void)
 failed:
     pic_set_irq_handler(IRQ_KEYBOARD, NULL);
     panic("PS/2 keyboard initialization failed: controller or keyboard setup");
-}
-
-bool ps2kbd_get_event(struct KeyEvent* event)
-{
-    bool flag = enter_critical_section();
-    bool result = KeyEventQueue_pop(&events, event);
-    leave_critical_section(flag);
-    return result;
-}
-
-bool ps2kbd_take_overflow(void)
-{
-    bool flag = enter_critical_section();
-    bool result = overflow;
-    overflow = false;
-    leave_critical_section(flag);
-    return result;
-}
-
-void ps2kbd_add_observer(ps2kbd_observer_t fn, void* arg)
-{
-    bool iflag = enter_critical_section();
-    struct Observer* observer = kmalloc(sizeof(struct Observer));
-    observer->fn = fn;
-    observer->arg = arg;
-    STAILQ_INSERT_TAIL(&observers, observer, entry);
-    leave_critical_section(iflag);
-}
-
-void ps2kbd_remove_observer(ps2kbd_observer_t fn)
-{
-    bool iflag = enter_critical_section();
-    struct Observer* observer;
-    struct Observer* tmp;
-    STAILQ_FOREACH_SAFE(observer, &observers, entry, tmp)
-    {
-        if (observer->fn == fn) {
-            STAILQ_REMOVE(&observers, observer, Observer, entry);
-        }
-    }
-    leave_critical_section(iflag);
 }
 

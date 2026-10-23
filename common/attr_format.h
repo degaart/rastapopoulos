@@ -1,9 +1,9 @@
 #pragma once
 
-#ifdef RASTA_KERNEL
+#ifdef RASTA_BOOTLOADER
+#    define ATTR_FORMAT(string_index, first_to_check)
+#else
 #    define ATTR_FORMAT(string_index, first_to_check)                         \
         __attribute__((format(printf, string_index, first_to_check)))
-#else
-#    define ATTR_FORMAT(string_index, first_to_check)
 #endif
 
