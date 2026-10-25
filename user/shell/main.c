@@ -14,13 +14,57 @@ struct LayoutEntry
     char ch;
 };
 
-static struct LayoutEntry layout[] = {
-    {0x10, 'a'}, {0x30, 'b'}, {0x2e, 'c'}, {0x20, 'd'}, {0x12, 'e'},
-    {0x21, 'f'}, {0x22, 'g'}, {0x23, 'h'}, {0x17, 'i'}, {0x24, 'j'},
-    {0x25, 'k'}, {0x26, 'l'}, {0x27, 'm'}, {0x31, 'n'}, {0x18, 'o'},
-    {0x19, 'p'}, {0x1e, 'q'}, {0x13, 'r'}, {0x1f, 's'}, {0x14, 't'},
-    {0x16, 'u'}, {0x2f, 'v'}, {0x2c, 'w'}, {0x2d, 'x'}, {0x15, 'y'},
-    {0x11, 'z'}, {0x39, ' '}, {0x09, '_'},
+/*
+ * Table of lowercase keys, in groups of two: scancode and associated char
+ * In Code page 437, because that's the one the VGA uses
+ */
+static uint16_t layout[] = {
+    0x10, 'a',    0x30, 'b',    0x2e, 'c', 0x20, 'd',    0x12,   'e',
+    0x21, 'f',    0x22, 'g',    0x23, 'h', 0x17, 'i',    0x24,   'j',
+    0x25, 'k',    0x26, 'l',    0x27, 'm', 0x31, 'n',    0x18,   'o',
+    0x19, 'p',    0x1e, 'q',    0x13, 'r', 0x1f, 's',    0x14,   't',
+    0x16, 'u',    0x2f, 'v',    0x2c, 'w', 0x2d, 'x',    0x15,   'y',
+    0x11, 'z',    0x32, ',',    0x33, ';', 0x34, ':',    0x35,   '!',
+    0x28, '\xa3', 0x2b, '*',    0x1a, '^', 0x1b, '$',    0x29,   '\xfd',
+    0x02, '&',    0x03, '\x82', 0x04, '"', 0x05, '\'',   0x06,   '(',
+    0x07, '-',    0x08, '\x8a', 0x09, '_', 0x0a, '\x87', 0x0b,   '\x85',
+    0x0c, ')',    0x0d, '=',    0x56, '<', 0x52, '0',    0x4f,   '1',
+    0x50, '2',    0x51, '3',    0x4b, '4', 0x4c, '5',    0x4d,   '6',
+    0x47, '7',    0x48, '8',    0x49, '9', 0x53, '.',    0xe035, '/',
+    0x37, '*',    0x4a, '-',    0x4e, '+',
+};
+
+/* Keys when shift is held */
+static uint16_t layout_shift[] = {
+    0x10, 'A',    0x30, 'B',    0x2e,   'C',  0x20, 'D',  0x12,   'E',  0x21,
+    'F',  0x22,   'G',  0x23,   'H',    0x17, 'I',  0x24, 'J',    0x25, 'K',
+    0x26, 'L',    0x27, 'M',    0x31,   'N',  0x18, 'O',  0x19,   'P',  0x1e,
+    'Q',  0x13,   'R',  0x1f,   'S',    0x14, 'T',  0x16, 'U',    0x2f, 'V',
+    0x2c, 'W',    0x2d, 'X',    0x15,   'Y',  0x11, 'Z',  0x32,   '?',  0x33,
+    '.',  0x34,   '/',  0x35,   '\x15', 0x28, '%',  0x2b, '\xe6', 0x1a, '\xb0',
+    0x1b, '\x9c', 0x29, '\xb1', 0x02,   '1',  0x03, '2',  0x04,   '3',  0x05,
+    '4',  0x06,   '5',  0x07,   '6',    0x08, '7',  0x09, '8',    0x0a, '9',
+    0x0b, '0',    0x0c, '\xf8', 0x0d,   '+',  0x56, '>',  0x52,   '0',  0x4f,
+    '1',  0x50,   '2',  0x51,   '3',    0x4b, '4',  0x4c, '5',    0x4d, '6',
+    0x47, '7',    0x48, '8',    0x49,   '9',  0x53, '.',  0xe035, '/',  0x37,
+    '*',  0x4a,   '-',  0x4e,   '+',
+};
+
+/* Keys when AltGr is held    */
+static uint16_t layout_altgr[] = {
+    0x10, '\xb3', 0x30, '\xb4', 0x2e, '\xb5', 0x20, '\xb6', 0x12,   '\xb7',
+    0x21, '\xb8', 0x22, '\xb9', 0x23, '\xba', 0x17, '\xbb', 0x24,   '\xbc',
+    0x25, '\xbd', 0x26, '\xbe', 0x27, '\xbf', 0x31, '\xc0', 0x18,   '\xc1',
+    0x19, '\xc2', 0x1e, '\xc3', 0x13, '\xc4', 0x1f, '\xc5', 0x14,   '\xc6',
+    0x16, '\xc7', 0x2f, '\xc8', 0x2c, '\xc9', 0x2d, '\xca', 0x15,   '\xcb',
+    0x11, '\xcc', 0x32, '\xcd', 0x33, '\xce', 0x34, '\xcf', 0x35,   '\xd0',
+    0x28, '\xd1', 0x2b, '\xd2', 0x1a, '\xd3', 0x1b, '\xd4', 0x29,   '\xd5',
+    0x02, '\xd6', 0x03, '~',    0x04, '#',    0x05, '{',    0x06,   '[',
+    0x07, '|',    0x08, '`',    0x09, '\\',   0x0a, '^',    0x0b,   '@',
+    0x0c, ']',    0x0d, '}',    0x56, '\xd7', 0x52, '0',    0x4f,   '1',
+    0x50, '2',    0x51, '3',    0x4b, '4',    0x4c, '5',    0x4d,   '6',
+    0x47, '7',    0x48, '8',    0x49, '9',    0x53, '.',    0xe035, '/',
+    0x37, '*',    0x4a, '-',    0x4e, '+',
 };
 
 size_t parse_args(char* buf, char** argv, size_t len)
@@ -104,11 +148,22 @@ size_t parse_args(char* buf, char** argv, size_t len)
     return argc;
 }
 
-static int lookup_scancode(uint16_t scancode)
+static int lookup_scancode(uint16_t scancode, bool shift, bool altgr)
 {
-    for (size_t i = 0; i < sizeof(layout) / sizeof(layout[0]); i++) {
-        if (layout[i].scancode == scancode) {
-            return layout[i].ch;
+    const uint16_t* table = layout;
+    size_t table_len = sizeof(layout) / sizeof(layout[0]);
+
+    if (altgr) {
+        table = layout_altgr;
+        table_len = sizeof(layout_altgr) / sizeof(layout_altgr[0]);
+    } else if (shift) {
+        table = layout_shift;
+        table_len = sizeof(layout_shift) / sizeof(layout_shift[0]);
+    }
+
+    for (size_t i = 0; i < table_len; i += 2) {
+        if (table[i] == scancode) {
+            return table[i + 1];
         }
     }
     return 0;
@@ -224,9 +279,22 @@ static const size_t commands_size;
 
 static void help(char* arguments)
 {
-    printf("Valid commands:\n");
+    printf("Internal commands:\n");
     for (int i = 0; i < commands_size; i++) {
-        printf("%s\n", commands[i].name);
+        printf("    %s\n", commands[i].name);
+    }
+
+    char buffer[256];
+    int ret = sys_list(buffer, sizeof(buffer));
+    if (ret < 0)
+        return;
+
+    printf("External commands:\n");
+    for (const char* str = buffer; *str; str += strlen(str) + 1) {
+        char* period = strchr(str, '.');
+        if (!period)
+            continue;
+        printf("    %.*s\n", (int)(period - str), str);
     }
 }
 
@@ -286,11 +354,20 @@ static void shutdown(char* arguments)
 static void exec(char* command, char* arguments)
 {
     int ret = sys_exec(command, arguments);
-    if (ret == -1) {
-        printf("Failed to execute %s\n", command);
-    } else {
+    if (ret >= 0) {
         printf("%s: %d\n", command, ret);
+        return;
     }
+
+    char tmp[81];
+    strlcpy(tmp, command, sizeof(tmp));
+    strlcat(tmp, ".bin", sizeof(tmp));
+    ret = sys_exec(tmp, arguments);
+    if (ret >= 0) {
+        printf("%s: %d\n", tmp, ret);
+        return;
+    }
+    printf("Failed to execute %s\n", tmp);
 }
 
 #define X(C) {.name = #C, .fn = C}
@@ -302,16 +379,6 @@ static const size_t commands_size = sizeof(commands) / sizeof(commands[0]);
 
 static void run_command(char* s)
 {
-    printf("Command: \"");
-    for (int i = 0; s[i]; i++) {
-        if (s[i] >= ' ') {
-            printf("%c", s[i]);
-        } else {
-            printf("\\x%02x", s[i]);
-        }
-    }
-    printf("\"\n");
-
     char* command;
     char* arguments;
     split_command_line(s, &command, &arguments);
@@ -336,6 +403,7 @@ int main(void)
     char input_buf[128];
     int input_idx = 0;
     int shift = 0;
+    int alt = 0;
 
     while (true) {
         sys_write("> ", 2);
@@ -357,20 +425,17 @@ int main(void)
                 if (evt.scancode == SCANCODE_LSHIFT ||
                     evt.scancode == SCANCODE_RSHIFT) {
                     shift = 1;
-                }
-            }
-            if (evt.type == KEY_RELEASED) {
-                int ch = 0;
-                if (evt.scancode == SCANCODE_LSHIFT ||
-                    evt.scancode == SCANCODE_RSHIFT) {
-                    shift = 0;
+                } else if (evt.scancode == SCANCODE_LALT ||
+                           evt.scancode == SCANCODE_RALT) {
+                    alt = 1;
                 } else if (evt.scancode == SCANCODE_BACKSPACE) {
                     if (!input_idx)
                         continue;
 
                     sys_write("\x08", 1);
                     input_idx--;
-                } else if (evt.scancode == SCANCODE_ENTER) {
+                } else if (evt.scancode == SCANCODE_ENTER ||
+                           evt.scancode == SCANCODE_KP_ENTER) {
                     sys_write("\n", 1);
                     input_buf[input_idx++] = '\0';
                     run_command(input_buf);
@@ -379,25 +444,22 @@ int main(void)
                     if (input_idx >= 80 - 3)
                         continue;
 
-                    if (shift && evt.scancode >= SCANCODE_1 &&
-                        evt.scancode <= SCANCODE_0) {
-                        if (evt.scancode == SCANCODE_0)
-                            ch = '0';
-                        else
-                            ch = evt.scancode - SCANCODE_1 + '1';
-                        printf("%c", ch);
-                        input_buf[input_idx++] = (char)ch;
-                        continue;
-                    }
-
-                    ch = lookup_scancode(evt.scancode);
+                    int ch = lookup_scancode(evt.scancode, shift, alt);
                     if (!ch)
                         continue;
-                    if (ch >= 'a' && ch <= 'z' && shift) {
-                        ch = ch - 'a' + 'A';
-                    }
+
                     printf("%c", ch);
                     input_buf[input_idx++] = (char)ch;
+                }
+            }
+            if (evt.type == KEY_RELEASED) {
+                int ch = 0;
+                if (evt.scancode == SCANCODE_LSHIFT ||
+                    evt.scancode == SCANCODE_RSHIFT) {
+                    shift = 0;
+                } else if (evt.scancode == SCANCODE_LALT ||
+                           evt.scancode == SCANCODE_RALT) {
+                    alt = 0;
                 }
             }
         }

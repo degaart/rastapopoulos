@@ -17,4 +17,5 @@ int sys_get_kbd_event(struct KeyEvent* evt, int* overflow, int block);
 int sys_write(const char* s, size_t len);
 int sys_exec(const char* command, const char* arguments);
 int sys_shutdown(void);
+int sys_list(void* buffer, size_t len);
 

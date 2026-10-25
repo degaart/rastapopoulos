@@ -181,7 +181,7 @@ static void init_entry(void* unused)
 {
     trace("Init thread started");
     while (true) {
-        int ret = exec("shell", "");
+        int ret = exec("shell.bin", "");
         if (ret == -1)
             panic("Failed to exec shell");
         else if (ret != 0) {
@@ -190,6 +190,15 @@ static void init_entry(void* unused)
         }
     }
 }
+
+#ifdef UNIT_TESTS
+extern void test_tar();
+static void unit_tests(void)
+{
+    test_tar();
+    debugexit(1);
+}
+#endif
 
 void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 {
@@ -284,6 +293,10 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     process_init();
     thread_init();
+
+#ifdef UNIT_TESTS
+    unit_tests();
+#endif
 
     schedule();
     trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",

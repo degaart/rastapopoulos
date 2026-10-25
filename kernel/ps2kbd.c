@@ -86,6 +86,9 @@ static void enqueue(uint16_t scancode, enum KeyEventType type)
 {
     struct KeyEvent event = {.scancode = scancode, .type = type};
     process_push_input_event(&event);
+
+    // if (type == KEY_RELEASED)
+    //     trace("KEY_RELEASED: 0x%x", scancode);
 }
 
 static void decode_scancode(uint8_t byte)

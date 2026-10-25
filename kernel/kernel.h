@@ -152,6 +152,13 @@ static inline void hlt(void)
     asm volatile("hlt" ::: "memory");
 }
 
+__attribute__((noreturn)) static inline void debugexit(uint8_t status)
+{
+    outb(0xf4, status);
+    while (1)
+        ;
+}
+
 #define panic(...) __panic(__FILE__, __LINE__, __VA_ARGS__)
 
 __attribute__((format(printf, 3, 4))) void __panic(const char* file, int line,

@@ -4,6 +4,8 @@
 #include "pmm.h"
 #include "process.h"
 #include "psp.h"
+#include "ramdisk.h"
+#include "tar.h"
 #include "trace.h"
 #include "vga.h"
 #include "vmm.h"
@@ -14,12 +16,10 @@
 
 struct Usercode
 {
-    const char* name;
     size_t len;
-    void* addr;
-} __attribute__((packed));
+    void* const addr;
+};
 
-extern struct Usercode usercode_data[];
 extern uint8_t ring3_trampoline[];
 extern uint8_t ring3_trampoline_end[];
 
@@ -182,22 +182,20 @@ int exec(const char* filename, const char* args)
     if (!args)
         args = "";
 
-    const struct Usercode* usercode = NULL;
-    for (int i = 0; usercode_data[i].name; i++) {
-        if (!strcmp(usercode_data[i].name, filename)) {
-            usercode = &usercode_data[i];
-            break;
-        }
+    struct Tar ramdisk;
+    if (!tar_open(&ramdisk, ramdisk_start, ramdisk_end - ramdisk_start)) {
+        return -1;
     }
 
-    if (!usercode)
+    struct Usercode usercode;
+    if (!tar_open_file(&ramdisk, filename, &usercode.addr, &usercode.len))
         return -1;
 
     struct Process* process = process_create(filename);
     if (!process)
         return -1;
 
-    struct Context* ctx = context_create(filename, args, usercode);
+    struct Context* ctx = context_create(filename, args, &usercode);
     if (!ctx)
         goto cleanup;
 

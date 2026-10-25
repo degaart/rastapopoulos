@@ -8,13 +8,13 @@ SECTIONS
     .text BLOCK(4) : ALIGN(4)
     {
         *(.start.text .start.text.*)
-        *(.text)
+        *(.text .text.*)
     }
 
     .data BLOCK(4) : ALIGN(4)
     {
-        *(.rodata)
-        *(.data)
+        *(.rodata .rodata.*)
+        *(.data .data.*)
     }
 
     .init_array : ALIGN(4)
@@ -29,8 +29,7 @@ SECTIONS
     .bss BLOCK(4) : ALIGN(4)
     {
         *(COMMON)
-        *(.bss)
-        *(.bss.*)
+        *(.bss .bss.*)
     }
     __bss_end = .;
 }

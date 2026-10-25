@@ -46,3 +46,8 @@ int sys_shutdown(void)
     return syscall(SYSCALL_SHUTDOWN, 0, 0, 0, 0, 0);
 }
 
+int sys_list(void* buffer, size_t len)
+{
+    return syscall(SYSCALL_LIST, (uintptr_t)buffer, len, 0, 0, 0);
+}
+

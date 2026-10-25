@@ -9,10 +9,13 @@
 #include "pit.h"
 #include "process.h"
 #include "ps2kbd.h"
+#include "ramdisk.h"
 #include "scancode.h"
+#include "tar.h"
 #include "trace.h"
 #include "vga.h"
 #include "vmm.h"
+#include <string.h>
 
 static int32_t syscall_getticks(uint32_t* edx)
 {
@@ -79,8 +82,52 @@ static int32_t syscall_exec(const char* filename, const char* args)
 
 static int32_t syscall_shutdown(void)
 {
+    debugexit(1);
     outb(0xf4, 1);
     return 0;
+}
+
+struct ListContext
+{
+    void* buffer;
+    size_t capacity;
+    size_t len;
+};
+
+static void list_callback(const struct TarEntry* entry, void* param)
+{
+    struct ListContext* ctx = param;
+    if (entry->is_dir)
+        return;
+
+    size_t name_len = strlen(entry->name);
+    if (name_len == 0)
+        return;
+    if (ctx->capacity - ctx->len < name_len + 2)
+        return;
+    memcpy(ctx->buffer + ctx->len, entry->name, name_len + 1);
+    ctx->len += name_len + 1;
+}
+
+static int32_t syscall_list(char* buffer, size_t len)
+{
+    if (!vmm_is_valid_userptr(buffer, len, true))
+        return -1;
+
+    struct Tar ramdisk;
+    if (!tar_open(&ramdisk, ramdisk_start, ramdisk_end - ramdisk_start))
+        return -1;
+
+    struct ListContext ctx = {
+        .buffer = buffer,
+        .capacity = len,
+        .len = 0,
+    };
+    if (!tar_list(&ramdisk, list_callback, &ctx))
+        return -1;
+
+    buffer[ctx.len] = '\0';
+    return ctx.len;
 }
 
 /*
@@ -129,6 +176,9 @@ void syscall_handler(int, struct isr_regs* regs)
         break;
     case SYSCALL_SHUTDOWN:
         regs->eax = syscall_shutdown();
+        break;
+    case SYSCALL_LIST:
+        regs->eax = syscall_list((char*)regs->ebx, (size_t)regs->ecx);
         break;
     default:
         regs->eax = (uint32_t)-1;

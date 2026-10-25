@@ -359,5 +359,5 @@ void test_address_spaces(void)
     activate(original);
     leave_critical_section(interrupts);
     trace("All %zu address-space checks succeeded", checks);
-    outb(0xf4, 1);
+    debugexit(1);
 }

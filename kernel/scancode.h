@@ -33,7 +33,25 @@
 #define SCANCODE_EQUALS    0xd
 #define SCANCODE_BACKSPACE 0xe
 #define SCANCODE_TAB       0xf
-#define SCANCODE_SPACE     0x38
+#define SCANCODE_SPACE     0x39
 #define SCANCODE_LSHIFT    0x2a
 #define SCANCODE_RSHIFT    0x36
+#define SCANCODE_LALT      0x38
+#define SCANCODE_RALT      0xe038
 
+#define SCANCODE_KP_0      0x52
+#define SCANCODE_KP_1      0x4f
+#define SCANCODE_KP_2      0x50
+#define SCANCODE_KP_3      0x51
+#define SCANCODE_KP_4      0x4b
+#define SCANCODE_KP_5      0x4c
+#define SCANCODE_KP_6      0x4d
+#define SCANCODE_KP_7      0x47
+#define SCANCODE_KP_8      0x48
+#define SCANCODE_KP_9      0x49
+#define SCANCODE_KP_PERIOD 0x53
+#define SCANCODE_KP_SLASH  0xe035
+#define SCANCODE_KP_STAR   0x37
+#define SCANCODE_KP_MINUS  0x4a
+#define SCANCODE_KP_PLUS   0x4e
+#define SCANCODE_KP_ENTER  0xe01c

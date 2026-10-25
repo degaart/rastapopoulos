@@ -28,7 +28,8 @@ ASM_HDRS := $(wildcard *.inc) \
 ASM_SRCS := $(wildcard *.asm) \
 			$(wildcard ../common/*.asm)
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
-		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
+		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o))) \
+		build/test_tar.o
 
 all: $(IMAGE) $(BINARY)
 
@@ -41,17 +42,12 @@ $(BINARY): $(OBJS) | build
 build/%.o: %.asm $(ASM_HDRS) | build
 	$(AS) -felf32 -o $@ $<
 
-build/usercode.o: usercode.asm \
-	              $(ASM_HDRS) \
-	              ../user/snek/build/snek.bin \
-	              ../user/shell/build/shell.bin \
-	              | build
-	$(AS) -felf32 -o $@ $<
-
-build/test_address_spaces.o: test/test_address_spaces.c | build
-	$(CC) -c -o $@ $< $(CFLAGS)
+build/ramdisk.o: ../user/build/user.tar
 
 build/%.o: %.c $(HDRS) $(COMMON_HDRS) | build
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+build/%.o: test/%.c $(HDRS) $(COMMON_HDRS) | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 build/%.o: ../common/%.c $(HDRS) $(COMMON_HDRS) | build
