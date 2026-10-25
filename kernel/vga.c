@@ -5,6 +5,7 @@
 #include "trace.h"
 #include "vmm.h"
 #include <stddef.h>
+#include <string.h>
 
 #define ATTR_IDX_DATA 0x3C0
 #define MISC_OUTPUT   0x3C2
@@ -66,29 +67,6 @@ struct Bitmap
 static uint8_t backbuffer[4 * MODE_X_PLANE_SIZE] ALIGNED(4);
 static struct Bitmap screen = {VGA_MODE_X_WIDTH, VGA_MODE_X_HEIGHT,
                                MODE_X_STRIDE, MODE_X_PLANE_SIZE, backbuffer};
-
-static void fill_bytes(void* dst, size_t count, uint8_t color)
-{
-    size_t words = count >> 2;
-    uint32_t value = color * 0x01010101u;
-    asm volatile("rep stos{l|d}"
-                 : "+D"(dst), "+c"(words)
-                 : "a"(value)
-                 : "memory");
-    count &= 3;
-    asm volatile("rep stosb" : "+D"(dst), "+c"(count) : "a"(color) : "memory");
-}
-
-static void copy_bytes(void* dst, const void* src, size_t count)
-{
-    size_t words = count >> 2;
-    asm volatile("rep movs{l|d}"
-                 : "+D"(dst), "+S"(src), "+c"(words)
-                 :
-                 : "memory");
-    count &= 3;
-    asm volatile("rep movsb" : "+D"(dst), "+S"(src), "+c"(count) : : "memory");
-}
 
 static uint8_t* bitmap_pixel(struct Bitmap* bitmap, int x, int y)
 {
@@ -224,14 +202,14 @@ void vga_swap(void)
 {
     for (unsigned plane = 0; plane < 4; ++plane) {
         vga_write_register(SEQ_IDX, SEQ_MAP_MASK, 1u << plane);
-        copy_bytes((void*)VGA_START, backbuffer + plane * MODE_X_PLANE_SIZE,
-                   MODE_X_PLANE_SIZE);
+        memcpy((void*)VGA_START, backbuffer + plane * MODE_X_PLANE_SIZE,
+               MODE_X_PLANE_SIZE);
     }
 }
 
 void vga_clear(uint8_t color)
 {
-    fill_bytes(backbuffer, sizeof(backbuffer), color);
+    memset(backbuffer, color, sizeof(backbuffer));
 }
 
 void vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
@@ -256,10 +234,10 @@ void vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
         size_t count = ((x2 - first) >> 2) + 1;
         uint8_t* dst = bitmap_pixel(&screen, first, y1);
         if (count == MODE_X_STRIDE) {
-            fill_bytes(dst, count * (y2 - y1 + 1), color);
+            memset(dst, color, count * (y2 - y1 + 1));
         } else {
             for (int y = y1; y <= y2; ++y, dst += MODE_X_STRIDE)
-                fill_bytes(dst, count, color);
+                memset(dst, color, count);
         }
     }
 }
@@ -471,15 +449,14 @@ void vga_blit(struct Bitmap* src, int x1, int y1, struct Bitmap* dst, int x2,
         const uint8_t* in = bitmap_pixel(src, x1 + plane, y1 + row);
         uint8_t* out = bitmap_pixel(dst, x2 + plane, y2 + row);
         if (!overlap && count == src->stride && count == dst->stride) {
-            copy_bytes(out, in, count * height);
+            memcpy(out, in, count * height);
             continue;
         }
         for (int n = 0; n < height; ++n) {
-            if (overlap && out > in && (size_t)(out - in) < count) {
-                for (size_t i = count; i; --i)
-                    out[i - 1] = in[i - 1];
+            if (overlap && y1 == y2) {
+                memmove(out, in, count);
             } else {
-                copy_bytes(out, in, count);
+                memcpy(out, in, count);
             }
             if (n + 1 < height) {
                 in += step * (ptrdiff_t)src->stride;

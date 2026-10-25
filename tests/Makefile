@@ -18,7 +18,7 @@ HDRS := $(wildcard *.h) \
 		$(wildcard ../librastaldr/*.h) \
 		$(wildcard ../common/*.h)
 ASM_SRCS := $(wildcard ../librastaldr/*.asm) \
-			$(wildcard ../common/*.asm)
+			$(filter-out ../common/memcpy.asm ../common/memset.asm ../common/memmove.asm,$(wildcard ../common/*.asm))
 ASM_HDRS := $(wildcard *.inc) \
 			$(wildcard ../librastaldr/*.inc) \
 			$(wildcard ../common/*.inc)

@@ -19,6 +19,7 @@ section .text
 extern idt_isr_handler
 isr_common_stub:
     pusha                       ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
+    cld                         ; C handlers require DF clear; iret restores it
 
     xor     eax, eax
     mov     ax, ds              ; Lower 16-bits of eax = ds.

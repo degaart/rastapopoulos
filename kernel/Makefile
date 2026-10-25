@@ -43,6 +43,9 @@ $(BINARY): $(OBJS) | build
 build/%.o: %.asm $(ASM_HDRS) | build
 	$(AS) -felf32 -o $@ $<
 
+build/%.o: ../common/%.asm $(ASM_HDRS) | build
+	$(AS) -felf32 -o $@ $<
+
 build/ramdisk.o: ../user/build/user.tar
 
 build/vga.o: CFLAGS += -O2

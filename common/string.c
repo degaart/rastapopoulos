@@ -1,5 +1,6 @@
 #include "string.h"
 
+#if defined(RASTA_BOOTLOADER) || !defined(__i386__)
 void* memset(void* dest, int ch, size_t count)
 {
     unsigned char* out = dest;
@@ -9,6 +10,7 @@ void* memset(void* dest, int ch, size_t count)
 
     return dest;
 }
+#endif
 
 int memcmp(const void* lhs, const void* rhs, size_t count)
 {
@@ -26,6 +28,7 @@ int memcmp(const void* lhs, const void* rhs, size_t count)
     return 0;
 }
 
+#if defined(RASTA_BOOTLOADER) || !defined(__i386__)
 void* memcpy(void* restrict dest, const void* restrict src, size_t count)
 {
     unsigned char* out = dest;
@@ -36,6 +39,7 @@ void* memcpy(void* restrict dest, const void* restrict src, size_t count)
 
     return dest;
 }
+#endif
 
 void* memchr(const void* ptr, int ch, size_t count)
 {
@@ -52,6 +56,7 @@ void* memchr(const void* ptr, int ch, size_t count)
     return NULL;
 }
 
+#if defined(RASTA_BOOTLOADER) || !defined(__i386__)
 void* memmove(void* dest, const void* src, size_t count)
 {
     unsigned char* out = dest;
@@ -73,6 +78,7 @@ void* memmove(void* dest, const void* src, size_t count)
 
     return dest;
 }
+#endif
 
 size_t strlen(const char* str)
 {

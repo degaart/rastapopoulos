@@ -26,7 +26,8 @@ SRCS := $(wildcard *.c) \
 		$(wildcard ../lib/*.c) \
 		$(wildcard ../../common/*.c)
 ASM_HDRS := $(wildcard *.inc)
-ASM_SRCS := $(filter-out start.asm,$(wildcard *.asm))
+ASM_SRCS := $(filter-out start.asm,$(wildcard *.asm)) \
+			$(wildcard ../../common/*.asm)
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
 
