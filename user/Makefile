@@ -1,9 +1,9 @@
 .PHONY: all clean
 
-TARGETS := lib snek shell fib
+TARGETS := lib snek shell hello_rust
 FILES := snek/build/snek.bin \
 		 shell/build/shell.bin \
-		 fib/target/i386-elf/debug/fib.bin
+		 hello_rust/target/i386-elf/debug/hello_rust.bin
 
 all: build/user.tar
 
@@ -13,8 +13,8 @@ snek/build/snek.bin:
 shell/build/shell.bin:
 	make -C shell
 
-fib/target/i386-elf/debug/fib.bin:
-	make -C fib
+hello_rust/target/i386-elf/debug/hello_rust.bin:
+	make -C hello_rust
 
 clean:
 	rm -rf build
@@ -29,5 +29,4 @@ build/user.tar: $(FILES) | build
 
 build:
 	mkdir -p build
-
 
