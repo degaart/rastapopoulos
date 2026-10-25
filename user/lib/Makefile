@@ -26,14 +26,16 @@ SRCS := $(wildcard *.c) \
 		$(wildcard ../lib/*.c) \
 		$(wildcard ../../common/*.c)
 ASM_HDRS := $(wildcard *.inc)
-ASM_SRCS := $(wildcard *.asm)
+ASM_SRCS := $(filter-out start.asm,$(wildcard *.asm))
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
-LIBRARY := build/librasta.a
 
-all: $(LIBRARY)
+all: build/libcrt0.a build/librasta.a
 
-$(LIBRARY): $(OBJS)
+build/libcrt0.a: build/start.o
+	$(AR) rcu $@ $^
+
+build/librasta.a: $(OBJS)
 	$(AR) rcu $@ $^
 
 build/%.o: %.asm $(ASM_HDRS) | build

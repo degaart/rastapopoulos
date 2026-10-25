@@ -15,12 +15,12 @@ fn main() {
         PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../lib/build");
 
     println!("cargo:rustc-link-search=native={}", library_dir.display());
-    println!("cargo:rustc-link-lib=static=rasta");
+    println!("cargo:rustc-link-lib=static=crt0");
     println!("cargo:rustc-link-arg=-T{}", linker_script.display());
     println!("cargo:rustc-link-arg=-Map={}", map_file.display());
     println!("cargo:rerun-if-changed={}", linker_script.display());
     println!(
         "cargo:rerun-if-changed={}",
-        library_dir.join("librasta.a").display()
+        library_dir.join("libcrt0.a").display()
     );
 }

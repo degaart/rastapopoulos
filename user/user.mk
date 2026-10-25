@@ -17,14 +17,13 @@ CFLAGS := -DRASTA -DRASTA_USER \
 LDFLAGS := -T../user.ld \
 		   -Wl,-Map=$(PROGRAM:.bin=.map) \
 		   -Wl,--no-warn-rwx-segments \
-		   -ffreestanding -nostdlib -g -lgcc
+		   -L ../lib/build \
+		   -ffreestanding -nostdlib -g -lcrt0 -lrasta -lgcc
 
 HDRS := $(wildcard *.h) \
 		$(wildcard ../lib/*.h) \
 		$(wildcard ../../common/*.h)
-SRCS := $(wildcard *.c) \
-		$(wildcard ../lib/*.c) \
-		$(wildcard ../../common/*.c)
+SRCS := $(wildcard *.c)
 ASM_HDRS := $(wildcard *.inc) $(wildcard ../lib/*.inc)
 ASM_SRCS := $(wildcard *.asm) $(wildcard ../lib/*.asm)
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
@@ -35,27 +34,17 @@ all: $(PROGRAM)
 
 $(PROGRAM): $(ELF_FILE)
 	$(OBJCOPY) \
-		--set-section-flags \
-		.bss=alloc,load,contents \
+		--set-section-flags bss=alloc,load,contents \
 		-O binary -S -g \
 		$< $@
 
-$(ELF_FILE): $(OBJS)
+$(ELF_FILE): $(OBJS) ../lib/build/libcrt0.a ../lib/build/librasta.a
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 build/%.o: %.asm $(ASM_HDRS) | build
 	$(AS) -o $@ -f elf32 $<
 
-build/%.o: ../lib/%.asm $(ASM_HDRS) | build
-	$(AS) -o $@ -f elf32 $<
-
 build/%.o: %.c $(HDRS) | build
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-build/%.o: ../lib/%.c $(HDRS) | build
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-build/%.o: ../../common/%.c $(HDRS) | build
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 build:

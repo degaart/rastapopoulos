@@ -364,7 +364,7 @@ static void exec(char* command, char* arguments)
     strlcat(tmp, ".bin", sizeof(tmp));
     ret = sys_exec(tmp, arguments);
     if (ret >= 0) {
-        printf("%s: %d\n", tmp, ret);
+        printf("%d", ret);
         return;
     }
     printf("Failed to execute %s\n", tmp);
