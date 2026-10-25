@@ -1,4 +1,5 @@
 #include "../kernel.h"
+#include "../ramdisk.h"
 #include "../tar.h"
 #include "../trace.h"
 #include <stdint.h>
@@ -11,9 +12,6 @@
             debugexit(2);                                                     \
         }                                                                     \
     } while (0)
-
-extern const uint8_t ramdisk_start[];
-extern const uint8_t ramdisk_end[];
 
 #define MAX_ENTRIES 64
 struct TarEntryList

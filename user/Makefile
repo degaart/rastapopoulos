@@ -19,6 +19,7 @@ build/user.tar: $(FILES) | build
 	rm -rf build/tmp
 	mkdir -p build/tmp
 	cp -a $(FILES) build/tmp
+	cp logo.raw build/tmp
 	echo 'ALL YOUR BASE ARE BELONG TO US' > build/tmp/message
 	cd build
 	tar cvf build/user.tar -C build/tmp .

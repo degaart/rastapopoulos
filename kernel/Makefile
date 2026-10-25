@@ -4,9 +4,9 @@
 
 AS := nasm
 CC := i686-elf-gcc
-CFLAGS := -DRASTA -DRASTA_KERNEL \
+CFLAGS := -DRASTA -DRASTA_KERNEL -DUNIT_TESTS \
 		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables \
-		  -march=i386 -O0 -g \
+		  -march=i386 -O2 -g \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
 		  -I../common -I../third-party \
@@ -44,6 +44,8 @@ build/%.o: %.asm $(ASM_HDRS) | build
 	$(AS) -felf32 -o $@ $<
 
 build/ramdisk.o: ../user/build/user.tar
+
+build/vga.o: CFLAGS += -O2
 
 build/%.o: %.c $(HDRS) $(COMMON_HDRS) | build
 	$(CC) -c -o $@ $< $(CFLAGS)

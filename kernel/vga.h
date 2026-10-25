@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kernel.h"
+#include <stddef.h>
 #include <stdint.h>
 
 #define VGA_PHYSICAL_BASE       0xb8000
@@ -38,6 +39,11 @@ struct VGAPoint
     uint8_t y;
 };
 
+/* Opaque structure that represents a bitmap, converted to the
+ * pixel format of the primary buffer
+ */
+struct Bitmap;
+
 struct VGAPoint vga_get_cursor_pos(void);
 void vga_set_cursor_pos(struct VGAPoint p);
 void vga_init(void);
@@ -48,4 +54,64 @@ bool vga_unlock_screen();
 void vga_putpixel(unsigned x, unsigned y, uint8_t color);
 void vga_text_mode(void);
 void vga_mode_x(void);
+
+/* Drawing uses the backbuffer. Rectangle endpoints are inclusive and may
+ * be reversed; pixels outside the screen are clipped.
+ */
+
+/*
+ * Swap the backbuffer into the primary buffer
+ * Does not wait for vertical retrace
+ */
+void vga_swap(void);
+
+/*
+ * Clear the entire screen
+ */
+void vga_clear(uint8_t color);
+
+/*
+ * Draw a filled rectangle at the specified coordinates
+ */
+void vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color);
+
+/*
+ * Draw a rectangle outline at the specified coordinates
+ */
+void vga_rect(int x1, int y1, int x2, int y2, uint8_t color);
+
+/*
+ * Draw a line
+ */
+void vga_drawline(int x1, int y1, int x2, int y2, uint8_t color);
+
+/*
+ * Draw an oval contained into the specified rectangle coordinates
+ */
+void vga_oval(int x1, int y1, int x2, int y2, uint8_t color);
+
+/*
+ * Draw a rounded rectangle
+ */
+void vga_roundrect(int x1, int y1, int x2, int y2, int radius, uint8_t color);
+
+/*
+ * Blit a bitmap into the specified coordinates. NULL selects the screen
+ * backbuffer for either bitmap. Overlapping copies are supported.
+ */
+void vga_blit(struct Bitmap* src, int x1, int y1, struct Bitmap* dst, int x2,
+              int y2, int width, int height);
+
+/*
+ * Load a raw array of pixel colors (8 bit per color)
+ * Then convert it to the pixel format of the primary buffer,
+ * for optimized blit operations
+ */
+struct Bitmap* vga_load_bitmap(const void* buffer, size_t len, int width,
+                               int height);
+
+/*
+ * Destroys a bitmap (free memory)
+ */
+void vga_destroy_bitmap(struct Bitmap* bitmap);
 
