@@ -1,6 +1,5 @@
-export PREFIX=
-export HOSTDATA=
-export RASTACC_HOME=
+export PREFIX=''
+export PATH="$PREFIX/bin:$PREFIX/sbin:$PATH"
+export EDITOR=vim
 
-export PATH="$RASTACC_HOME:$PREFIX/bin:$PREFIX/sbin:$PATH"
 

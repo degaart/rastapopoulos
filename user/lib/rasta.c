@@ -51,3 +51,25 @@ int sys_list(void* buffer, size_t len)
     return syscall(SYSCALL_LIST, (uintptr_t)buffer, len, 0, 0, 0);
 }
 
+int sys_lock_screen(void)
+{
+    return syscall(SYSCALL_LOCK_SCREEN, 0, 0, 0, 0, 0);
+}
+
+int sys_unlock_screen(void)
+{
+    return syscall(SYSCALL_UNLOCK_SCREEN, 0, 0, 0, 0, 0);
+}
+
+void sys_putpixel(unsigned x, unsigned y, uint8_t color)
+{
+    syscall(SYSCALL_PUTPIXEL, x, y, color, 0, 0);
+}
+
+int sys_trace(const char* file, size_t file_len, int line, const char* s,
+              size_t len)
+{
+    return syscall(SYSCALL_TRACE, (uintptr_t)file, file_len, line,
+                   (uintptr_t)s, len);
+}
+

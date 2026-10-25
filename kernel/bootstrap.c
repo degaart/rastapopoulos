@@ -160,7 +160,9 @@ void bootstrap(uint32_t mbsgn, const struct multiboot_info* mbinfo)
         panic("No memory info. Cannot continue");
     }
 
-    map(VGA_BASE, VGA_BASE, PTE_WRITABLE);
+    for (uintptr_t frame = VGA_START; frame < VGA_END; frame += PAGE_SIZE) {
+        map(frame, frame, PTE_WRITABLE | PTE_CACHE_DISABLE);
+    }
     unmap(0);
 
     /* Enable paging */

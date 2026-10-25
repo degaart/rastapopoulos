@@ -130,6 +130,34 @@ static int32_t syscall_list(char* buffer, size_t len)
     return ctx.len;
 }
 
+static int32_t syscall_lock_screen(void)
+{
+    return vga_lock_screen();
+}
+
+static int32_t syscall_unlock_screen(void)
+{
+    return vga_unlock_screen();
+}
+
+static void syscall_putpixel(unsigned x, unsigned y, unsigned color)
+{
+    vga_putpixel(x, y, color);
+}
+
+static int32_t syscall_trace(const char* file, int file_len, int line,
+                             const char* s, int len)
+{
+    if (!vmm_is_valid_userptr(file, file_len, false) ||
+        !vmm_is_valid_userptr(s, len, false)) {
+        return -1;
+    }
+
+    serial_printf("[%s:%.*s:%d] %.*s\n", process_current()->name, file_len,
+                  file, line, len, s);
+    return 0;
+}
+
 /*
  * Syscall ABI:
  *  eax: function
@@ -179,6 +207,20 @@ void syscall_handler(int, struct isr_regs* regs)
         break;
     case SYSCALL_LIST:
         regs->eax = syscall_list((char*)regs->ebx, (size_t)regs->ecx);
+        break;
+    case SYSCALL_LOCK_SCREEN:
+        regs->eax = syscall_lock_screen();
+        break;
+    case SYSCALL_UNLOCK_SCREEN:
+        regs->eax = syscall_unlock_screen();
+        break;
+    case SYSCALL_PUTPIXEL:
+        syscall_putpixel(regs->ebx, regs->ecx, regs->edx);
+        regs->eax = 0;
+        break;
+    case SYSCALL_TRACE:
+        regs->eax = syscall_trace((const char*)regs->ebx, regs->ecx, regs->edx,
+                                  (const char*)regs->esi, regs->edi);
         break;
     default:
         regs->eax = (uint32_t)-1;

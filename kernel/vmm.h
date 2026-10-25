@@ -8,6 +8,7 @@
 #define VMM_WRITABLE (1 << 1)
 #define VMM_USER     (1 << 2)
 #define VMM_SHARED   (1 << 9)
+#define VMM_UNCACHED (1 << 4)
 
 bool vmm_init(void);
 bool vmm_map(void* frame, void* virtual_address, uint32_t flags);

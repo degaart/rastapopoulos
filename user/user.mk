@@ -25,7 +25,7 @@ HDRS := $(wildcard *.h) \
 		$(wildcard ../../common/*.h)
 SRCS := $(wildcard *.c)
 ASM_HDRS := $(wildcard *.inc) $(wildcard ../lib/*.inc)
-ASM_SRCS := $(wildcard *.asm) $(wildcard ../lib/*.asm)
+ASM_SRCS := $(wildcard *.asm)
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
 ELF_FILE := $(PROGRAM:.bin=.elf)

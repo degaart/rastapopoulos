@@ -4,7 +4,11 @@
 #include <stdint.h>
 
 #define VGA_PHYSICAL_BASE       0xb8000
+#define VGA_PHYSICAL_START      0xa0000
+#define VGA_PHYSICAL_END        0xbffff
 #define VGA_BASE                (VGA_PHYSICAL_BASE + KERNEL_OFFSET)
+#define VGA_START               (VGA_PHYSICAL_START + KERNEL_OFFSET)
+#define VGA_END                 (VGA_PHYSICAL_END + KERNEL_OFFSET)
 #define VGA_COLOR_BLACK         0x0
 #define VGA_COLOR_BLUE          0x1
 #define VGA_COLOR_GREEN         0x2
@@ -25,6 +29,9 @@
 #define VGA_WIDTH  80
 #define VGA_HEIGHT 25
 
+#define VGA_MODE_X_WIDTH  320
+#define VGA_MODE_X_HEIGHT 240
+
 struct VGAPoint
 {
     uint8_t x;
@@ -36,4 +43,9 @@ void vga_set_cursor_pos(struct VGAPoint p);
 void vga_init(void);
 void vga_write(const char* text, int len, uint8_t fg, uint8_t bg);
 void vga_write_at(int x, int y, char ch, uint8_t fg, uint8_t bg);
+bool vga_lock_screen();
+bool vga_unlock_screen();
+void vga_putpixel(unsigned x, unsigned y, uint8_t color);
+void vga_text_mode(void);
+void vga_mode_x(void);
 

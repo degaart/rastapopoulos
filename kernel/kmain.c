@@ -192,10 +192,12 @@ static void init_entry(void* unused)
 }
 
 #ifdef UNIT_TESTS
-extern void test_tar();
+extern void test_tar(void);
+extern void test_vga(void);
+
 static void unit_tests(void)
 {
-    test_tar();
+    test_vga();
     debugexit(1);
 }
 #endif
@@ -265,9 +267,13 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     /* After address_space initialization, lower-half is unmapped */
     address_space_init();
-    if (!address_space_map(address_space_current(), (void*)VGA_PHYSICAL_BASE,
-                           (void*)VGA_BASE, PAGE_WRITABLE))
-        panic("Failed to map VGA_BASE");
+
+    for (void* pa = (void*)VGA_PHYSICAL_START; pa < (void*)VGA_PHYSICAL_END;
+         pa += PAGE_SIZE) {
+        if (!address_space_map(address_space_current(), pa, pa + KERNEL_OFFSET,
+                               PAGE_WRITABLE | PAGE_UNCACHED))
+            panic("Failed to map 0x%p", pa);
+    }
 
     if (!vmm_init())
         panic("vmm_init failed");

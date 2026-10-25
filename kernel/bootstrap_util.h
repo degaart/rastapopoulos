@@ -303,6 +303,8 @@ static inline void* memset(void* dest, int ch, size_t count)
 }
 
 #define VGA_BASE                0xb8000
+#define VGA_START               0xa0000
+#define VGA_END                 0xbffff
 #define VGA_COLOR_BLACK         0x0
 #define VGA_COLOR_BLUE          0x1
 #define VGA_COLOR_GREEN         0x2

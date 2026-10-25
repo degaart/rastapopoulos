@@ -10,6 +10,7 @@
 #define PAGE_WRITABLE (1 << 1)
 #define PAGE_USER     (1 << 2)
 #define PAGE_SHARED   (1 << 9)
+#define PAGE_UNCACHED (1 << 4)
 
 /*
  * WARNING: Forgetting to destroy an address space

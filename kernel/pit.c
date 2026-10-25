@@ -52,22 +52,22 @@ static void pit_irq_handler(int irq, struct isr_regs* regs)
         trace("First IRQ0 received");
     pic_eoi(irq);
 
-    char process_buffer[32];
-    process_get_info(process_buffer, sizeof(process_buffer));
+    // char process_buffer[32];
+    // process_get_info(process_buffer, sizeof(process_buffer));
 
-    char thread_buffer[32];
-    thread_get_info(thread_buffer, sizeof(thread_buffer));
+    // char thread_buffer[32];
+    // thread_get_info(thread_buffer, sizeof(thread_buffer));
 
-    char buffer[81];
-    size_t len = snprintf(buffer, sizeof(buffer), "%llu %s %s", ticks,
-                          process_buffer, thread_buffer);
-    int i;
-    for (i = 0; i < 80 && i < len; i++) {
-        vga_write_at(i, 0, buffer[i], VGA_COLOR_WHITE, VGA_COLOR_BLUE);
-    }
-    for (; i < 80; i++) {
-        vga_write_at(i, 0, ' ', VGA_COLOR_WHITE, VGA_COLOR_BLUE);
-    }
+    // char buffer[81];
+    // size_t len = snprintf(buffer, sizeof(buffer), "%llu %s %s", ticks,
+    //                       process_buffer, thread_buffer);
+    // int i;
+    // for (i = 0; i < 80 && i < len; i++) {
+    //     vga_write_at(i, 0, buffer[i], VGA_COLOR_WHITE, VGA_COLOR_BLUE);
+    // }
+    // for (; i < 80; i++) {
+    //     vga_write_at(i, 0, ' ', VGA_COLOR_WHITE, VGA_COLOR_BLUE);
+    // }
 
     schedule();
 }

@@ -31,8 +31,7 @@ static uint16_t layout[] = {
     0x0c, ')',    0x0d, '=',    0x56, '<', 0x52, '0',    0x4f,   '1',
     0x50, '2',    0x51, '3',    0x4b, '4', 0x4c, '5',    0x4d,   '6',
     0x47, '7',    0x48, '8',    0x49, '9', 0x53, '.',    0xe035, '/',
-    0x37, '*',    0x4a, '-',    0x4e, '+',
-};
+    0x37, '*',    0x4a, '-',    0x4e, '+', 0x39, ' '};
 
 /* Keys when shift is held */
 static uint16_t layout_shift[] = {
@@ -47,8 +46,7 @@ static uint16_t layout_shift[] = {
     0x0b, '0',    0x0c, '\xf8', 0x0d,   '+',  0x56, '>',  0x52,   '0',  0x4f,
     '1',  0x50,   '2',  0x51,   '3',    0x4b, '4',  0x4c, '5',    0x4d, '6',
     0x47, '7',    0x48, '8',    0x49,   '9',  0x53, '.',  0xe035, '/',  0x37,
-    '*',  0x4a,   '-',  0x4e,   '+',
-};
+    '*',  0x4a,   '-',  0x4e,   '+',    0x39, ' '};
 
 /* Keys when AltGr is held    */
 static uint16_t layout_altgr[] = {
@@ -64,8 +62,7 @@ static uint16_t layout_altgr[] = {
     0x0c, ']',    0x0d, '}',    0x56, '\xd7', 0x52, '0',    0x4f,   '1',
     0x50, '2',    0x51, '3',    0x4b, '4',    0x4c, '5',    0x4d,   '6',
     0x47, '7',    0x48, '8',    0x49, '9',    0x53, '.',    0xe035, '/',
-    0x37, '*',    0x4a, '-',    0x4e, '+',
-};
+    0x37, '*',    0x4a, '-',    0x4e, '+',    0x39, ' '};
 
 size_t parse_args(char* buf, char** argv, size_t len)
 {
@@ -351,6 +348,39 @@ static void shutdown(char* arguments)
     sys_shutdown();
 }
 
+static void test_vga(char* arguments)
+{
+    printf("Locking screen\n");
+    int ret = sys_lock_screen();
+    if (ret < 0) {
+        trace("Failed to lock screen");
+        return;
+    }
+
+    trace("Screen locked");
+
+    static const int width = 320;
+    static const int height = 240;
+    for (unsigned y = 0; y < height; ++y) {
+        for (unsigned x = 0; x < width; ++x) {
+            uint8_t color = (y / 15) * 16 + x / 20;
+            if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
+                color = 255;
+            }
+            sys_putpixel(x, y, color);
+        }
+    }
+
+    sys_sleep(1000);
+
+    trace("Unlocking screen");
+    if (sys_unlock_screen() < 0) {
+        trace("Failed to unlock screen");
+        return;
+    }
+    printf("Screen unlocked\n");
+}
+
 static void exec(char* command, char* arguments)
 {
     int ret = sys_exec(command, arguments);
@@ -372,7 +402,8 @@ static void exec(char* command, char* arguments)
 
 #define X(C) {.name = #C, .fn = C}
 static struct Command commands[] = {
-    X(help), X(exit), X(exit_thread), X(sleep), X(count), X(shutdown),
+    X(help),  X(exit),     X(exit_thread), X(sleep),
+    X(count), X(shutdown), X(test_vga),
 };
 #undef X
 static const size_t commands_size = sizeof(commands) / sizeof(commands[0]);
@@ -445,8 +476,11 @@ int main(void)
                         continue;
 
                     int ch = lookup_scancode(evt.scancode, shift, alt);
-                    if (!ch)
+                    if (!ch) {
+                        trace("Failed to translate 0x%x shift: %d alt: %d",
+                              evt.scancode, shift, alt);
                         continue;
+                    }
 
                     printf("%c", ch);
                     input_buf[input_idx++] = (char)ch;
