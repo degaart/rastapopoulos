@@ -1,8 +1,9 @@
 .PHONY: all clean
 
-TARGETS := lib snek shell
+TARGETS := lib snek shell test_vga
 FILES := snek/build/snek.bin \
-		 shell/build/shell.bin
+		 shell/build/shell.bin \
+		 test_vga/build/test_vga.bin
 
 all: build/user.tar
 
