@@ -123,3 +123,10 @@ int sys_vga_destroy_bitmap(VGABitmap bitmap)
 {
     return syscall(SYSCALL_VGA_DESTROY_BITMAP, bitmap, 0, 0, 0, 0);
 }
+
+int sys_vga_set_palette(uint8_t index, uint8_t red, uint8_t green,
+                        uint8_t blue)
+{
+    return syscall(SYSCALL_VGA_SET_PALETTE, index, red, green, blue, 0);
+}
+

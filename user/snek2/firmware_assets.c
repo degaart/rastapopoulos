@@ -1,0 +1,131 @@
+/* Generated from firmware SHA-256
+ * 14f5f650de01cccee9e4d12b6c1c132e60df1d24cf97cbb95efe94840d2bfaf1. */
+#include "firmware_assets.h"
+
+static const uint8_t bits_325f0c[] = {0x02, 0x05, 0x02};
+static const uint8_t bits_325f18[] = {0x03, 0x03, 0x04, 0x04,
+                                      0x0e, 0x07, 0x0e, 0x04};
+static const uint8_t bits_325f24[] = {0x06, 0x08, 0x0c, 0x0e,
+                                      0x0f, 0x0d, 0x0e, 0x08};
+static const uint8_t bits_325f30[] = {0x0e, 0x02, 0x0f, 0x07,
+                                      0x07, 0x0f, 0x02, 0x0e};
+static const uint8_t bits_325f3c[] = {0x04, 0x06, 0x0d, 0x0f,
+                                      0x0e, 0x0c, 0x06, 0x00};
+static const uint8_t bits_325f48[] = {0x06, 0x05, 0x0e, 0x07,
+                                      0x06, 0x0f, 0x06, 0x04};
+static const uint8_t bits_325f54[] = {0x06, 0x0c, 0x04, 0x0c,
+                                      0x04, 0x0c, 0x04, 0x0c};
+static const uint8_t bits_325f60[] = {0x00, 0x0c, 0x0a, 0x06};
+static const uint8_t bits_325f6c[] = {0x06, 0x0a, 0x0c, 0x00};
+static const uint8_t bits_325f78[] = {0x00, 0x03, 0x05, 0x06};
+static const uint8_t bits_325f84[] = {0x06, 0x05, 0x03, 0x00};
+static const uint8_t bits_325f90[] = {0x62, 0x81, 0x19, 0x34,
+                                      0x3c, 0x98, 0x81, 0x46};
+static const uint8_t bits_325f9c[] = {0x1c, 0x00, 0x98, 0xb5,
+                                      0xbd, 0x19, 0x00, 0x38};
+static const uint8_t bits_325fa8[] = {0x02, 0x00, 0x06, 0x0d,
+                                      0x0f, 0x06, 0x00, 0x08};
+static const uint8_t bits_325fb4[] = {0x08, 0x00, 0x06, 0x0d,
+                                      0x0f, 0x06, 0x00, 0x02};
+static const uint8_t bits_325fc0[] = {0x00, 0x06, 0x06, 0x05};
+static const uint8_t bits_325fcc[] = {0x08, 0x06, 0x0e, 0x00};
+static const uint8_t bits_325fd8[] = {0x05, 0x06, 0x06, 0x00};
+static const uint8_t bits_325fe4[] = {0x01, 0x06, 0x07, 0x00};
+static const uint8_t bits_325ff0[] = {0x06, 0x06, 0x04, 0x04};
+static const uint8_t bits_325ffc[] = {0x00, 0x03, 0x0f, 0x00};
+static const uint8_t bits_326008[] = {0x04, 0x04, 0x06, 0x06};
+static const uint8_t bits_326014[] = {0x00, 0x0c, 0x0f, 0x00};
+static const uint8_t bits_326020[] = {0x06, 0x04, 0x02, 0x06};
+static const uint8_t bits_32602c[] = {0x00, 0x0d, 0x0b, 0x00};
+static const uint8_t bits_326038[] = {0x06, 0x02, 0x04, 0x06};
+static const uint8_t bits_326044[] = {0x00, 0x0b, 0x0d, 0x00};
+static const uint8_t bits_326050[] = {0x06, 0x0d, 0x0b, 0x06};
+static const uint8_t bits_32605c[] = {0x06, 0x0d, 0x0b, 0x06};
+static const uint8_t bits_326068[] = {0x06, 0x0b, 0x0d, 0x06};
+static const uint8_t bits_326074[] = {0x06, 0x0b, 0x0d, 0x06};
+static const uint8_t bits_326080[] = {0x00, 0x09, 0x06, 0x05};
+static const uint8_t bits_32608c[] = {0x0a, 0x04, 0x0c, 0x02};
+static const uint8_t bits_326098[] = {0x05, 0x06, 0x09, 0x00};
+static const uint8_t bits_3260a4[] = {0x05, 0x02, 0x03, 0x04};
+static const uint8_t bits_3260b0[] = {0x00, 0x0c, 0x0a, 0x0e};
+static const uint8_t bits_3260bc[] = {0x0e, 0x0a, 0x0c, 0x00};
+static const uint8_t bits_3260c8[] = {0x00, 0x03, 0x05, 0x07};
+static const uint8_t bits_3260d4[] = {0x07, 0x05, 0x03, 0x00};
+static const uint8_t bits_10d808[] = {0x00, 0x1f, 0x11, 0x1f};
+static const uint8_t bits_10d814[] = {0x00, 0x02, 0x1f, 0x00};
+static const uint8_t bits_10d820[] = {0x00, 0x1d, 0x15, 0x17};
+static const uint8_t bits_10d82c[] = {0x00, 0x15, 0x15, 0x1f};
+static const uint8_t bits_10d838[] = {0x00, 0x07, 0x04, 0x1f};
+static const uint8_t bits_10d844[] = {0x00, 0x17, 0x15, 0x1d};
+static const uint8_t bits_10d850[] = {0x00, 0x1f, 0x15, 0x1d};
+static const uint8_t bits_10d85c[] = {0x00, 0x01, 0x1d, 0x03};
+static const uint8_t bits_10d868[] = {0x00, 0x1f, 0x15, 0x1f};
+static const uint8_t bits_10d874[] = {0x00, 0x17, 0x15, 0x1f};
+
+const FirmwareBitmap firmware_food = {0x325f0cu, 0x325e48u, 3, 3, bits_325f0c};
+const FirmwareBitmap firmware_digits[10] = {
+    {0x10d808u, 0x10d880u, 4, 5, bits_10d808},
+    {0x10d814u, 0x10d884u, 4, 5, bits_10d814},
+    {0x10d820u, 0x10d888u, 4, 5, bits_10d820},
+    {0x10d82cu, 0x10d88cu, 4, 5, bits_10d82c},
+    {0x10d838u, 0x10d890u, 4, 5, bits_10d838},
+    {0x10d844u, 0x10d894u, 4, 5, bits_10d844},
+    {0x10d850u, 0x10d898u, 4, 5, bits_10d850},
+    {0x10d85cu, 0x10d89cu, 4, 5, bits_10d85c},
+    {0x10d868u, 0x10d8a0u, 4, 5, bits_10d868},
+    {0x10d874u, 0x10d8a4u, 4, 5, bits_10d874},
+};
+const FirmwareBitmap firmware_heads[4] = {
+    {0x325fc0u, 0x325ea0u, 4, 4, bits_325fc0},
+    {0x325fccu, 0x325ea4u, 4, 4, bits_325fcc},
+    {0x325fd8u, 0x325e9cu, 4, 4, bits_325fd8},
+    {0x325fe4u, 0x325ea8u, 4, 4, bits_325fe4},
+};
+const FirmwareBitmap firmware_open_heads[4] = {
+    {0x326080u, 0x325eacu, 4, 4, bits_326080},
+    {0x32608cu, 0x325eb4u, 4, 4, bits_32608c},
+    {0x326098u, 0x325eb0u, 4, 4, bits_326098},
+    {0x3260a4u, 0x325eb8u, 4, 4, bits_3260a4},
+};
+const FirmwareBitmap firmware_tails[4] = {
+    {0x325ff0u, 0x325ef0u, 4, 4, bits_325ff0},
+    {0x325ffcu, 0x325ef4u, 4, 4, bits_325ffc},
+    {0x326008u, 0x325eecu, 4, 4, bits_326008},
+    {0x326014u, 0x325ef8u, 4, 4, bits_326014},
+};
+const FirmwareBitmap firmware_bodies[4] = {
+    {0x326020u, 0x325ec0u, 4, 4, bits_326020},
+    {0x32602cu, 0x325ec4u, 4, 4, bits_32602c},
+    {0x326038u, 0x325ebcu, 4, 4, bits_326038},
+    {0x326044u, 0x325ec8u, 4, 4, bits_326044},
+};
+const FirmwareBitmap firmware_swallow_bodies[4] = {
+    {0x326050u, 0x325eccu, 4, 4, bits_326050},
+    {0x32605cu, 0x325ed0u, 4, 4, bits_32605c},
+    {0x326068u, 0x325ed4u, 4, 4, bits_326068},
+    {0x326074u, 0x325ed8u, 4, 4, bits_326074},
+};
+const FirmwareBitmap firmware_corners[4] = {
+    {0x325f60u, 0x325efcu, 4, 4, bits_325f60},
+    {0x325f6cu, 0x325f00u, 4, 4, bits_325f6c},
+    {0x325f78u, 0x325f04u, 4, 4, bits_325f78},
+    {0x325f84u, 0x325f08u, 4, 4, bits_325f84},
+};
+const FirmwareBitmap firmware_swallow_corners[4] = {
+    {0x3260b0u, 0x325edcu, 4, 4, bits_3260b0},
+    {0x3260bcu, 0x325ee0u, 4, 4, bits_3260bc},
+    {0x3260c8u, 0x325ee4u, 4, 4, bits_3260c8},
+    {0x3260d4u, 0x325ee8u, 4, 4, bits_3260d4},
+};
+const FirmwareBitmap firmware_creatures[10] = {
+    {0x325f18u, 0x325e4cu, 8, 4, bits_325f18},
+    {0x325f24u, 0x325e5cu, 8, 4, bits_325f24},
+    {0x325f30u, 0x325e64u, 8, 4, bits_325f30},
+    {0x325f3cu, 0x325e6cu, 8, 4, bits_325f3c},
+    {0x325f48u, 0x325e74u, 8, 4, bits_325f48},
+    {0x325f54u, 0x325e54u, 8, 4, bits_325f54},
+    {0x325f90u, 0x325e7cu, 8, 8, bits_325f90},
+    {0x325f9cu, 0x325e84u, 8, 8, bits_325f9c},
+    {0x325fa8u, 0x325e8cu, 8, 4, bits_325fa8},
+    {0x325fb4u, 0x325e94u, 8, 4, bits_325fb4},
+};

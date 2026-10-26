@@ -182,6 +182,7 @@ static void init_entry(void* unused)
     trace("Init thread started");
     while (true) {
         int ret = exec("shell.bin", "");
+        // int ret = exec("snek2.bin", "");
         if (ret == -1)
             panic("Failed to exec shell");
         else if (ret != 0) {

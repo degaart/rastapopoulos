@@ -117,3 +117,8 @@ struct Bitmap* vga_load_bitmap(const void* buffer, size_t len, int width,
  */
 void vga_destroy_bitmap(struct Bitmap* bitmap);
 
+/*
+ * Set the color at palette index to the corresponding RGB value
+ */
+void vga_set_palette(uint8_t index, uint8_t red, uint8_t green, uint8_t blue);
+

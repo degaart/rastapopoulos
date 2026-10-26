@@ -8,7 +8,7 @@ CC := i686-elf-gcc
 OBJCOPY := i686-elf-objcopy
 CFLAGS := -DRASTA -DRASTA_USER \
 		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables \
-		  -march=i386 -O0 -g \
+		  -march=i386 -O3 -g \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
 		  -masm=intel \
@@ -34,7 +34,7 @@ all: $(PROGRAM)
 
 $(PROGRAM): $(ELF_FILE)
 	$(OBJCOPY) \
-		--set-section-flags bss=alloc,load,contents \
+		--set-section-flags .bss=alloc,load,contents \
 		-O binary -S -g \
 		$< $@
 

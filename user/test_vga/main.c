@@ -6,7 +6,7 @@ int main(void)
 {
     printf("Locking screen\n");
     int ret = sys_lock_screen();
-    if (!ret) {
+    if (ret < 0) {
         trace("Failed to lock screen");
         return 1;
     }
@@ -65,7 +65,7 @@ int main(void)
         sys_vga_destroy_bitmap(bitmap);
 
     trace("Unlocking screen");
-    if (!sys_unlock_screen()) {
+    if (sys_unlock_screen() < 0) {
         trace("Failed to unlock screen");
         return 1;
     }

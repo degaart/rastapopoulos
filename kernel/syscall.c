@@ -132,12 +132,12 @@ static int32_t syscall_list(char* buffer, size_t len)
 
 static int32_t syscall_lock_screen(void)
 {
-    return vga_lock_screen();
+    return vga_lock_screen() ? 0 : -1;
 }
 
 static int32_t syscall_unlock_screen(void)
 {
-    return vga_unlock_screen();
+    return vga_unlock_screen() ? 0 : -1;
 }
 
 static void syscall_putpixel(unsigned x, unsigned y, unsigned color)
@@ -262,6 +262,12 @@ static int syscall_vga_blit(const struct SyscallVGABlit* args)
     return 0;
 }
 
+static void syscall_vga_set_palette(uint8_t index, uint8_t red, uint8_t green,
+                                    uint8_t blue)
+{
+    vga_set_palette(index, red, green, blue);
+}
+
 /*
  * Syscall ABI:
  *  eax: function
@@ -363,6 +369,10 @@ void syscall_handler(int, struct isr_regs* regs)
         break;
     case SYSCALL_VGA_DESTROY_BITMAP:
         regs->eax = syscall_vga_destroy_bitmap(regs->ebx);
+        break;
+    case SYSCALL_VGA_SET_PALETTE:
+        syscall_vga_set_palette(regs->ebx, regs->ecx, regs->edx, regs->esi);
+        regs->eax = 0;
         break;
     default:
         regs->eax = (uint32_t)-1;

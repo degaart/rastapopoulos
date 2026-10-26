@@ -45,3 +45,6 @@ int sys_vga_blit(VGABitmap src, int x1, int y1, VGABitmap dst, int x2, int y2,
 VGABitmap sys_vga_load_bitmap(const void* buffer, size_t len, int width,
                               int height);
 int sys_vga_destroy_bitmap(VGABitmap bitmap);
+int sys_vga_set_palette(uint8_t index, uint8_t red, uint8_t green,
+                        uint8_t blue);
+
