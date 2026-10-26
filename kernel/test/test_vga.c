@@ -1,93 +1,169 @@
-#include "../kernel.h"
-#include "../pit.h"
-#include "../ramdisk.h"
-#include "../tar.h"
-#include "../trace.h"
-#include "../vga.h"
-#include "../vmm.h"
+#ifdef RASTA_KERNEL
+#    include "../address_space.h"
+#    include "../kernel.h"
+#    include "../process.h"
+#    include "../trace.h"
+#    include "../vga.h"
+#    include "../vmm.h"
 
-#ifndef VGA_TEST_CHECKS
-#    define VGA_TEST_CHECKS 0
-#endif
+#    define CHECK(cond)                                                       \
+        do {                                                                  \
+            if (!(cond)) {                                                    \
+                trace("VGA check failed: %s", #cond);                         \
+                debugexit(2);                                                 \
+            }                                                                 \
+        } while (0)
 
-#if VGA_TEST_CHECKS
+static void check_visible(const uint8_t* pixels)
+{
+    outb(0x3d4, 0x0c);
+    unsigned offset = (unsigned)inb(0x3d5) << 8;
+    outb(0x3d4, 0x0d);
+    offset |= inb(0x3d5);
+    for (unsigned plane = 0; plane < 4; ++plane) {
+        outb(0x3ce, 4);
+        outb(0x3cf, plane);
+        const volatile uint8_t* src =
+            (const volatile uint8_t*)VGA_START + offset;
+        for (unsigned i = 0; i < 19200; ++i)
+            CHECK(src[i] == pixels[i * 4 + plane]);
+    }
+}
+
+extern void vga_pack_plane(uint8_t* dst, const uint8_t* src, unsigned count);
+static void check_packing(void)
+{
+    uint8_t source[4 * 100 + 4];
+    uint8_t target[104];
+    for (unsigned i = 0; i < sizeof(source); ++i)
+        source[i] = i * 13 + i / 3;
+    for (unsigned count = 0; count <= 100; ++count) {
+        for (unsigned alignment = 0; alignment < 4; ++alignment) {
+            for (unsigned i = 0; i < sizeof(target); ++i)
+                target[i] = 0x53;
+            vga_pack_plane(target + alignment, source + alignment, count);
+            for (unsigned i = 0; i < sizeof(target); ++i)
+                CHECK(target[i] ==
+                      (i >= alignment && i < alignment + count
+                           ? source[alignment + (i - alignment) * 4]
+                           : 0x53));
+        }
+    }
+}
+
+void test_vga(void)
+{
+    check_packing();
+    CHECK(vga_lock_screen());
+    CHECK(!vga_lock_screen());
+    CHECK(vmm_is_valid_userptr((void*)VGA_PHYSICAL_START, 320 * 240, true));
+    for (unsigned i = 0; i < 19; ++i) {
+        unsigned flags;
+        void* frame;
+        CHECK(address_space_query(process_current()->as,
+                                  (void*)(VGA_PHYSICAL_START + i * PAGE_SIZE),
+                                  &frame, &flags));
+        CHECK((flags & (VMM_USER | VMM_WRITABLE | VMM_SHARED)) ==
+              (VMM_USER | VMM_WRITABLE | VMM_SHARED));
+        CHECK(!(flags & VMM_UNCACHED));
+    }
+    uint8_t* pixels = (uint8_t*)VGA_PHYSICAL_START;
+    for (unsigned frame = 0; frame < 4; ++frame) {
+        for (unsigned i = 0; i < 320 * 240; ++i)
+            pixels[i] = (i * 13 + i / 320 + frame * 37) & 255;
+        vga_swap();
+        outb(0x3d4, 0x0c);
+        unsigned offset = (unsigned)inb(0x3d5) << 8;
+        outb(0x3d4, 0x0d);
+        offset |= inb(0x3d5);
+        CHECK(offset == ((frame + 1) & 1) * 19200);
+        check_visible(pixels);
+    }
+    static const int rectangles[][4] = {
+        {1, 0, 1, 0},         {318, 238, 319, 239}, {2, 2, 4, 3},
+        {118, 96, 201, 143},  {0, 3, 319, 10},      {7, 13, 10, 15},
+        {300, 200, 319, 220}, {5, 7, 16, 20},       {0, 0, 0, 239}};
+    for (unsigned pass = 0; pass < 3; ++pass) {
+        for (unsigned r = 0; r < sizeof(rectangles) / sizeof(rectangles[0]);
+             ++r) {
+            const int* d = rectangles[r];
+            for (int y = d[1]; y <= d[3]; ++y)
+                for (int x = d[0]; x <= d[2]; ++x)
+                    pixels[y * 320 + x] =
+                        (x * 13 + y * 17 + r * 23 + pass) & 255;
+            vga_swap_rect(d[0], d[1], d[2], d[3]);
+            check_visible(pixels);
+        }
+    }
+    vga_swap_rect(-10, -10, -1, -1);
+    vga_swap_rect(10, 10, 9, 9);
+    vga_swap_rect(320, 240, 500, 500);
+    check_visible(pixels);
+    pixels[0] = 131;
+    vga_swap_rect(-10, -10, 0, 0);
+    check_visible(pixels);
+    vga_swap();
+    check_visible(pixels);
+
+    CHECK(vga_unlock_screen());
+    CHECK(!vmm_is_valid_userptr((void*)VGA_PHYSICAL_START, 320 * 240, true));
+    CHECK(!vga_unlock_screen());
+    CHECK(vga_lock_screen());
+    for (unsigned i = 0; i < 320 * 240; ++i)
+        CHECK(pixels[i] == 0);
+    CHECK(vga_unlock_screen());
+    trace("VGA packing, partial damage, page history, mapping and relock "
+          "checks passed");
+}
+#else
+#    define _GNU_SOURCE
+#    include "../../user/lib/rasta.h"
 #    include <limits.h>
+#    include <stdio.h>
+#    include <stdlib.h>
 #    include <string.h>
-#endif
+#    include <sys/mman.h>
+#    undef trace
+#    define trace(...)                                                        \
+        do {                                                                  \
+            printf(__VA_ARGS__);                                              \
+            putchar('\n');                                                    \
+        } while (0)
+#    define CHECK(cond)                                                       \
+        do {                                                                  \
+            if (!(cond)) {                                                    \
+                fprintf(stderr, "Failed line %d: %s\n", __LINE__, #cond);     \
+                abort();                                                      \
+            }                                                                 \
+        } while (0)
+#    define WIDTH              VGA_MODE_X_WIDTH
+#    define HEIGHT             VGA_MODE_X_HEIGHT
 
-#define CHECK(cond)                                                           \
-    do {                                                                      \
-        if (!(cond)) {                                                        \
-            trace("Assert failed: %s", #cond);                                \
-            debugexit(2);                                                     \
-        }                                                                     \
-    } while (0)
-
-static void setup(void)
+static struct Bitmap* vga_load_bitmap(const void* buffer, size_t len,
+                                      int width, int height)
 {
-    for (void* ptr = (void*)VGA_PHYSICAL_START; ptr < (void*)VGA_PHYSICAL_END;
-         ptr += PAGE_SIZE) {
-        if (ptr != (void*)VGA_PHYSICAL_BASE) {
-            CHECK(
-                vmm_map(ptr, ptr,
-                        VMM_USER | VMM_WRITABLE | VMM_UNCACHED | VMM_SHARED));
-        }
-    }
-
-    vga_mode_x();
+    if (width <= 0 || height <= 0 || (size_t)width > len / height)
+        return NULL;
+    struct Bitmap* bmp = malloc(sizeof(*bmp) + (size_t)width * height);
+    CHECK(bmp);
+    *bmp = (struct Bitmap) {width, height, (uint8_t*)(bmp + 1)};
+    memcpy(bmp->pixels, buffer, (size_t)width * height);
+    return bmp;
 }
+#    define vga_destroy_bitmap free
 
-static void teardown(void)
-{
-    for (void* ptr = (void*)VGA_PHYSICAL_START; ptr < (void*)VGA_PHYSICAL_END;
-         ptr += PAGE_SIZE) {
-        if (ptr != (void*)VGA_PHYSICAL_BASE) {
-            CHECK(vmm_unmap(ptr));
-        }
-    }
-
-    vga_text_mode();
-}
-
-static void delay(uint64_t ticks)
-{
-    enable_interrupts();
-    uint64_t deadline = pit_get_ticks() + ticks;
-    while (pit_get_ticks() < deadline)
-        hlt();
-    disable_interrupts();
-}
-
-#define WIDTH  VGA_MODE_X_WIDTH
-#define HEIGHT VGA_MODE_X_HEIGHT
-
-#if VGA_TEST_CHECKS
 static uint8_t expected[WIDTH * HEIGHT];
 static uint8_t snapshot[WIDTH * HEIGHT];
 
 static void read_screen(uint8_t* pixels)
 {
-    for (int plane = 0; plane < 4; ++plane) {
-        outb(0x3ce, 4);
-        outb(0x3cf, plane);
-        const volatile uint8_t* src = (const volatile uint8_t*)VGA_START;
-        for (int y = 0; y < HEIGHT; ++y)
-            for (int x = plane; x < WIDTH; x += 4)
-                pixels[y * WIDTH + x] = *src++;
-    }
+    memcpy(pixels, (void*)VGA_PHYSICAL_START, WIDTH * HEIGHT);
 }
 
 static void check_screen(void)
 {
-    vga_swap();
     read_screen(snapshot);
-    for (int i = 0; i < WIDTH * HEIGHT; ++i) {
-        if (snapshot[i] != expected[i]) {
-            trace("VGA mismatch (%d,%d): got %u, expected %u", i % WIDTH,
-                  i / WIDTH, snapshot[i], expected[i]);
-            debugexit(2);
-        }
-    }
+    CHECK(memcmp(snapshot, expected, sizeof(expected)) == 0);
 }
 
 static void reference_pixel(int x, int y, uint8_t color)
@@ -348,8 +424,6 @@ static void check_primitives(void)
     memset(expected, 0x53, sizeof(expected));
     check_screen();
     vga_clear(0);
-    read_screen(snapshot);
-    CHECK(memcmp(snapshot, expected, sizeof(expected)) == 0);
     memset(expected, 0, sizeof(expected));
 
     for (int i = 0; i < 16; ++i) {
@@ -401,7 +475,6 @@ static void check_curves(void)
                     vga_roundrect(x + w, y + h, x, y, 20, 255);
             }
         }
-        vga_swap();
         read_screen(snapshot);
         for (int h = 0; h < 12; ++h) {
             for (int w = 0; w < 12; ++w) {
@@ -438,7 +511,6 @@ static void check_curves(void)
     vga_clear(0);
     vga_oval(100, 80, 170, 124, 0xe3);
     vga_roundrect(180, 80, 250, 124, 12, 0xfc);
-    vga_swap();
     read_screen(snapshot);
     memset(expected, 0, sizeof(expected));
     reference_blit(snapshot, WIDTH, HEIGHT, 100, 80, expected, WIDTH, HEIGHT,
@@ -589,92 +661,22 @@ static void check_blits(struct Bitmap* logo, const uint8_t* raw)
     check_screen();
     vga_destroy_bitmap(small);
 }
-#endif
-
-static void animate(struct Bitmap* logo)
+int main(void)
 {
-    static const char* names[] = {"fills", "rectangles",         "lines",
-                                  "ovals", "rounded rectangles", "blits"};
-    for (int scene = 0; scene < 6; ++scene) {
-        trace("VGA animation: %s (uncapped, 100 PIT ticks)", names[scene]);
-        enable_interrupts();
-        uint64_t start = pit_get_ticks();
-        uint64_t now = start;
-        unsigned frames = 0;
-        do {
-            unsigned phase = (now - start) * 3;
-            vga_clear(0);
-            for (int i = 0; i < 48; ++i) {
-                int x = (phase + i * 37) % 400 - 40;
-                int y = (phase * 2 + i * 23) % 300 - 30;
-                uint8_t color = 1 + (i * 19 + phase) % 255;
-                switch (scene) {
-                case 0:
-                    vga_fillrect(x, y, x + 39, y + 27, color);
-                    break;
-                case 1:
-                    vga_rect(x, y, x + 57, y + 39, color);
-                    break;
-                case 2:
-                    vga_drawline(160, 120, x, y, color);
-                    break;
-                case 3:
-                    vga_oval(x, y, x + 57, y + 39, color);
-                    break;
-                case 4:
-                    vga_roundrect(x, y, x + 57, y + 39, 4 + i % 16, color);
-                    break;
-                case 5:
-                    vga_blit(logo, (i * 17) % 240, (i * 13) % 180, NULL, x, y,
-                             80, 60);
-                    break;
-                }
-            }
-            vga_rect(0, 0, WIDTH - 1, HEIGHT - 1, 255);
-            vga_swap();
-            ++frames;
-            now = pit_get_ticks();
-        } while (now - start < 100);
-        disable_interrupts();
-        trace("VGA %s: %u frames, %llu ticks, %llu FPS (48 primitives/frame)",
-              names[scene], frames, now - start,
-              (uint64_t)frames * 100 / (now - start));
-    }
-    vga_blit(logo, 0, 0, NULL, 0, 0, WIDTH, HEIGHT);
-    vga_swap();
-}
-
-void test_vga(void)
-{
-    setup();
-
-    struct Tar tar;
-    CHECK(tar_open(&tar, ramdisk_start, ramdisk_end - ramdisk_start) != false);
-
-    void* bitmap_buffer;
-    size_t bitmap_buffer_len;
-    CHECK(tar_open_file(&tar, "logo.raw", &bitmap_buffer,
-                        &bitmap_buffer_len) != false);
-
-    struct Bitmap* bmp =
-        vga_load_bitmap(bitmap_buffer, bitmap_buffer_len, 320, 240);
-
-    CHECK(bmp != NULL);
-#if VGA_TEST_CHECKS
+    CHECK(mmap((void*)VGA_PHYSICAL_START, WIDTH * HEIGHT,
+               PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+               -1, 0) == (void*)VGA_PHYSICAL_START);
+    uint8_t raw[WIDTH * HEIGHT];
+    for (unsigned i = 0; i < sizeof(raw); ++i)
+        raw[i] = i * 13 + i / WIDTH;
+    struct Bitmap* bmp = vga_load_bitmap(raw, sizeof(raw), WIDTH, HEIGHT);
     check_spans();
     check_primitives();
     check_curves();
     check_arithmetic_paths();
-    check_blits(bmp, bitmap_buffer);
-    trace("VGA pixel checks passed");
-#endif
-    animate(bmp);
-
-    vga_destroy_bitmap(bmp);
-    delay(100);
-    teardown();
-    trace("VGA tests passed");
-    printf("VGA tests passed\n");
-    halt();
+    check_blits(bmp, raw);
+    free(bmp);
+    puts("Userspace VGA pixel checks passed");
+    return 0;
 }
-
+#endif

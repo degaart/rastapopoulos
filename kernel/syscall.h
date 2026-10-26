@@ -24,23 +24,10 @@
 #define SYSCALL_VGA_DESTROY_BITMAP 22
 #define SYSCALL_VGA_SET_PALETTE    23
 
-struct SyscallVGARoundrect
-{
-    int x1, y1, x2, y2, radius;
-    unsigned char color;
-};
-
-struct SyscallVGABlit
-{
-    unsigned src;
-    int x1, y1;
-    unsigned dst;
-    int x2, y2, width, height;
-};
+#define SYSCALL_PERF_CLOCK    24
+#define SYSCALL_VGA_SWAP_RECT 25
 
 #ifdef RASTA_KERNEL
 void syscall_init(void);
-struct Process;
-void syscall_cleanup_bitmaps(struct Process* process);
 #endif
 

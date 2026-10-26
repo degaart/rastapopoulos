@@ -17,6 +17,12 @@ typedef struct
     uint8_t pixels[LCD_WIDTH * LCD_HEIGHT];
 } Lcd;
 
+struct LcdDamage
+{
+    int x1, y1, x2, y2;
+};
+bool lcd_update(Lcd* displayed, const Lcd* next, struct LcdDamage* damage);
+
 void lcd_clear(Lcd* lcd, uint8_t color);
 void lcd_pixel(Lcd* lcd, int x, int y, uint8_t color);
 void lcd_text(Lcd* lcd, int x, int y, const char* text, uint8_t color);

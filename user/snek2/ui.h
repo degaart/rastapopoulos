@@ -28,6 +28,7 @@ typedef enum
 typedef struct
 {
     SnakeScreen screen;
+    unsigned revision;
     SnakeGame game;
     unsigned level, maze, top_level;
     uint32_t top_score, seed;

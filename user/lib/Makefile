@@ -57,3 +57,5 @@ build:
 clean:
 	rm -rf build
 
+
+build/rasta.o: CFLAGS += -O2

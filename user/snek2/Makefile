@@ -1,3 +1,11 @@
 PROGRAM := build/snek2.bin
 include ../user.mk
 
+
+ifneq ($(SNEK_BENCHMARK),)
+CFLAGS += -DSNEK_BENCHMARK=$(SNEK_BENCHMARK)
+endif
+
+ifneq ($(SNEK_BENCHMARK_LEVEL),)
+CFLAGS += -DSNEK_BENCHMARK_LEVEL=$(SNEK_BENCHMARK_LEVEL)
+endif

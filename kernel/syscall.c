@@ -140,11 +140,6 @@ static int32_t syscall_unlock_screen(void)
     return vga_unlock_screen() ? 0 : -1;
 }
 
-static void syscall_putpixel(unsigned x, unsigned y, unsigned color)
-{
-    vga_putpixel(x, y, color);
-}
-
 static int32_t syscall_trace(const char* file, int file_len, int line,
                              const char* s, int len)
 {
@@ -161,105 +156,6 @@ static int32_t syscall_trace(const char* file, int file_len, int line,
 static void syscall_vga_swap(void)
 {
     vga_swap();
-}
-
-struct UserBitmap
-{
-    struct UserBitmap* next;
-    struct Process* owner;
-    struct Bitmap* bitmap;
-    unsigned handle;
-};
-
-static struct UserBitmap* user_bitmaps;
-static unsigned next_bitmap_handle = 1;
-
-static struct UserBitmap* find_bitmap(unsigned handle)
-{
-    for (struct UserBitmap* entry = user_bitmaps; entry; entry = entry->next) {
-        if (entry->handle == handle && entry->owner == process_current())
-            return entry;
-    }
-    return NULL;
-}
-
-void syscall_cleanup_bitmaps(struct Process* process)
-{
-    bool iflag = enter_critical_section();
-    struct UserBitmap** link = &user_bitmaps;
-    while (*link) {
-        struct UserBitmap* entry = *link;
-        if (entry->owner != process) {
-            link = &entry->next;
-            continue;
-        }
-        *link = entry->next;
-        vga_destroy_bitmap(entry->bitmap);
-        kfree(entry);
-    }
-    leave_critical_section(iflag);
-}
-
-static unsigned syscall_vga_load_bitmap(const void* buffer, size_t len,
-                                        int width, int height)
-{
-    if (!next_bitmap_handle || width <= 0 || height <= 0 ||
-        (size_t)width > len / (size_t)height)
-        return 0;
-    size_t size = (size_t)width * height;
-    if (!vmm_is_valid_userptr(buffer, size, false))
-        return 0;
-    struct UserBitmap* entry = kmalloc(sizeof(*entry));
-    if (!entry)
-        return 0;
-    struct Bitmap* bitmap = vga_load_bitmap(buffer, size, width, height);
-    if (!bitmap) {
-        kfree(entry);
-        return 0;
-    }
-    *entry = (struct UserBitmap) {user_bitmaps, process_current(), bitmap,
-                                  next_bitmap_handle++};
-    user_bitmaps = entry;
-    return entry->handle;
-}
-
-static int syscall_vga_destroy_bitmap(unsigned handle)
-{
-    struct UserBitmap** link = &user_bitmaps;
-    while (*link) {
-        struct UserBitmap* entry = *link;
-        if (entry->handle == handle && entry->owner == process_current()) {
-            *link = entry->next;
-            vga_destroy_bitmap(entry->bitmap);
-            kfree(entry);
-            return 0;
-        }
-        link = &entry->next;
-    }
-    return -1;
-}
-
-static int syscall_vga_roundrect(const struct SyscallVGARoundrect* args)
-{
-    if (!vmm_is_valid_userptr(args, sizeof(*args), false))
-        return -1;
-    struct SyscallVGARoundrect a = *args;
-    vga_roundrect(a.x1, a.y1, a.x2, a.y2, a.radius, a.color);
-    return 0;
-}
-
-static int syscall_vga_blit(const struct SyscallVGABlit* args)
-{
-    if (!vmm_is_valid_userptr(args, sizeof(*args), false))
-        return -1;
-    struct SyscallVGABlit a = *args;
-    struct UserBitmap* src = find_bitmap(a.src);
-    struct UserBitmap* dst = find_bitmap(a.dst);
-    if ((a.src && !src) || (a.dst && !dst))
-        return -1;
-    vga_blit(src ? src->bitmap : NULL, a.x1, a.y1, dst ? dst->bitmap : NULL,
-             a.x2, a.y2, a.width, a.height);
-    return 0;
 }
 
 static void syscall_vga_set_palette(uint8_t index, uint8_t red, uint8_t green,
@@ -324,51 +220,25 @@ void syscall_handler(int, struct isr_regs* regs)
     case SYSCALL_UNLOCK_SCREEN:
         regs->eax = syscall_unlock_screen();
         break;
-    case SYSCALL_PUTPIXEL:
-        syscall_putpixel(regs->ebx, regs->ecx, regs->edx);
-        regs->eax = 0;
-        break;
     case SYSCALL_TRACE:
         regs->eax = syscall_trace((const char*)regs->ebx, regs->ecx, regs->edx,
                                   (const char*)regs->esi, regs->edi);
         break;
+    case SYSCALL_PERF_CLOCK:
+    {
+        uint64_t clocks = pit_perf_clock();
+        regs->eax = clocks;
+        regs->edx = clocks >> 32;
+        break;
+    }
+    case SYSCALL_VGA_SWAP_RECT:
+        vga_swap_rect((int)regs->ebx, (int)regs->ecx, (int)regs->edx,
+                      (int)regs->esi);
+        regs->eax = 0;
+        break;
     case SYSCALL_VGA_SWAP:
         syscall_vga_swap();
         regs->eax = 0;
-        break;
-    case SYSCALL_VGA_FILLRECT:
-        vga_fillrect((int)regs->ebx, (int)regs->ecx, (int)regs->edx,
-                     (int)regs->esi, regs->edi);
-        regs->eax = 0;
-        break;
-    case SYSCALL_VGA_RECT:
-        vga_rect((int)regs->ebx, (int)regs->ecx, (int)regs->edx,
-                 (int)regs->esi, regs->edi);
-        regs->eax = 0;
-        break;
-    case SYSCALL_VGA_DRAWLINE:
-        vga_drawline((int)regs->ebx, (int)regs->ecx, (int)regs->edx,
-                     (int)regs->esi, regs->edi);
-        regs->eax = 0;
-        break;
-    case SYSCALL_VGA_OVAL:
-        vga_oval((int)regs->ebx, (int)regs->ecx, (int)regs->edx,
-                 (int)regs->esi, regs->edi);
-        regs->eax = 0;
-        break;
-    case SYSCALL_VGA_ROUNDRECT:
-        regs->eax = syscall_vga_roundrect(
-            (const struct SyscallVGARoundrect*)regs->ebx);
-        break;
-    case SYSCALL_VGA_BLIT:
-        regs->eax = syscall_vga_blit((const struct SyscallVGABlit*)regs->ebx);
-        break;
-    case SYSCALL_VGA_LOAD_BITMAP:
-        regs->eax = syscall_vga_load_bitmap((const void*)regs->ebx, regs->ecx,
-                                            regs->edx, regs->esi);
-        break;
-    case SYSCALL_VGA_DESTROY_BITMAP:
-        regs->eax = syscall_vga_destroy_bitmap(regs->ebx);
         break;
     case SYSCALL_VGA_SET_PALETTE:
         syscall_vga_set_palette(regs->ebx, regs->ecx, regs->edx, regs->esi);

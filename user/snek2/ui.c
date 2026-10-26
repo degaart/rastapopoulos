@@ -7,6 +7,7 @@
 static void enter(SnakeUI* ui, SnakeScreen screen)
 {
     ui->screen = screen;
+    ++ui->revision;
     ui->elapsed_ms = ui->accumulator_ms = 0;
     ui->selection = ui->first_visible = 0;
     ui->snake_visible = true;
@@ -81,6 +82,7 @@ static void select_menu(SnakeUI* ui)
 
 void ui_action(SnakeUI* ui, UiAction action)
 {
+    ++ui->revision;
     if (ui->screen == UI_TITLE) {
         enter(ui, UI_MENU);
         return;
@@ -165,6 +167,7 @@ void ui_action(SnakeUI* ui, UiAction action)
 
 void ui_keypad(SnakeUI* ui, unsigned key)
 {
+    ++ui->revision;
     if (ui->screen == UI_PLAY)
         snake_apply_keypad(&ui->game, key);
 }
@@ -178,8 +181,13 @@ void ui_update(SnakeUI* ui, uint32_t elapsed_ms)
     if (ui->screen == UI_TITLE) {
         if (ui->elapsed_ms >= 2700ull)
             enter(ui, UI_MENU);
-        else
-            ui->title_step = (unsigned)(ui->elapsed_ms / 250u);
+        else {
+            unsigned step = ui->elapsed_ms / 250u;
+            if (step != ui->title_step) {
+                ui->title_step = step;
+                ++ui->revision;
+            }
+        }
         return;
     }
     if (ui->screen == UI_DYING) {
@@ -190,8 +198,13 @@ void ui_update(SnakeUI* ui, uint32_t elapsed_ms)
                 ui->top_level = ui->game.level;
             }
             enter(ui, UI_GAME_OVER);
-        } else
-            ui->snake_visible = (ui->elapsed_ms / 250u) % 2 != 0;
+        } else {
+            bool visible = (ui->elapsed_ms / 250u) % 2 != 0;
+            if (visible != ui->snake_visible) {
+                ui->snake_visible = visible;
+                ++ui->revision;
+            }
+        }
         return;
     }
     if (ui->screen != UI_PLAY)
@@ -206,6 +219,7 @@ void ui_update(SnakeUI* ui, uint32_t elapsed_ms)
             break;
         ui->accumulator_ms -= period_ms;
         snake_tick(&ui->game);
+        ++ui->revision;
         if (ui->game.phase == SNAKE_DEAD || ui->game.phase == SNAKE_WON) {
             ui->has_game = false;
             enter(ui, UI_DYING);

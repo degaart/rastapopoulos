@@ -18,18 +18,43 @@ void lcd_pixel(Lcd* lcd, int x, int y, uint8_t color)
 static void rectangle(Lcd* lcd, int x, int y, int width, int height,
                       uint8_t color)
 {
-    for (int dy = 0; dy < height; ++dy)
-        for (int dx = 0; dx < width; ++dx)
-            lcd_pixel(lcd, x + dx, y + dy, color);
+    if (width <= 0 || height <= 0 || x >= LCD_WIDTH || y >= LCD_HEIGHT)
+        return;
+    int x1 = x < 0 ? 0 : x;
+    int y1 = y < 0 ? 0 : y;
+    int64_t right = (int64_t)x + width;
+    int64_t bottom = (int64_t)y + height;
+    if (right <= 0 || bottom <= 0)
+        return;
+    int x2 = right > LCD_WIDTH ? LCD_WIDTH : right;
+    int y2 = bottom > LCD_HEIGHT ? LCD_HEIGHT : bottom;
+    if (x1 >= x2 || y1 >= y2)
+        return;
+    for (int row = y1; row < y2; ++row)
+        memset(lcd->pixels + row * LCD_WIDTH + x1, color, x2 - x1);
 }
 void lcd_bitmap(Lcd* lcd, int x, int y, const FirmwareBitmap* bitmap)
 {
-    for (unsigned dy = 0; dy < bitmap->height; ++dy)
-        for (unsigned dx = 0; dx < bitmap->width; ++dx)
-            lcd_pixel(
-                lcd, x + (int)dx, y + (int)dy,
-                (bitmap->columns[dx + (dy / 8) * bitmap->width] >> (dy % 8)) &
-                    1);
+    if (x >= LCD_WIDTH || y >= LCD_HEIGHT || x <= -(int)bitmap->width ||
+        y <= -(int)bitmap->height)
+        return;
+    int left = x < 0 ? -x : 0;
+    int top = y < 0 ? -y : 0;
+    int right = bitmap->width;
+    int bottom = bitmap->height;
+    if ((int64_t)x + right > LCD_WIDTH)
+        right = LCD_WIDTH - x;
+    if ((int64_t)y + bottom > LCD_HEIGHT)
+        bottom = LCD_HEIGHT - y;
+    if (left >= right || top >= bottom)
+        return;
+    for (int dy = top; dy < bottom; ++dy) {
+        const uint8_t* in = bitmap->columns + (dy >> 3) * bitmap->width + left;
+        uint8_t* out = lcd->pixels + (y + dy) * LCD_WIDTH + x + left;
+        unsigned shift = dy & 7;
+        for (int dx = 0; dx < right - left; ++dx)
+            out[dx] = (in[dx] >> shift) & 1;
+    }
 }
 void lcd_text_font(Lcd* lcd, int x, int y, const char* text, NokiaFont font,
                    uint8_t color)
@@ -54,13 +79,10 @@ static void centered(Lcd* lcd, int y, const char* text, NokiaFont font)
 }
 static void hud_number(Lcd* lcd, int x, uint32_t number, unsigned digits)
 {
-    unsigned divisor = 1;
-    for (unsigned i = 1; i < digits; ++i)
-        divisor *= 10;
-    for (unsigned i = 0; i < digits; ++i) {
-        lcd_bitmap(lcd, x + (int)i * 4, 0,
-                   &firmware_digits[(number / divisor) % 10]);
-        divisor /= 10;
+    while (digits) {
+        --digits;
+        lcd_bitmap(lcd, x + (int)digits * 4, 0, &firmware_digits[number % 10]);
+        number /= 10;
     }
 }
 static SnakeDirection between(SnakeCell a, SnakeCell b)
@@ -91,19 +113,20 @@ void lcd_game_visible(Lcd* lcd, const SnakeGame* game, bool snake_visible)
     rectangle(lcd, 0, 47, 84, 1, 1);
     rectangle(lcd, 0, 8, 1, 40, 1);
     rectangle(lcd, 83, 8, 1, 40, 1);
-    for (unsigned y = 0; y < SNAKE_BOARD_HEIGHT; ++y)
-        for (unsigned x = 0; x < SNAKE_BOARD_WIDTH; ++x) {
-            if (!snake_maze_wall(game->maze, (uint8_t)x, (uint8_t)y))
-                continue;
-            int px = 3 + (int)x * 4, py = 11 + (int)y * 4;
-            rectangle(lcd, px, py, 2, 2, 1);
-            if (x + 1 < SNAKE_BOARD_WIDTH &&
-                snake_maze_wall(game->maze, (uint8_t)(x + 1), (uint8_t)y))
-                rectangle(lcd, px, py, 6, 2, 1);
-            if (y + 1 < SNAKE_BOARD_HEIGHT &&
-                snake_maze_wall(game->maze, (uint8_t)x, (uint8_t)(y + 1)))
-                rectangle(lcd, px, py, 2, 6, 1);
-        }
+    if (game->maze)
+        for (unsigned y = 0; y < SNAKE_BOARD_HEIGHT; ++y)
+            for (unsigned x = 0; x < SNAKE_BOARD_WIDTH; ++x) {
+                if (!snake_maze_wall(game->maze, (uint8_t)x, (uint8_t)y))
+                    continue;
+                int px = 3 + (int)x * 4, py = 11 + (int)y * 4;
+                rectangle(lcd, px, py, 2, 2, 1);
+                if (x + 1 < SNAKE_BOARD_WIDTH &&
+                    snake_maze_wall(game->maze, (uint8_t)(x + 1), (uint8_t)y))
+                    rectangle(lcd, px, py, 6, 2, 1);
+                if (y + 1 < SNAKE_BOARD_HEIGHT &&
+                    snake_maze_wall(game->maze, (uint8_t)x, (uint8_t)(y + 1)))
+                    rectangle(lcd, px, py, 2, 6, 1);
+            }
     if (game->food_present)
         lcd_bitmap(lcd, 2 + game->food.x * 4, 10 + game->food.y * 4,
                    &firmware_food);
@@ -262,4 +285,27 @@ void lcd_ui(Lcd* lcd, const SnakeUI* ui)
         centered(lcd, 25, text, NOKIA_LARGE_BOLD);
         break;
     }
+}
+
+bool lcd_update(Lcd* displayed, const Lcd* next, struct LcdDamage* damage)
+{
+    *damage = (struct LcdDamage) {LCD_WIDTH, LCD_HEIGHT, -1, -1};
+    for (int y = 0; y < LCD_HEIGHT; ++y) {
+        for (int x = 0; x < LCD_WIDTH; x += 4) {
+            uint32_t old, value;
+            __builtin_memcpy(&old, displayed->pixels + y * LCD_WIDTH + x, 4);
+            __builtin_memcpy(&value, next->pixels + y * LCD_WIDTH + x, 4);
+            if (old == value)
+                continue;
+            __builtin_memcpy(displayed->pixels + y * LCD_WIDTH + x, &value, 4);
+            if (x < damage->x1)
+                damage->x1 = x;
+            if (x + 3 > damage->x2)
+                damage->x2 = x + 3;
+            if (y < damage->y1)
+                damage->y1 = y;
+            damage->y2 = y;
+        }
+    }
+    return damage->x1 <= damage->x2;
 }

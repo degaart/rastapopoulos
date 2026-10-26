@@ -1,6 +1,8 @@
 #include "vga.h"
+#include "address_space.h"
 #include "kernel.h"
 #include "kmalloc.h"
+#include "pit.h"
 #include "process.h"
 #include "trace.h"
 #include "vmm.h"
@@ -55,102 +57,35 @@ static uint8_t text_font[FONT_SIZE];
 #define MODE_X_STRIDE     (VGA_MODE_X_WIDTH / 4)
 #define MODE_X_PLANE_SIZE (MODE_X_STRIDE * VGA_MODE_X_HEIGHT)
 
-struct Bitmap
+#define SHADOW_SIZE  (VGA_MODE_X_WIDTH * VGA_MODE_X_HEIGHT)
+#define SHADOW_PAGES ((SHADOW_SIZE + PAGE_SIZE - 1) / PAGE_SIZE)
+static void* shadow_allocation;
+static uint8_t* shadow;
+static unsigned visible_page;
+static unsigned profile_swaps, profile_bytes;
+static uint32_t profile_convert, profile_upload, profile_max;
+static uint8_t plane_buffer[MODE_X_PLANE_SIZE] ALIGNED(4);
+struct VGADamage
 {
-    int width;
-    int height;
-    size_t stride;
-    size_t plane_size;
-    uint8_t* pixels;
+    int x1, y1, x2, y2;
 };
+static struct VGADamage damage[2];
+extern void vga_pack_plane(uint8_t* dst, const uint8_t* src, unsigned count);
+extern void vga_pack_rows(uint8_t* dst, const uint8_t* src, unsigned count,
+                          unsigned rows);
+extern void vga_copy_rows(uint8_t* dst, const uint8_t* src, unsigned count,
+                          unsigned rows);
 
-static uint8_t backbuffer[4 * MODE_X_PLANE_SIZE] ALIGNED(4);
-static struct Bitmap screen = {VGA_MODE_X_WIDTH, VGA_MODE_X_HEIGHT,
-                               MODE_X_STRIDE, MODE_X_PLANE_SIZE, backbuffer};
-
-static const int next_column[4] = {1 - 3 * MODE_X_PLANE_SIZE,
-                                   MODE_X_PLANE_SIZE, MODE_X_PLANE_SIZE,
-                                   MODE_X_PLANE_SIZE};
-static const int previous_column[4] = {-MODE_X_PLANE_SIZE, -MODE_X_PLANE_SIZE,
-                                       -MODE_X_PLANE_SIZE,
-                                       3 * MODE_X_PLANE_SIZE - 1};
-
-extern void vga_fill_rows(uint8_t* dst, unsigned count, unsigned rows,
-                          uint8_t color);
-
-static uint8_t* bitmap_pixel(struct Bitmap* bitmap, int x, int y)
+static void damage_add(struct VGADamage* d, int x1, int y1, int x2, int y2)
 {
-    return bitmap->pixels + (x & 3) * bitmap->plane_size + y * bitmap->stride +
-           (x >> 2);
-}
-
-static void order_bounds(int* a, int* b)
-{
-    if (*a > *b) {
-        int tmp = *a;
-        *a = *b;
-        *b = tmp;
-    }
-}
-
-static bool bounds_visible(int x1, int y1, int x2, int y2)
-{
-    return x1 >= 0 && y1 >= 0 && x2 < VGA_MODE_X_WIDTH &&
-           y2 < VGA_MODE_X_HEIGHT;
-}
-
-static int column_offset(unsigned x)
-{
-    return (x & 3) * MODE_X_PLANE_SIZE + (x >> 2);
-}
-
-static void horizontal_span_unchecked(int x1, int y, int x2, uint8_t color)
-{
-    uint8_t* row = backbuffer + y * MODE_X_STRIDE;
-    for (int plane = 0; plane < 4; ++plane) {
-        int first = x1 + ((plane - x1) & 3);
-        if (first <= x2)
-            memset(row + plane * MODE_X_PLANE_SIZE + (first >> 2), color,
-                   ((x2 - first) >> 2) + 1);
-    }
-}
-
-static void horizontal_span(int x1, int y, int x2, uint8_t color)
-{
-    if ((unsigned)y >= VGA_MODE_X_HEIGHT)
-        return;
-    if (x1 < 0)
-        x1 = 0;
-    if (x2 >= VGA_MODE_X_WIDTH)
-        x2 = VGA_MODE_X_WIDTH - 1;
-    if (x1 > x2)
-        return;
-
-    horizontal_span_unchecked(x1, y, x2, color);
-}
-
-static void vertical_span_unchecked(int x, int y1, int y2, uint8_t color)
-{
-    unsigned offset = column_offset(x) + y1 * MODE_X_STRIDE;
-    unsigned rows = y2 - y1 + 1;
-    do {
-        backbuffer[offset] = color;
-        offset += MODE_X_STRIDE;
-    } while (--rows);
-}
-
-static void vertical_span(int x, int y1, int y2, uint8_t color)
-{
-    if ((unsigned)x >= VGA_MODE_X_WIDTH)
-        return;
-    if (y1 < 0)
-        y1 = 0;
-    if (y2 >= VGA_MODE_X_HEIGHT)
-        y2 = VGA_MODE_X_HEIGHT - 1;
-    if (y1 > y2)
-        return;
-
-    vertical_span_unchecked(x, y1, y2, color);
+    if (x1 < d->x1)
+        d->x1 = x1;
+    if (y1 < d->y1)
+        d->y1 = y1;
+    if (x2 > d->x2)
+        d->x2 = x2;
+    if (y2 > d->y2)
+        d->y2 = y2;
 }
 
 struct VGAPoint vga_get_cursor_pos(void)
@@ -258,42 +193,10 @@ static void vga_attribute(uint8_t index, uint8_t value)
     outb(ATTR_IDX_DATA, value);
 }
 
-void vga_putpixel(unsigned x, unsigned y, uint8_t color)
+void vga_swap_rect(int x1, int y1, int x2, int y2)
 {
-    if (x >= VGA_MODE_X_WIDTH || y >= VGA_MODE_X_HEIGHT) {
+    if (!shadow || locked_process != process_current())
         return;
-    }
-
-    backbuffer[(x & 3) * MODE_X_PLANE_SIZE + y * MODE_X_STRIDE + (x >> 2)] =
-        color;
-}
-
-void vga_swap(void)
-{
-    for (unsigned plane = 0; plane < 4; ++plane) {
-        vga_write_register(SEQ_IDX, SEQ_MAP_MASK, 1u << plane);
-        memcpy((void*)VGA_START, backbuffer + plane * MODE_X_PLANE_SIZE,
-               MODE_X_PLANE_SIZE);
-    }
-}
-
-void vga_clear(uint8_t color)
-{
-    memset(backbuffer, color, sizeof(backbuffer));
-}
-
-void vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    order_bounds(&x1, &x2);
-    order_bounds(&y1, &y2);
-    if (y1 == y2) {
-        horizontal_span(x1, y1, x2, color);
-        return;
-    }
-    if (x1 == x2) {
-        vertical_span(x1, y1, y2, color);
-        return;
-    }
     if (x1 < 0)
         x1 = 0;
     if (y1 < 0)
@@ -304,619 +207,65 @@ void vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
         y2 = VGA_MODE_X_HEIGHT - 1;
     if (x1 > x2 || y1 > y2)
         return;
-
-    uint8_t* row = backbuffer + y1 * MODE_X_STRIDE;
-    for (int plane = 0; plane < 4; ++plane) {
-        int first = x1 + ((plane - x1) & 3);
-        if (first > x2)
+    uint32_t begin = pit_perf_clock();
+    damage_add(&damage[0], x1, y1, x2, y2);
+    damage_add(&damage[1], x1, y1, x2, y2);
+    unsigned page = visible_page ^ 1;
+    unsigned offset = page * MODE_X_PLANE_SIZE;
+    struct VGADamage* d = &damage[page];
+    unsigned rows = d->y2 - d->y1 + 1;
+    for (unsigned plane = 0; plane < 4; ++plane) {
+        int first = d->x1 + ((plane - d->x1) & 3);
+        if (first > d->x2)
             continue;
-        size_t count = ((x2 - first) >> 2) + 1;
-        uint8_t* dst = row + plane * MODE_X_PLANE_SIZE + (first >> 2);
+        unsigned count = ((d->x2 - first) >> 2) + 1;
+        const uint8_t* src = shadow + d->y1 * VGA_MODE_X_WIDTH + first;
+        uint32_t start = pit_perf_clock();
         if (count == MODE_X_STRIDE) {
-            memset(dst, color, count * (y2 - y1 + 1));
-        } else {
-            vga_fill_rows(dst, count, y2 - y1 + 1, color);
-        }
-    }
-}
-
-void vga_rect(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    order_bounds(&x1, &x2);
-    order_bounds(&y1, &y2);
-    if (bounds_visible(x1, y1, x2, y2)) {
-        if (x1 == x2) {
-            vertical_span_unchecked(x1, y1, y2, color);
-            return;
-        }
-        horizontal_span_unchecked(x1, y1, x2, color);
-        if (y1 == y2)
-            return;
-        horizontal_span_unchecked(x1, y2, x2, color);
-        ++y1;
-        --y2;
-        if (y1 <= y2) {
-            vertical_span_unchecked(x1, y1, y2, color);
-            vertical_span_unchecked(x2, y1, y2, color);
-        }
-        return;
-    }
-    if (x1 == x2) {
-        vertical_span(x1, y1, y2, color);
-        return;
-    }
-    horizontal_span(x1, y1, x2, color);
-    if (y1 == y2)
-        return;
-    horizontal_span(x1, y2, x2, color);
-    ++y1;
-    --y2;
-    if (y1 <= y2) {
-        vertical_span(x1, y1, y2, color);
-        vertical_span(x2, y1, y2, color);
-    }
-}
-
-static void drawline_unchecked(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    int dx = x2 > x1 ? x2 - x1 : x1 - x2;
-    int dy = y2 > y1 ? y2 - y1 : y1 - y2;
-    if (dy > dx) {
-        if (y1 > y2) {
-            order_bounds(&y1, &y2);
-            int tmp = x1;
-            x1 = x2;
-            x2 = tmp;
-        }
-        int x_step = x1 < x2 ? 1 : -1;
-        const int* columns = x_step > 0 ? next_column : previous_column;
-        int offset = column_offset(x1) + y1 * MODE_X_STRIDE;
-        int error = dy / 2;
-        for (int y = y1; y <= y2; ++y) {
-            backbuffer[offset] = color;
-            offset += MODE_X_STRIDE;
-            error += dx;
-            if (error >= dy) {
-                error -= dy;
-                x1 += x_step;
-                offset += columns[x1 & 3];
+            unsigned total = count * rows;
+            for (unsigned i = 0; i < total; i += 1024) {
+                unsigned n = total - i;
+                if (n > 1024)
+                    n = 1024;
+                vga_pack_plane(plane_buffer + i, src + i * 4, n);
+                pit_perf_clock();
             }
-        }
-    } else {
-        if (x1 > x2) {
-            order_bounds(&x1, &x2);
-            int tmp = y1;
-            y1 = y2;
-            y2 = tmp;
-        }
-        int row_step = y1 < y2 ? MODE_X_STRIDE : -MODE_X_STRIDE;
-        int offset = column_offset(x1) + y1 * MODE_X_STRIDE;
-        int error = dx / 2;
-        for (int x = x1; x <= x2; ++x) {
-            backbuffer[offset] = color;
-            offset += next_column[(x + 1) & 3];
-            error += dy;
-            if (error >= dx) {
-                error -= dx;
-                offset += row_step;
-            }
-        }
-    }
-}
-
-static void drawline32(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    int dx = x2 - x1;
-    int dy = y2 - y1;
-    bool steep = (dy < 0 ? -dy : dy) > (dx < 0 ? -dx : dx);
-    int major1 = steep ? y1 : x1;
-    int major2 = steep ? y2 : x2;
-    int minor1 = steep ? x1 : y1;
-    int minor2 = steep ? x2 : y2;
-    if (major1 > major2) {
-        order_bounds(&major1, &major2);
-        int tmp = minor1;
-        minor1 = minor2;
-        minor2 = tmp;
-    }
-    int limit = steep ? VGA_MODE_X_HEIGHT : VGA_MODE_X_WIDTH;
-    int first = major1 < 0 ? 0 : major1;
-    int last = major2 >= limit ? limit - 1 : major2;
-    if (first > last)
-        return;
-
-    unsigned major = major2 - major1;
-    int delta = minor2 - minor1;
-    int step = delta < 0 ? -1 : 1;
-    unsigned minor = delta < 0 ? -delta : delta;
-    unsigned error = major / 2;
-    int pos = minor1;
-    if (first != major1) {
-        unsigned phase = (unsigned)(first - major1) * minor + error;
-        pos += (int)(phase / major) * step;
-        error = phase % major;
-    }
-    for (int i = first; i <= last; ++i) {
-        if (steep)
-            vga_putpixel(pos, i, color);
-        else
-            vga_putpixel(i, pos, color);
-        error += minor;
-        if (error >= major) {
-            error -= major;
-            pos += step;
-        }
-    }
-}
-
-static __attribute__((noinline)) void drawline64(int x1, int y1, int x2,
-                                                 int y2, uint8_t color)
-{
-    int64_t dx = (int64_t)x2 - x1;
-    int64_t dy = (int64_t)y2 - y1;
-    bool steep = (dy < 0 ? -dy : dy) > (dx < 0 ? -dx : dx);
-    int major1 = steep ? y1 : x1;
-    int major2 = steep ? y2 : x2;
-    int minor1 = steep ? x1 : y1;
-    int minor2 = steep ? x2 : y2;
-    if (major1 > major2) {
-        order_bounds(&major1, &major2);
-        int tmp = minor1;
-        minor1 = minor2;
-        minor2 = tmp;
-    }
-    int limit = steep ? VGA_MODE_X_HEIGHT : VGA_MODE_X_WIDTH;
-    int first = major1 < 0 ? 0 : major1;
-    int last = major2 >= limit ? limit - 1 : major2;
-    if (first > last)
-        return;
-
-    uint32_t major = (int64_t)major2 - major1;
-    int64_t delta = (int64_t)minor2 - minor1;
-    int step = delta < 0 ? -1 : 1;
-    uint32_t minor = delta < 0 ? -delta : delta;
-    uint64_t phase = (uint64_t)((int64_t)first - major1) * minor + major / 2;
-    int64_t pos = minor1 + (int64_t)(phase / major) * step;
-    uint64_t error = phase % major;
-    for (int i = first; i <= last; ++i) {
-        if (steep)
-            vga_putpixel(pos, i, color);
-        else
-            vga_putpixel(i, pos, color);
-        error += minor;
-        if (error >= major) {
-            error -= major;
-            pos += step;
-        }
-    }
-}
-
-void vga_drawline(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    if (y1 == y2) {
-        order_bounds(&x1, &x2);
-        horizontal_span(x1, y1, x2, color);
-        return;
-    }
-    if (x1 == x2) {
-        order_bounds(&y1, &y2);
-        vertical_span(x1, y1, y2, color);
-        return;
-    }
-
-    if ((unsigned)x1 < VGA_MODE_X_WIDTH && (unsigned)y1 < VGA_MODE_X_HEIGHT &&
-        (unsigned)x2 < VGA_MODE_X_WIDTH && (unsigned)y2 < VGA_MODE_X_HEIGHT) {
-        drawline_unchecked(x1, y1, x2, y2, color);
-    } else if ((unsigned)x1 + 32768u <= 65535u &&
-               (unsigned)y1 + 32768u <= 65535u &&
-               (unsigned)x2 + 32768u <= 65535u &&
-               (unsigned)y2 + 32768u <= 65535u) {
-        drawline32(x1, y1, x2, y2, color);
-    } else {
-        drawline64(x1, y1, x2, y2, color);
-    }
-}
-
-static void oval_unchecked(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    int a = x2 - x1;
-    int b = y2 - y1;
-    int odd = b & 1;
-    int dx = 4 * (1 - a) * b * b;
-    int dy = 4 * (odd + 1) * a * a;
-    int error = dx + dy + odd * a * a;
-    y1 += (b + 1) / 2;
-    y2 = y1 - odd;
-    a *= 8 * a;
-    odd = 8 * b * b;
-    int left = column_offset(x1);
-    int right = column_offset(x2);
-    int bottom = y1 * MODE_X_STRIDE;
-    int top = y2 * MODE_X_STRIDE;
-
-    do {
-        backbuffer[right + bottom] = color;
-        backbuffer[left + bottom] = color;
-        backbuffer[left + top] = color;
-        backbuffer[right + top] = color;
-        int twice = 2 * error;
-        if (twice <= dy) {
-            ++y1;
-            --y2;
-            bottom += MODE_X_STRIDE;
-            top -= MODE_X_STRIDE;
-            dy += a;
-            error += dy;
-        }
-        if (twice >= dx || 2 * error > dy) {
-            ++x1;
-            --x2;
-            left += next_column[x1 & 3];
-            right += previous_column[x2 & 3];
-            dx += odd;
-            error += dx;
-        }
-    } while (x1 <= x2);
-
-    left += previous_column[(x1 - 1) & 3];
-    right += next_column[(x2 + 1) & 3];
-    while (y1 - y2 <= b) {
-        backbuffer[left + bottom] = color;
-        backbuffer[right + bottom] = color;
-        backbuffer[left + top] = color;
-        backbuffer[right + top] = color;
-        ++y1;
-        --y2;
-        bottom += MODE_X_STRIDE;
-        top -= MODE_X_STRIDE;
-    }
-}
-
-static void oval32(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    int a = x2 - x1;
-    int b = y2 - y1;
-    int odd = b & 1;
-    int dx = 4 * (1 - a) * b * b;
-    int dy = 4 * (odd + 1) * a * a;
-    int error = dx + dy + odd * a * a;
-    y1 += (b + 1) / 2;
-    y2 = y1 - odd;
-    a *= 8 * a;
-    odd = 8 * b * b;
-
-    do {
-        vga_putpixel(x2, y1, color);
-        vga_putpixel(x1, y1, color);
-        vga_putpixel(x1, y2, color);
-        vga_putpixel(x2, y2, color);
-        int twice = 2 * error;
-        if (twice <= dy) {
-            ++y1;
-            --y2;
-            dy += a;
-            error += dy;
-        }
-        if (twice >= dx || 2 * error > dy) {
-            ++x1;
-            --x2;
-            dx += odd;
-            error += dx;
-        }
-    } while (x1 <= x2);
-
-    while (y1 - y2 <= b) {
-        vga_putpixel(x1 - 1, y1, color);
-        vga_putpixel(x2 + 1, y1++, color);
-        vga_putpixel(x1 - 1, y2, color);
-        vga_putpixel(x2 + 1, y2--, color);
-    }
-}
-
-static __attribute__((noinline)) void oval64(int x1, int y1, int x2, int y2,
-                                             uint8_t color)
-{
-    int64_t a = (int64_t)x2 - x1;
-    int64_t b = (int64_t)y2 - y1;
-    int64_t odd = b & 1;
-    int64_t dx = 4 * (1 - a) * b * b;
-    int64_t dy = 4 * (odd + 1) * a * a;
-    int64_t error = dx + dy + odd * a * a;
-    y1 += (b + 1) / 2;
-    y2 = y1 - odd;
-    a *= 8 * a;
-    odd = 8 * b * b;
-
-    do {
-        vga_putpixel(x2, y1, color);
-        vga_putpixel(x1, y1, color);
-        vga_putpixel(x1, y2, color);
-        vga_putpixel(x2, y2, color);
-        int64_t twice = 2 * error;
-        if (twice <= dy) {
-            ++y1;
-            --y2;
-            dy += a;
-            error += dy;
-        }
-        if (twice >= dx || 2 * error > dy) {
-            ++x1;
-            --x2;
-            dx += odd;
-            error += dx;
-        }
-    } while (x1 <= x2);
-
-    while ((int64_t)y1 - y2 <= b) {
-        vga_putpixel(x1 - 1, y1, color);
-        vga_putpixel(x2 + 1, y1++, color);
-        vga_putpixel(x1 - 1, y2, color);
-        vga_putpixel(x2 + 1, y2--, color);
-    }
-}
-
-void vga_oval(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    order_bounds(&x1, &x2);
-    order_bounds(&y1, &y2);
-    if (x2 < 0 || y2 < 0 || x1 >= VGA_MODE_X_WIDTH || y1 >= VGA_MODE_X_HEIGHT)
-        return;
-    if (x1 == x2 || y1 == y2) {
-        vga_fillrect(x1, y1, x2, y2, color);
-        return;
-    }
-    if (bounds_visible(x1, y1, x2, y2)) {
-        oval_unchecked(x1, y1, x2, y2, color);
-        return;
-    }
-
-    /* The midpoint intermediates fit in 32 bits within these bounds. */
-    if ((unsigned)x2 - (unsigned)x1 <= 384 &&
-        (unsigned)y2 - (unsigned)y1 <= 384) {
-        oval32(x1, y1, x2, y2, color);
-    } else {
-        oval64(x1, y1, x2, y2, color);
-    }
-}
-
-static void roundrect_unchecked(int left, int top, int right, int bottom,
-                                int radius, uint8_t color)
-{
-    int x = radius;
-    int y = 0;
-    int error = 1 - radius;
-    int left_x = column_offset(left - x);
-    int right_x = column_offset(right + x);
-    int left_y = column_offset(left);
-    int right_y = column_offset(right);
-    int top_x = (top - x) * MODE_X_STRIDE;
-    int bottom_x = (bottom + x) * MODE_X_STRIDE;
-    int top_y = top * MODE_X_STRIDE;
-    int bottom_y = bottom * MODE_X_STRIDE;
-    while (x >= y) {
-        backbuffer[left_x + top_y] = color;
-        backbuffer[left_y + top_x] = color;
-        backbuffer[right_x + top_y] = color;
-        backbuffer[right_y + top_x] = color;
-        backbuffer[left_x + bottom_y] = color;
-        backbuffer[left_y + bottom_x] = color;
-        backbuffer[right_x + bottom_y] = color;
-        backbuffer[right_y + bottom_x] = color;
-        ++y;
-        left_y += previous_column[(left - y) & 3];
-        right_y += next_column[(right + y) & 3];
-        top_y -= MODE_X_STRIDE;
-        bottom_y += MODE_X_STRIDE;
-        if (error < 0) {
-            error += 2 * y + 1;
         } else {
-            --x;
-            left_x += next_column[(left - x) & 3];
-            right_x += previous_column[(right + x) & 3];
-            top_x += MODE_X_STRIDE;
-            bottom_x -= MODE_X_STRIDE;
-            error += 2 * (y - x) + 1;
+            vga_pack_rows(plane_buffer, src, count, rows);
         }
-    }
-}
-
-static void roundrect32(int left, int top, int right, int bottom, int radius,
-                        uint8_t color)
-{
-    int x = radius;
-    int y = 0;
-    int error = 1 - radius;
-    while (x >= y) {
-        vga_putpixel(left - x, top - y, color);
-        vga_putpixel(left - y, top - x, color);
-        vga_putpixel(right + x, top - y, color);
-        vga_putpixel(right + y, top - x, color);
-        vga_putpixel(left - x, bottom + y, color);
-        vga_putpixel(left - y, bottom + x, color);
-        vga_putpixel(right + x, bottom + y, color);
-        vga_putpixel(right + y, bottom + x, color);
-        ++y;
-        if (error < 0) {
-            error += 2 * y + 1;
-        } else {
-            --x;
-            error += 2 * (y - x) + 1;
-        }
-    }
-}
-
-static __attribute__((noinline)) void roundrect64(int left, int top, int right,
-                                                  int bottom, int radius,
-                                                  uint8_t color)
-{
-    int x = radius;
-    int y = 0;
-    int64_t error = 1 - radius;
-    while (x >= y) {
-        vga_putpixel(left - x, top - y, color);
-        vga_putpixel(left - y, top - x, color);
-        vga_putpixel(right + x, top - y, color);
-        vga_putpixel(right + y, top - x, color);
-        vga_putpixel(left - x, bottom + y, color);
-        vga_putpixel(left - y, bottom + x, color);
-        vga_putpixel(right + x, bottom + y, color);
-        vga_putpixel(right + y, bottom + x, color);
-        ++y;
-        if (error < 0) {
-            error += 2 * (int64_t)y + 1;
-        } else {
-            --x;
-            error += 2 * ((int64_t)y - x) + 1;
-        }
-    }
-}
-
-void vga_roundrect(int x1, int y1, int x2, int y2, int radius, uint8_t color)
-{
-    order_bounds(&x1, &x2);
-    order_bounds(&y1, &y2);
-    if (x2 < 0 || y2 < 0 || x1 >= VGA_MODE_X_WIDTH || y1 >= VGA_MODE_X_HEIGHT)
-        return;
-    if (radius <= 0) {
-        vga_rect(x1, y1, x2, y2, color);
-        return;
-    }
-    unsigned max_radius = ((unsigned)x2 - (unsigned)x1) / 2;
-    unsigned max_y_radius = ((unsigned)y2 - (unsigned)y1) / 2;
-    if (max_y_radius < max_radius)
-        max_radius = max_y_radius;
-    if ((unsigned)radius > max_radius)
-        radius = max_radius;
-    if (!radius) {
-        vga_rect(x1, y1, x2, y2, color);
-        return;
-    }
-
-    int left = x1 + radius;
-    int right = x2 - radius;
-    int top = y1 + radius;
-    int bottom = y2 - radius;
-    if (bounds_visible(x1, y1, x2, y2)) {
-        horizontal_span_unchecked(left, y1, right, color);
-        horizontal_span_unchecked(left, y2, right, color);
-        vertical_span_unchecked(x1, top, bottom, color);
-        vertical_span_unchecked(x2, top, bottom, color);
-        roundrect_unchecked(left, top, right, bottom, radius, color);
-        return;
-    }
-    horizontal_span(left, y1, right, color);
-    horizontal_span(left, y2, right, color);
-    vertical_span(x1, top, bottom, color);
-    vertical_span(x2, top, bottom, color);
-    if (radius <= 32767) {
-        roundrect32(left, top, right, bottom, radius, color);
-    } else {
-        roundrect64(left, top, right, bottom, radius, color);
-    }
-}
-
-static bool clip_blit_axis(int* src, int src_limit, int* dst, int dst_limit,
-                           int* count)
-{
-    int64_t first = 0;
-    int64_t last = *count;
-    if (*src < 0)
-        first = -(int64_t)*src;
-    if (-(int64_t)*dst > first)
-        first = -(int64_t)*dst;
-    if ((int64_t)src_limit - *src < last)
-        last = (int64_t)src_limit - *src;
-    if ((int64_t)dst_limit - *dst < last)
-        last = (int64_t)dst_limit - *dst;
-    if (first >= last)
-        return false;
-    *src += first;
-    *dst += first;
-    *count = last - first;
-    return true;
-}
-
-void vga_blit(struct Bitmap* src, int x1, int y1, struct Bitmap* dst, int x2,
-              int y2, int width, int height)
-{
-    if (!src)
-        src = &screen;
-    if (!dst)
-        dst = &screen;
-    if (!clip_blit_axis(&x1, src->width, &x2, dst->width, &width) ||
-        !clip_blit_axis(&y1, src->height, &y2, dst->height, &height))
-        return;
-
-    bool overlap = src == dst && x2 < x1 + width && x1 < x2 + width &&
-                   y2 < y1 + height && y1 < y2 + height;
-    int row = overlap && y2 > y1 ? height - 1 : 0;
-    int step = overlap && y2 > y1 ? -1 : 1;
-
-    /* A shifted self-blit can overwrite a source plane not yet copied. */
-    if (overlap && ((x1 ^ x2) & 3)) {
-        int first = x2 > x1 ? width - 1 : 0;
-        int dx = x2 > x1 ? -1 : 1;
-        for (int n = 0; n < height; ++n, row += step) {
-            int x = first;
-            for (int i = 0; i < width; ++i, x += dx)
-                *bitmap_pixel(dst, x2 + x, y2 + row) =
-                    *bitmap_pixel(src, x1 + x, y1 + row);
-        }
-        return;
-    }
-
-    for (int plane = 0; plane < 4 && plane < width; ++plane) {
-        size_t count = ((width - 1 - plane) >> 2) + 1;
-        const uint8_t* in = bitmap_pixel(src, x1 + plane, y1 + row);
-        uint8_t* out = bitmap_pixel(dst, x2 + plane, y2 + row);
-        if (!overlap && count == src->stride && count == dst->stride) {
-            memcpy(out, in, count * height);
-            continue;
-        }
-        for (int n = 0; n < height; ++n) {
-            if (overlap && y1 == y2) {
-                memmove(out, in, count);
-            } else {
-                memcpy(out, in, count);
+        uint32_t converted = pit_perf_clock();
+        vga_write_register(SEQ_IDX, SEQ_MAP_MASK, 1u << plane);
+        uint8_t* dst = (uint8_t*)VGA_START + offset + d->y1 * MODE_X_STRIDE +
+                       (first >> 2);
+        if (count == MODE_X_STRIDE) {
+            unsigned total = count * rows;
+            for (unsigned i = 0; i < total; i += 4096) {
+                unsigned n = total - i;
+                if (n > 4096)
+                    n = 4096;
+                memcpy(dst + i, plane_buffer + i, n);
+                pit_perf_clock();
             }
-            if (n + 1 < height) {
-                in += step * (ptrdiff_t)src->stride;
-                out += step * (ptrdiff_t)dst->stride;
-            }
+        } else {
+            vga_copy_rows(dst, plane_buffer, count, rows);
         }
+        profile_convert += converted - start;
+        profile_upload += (uint32_t)pit_perf_clock() - converted;
+        profile_bytes += count * rows;
     }
+    *d = (struct VGADamage) {VGA_MODE_X_WIDTH, VGA_MODE_X_HEIGHT, -1, -1};
+    vga_write_register(CRTC_IDX, 0x0c, offset >> 8);
+    vga_write_register(CRTC_IDX, 0x0d, offset & 255);
+    visible_page = page;
+    ++profile_swaps;
+    uint32_t duration = (uint32_t)pit_perf_clock() - begin;
+    if (duration > profile_max)
+        profile_max = duration;
 }
 
-struct Bitmap* vga_load_bitmap(const void* buffer, size_t len, int width,
-                               int height)
+void vga_swap(void)
 {
-    if (width <= 0 || height <= 0 || (size_t)width > len / (size_t)height)
-        return NULL;
-    size_t stride = ((size_t)width + 3) >> 2;
-    if (stride > (SIZE_MAX - sizeof(struct Bitmap)) / 4 / (size_t)height)
-        return NULL;
-    size_t plane_size = stride * height;
-    struct Bitmap* bitmap = kmalloc(sizeof(*bitmap) + 4 * plane_size);
-    if (!bitmap)
-        return NULL;
-    *bitmap = (struct Bitmap) {width, height, stride, plane_size,
-                               (uint8_t*)(bitmap + 1)};
-    const uint8_t* pixels = buffer;
-    for (int plane = 0; plane < 4; ++plane) {
-        uint8_t* out = bitmap->pixels + plane * plane_size;
-        for (int y = 0; y < height; ++y) {
-            const uint8_t* in = pixels + (size_t)y * width;
-            for (int x = plane; x < width; x += 4)
-                out[x >> 2] = in[x];
-            out += stride;
-        }
-    }
-    return bitmap;
-}
-
-void vga_destroy_bitmap(struct Bitmap* bitmap)
-{
-    kfree(bitmap);
+    vga_swap_rect(0, 0, VGA_MODE_X_WIDTH - 1, VGA_MODE_X_HEIGHT - 1);
 }
 
 void vga_set_palette(uint8_t index, uint8_t red, uint8_t green, uint8_t blue)
@@ -929,7 +278,9 @@ void vga_set_palette(uint8_t index, uint8_t red, uint8_t green, uint8_t blue)
 
 void vga_mode_x(void)
 {
-    vga_clear(0);
+    visible_page = 0;
+    damage[0] = damage[1] =
+        (struct VGADamage) {VGA_MODE_X_WIDTH, VGA_MODE_X_HEIGHT, -1, -1};
     static const uint8_t sequencer[SEQ_REG_COUNT] = {0x03, 0x01, 0x0F, 0x00,
                                                      0x06};
 
@@ -1135,29 +486,57 @@ bool vga_lock_screen(void)
         leave_critical_section(iflag);
         return false;
     }
-
-    locked_process = process_current();
-    process_incref(locked_process);
-
-    for (void* ptr = (void*)VGA_PHYSICAL_START; ptr < (void*)VGA_PHYSICAL_END;
-         ptr += PAGE_SIZE) {
-        if (ptr != (void*)VGA_PHYSICAL_BASE) {
-            if (!vmm_map(ptr, ptr,
-                         VMM_USER | VMM_WRITABLE | VMM_UNCACHED |
-                             VMM_SHARED)) {
-                trace("Failed to map page 0x%p", ptr);
-                process_decref(locked_process);
-                locked_process = NULL;
-                leave_critical_section(iflag);
-                return false;
-            }
+    shadow_allocation = kmalloc(SHADOW_PAGES * PAGE_SIZE + PAGE_SIZE - 1);
+    if (!shadow_allocation) {
+        leave_critical_section(iflag);
+        return false;
+    }
+    shadow = (uint8_t*)(((uintptr_t)shadow_allocation + PAGE_SIZE - 1) &
+                        ~(uintptr_t)(PAGE_SIZE - 1));
+    memset(shadow, 0, SHADOW_PAGES * PAGE_SIZE);
+    unsigned mapped = 0;
+    for (; mapped < SHADOW_PAGES; ++mapped) {
+        void* frame;
+        if (!vmm_frame(shadow + mapped * PAGE_SIZE, &frame) ||
+            !vmm_map(frame, (void*)(VGA_PHYSICAL_START + mapped * PAGE_SIZE),
+                     VMM_USER | VMM_WRITABLE | VMM_SHARED)) {
+            while (mapped)
+                vmm_unmap((void*)(VGA_PHYSICAL_START + --mapped * PAGE_SIZE));
+            kfree(shadow_allocation);
+            shadow_allocation = NULL;
+            shadow = NULL;
+            leave_critical_section(iflag);
+            return false;
         }
     }
-
+    locked_process = process_current();
+    process_incref(locked_process);
     vga_mode_x();
-
+    profile_swaps = profile_bytes = 0;
+    profile_convert = profile_upload = profile_max = 0;
     leave_critical_section(iflag);
     return true;
+}
+
+void vga_cleanup_process(struct Process* owner)
+{
+    bool iflag = enter_critical_section();
+    if (locked_process != owner) {
+        leave_critical_section(iflag);
+        return;
+    }
+    for (unsigned i = 0; i < SHADOW_PAGES; ++i) {
+        if (!address_space_unmap(owner->as,
+                                 (void*)(VGA_PHYSICAL_START + i * PAGE_SIZE)))
+            panic("Failed to unmap VGA shadow page");
+    }
+    kfree(shadow_allocation);
+    shadow_allocation = NULL;
+    shadow = NULL;
+    locked_process = NULL;
+    vga_text_mode();
+    process_decref(owner);
+    leave_critical_section(iflag);
 }
 
 bool vga_unlock_screen(void)
@@ -1167,22 +546,11 @@ bool vga_unlock_screen(void)
         leave_critical_section(iflag);
         return false;
     }
-
-    process_decref(locked_process);
-    locked_process = NULL;
-
-    vga_text_mode();
-
-    for (void* ptr = (void*)VGA_PHYSICAL_START; ptr < (void*)VGA_PHYSICAL_END;
-         ptr += PAGE_SIZE) {
-        if (ptr != (void*)VGA_PHYSICAL_BASE) {
-            if (!vmm_unmap(ptr)) {
-                trace("Failed to unmap page 0x%p", ptr);
-            }
-        }
-    }
-
+    trace("VGA perf: swaps=%u bytes=%u convert_clocks=%u upload_clocks=%u "
+          "max_clocks=%u",
+          profile_swaps, profile_bytes, (unsigned)profile_convert,
+          (unsigned)profile_upload, (unsigned)profile_max);
+    vga_cleanup_process(locked_process);
     leave_critical_section(iflag);
     return true;
 }
-

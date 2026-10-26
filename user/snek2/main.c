@@ -5,6 +5,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef SNEK_BENCHMARK
+#    define SNEK_BENCHMARK 0
+#endif
+
+#ifndef SNEK_BENCHMARK_LEVEL
+#    define SNEK_BENCHMARK_LEVEL 1
+#endif
+
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 240
 
@@ -72,15 +80,44 @@ int main(void)
     sys_vga_set_palette(1, 255, 255, 255);
 
     static SnakeUI ui;
-    ui_init(&ui, (uint32_t)(sys_getticks() % 0xfff1u));
+    ui_init(&ui, SNEK_BENCHMARK ? 1 : (uint32_t)(sys_getticks() % 0xfff1u));
+
+    if (SNEK_BENCHMARK)
+        ui.level = SNEK_BENCHMARK_LEVEL;
 
     static Lcd lcd;
+    static Lcd displayed;
+    unsigned rendered_revision = 0;
+    unsigned presents = 0, idle_loops = 0;
+    uint32_t idle_clocks = 0;
     bool running = true;
     unsigned frames = 0;
-    uint32_t previous = sys_getticks();
+    uint32_t previous = sys_perf_clock();
+    uint32_t start = previous;
+    uint32_t clock_remainder = 0;
+    uint32_t update_clocks = 0, render_clocks = 0, blit_clocks = 0,
+             swap_clocks = 0;
+    uint32_t max_clocks = 0;
+    unsigned game_loops = 0;
+    unsigned simulated = 0;
     while (running) {
-        SnakeScreen old_screen = ui.screen;
-        uint32_t old_score = ui.game.score;
+        uint32_t frame_start = sys_perf_clock();
+        uint32_t elapsed =
+            (uint64_t)(frame_start - start) * 100 / PERF_CLOCK_HZ;
+        if (SNEK_BENCHMARK && simulated < 5 &&
+            elapsed >= (simulated < 2 ? simulated * 10
+                                      : 1000 + (simulated - 2) * 10)) {
+            uint16_t key = simulated < 2 ? SCANCODE_ENTER : SCANCODE_ESC;
+            if (ui.screen == UI_TITLE && key == SCANCODE_ESC)
+                running = false;
+            else
+                translate_key(&ui, key);
+            ++simulated;
+        }
+        if (!running)
+            break;
+        if (ui.screen == UI_PLAY)
+            ++game_loops;
 
         struct KeyEvent evt;
         int overflow;
@@ -98,28 +135,63 @@ int main(void)
             }
         }
 
-        uint32_t now = sys_getticks();
-        ui_update(&ui, (now - previous) * 10ull);
+        uint32_t now = sys_perf_clock();
+        uint64_t scaled = (uint64_t)(now - previous) * 1000 + clock_remainder;
+        ui_update(&ui, scaled / PERF_CLOCK_HZ);
+        clock_remainder = scaled % PERF_CLOCK_HZ;
         previous = now;
+        uint32_t render_start = sys_perf_clock();
+        update_clocks += render_start - now;
+        if (SNEK_BENCHMARK != 1 && rendered_revision == ui.revision) {
+            sys_sleep(1);
+            idle_clocks += (uint32_t)sys_perf_clock() - render_start;
+            ++idle_loops;
+            continue;
+        }
+        rendered_revision = ui.revision;
         lcd_ui(&lcd, &ui);
 
-        VGABitmap bmp = sys_vga_load_bitmap(lcd.pixels, sizeof(lcd.pixels),
-                                            LCD_WIDTH, LCD_HEIGHT);
-        if (!bmp) {
-            if (sys_unlock_screen() < 0) {
-                trace("sys_unlock_screen failed");
-                return 1;
-            }
-            printf("sys_vga_load_bitmap failed\n");
-            return 1;
+        uint32_t blit_start = sys_perf_clock();
+        render_clocks += blit_start - render_start;
+        struct LcdDamage dirty = {0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1};
+        bool changed =
+            SNEK_BENCHMARK == 1 || lcd_update(&displayed, &lcd, &dirty);
+        struct Bitmap bmp = {LCD_WIDTH, LCD_HEIGHT, lcd.pixels};
+        if (changed)
+            vga_blit(&bmp, dirty.x1, dirty.y1, NULL,
+                     (SCREEN_WIDTH - LCD_WIDTH) / 2 + dirty.x1,
+                     (SCREEN_HEIGHT - LCD_HEIGHT) / 2 + dirty.y1,
+                     dirty.x2 - dirty.x1 + 1, dirty.y2 - dirty.y1 + 1);
+        uint32_t swap_start = sys_perf_clock();
+        blit_clocks += swap_start - blit_start;
+        if (changed) {
+            sys_vga_swap_rect((SCREEN_WIDTH - LCD_WIDTH) / 2 + dirty.x1,
+                              (SCREEN_HEIGHT - LCD_HEIGHT) / 2 + dirty.y1,
+                              (SCREEN_WIDTH - LCD_WIDTH) / 2 + dirty.x2,
+                              (SCREEN_HEIGHT - LCD_HEIGHT) / 2 + dirty.y2);
+            ++presents;
         }
-        sys_vga_blit(bmp, 0, 0, 0, (SCREEN_WIDTH - LCD_WIDTH) / 2,
-                     (SCREEN_HEIGHT - LCD_HEIGHT) / 2, LCD_WIDTH, LCD_HEIGHT);
-        sys_vga_swap();
-        sys_vga_destroy_bitmap(bmp);
-        sys_sleep(1);
+        uint32_t done = sys_perf_clock();
+        swap_clocks += done - swap_start;
+        if (done - frame_start > max_clocks)
+            max_clocks = done - frame_start;
+        ++frames;
     }
 
+    uint32_t duration = (uint32_t)sys_perf_clock() - start;
+    if (duration && frames) {
+        trace("SNEK perf: frames=%u clocks=%u fps_x100=%u game_loops=%u",
+              frames, (unsigned)duration,
+              (unsigned)((uint64_t)frames * PERF_CLOCK_HZ * 100 / duration),
+              game_loops);
+        trace("SNEK stages: update=%u lcd=%u blit=%u swap=%u max=%u clocks",
+              (unsigned)update_clocks, (unsigned)render_clocks,
+              (unsigned)blit_clocks, (unsigned)swap_clocks,
+              (unsigned)max_clocks);
+        trace("SNEK work: presents=%u idle_loops=%u idle_clocks=%u "
+              "game_steps=%lu",
+              presents, idle_loops, (unsigned)idle_clocks, ui.game.tick);
+    }
     if (sys_unlock_screen() < 0) {
         trace("sys_unlock_screen failed");
         return 1;

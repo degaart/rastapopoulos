@@ -6,8 +6,8 @@
 #include "kthread.h"
 #include "ps2kbd.h"
 #include "string.h"
-#include "syscall.h"
 #include "trace.h"
+#include "vga.h"
 
 struct Process* kernel_task;
 struct Process* current_proc;
@@ -173,7 +173,6 @@ int process_decref(struct Process* proc)
     }
     leave_critical_section(iflag);
 
-    syscall_cleanup_bitmaps(proc);
     kfree(proc->input_queue);
 
     address_space_destroy(proc->as);
@@ -208,6 +207,7 @@ void process_remove_thread(struct Process* proc, struct Thread* thread)
     proc->live_threads--;
 
     if (proc->live_threads == 0) {
+        vga_cleanup_process(proc);
         process_deactivate(proc);
         proc->state = PROCESS_EXITED;
         event_signal(&proc->termination_event);

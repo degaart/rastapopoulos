@@ -41,12 +41,28 @@
 #define PIT_BCD    0x01
 
 volatile uint64_t ticks = 0;
+static uint16_t perf_previous;
+static uint64_t perf_clocks;
+
+uint64_t pit_perf_clock(void)
+{
+    bool flag = enter_critical_section();
+    outb(PIT_COMMAND, PIT_CHANNEL2 | PIT_LATCH);
+    unsigned low = inb(PIT_CHANNEL2_DATA);
+    uint16_t counter = low | ((unsigned)inb(PIT_CHANNEL2_DATA) << 8);
+    perf_clocks += (uint16_t)(perf_previous - counter);
+    perf_previous = counter;
+    uint64_t result = perf_clocks;
+    leave_critical_section(flag);
+    return result;
+}
 
 /*
  * WARNING: Do not run time-hungry operations in this IRQ handler
  */
 static void pit_irq_handler(int irq, struct isr_regs* regs)
 {
+    pit_perf_clock();
     ticks++;
     if (ticks == 1)
         trace("First IRQ0 received");
@@ -75,6 +91,11 @@ static void pit_irq_handler(int irq, struct isr_regs* regs)
 void pit_init(uint32_t frequency)
 {
     uint16_t divisor = PIT_BASE_FREQUENCY / frequency;
+    outb(0x61, (inb(0x61) & ~3u) | 1u);
+    outb(PIT_COMMAND, PIT_CHANNEL2 | PIT_ACCESS_LOHIBYTE | PIT_MODE2);
+    outb(PIT_CHANNEL2_DATA, 0);
+    outb(PIT_CHANNEL2_DATA, 0);
+    pit_perf_clock();
 
     /* tell pit how we send the divisor value and the mode*/
     outb(PIT_COMMAND,
