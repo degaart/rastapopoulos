@@ -68,6 +68,16 @@ static uint8_t backbuffer[4 * MODE_X_PLANE_SIZE] ALIGNED(4);
 static struct Bitmap screen = {VGA_MODE_X_WIDTH, VGA_MODE_X_HEIGHT,
                                MODE_X_STRIDE, MODE_X_PLANE_SIZE, backbuffer};
 
+static const int next_column[4] = {1 - 3 * MODE_X_PLANE_SIZE,
+                                   MODE_X_PLANE_SIZE, MODE_X_PLANE_SIZE,
+                                   MODE_X_PLANE_SIZE};
+static const int previous_column[4] = {-MODE_X_PLANE_SIZE, -MODE_X_PLANE_SIZE,
+                                       -MODE_X_PLANE_SIZE,
+                                       3 * MODE_X_PLANE_SIZE - 1};
+
+extern void vga_fill_rows(uint8_t* dst, unsigned count, unsigned rows,
+                          uint8_t color);
+
 static uint8_t* bitmap_pixel(struct Bitmap* bitmap, int x, int y)
 {
     return bitmap->pixels + (x & 3) * bitmap->plane_size + y * bitmap->stride +
@@ -81,6 +91,66 @@ static void order_bounds(int* a, int* b)
         *a = *b;
         *b = tmp;
     }
+}
+
+static bool bounds_visible(int x1, int y1, int x2, int y2)
+{
+    return x1 >= 0 && y1 >= 0 && x2 < VGA_MODE_X_WIDTH &&
+           y2 < VGA_MODE_X_HEIGHT;
+}
+
+static int column_offset(unsigned x)
+{
+    return (x & 3) * MODE_X_PLANE_SIZE + (x >> 2);
+}
+
+static void horizontal_span_unchecked(int x1, int y, int x2, uint8_t color)
+{
+    uint8_t* row = backbuffer + y * MODE_X_STRIDE;
+    for (int plane = 0; plane < 4; ++plane) {
+        int first = x1 + ((plane - x1) & 3);
+        if (first <= x2)
+            memset(row + plane * MODE_X_PLANE_SIZE + (first >> 2), color,
+                   ((x2 - first) >> 2) + 1);
+    }
+}
+
+static void horizontal_span(int x1, int y, int x2, uint8_t color)
+{
+    if ((unsigned)y >= VGA_MODE_X_HEIGHT)
+        return;
+    if (x1 < 0)
+        x1 = 0;
+    if (x2 >= VGA_MODE_X_WIDTH)
+        x2 = VGA_MODE_X_WIDTH - 1;
+    if (x1 > x2)
+        return;
+
+    horizontal_span_unchecked(x1, y, x2, color);
+}
+
+static void vertical_span_unchecked(int x, int y1, int y2, uint8_t color)
+{
+    unsigned offset = column_offset(x) + y1 * MODE_X_STRIDE;
+    unsigned rows = y2 - y1 + 1;
+    do {
+        backbuffer[offset] = color;
+        offset += MODE_X_STRIDE;
+    } while (--rows);
+}
+
+static void vertical_span(int x, int y1, int y2, uint8_t color)
+{
+    if ((unsigned)x >= VGA_MODE_X_WIDTH)
+        return;
+    if (y1 < 0)
+        y1 = 0;
+    if (y2 >= VGA_MODE_X_HEIGHT)
+        y2 = VGA_MODE_X_HEIGHT - 1;
+    if (y1 > y2)
+        return;
+
+    vertical_span_unchecked(x, y1, y2, color);
 }
 
 struct VGAPoint vga_get_cursor_pos(void)
@@ -216,6 +286,14 @@ void vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
 {
     order_bounds(&x1, &x2);
     order_bounds(&y1, &y2);
+    if (y1 == y2) {
+        horizontal_span(x1, y1, x2, color);
+        return;
+    }
+    if (x1 == x2) {
+        vertical_span(x1, y1, y2, color);
+        return;
+    }
     if (x1 < 0)
         x1 = 0;
     if (y1 < 0)
@@ -227,17 +305,17 @@ void vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
     if (x1 > x2 || y1 > y2)
         return;
 
+    uint8_t* row = backbuffer + y1 * MODE_X_STRIDE;
     for (int plane = 0; plane < 4; ++plane) {
         int first = x1 + ((plane - x1) & 3);
         if (first > x2)
             continue;
         size_t count = ((x2 - first) >> 2) + 1;
-        uint8_t* dst = bitmap_pixel(&screen, first, y1);
+        uint8_t* dst = row + plane * MODE_X_PLANE_SIZE + (first >> 2);
         if (count == MODE_X_STRIDE) {
             memset(dst, color, count * (y2 - y1 + 1));
         } else {
-            for (int y = y1; y <= y2; ++y, dst += MODE_X_STRIDE)
-                memset(dst, color, count);
+            vga_fill_rows(dst, count, y2 - y1 + 1, color);
         }
     }
 }
@@ -246,19 +324,134 @@ void vga_rect(int x1, int y1, int x2, int y2, uint8_t color)
 {
     order_bounds(&x1, &x2);
     order_bounds(&y1, &y2);
-    vga_fillrect(x1, y1, x2, y1, color);
-    vga_fillrect(x1, y2, x2, y2, color);
-    vga_fillrect(x1, y1, x1, y2, color);
-    vga_fillrect(x2, y1, x2, y2, color);
-}
-
-void vga_drawline(int x1, int y1, int x2, int y2, uint8_t color)
-{
-    if (x1 == x2 || y1 == y2) {
-        vga_fillrect(x1, y1, x2, y2, color);
+    if (bounds_visible(x1, y1, x2, y2)) {
+        if (x1 == x2) {
+            vertical_span_unchecked(x1, y1, y2, color);
+            return;
+        }
+        horizontal_span_unchecked(x1, y1, x2, color);
+        if (y1 == y2)
+            return;
+        horizontal_span_unchecked(x1, y2, x2, color);
+        ++y1;
+        --y2;
+        if (y1 <= y2) {
+            vertical_span_unchecked(x1, y1, y2, color);
+            vertical_span_unchecked(x2, y1, y2, color);
+        }
         return;
     }
+    if (x1 == x2) {
+        vertical_span(x1, y1, y2, color);
+        return;
+    }
+    horizontal_span(x1, y1, x2, color);
+    if (y1 == y2)
+        return;
+    horizontal_span(x1, y2, x2, color);
+    ++y1;
+    --y2;
+    if (y1 <= y2) {
+        vertical_span(x1, y1, y2, color);
+        vertical_span(x2, y1, y2, color);
+    }
+}
 
+static void drawline_unchecked(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    int dx = x2 > x1 ? x2 - x1 : x1 - x2;
+    int dy = y2 > y1 ? y2 - y1 : y1 - y2;
+    if (dy > dx) {
+        if (y1 > y2) {
+            order_bounds(&y1, &y2);
+            int tmp = x1;
+            x1 = x2;
+            x2 = tmp;
+        }
+        int x_step = x1 < x2 ? 1 : -1;
+        const int* columns = x_step > 0 ? next_column : previous_column;
+        int offset = column_offset(x1) + y1 * MODE_X_STRIDE;
+        int error = dy / 2;
+        for (int y = y1; y <= y2; ++y) {
+            backbuffer[offset] = color;
+            offset += MODE_X_STRIDE;
+            error += dx;
+            if (error >= dy) {
+                error -= dy;
+                x1 += x_step;
+                offset += columns[x1 & 3];
+            }
+        }
+    } else {
+        if (x1 > x2) {
+            order_bounds(&x1, &x2);
+            int tmp = y1;
+            y1 = y2;
+            y2 = tmp;
+        }
+        int row_step = y1 < y2 ? MODE_X_STRIDE : -MODE_X_STRIDE;
+        int offset = column_offset(x1) + y1 * MODE_X_STRIDE;
+        int error = dx / 2;
+        for (int x = x1; x <= x2; ++x) {
+            backbuffer[offset] = color;
+            offset += next_column[(x + 1) & 3];
+            error += dy;
+            if (error >= dx) {
+                error -= dx;
+                offset += row_step;
+            }
+        }
+    }
+}
+
+static void drawline32(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    int dx = x2 - x1;
+    int dy = y2 - y1;
+    bool steep = (dy < 0 ? -dy : dy) > (dx < 0 ? -dx : dx);
+    int major1 = steep ? y1 : x1;
+    int major2 = steep ? y2 : x2;
+    int minor1 = steep ? x1 : y1;
+    int minor2 = steep ? x2 : y2;
+    if (major1 > major2) {
+        order_bounds(&major1, &major2);
+        int tmp = minor1;
+        minor1 = minor2;
+        minor2 = tmp;
+    }
+    int limit = steep ? VGA_MODE_X_HEIGHT : VGA_MODE_X_WIDTH;
+    int first = major1 < 0 ? 0 : major1;
+    int last = major2 >= limit ? limit - 1 : major2;
+    if (first > last)
+        return;
+
+    unsigned major = major2 - major1;
+    int delta = minor2 - minor1;
+    int step = delta < 0 ? -1 : 1;
+    unsigned minor = delta < 0 ? -delta : delta;
+    unsigned error = major / 2;
+    int pos = minor1;
+    if (first != major1) {
+        unsigned phase = (unsigned)(first - major1) * minor + error;
+        pos += (int)(phase / major) * step;
+        error = phase % major;
+    }
+    for (int i = first; i <= last; ++i) {
+        if (steep)
+            vga_putpixel(pos, i, color);
+        else
+            vga_putpixel(i, pos, color);
+        error += minor;
+        if (error >= major) {
+            error -= major;
+            pos += step;
+        }
+    }
+}
+
+static __attribute__((noinline)) void drawline64(int x1, int y1, int x2,
+                                                 int y2, uint8_t color)
+{
     int64_t dx = (int64_t)x2 - x1;
     int64_t dy = (int64_t)y2 - y1;
     bool steep = (dy < 0 ? -dy : dy) > (dx < 0 ? -dx : dx);
@@ -298,17 +491,131 @@ void vga_drawline(int x1, int y1, int x2, int y2, uint8_t color)
     }
 }
 
-void vga_oval(int x1, int y1, int x2, int y2, uint8_t color)
+void vga_drawline(int x1, int y1, int x2, int y2, uint8_t color)
 {
-    order_bounds(&x1, &x2);
-    order_bounds(&y1, &y2);
-    if (x2 < 0 || y2 < 0 || x1 >= VGA_MODE_X_WIDTH || y1 >= VGA_MODE_X_HEIGHT)
+    if (y1 == y2) {
+        order_bounds(&x1, &x2);
+        horizontal_span(x1, y1, x2, color);
         return;
-    if (x1 == x2 || y1 == y2) {
-        vga_fillrect(x1, y1, x2, y2, color);
+    }
+    if (x1 == x2) {
+        order_bounds(&y1, &y2);
+        vertical_span(x1, y1, y2, color);
         return;
     }
 
+    if ((unsigned)x1 < VGA_MODE_X_WIDTH && (unsigned)y1 < VGA_MODE_X_HEIGHT &&
+        (unsigned)x2 < VGA_MODE_X_WIDTH && (unsigned)y2 < VGA_MODE_X_HEIGHT) {
+        drawline_unchecked(x1, y1, x2, y2, color);
+    } else if ((unsigned)x1 + 32768u <= 65535u &&
+               (unsigned)y1 + 32768u <= 65535u &&
+               (unsigned)x2 + 32768u <= 65535u &&
+               (unsigned)y2 + 32768u <= 65535u) {
+        drawline32(x1, y1, x2, y2, color);
+    } else {
+        drawline64(x1, y1, x2, y2, color);
+    }
+}
+
+static void oval_unchecked(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    int a = x2 - x1;
+    int b = y2 - y1;
+    int odd = b & 1;
+    int dx = 4 * (1 - a) * b * b;
+    int dy = 4 * (odd + 1) * a * a;
+    int error = dx + dy + odd * a * a;
+    y1 += (b + 1) / 2;
+    y2 = y1 - odd;
+    a *= 8 * a;
+    odd = 8 * b * b;
+    int left = column_offset(x1);
+    int right = column_offset(x2);
+    int bottom = y1 * MODE_X_STRIDE;
+    int top = y2 * MODE_X_STRIDE;
+
+    do {
+        backbuffer[right + bottom] = color;
+        backbuffer[left + bottom] = color;
+        backbuffer[left + top] = color;
+        backbuffer[right + top] = color;
+        int twice = 2 * error;
+        if (twice <= dy) {
+            ++y1;
+            --y2;
+            bottom += MODE_X_STRIDE;
+            top -= MODE_X_STRIDE;
+            dy += a;
+            error += dy;
+        }
+        if (twice >= dx || 2 * error > dy) {
+            ++x1;
+            --x2;
+            left += next_column[x1 & 3];
+            right += previous_column[x2 & 3];
+            dx += odd;
+            error += dx;
+        }
+    } while (x1 <= x2);
+
+    left += previous_column[(x1 - 1) & 3];
+    right += next_column[(x2 + 1) & 3];
+    while (y1 - y2 <= b) {
+        backbuffer[left + bottom] = color;
+        backbuffer[right + bottom] = color;
+        backbuffer[left + top] = color;
+        backbuffer[right + top] = color;
+        ++y1;
+        --y2;
+        bottom += MODE_X_STRIDE;
+        top -= MODE_X_STRIDE;
+    }
+}
+
+static void oval32(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    int a = x2 - x1;
+    int b = y2 - y1;
+    int odd = b & 1;
+    int dx = 4 * (1 - a) * b * b;
+    int dy = 4 * (odd + 1) * a * a;
+    int error = dx + dy + odd * a * a;
+    y1 += (b + 1) / 2;
+    y2 = y1 - odd;
+    a *= 8 * a;
+    odd = 8 * b * b;
+
+    do {
+        vga_putpixel(x2, y1, color);
+        vga_putpixel(x1, y1, color);
+        vga_putpixel(x1, y2, color);
+        vga_putpixel(x2, y2, color);
+        int twice = 2 * error;
+        if (twice <= dy) {
+            ++y1;
+            --y2;
+            dy += a;
+            error += dy;
+        }
+        if (twice >= dx || 2 * error > dy) {
+            ++x1;
+            --x2;
+            dx += odd;
+            error += dx;
+        }
+    } while (x1 <= x2);
+
+    while (y1 - y2 <= b) {
+        vga_putpixel(x1 - 1, y1, color);
+        vga_putpixel(x2 + 1, y1++, color);
+        vga_putpixel(x1 - 1, y2, color);
+        vga_putpixel(x2 + 1, y2--, color);
+    }
+}
+
+static __attribute__((noinline)) void oval64(int x1, int y1, int x2, int y2,
+                                             uint8_t color)
+{
     int64_t a = (int64_t)x2 - x1;
     int64_t b = (int64_t)y2 - y1;
     int64_t odd = b & 1;
@@ -348,30 +655,100 @@ void vga_oval(int x1, int y1, int x2, int y2, uint8_t color)
     }
 }
 
-void vga_roundrect(int x1, int y1, int x2, int y2, int radius, uint8_t color)
+void vga_oval(int x1, int y1, int x2, int y2, uint8_t color)
 {
     order_bounds(&x1, &x2);
     order_bounds(&y1, &y2);
     if (x2 < 0 || y2 < 0 || x1 >= VGA_MODE_X_WIDTH || y1 >= VGA_MODE_X_HEIGHT)
         return;
-    int64_t max_radius = ((int64_t)x2 - x1) / 2;
-    if (((int64_t)y2 - y1) / 2 < max_radius)
-        max_radius = ((int64_t)y2 - y1) / 2;
-    if (radius > max_radius)
-        radius = max_radius;
-    if (radius <= 0) {
-        vga_rect(x1, y1, x2, y2, color);
+    if (x1 == x2 || y1 == y2) {
+        vga_fillrect(x1, y1, x2, y2, color);
+        return;
+    }
+    if (bounds_visible(x1, y1, x2, y2)) {
+        oval_unchecked(x1, y1, x2, y2, color);
         return;
     }
 
-    int left = x1 + radius;
-    int right = x2 - radius;
-    int top = y1 + radius;
-    int bottom = y2 - radius;
-    vga_fillrect(left, y1, right, y1, color);
-    vga_fillrect(left, y2, right, y2, color);
-    vga_fillrect(x1, top, x1, bottom, color);
-    vga_fillrect(x2, top, x2, bottom, color);
+    /* The midpoint intermediates fit in 32 bits within these bounds. */
+    if ((unsigned)x2 - (unsigned)x1 <= 384 &&
+        (unsigned)y2 - (unsigned)y1 <= 384) {
+        oval32(x1, y1, x2, y2, color);
+    } else {
+        oval64(x1, y1, x2, y2, color);
+    }
+}
+
+static void roundrect_unchecked(int left, int top, int right, int bottom,
+                                int radius, uint8_t color)
+{
+    int x = radius;
+    int y = 0;
+    int error = 1 - radius;
+    int left_x = column_offset(left - x);
+    int right_x = column_offset(right + x);
+    int left_y = column_offset(left);
+    int right_y = column_offset(right);
+    int top_x = (top - x) * MODE_X_STRIDE;
+    int bottom_x = (bottom + x) * MODE_X_STRIDE;
+    int top_y = top * MODE_X_STRIDE;
+    int bottom_y = bottom * MODE_X_STRIDE;
+    while (x >= y) {
+        backbuffer[left_x + top_y] = color;
+        backbuffer[left_y + top_x] = color;
+        backbuffer[right_x + top_y] = color;
+        backbuffer[right_y + top_x] = color;
+        backbuffer[left_x + bottom_y] = color;
+        backbuffer[left_y + bottom_x] = color;
+        backbuffer[right_x + bottom_y] = color;
+        backbuffer[right_y + bottom_x] = color;
+        ++y;
+        left_y += previous_column[(left - y) & 3];
+        right_y += next_column[(right + y) & 3];
+        top_y -= MODE_X_STRIDE;
+        bottom_y += MODE_X_STRIDE;
+        if (error < 0) {
+            error += 2 * y + 1;
+        } else {
+            --x;
+            left_x += next_column[(left - x) & 3];
+            right_x += previous_column[(right + x) & 3];
+            top_x += MODE_X_STRIDE;
+            bottom_x -= MODE_X_STRIDE;
+            error += 2 * (y - x) + 1;
+        }
+    }
+}
+
+static void roundrect32(int left, int top, int right, int bottom, int radius,
+                        uint8_t color)
+{
+    int x = radius;
+    int y = 0;
+    int error = 1 - radius;
+    while (x >= y) {
+        vga_putpixel(left - x, top - y, color);
+        vga_putpixel(left - y, top - x, color);
+        vga_putpixel(right + x, top - y, color);
+        vga_putpixel(right + y, top - x, color);
+        vga_putpixel(left - x, bottom + y, color);
+        vga_putpixel(left - y, bottom + x, color);
+        vga_putpixel(right + x, bottom + y, color);
+        vga_putpixel(right + y, bottom + x, color);
+        ++y;
+        if (error < 0) {
+            error += 2 * y + 1;
+        } else {
+            --x;
+            error += 2 * (y - x) + 1;
+        }
+    }
+}
+
+static __attribute__((noinline)) void roundrect64(int left, int top, int right,
+                                                  int bottom, int radius,
+                                                  uint8_t color)
+{
     int x = radius;
     int y = 0;
     int64_t error = 1 - radius;
@@ -391,6 +768,50 @@ void vga_roundrect(int x1, int y1, int x2, int y2, int radius, uint8_t color)
             --x;
             error += 2 * ((int64_t)y - x) + 1;
         }
+    }
+}
+
+void vga_roundrect(int x1, int y1, int x2, int y2, int radius, uint8_t color)
+{
+    order_bounds(&x1, &x2);
+    order_bounds(&y1, &y2);
+    if (x2 < 0 || y2 < 0 || x1 >= VGA_MODE_X_WIDTH || y1 >= VGA_MODE_X_HEIGHT)
+        return;
+    if (radius <= 0) {
+        vga_rect(x1, y1, x2, y2, color);
+        return;
+    }
+    unsigned max_radius = ((unsigned)x2 - (unsigned)x1) / 2;
+    unsigned max_y_radius = ((unsigned)y2 - (unsigned)y1) / 2;
+    if (max_y_radius < max_radius)
+        max_radius = max_y_radius;
+    if ((unsigned)radius > max_radius)
+        radius = max_radius;
+    if (!radius) {
+        vga_rect(x1, y1, x2, y2, color);
+        return;
+    }
+
+    int left = x1 + radius;
+    int right = x2 - radius;
+    int top = y1 + radius;
+    int bottom = y2 - radius;
+    if (bounds_visible(x1, y1, x2, y2)) {
+        horizontal_span_unchecked(left, y1, right, color);
+        horizontal_span_unchecked(left, y2, right, color);
+        vertical_span_unchecked(x1, top, bottom, color);
+        vertical_span_unchecked(x2, top, bottom, color);
+        roundrect_unchecked(left, top, right, bottom, radius, color);
+        return;
+    }
+    horizontal_span(left, y1, right, color);
+    horizontal_span(left, y2, right, color);
+    vertical_span(x1, top, bottom, color);
+    vertical_span(x2, top, bottom, color);
+    if (radius <= 32767) {
+        roundrect32(left, top, right, bottom, radius, color);
+    } else {
+        roundrect64(left, top, right, bottom, radius, color);
     }
 }
 

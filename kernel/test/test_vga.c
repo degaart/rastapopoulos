@@ -127,6 +127,158 @@ static void reference_line(int x1, int y1, int x2, int y2, uint8_t color)
     }
 }
 
+static void reference_bounds(int* a, int* b)
+{
+    if (*a > *b) {
+        int tmp = *a;
+        *a = *b;
+        *b = tmp;
+    }
+}
+
+static void reference_hspan(int x1, int y, int x2, uint8_t color)
+{
+    if ((unsigned)y >= HEIGHT)
+        return;
+    if (x1 < 0)
+        x1 = 0;
+    if (x2 >= WIDTH)
+        x2 = WIDTH - 1;
+    for (int x = x1; x <= x2; ++x)
+        reference_pixel(x, y, color);
+}
+
+static void reference_vspan(int x, int y1, int y2, uint8_t color)
+{
+    if ((unsigned)x >= WIDTH)
+        return;
+    if (y1 < 0)
+        y1 = 0;
+    if (y2 >= HEIGHT)
+        y2 = HEIGHT - 1;
+    for (int y = y1; y <= y2; ++y)
+        reference_pixel(x, y, color);
+}
+
+static void reference_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    reference_bounds(&x1, &x2);
+    reference_bounds(&y1, &y2);
+    if (y1 < 0)
+        y1 = 0;
+    if (y2 >= HEIGHT)
+        y2 = HEIGHT - 1;
+    for (int y = y1; y <= y2; ++y)
+        reference_hspan(x1, y, x2, color);
+}
+
+static void reference_rect(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    reference_bounds(&x1, &x2);
+    reference_bounds(&y1, &y2);
+    reference_hspan(x1, y1, x2, color);
+    reference_hspan(x1, y2, x2, color);
+    reference_vspan(x1, y1, y2, color);
+    reference_vspan(x2, y1, y2, color);
+}
+
+static void reference_oval(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    reference_bounds(&x1, &x2);
+    reference_bounds(&y1, &y2);
+    if (x2 < 0 || y2 < 0 || x1 >= VGA_MODE_X_WIDTH || y1 >= VGA_MODE_X_HEIGHT)
+        return;
+    if (x1 == x2 || y1 == y2) {
+        reference_fillrect(x1, y1, x2, y2, color);
+        return;
+    }
+
+    int64_t a = (int64_t)x2 - x1;
+    int64_t b = (int64_t)y2 - y1;
+    int64_t odd = b & 1;
+    int64_t dx = 4 * (1 - a) * b * b;
+    int64_t dy = 4 * (odd + 1) * a * a;
+    int64_t error = dx + dy + odd * a * a;
+    y1 += (b + 1) / 2;
+    y2 = y1 - odd;
+    a *= 8 * a;
+    odd = 8 * b * b;
+
+    do {
+        reference_pixel(x2, y1, color);
+        reference_pixel(x1, y1, color);
+        reference_pixel(x1, y2, color);
+        reference_pixel(x2, y2, color);
+        int64_t twice = 2 * error;
+        if (twice <= dy) {
+            ++y1;
+            --y2;
+            dy += a;
+            error += dy;
+        }
+        if (twice >= dx || 2 * error > dy) {
+            ++x1;
+            --x2;
+            dx += odd;
+            error += dx;
+        }
+    } while (x1 <= x2);
+
+    while ((int64_t)y1 - y2 <= b) {
+        reference_pixel(x1 - 1, y1, color);
+        reference_pixel(x2 + 1, y1++, color);
+        reference_pixel(x1 - 1, y2, color);
+        reference_pixel(x2 + 1, y2--, color);
+    }
+}
+
+static void reference_roundrect(int x1, int y1, int x2, int y2, int radius,
+                                uint8_t color)
+{
+    reference_bounds(&x1, &x2);
+    reference_bounds(&y1, &y2);
+    if (x2 < 0 || y2 < 0 || x1 >= VGA_MODE_X_WIDTH || y1 >= VGA_MODE_X_HEIGHT)
+        return;
+    int64_t max_radius = ((int64_t)x2 - x1) / 2;
+    if (((int64_t)y2 - y1) / 2 < max_radius)
+        max_radius = ((int64_t)y2 - y1) / 2;
+    if (radius > max_radius)
+        radius = max_radius;
+    if (radius <= 0) {
+        reference_rect(x1, y1, x2, y2, color);
+        return;
+    }
+
+    int left = x1 + radius;
+    int right = x2 - radius;
+    int top = y1 + radius;
+    int bottom = y2 - radius;
+    reference_hspan(left, y1, right, color);
+    reference_hspan(left, y2, right, color);
+    reference_vspan(x1, top, bottom, color);
+    reference_vspan(x2, top, bottom, color);
+    int x = radius;
+    int y = 0;
+    int64_t error = 1 - radius;
+    while (x >= y) {
+        reference_pixel(left - x, top - y, color);
+        reference_pixel(left - y, top - x, color);
+        reference_pixel(right + x, top - y, color);
+        reference_pixel(right + y, top - x, color);
+        reference_pixel(left - x, bottom + y, color);
+        reference_pixel(left - y, bottom + x, color);
+        reference_pixel(right + x, bottom + y, color);
+        reference_pixel(right + y, bottom + x, color);
+        ++y;
+        if (error < 0) {
+            error += 2 * (int64_t)y + 1;
+        } else {
+            --x;
+            error += 2 * ((int64_t)y - x) + 1;
+        }
+    }
+}
+
 static void reference_blit(const uint8_t* src, int sw, int sh, int sx, int sy,
                            uint8_t* dst, int dw, int dh, int dx, int dy,
                            int width, int height)
@@ -138,6 +290,55 @@ static void reference_blit(const uint8_t* src, int sw, int sh, int sx, int sy,
                 (unsigned)(dx + x) < (unsigned)dw &&
                 (unsigned)(dy + y) < (unsigned)dh)
                 dst[(dy + y) * dw + dx + x] = src[(sy + y) * sw + sx + x];
+}
+
+static void check_spans(void)
+{
+    trace("VGA: checking spans, row fills and clipping");
+    for (int phase = 0; phase < 4; ++phase) {
+        vga_clear(0x53);
+        memset(expected, 0x53, sizeof(expected));
+        for (int i = 1; i <= 80; ++i) {
+            int x1 = phase * 5;
+            int x2 = x1 + i * 4 + phase - 4;
+            int y1 = (i - 1) * 3;
+            int y2 = y1 + 2;
+            uint8_t color = i * 7;
+            if (i & 1)
+                vga_fillrect(x2, y2, x1, y1, color);
+            else
+                vga_fillrect(x1, y1, x2, y2, color);
+            for (int y = y1; y <= y2; ++y)
+                for (int x = x1; x <= x2; ++x)
+                    reference_pixel(x, y, color);
+        }
+        check_screen();
+    }
+
+    vga_clear(0);
+    memset(expected, 0, sizeof(expected));
+    vga_fillrect(-10, 91, WIDTH + 10, 97, 0x53);
+    for (int y = 91; y <= 97; ++y)
+        for (int x = 0; x < WIDTH; ++x)
+            reference_pixel(x, y, 0x53);
+    for (int i = 0; i < 16; ++i) {
+        int x = i * 23 - 12;
+        int y = i * 17 - 8;
+        vga_drawline(WIDTH + 20, y, -20, y, i + 1);
+        reference_line(WIDTH + 20, y, -20, y, i + 1);
+        vga_drawline(x, HEIGHT + 20, x, -20, i + 32);
+        reference_line(x, HEIGHT + 20, x, -20, i + 32);
+        vga_rect(x, HEIGHT + 10, x, -10, i + 64);
+        reference_line(x, HEIGHT + 10, x, -10, i + 64);
+        vga_rect(WIDTH + 10, y, -10, y, i + 96);
+        reference_line(WIDTH + 10, y, -10, y, i + 96);
+    }
+    vga_drawline(INT_MIN, 1, INT_MAX, 1, 255);
+    reference_line(0, 1, WIDTH - 1, 1, 255);
+    vga_drawline(1, INT_MAX, 1, INT_MIN, 255);
+    reference_line(1, 0, 1, HEIGHT - 1, 255);
+    vga_rect(INT_MIN, INT_MIN, INT_MAX, INT_MAX, 255);
+    check_screen();
 }
 
 static void check_primitives(void)
@@ -256,6 +457,80 @@ static void check_curves(void)
     reference_line(5, 6, 5, 19, 255);
     reference_line(27, 6, 27, 19, 255);
     check_screen();
+}
+
+static void check_arithmetic_paths(void)
+{
+    static const int lines[][4] = {{0, 0, 319, 127},
+                                   {319, 127, 0, 0},
+                                   {0, 0, 319, 239},
+                                   {319, 239, 0, 0},
+                                   {319, 0, 0, 239},
+                                   {0, 239, 319, 0},
+                                   {319, 0, 300, 239},
+                                   {300, 239, 319, 0},
+                                   {0, 0, 2, 239},
+                                   {2, 239, 0, 0},
+                                   {1, 1, 318, 238},
+                                   {318, 1, 1, 238},
+                                   {1, 239, 318, 238},
+                                   {1, 238, 318, 239},
+                                   {-32768, -32768, 32767, 32767},
+                                   {-32769, -32769, 32768, 32768},
+                                   {-32768, 239, 32767, 0},
+                                   {-32768, 100, 32767, 101},
+                                   {100, 32767, 101, -32768},
+                                   {100, 32768, 101, -32769},
+                                   {-32768, 0, -32767, 239},
+                                   {32767, 0, 32766, 239}};
+    static const int ovals[][4] = {
+        {0, 0, 319, 239},     {-10, -20, 310, 220},       {-32, -40, 352, 344},
+        {-33, -41, 352, 344}, {0, 0, 384, 384},           {0, 0, 385, 385},
+        {350, 340, -33, -44}, {-1, 120, 383, 121},        {159, -1, 160, 383},
+        {100, 20, 485, 239},  {-1024, -1024, 1024, 1024}, {1, 1, 318, 238},
+        {0, 0, 1, 239},       {318, 0, 319, 239},         {0, 0, 319, 1},
+        {0, 238, 319, 239},   {2, 3, 317, 236},           {3, 2, 316, 237},
+        {0, 0, 2, 2},         {317, 237, 319, 239},       {0, 0, 3, 1}};
+    static const int rounded[][5] = {{10, 20, 200, 100, 20},
+                                     {90, 80, 5, 3, INT_MAX},
+                                     {-30, -40, 400, 280, 79},
+                                     {0, 0, 319, 239, -1},
+                                     {-32767, 0, 32767, 65534, 32767},
+                                     {-32768, 0, 32768, 65536, 32768},
+                                     {0, 0, 319, 239, INT_MAX},
+                                     {1, 1, 318, 238, INT_MAX},
+                                     {2, 3, 317, 236, 17},
+                                     {3, 2, 316, 237, 1},
+                                     {0, 0, 1, 239, 200},
+                                     {318, 0, 319, 239, 1},
+                                     {0, 0, 319, 0, 8},
+                                     {4, 4, 6, 6, 1}};
+
+    trace("VGA: comparing visible, clipped and wide raster paths");
+    for (unsigned i = 0; i < sizeof(lines) / sizeof(lines[0]); ++i) {
+        const int* p = lines[i];
+        vga_clear(0);
+        memset(expected, 0, sizeof(expected));
+        vga_drawline(p[0], p[1], p[2], p[3], 255);
+        reference_line(p[0], p[1], p[2], p[3], 255);
+        check_screen();
+    }
+    for (unsigned i = 0; i < sizeof(ovals) / sizeof(ovals[0]); ++i) {
+        const int* p = ovals[i];
+        vga_clear(0);
+        memset(expected, 0, sizeof(expected));
+        vga_oval(p[0], p[1], p[2], p[3], 255);
+        reference_oval(p[0], p[1], p[2], p[3], 255);
+        check_screen();
+    }
+    for (unsigned i = 0; i < sizeof(rounded) / sizeof(rounded[0]); ++i) {
+        const int* p = rounded[i];
+        vga_clear(0);
+        memset(expected, 0, sizeof(expected));
+        vga_roundrect(p[0], p[1], p[2], p[3], p[4], 255);
+        reference_roundrect(p[0], p[1], p[2], p[3], p[4], 255);
+        check_screen();
+    }
 }
 
 static void check_blits(struct Bitmap* logo, const uint8_t* raw)
@@ -386,8 +661,10 @@ void test_vga(void)
 
     CHECK(bmp != NULL);
 #if VGA_TEST_CHECKS
+    check_spans();
     check_primitives();
     check_curves();
+    check_arithmetic_paths();
     check_blits(bmp, bitmap_buffer);
     trace("VGA pixel checks passed");
 #endif

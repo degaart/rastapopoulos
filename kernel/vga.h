@@ -55,8 +55,10 @@ void vga_putpixel(unsigned x, unsigned y, uint8_t color);
 void vga_text_mode(void);
 void vga_mode_x(void);
 
-/* Drawing uses the backbuffer. Rectangle endpoints are inclusive and may
- * be reversed; pixels outside the screen are clipped.
+/*
+ * Drawing uses the backbuffer
+ * Rectangle endpoints are inclusive and may be reversed
+ * Pixels outside the screen are clipped.
  */
 
 /*
