@@ -4,7 +4,7 @@
 
 AS := nasm
 CC := i686-elf-gcc
-CFLAGS := -DRASTA -DRASTA_KERNEL -DUNIT_TESTS \
+CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables \
 		  -march=i386 -O2 -g \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \

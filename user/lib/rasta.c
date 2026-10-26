@@ -73,3 +73,53 @@ int sys_trace(const char* file, size_t file_len, int line, const char* s,
                    (uintptr_t)s, len);
 }
 
+int sys_vga_swap(void)
+{
+    return syscall(SYSCALL_VGA_SWAP, 0, 0, 0, 0, 0);
+}
+
+int sys_vga_fillrect(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    return syscall(SYSCALL_VGA_FILLRECT, x1, y1, x2, y2, color);
+}
+
+int sys_vga_rect(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    return syscall(SYSCALL_VGA_RECT, x1, y1, x2, y2, color);
+}
+
+int sys_vga_drawline(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    return syscall(SYSCALL_VGA_DRAWLINE, x1, y1, x2, y2, color);
+}
+
+int sys_vga_oval(int x1, int y1, int x2, int y2, uint8_t color)
+{
+    return syscall(SYSCALL_VGA_OVAL, x1, y1, x2, y2, color);
+}
+
+int sys_vga_roundrect(int x1, int y1, int x2, int y2, int radius,
+                      uint8_t color)
+{
+    struct SyscallVGARoundrect args = {x1, y1, x2, y2, radius, color};
+    return syscall(SYSCALL_VGA_ROUNDRECT, (uintptr_t)&args, 0, 0, 0, 0);
+}
+
+int sys_vga_blit(VGABitmap src, int x1, int y1, VGABitmap dst, int x2, int y2,
+                 int width, int height)
+{
+    struct SyscallVGABlit args = {src, x1, y1, dst, x2, y2, width, height};
+    return syscall(SYSCALL_VGA_BLIT, (uintptr_t)&args, 0, 0, 0, 0);
+}
+
+VGABitmap sys_vga_load_bitmap(const void* buffer, size_t len, int width,
+                              int height)
+{
+    return syscall(SYSCALL_VGA_LOAD_BITMAP, (uintptr_t)buffer, len, width,
+                   height, 0);
+}
+
+int sys_vga_destroy_bitmap(VGABitmap bitmap)
+{
+    return syscall(SYSCALL_VGA_DESTROY_BITMAP, bitmap, 0, 0, 0, 0);
+}

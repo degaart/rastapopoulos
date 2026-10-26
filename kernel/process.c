@@ -6,6 +6,7 @@
 #include "kthread.h"
 #include "ps2kbd.h"
 #include "string.h"
+#include "syscall.h"
 #include "trace.h"
 
 struct Process* kernel_task;
@@ -172,6 +173,7 @@ int process_decref(struct Process* proc)
     }
     leave_critical_section(iflag);
 
+    syscall_cleanup_bitmaps(proc);
     kfree(proc->input_queue);
 
     address_space_destroy(proc->as);

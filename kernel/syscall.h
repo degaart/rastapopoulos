@@ -14,7 +14,34 @@
 #define SYSCALL_PUTPIXEL      12
 #define SYSCALL_TRACE         13
 
+#define SYSCALL_VGA_SWAP 14
+
+#define SYSCALL_VGA_FILLRECT       15
+#define SYSCALL_VGA_RECT           16
+#define SYSCALL_VGA_DRAWLINE       17
+#define SYSCALL_VGA_OVAL           18
+#define SYSCALL_VGA_ROUNDRECT      19
+#define SYSCALL_VGA_BLIT           20
+#define SYSCALL_VGA_LOAD_BITMAP    21
+#define SYSCALL_VGA_DESTROY_BITMAP 22
+
+struct SyscallVGARoundrect
+{
+    int x1, y1, x2, y2, radius;
+    unsigned char color;
+};
+
+struct SyscallVGABlit
+{
+    unsigned src;
+    int x1, y1;
+    unsigned dst;
+    int x2, y2, width, height;
+};
+
 #ifdef RASTA_KERNEL
 void syscall_init(void);
+struct Process;
+void syscall_cleanup_bitmaps(struct Process* process);
 #endif
 
