@@ -163,7 +163,6 @@ void ps2kbd_init(void)
     pause_index = 0;
 
     uint8_t config;
-    uint8_t response;
 
     /* Quiesce the first port before clearing stale BIOS output */
     if (!controller_command(0xAD))
@@ -185,13 +184,12 @@ void ps2kbd_init(void)
      */
     config = (config & ~0x11) | 0x40;
     if (!controller_command(0x60) || !write_data(config) ||
-        !controller_command(0xAE) || !keyboard_command(0xFF) ||
-        !read_data(&response) || response != 0xAA || !keyboard_command(0xF5))
+        !controller_command(0xAE) || !keyboard_command(0xF5))
         goto failed;
 
-    /* Reset leaves the keyboard in its default set 2. The controller
-     * translates it to set 1; do not require set-selection or query command
-     * support.
+    /* F5 restores defaults with scanning disabled, avoiding a full reset's
+     * BAT replies and controller side effects on emulators. Translation
+     * provides set 1 without requiring set-selection or query commands.
      */
     if (!keyboard_command(0xF4))
         goto failed;

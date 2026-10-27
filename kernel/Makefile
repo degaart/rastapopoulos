@@ -1,4 +1,4 @@
-.PHONY: all clean run format bochs 86box debug
+.PHONY: all clean run format bochs 86box debug dosbox-x
 .SUFFIXES:
 .SECONDARY:
 
@@ -106,4 +106,12 @@ bochs: all
 		-L /dev/null \
 		--vmname rasta386 \
 		--vmpath "$(HOME)/.local/share/86Box/Virtual Machines/rasta386" > /dev/null 2>&1
+
+dosbox-x: all
+	dosbox-x \
+		-defaultdir "$PWD" \
+		-nopromptfolder \
+		-c 'boot ../bootloader/build/rastapopoulos.img' \
+		> /dev/null 2>&1
+
 
