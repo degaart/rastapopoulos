@@ -1,4 +1,4 @@
-/* Generated from NHM-5 v05.79. Column bytes: bit(y%8), index (y/8)*width+x. */
+/* Column bytes: bit(y%8), index (y/8)*width+x. */
 #ifndef NOKIA_TITLE_H
 #define NOKIA_TITLE_H
 #include <stdint.h>

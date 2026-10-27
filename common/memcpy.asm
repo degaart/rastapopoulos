@@ -1,9 +1,7 @@
-bits 32
 cpu 386
 
 section .text
 global memcpy:function
-
 memcpy:
     push esi
     push edi
@@ -36,4 +34,3 @@ memcpy:
     pop esi
     ret
 
-section .note.GNU-stack noalloc noexec nowrite progbits

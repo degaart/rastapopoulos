@@ -1,9 +1,7 @@
-bits 32
 cpu 386
 
 section .text
 global memset:function
-
 memset:
     push edi
     mov edi, [esp + 8]
@@ -38,4 +36,3 @@ memset:
     pop edi
     ret
 
-section .note.GNU-stack noalloc noexec nowrite progbits

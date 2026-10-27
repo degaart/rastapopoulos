@@ -15,7 +15,7 @@ typedef struct
 } Maze;
 
 /*
- * Decoded from Nokia 3310 NHM-5 v05.79 at flash 0x3260E0..0x3261F7.
+ * Decoded  at flash 0x3260E0..0x3261F7.
  * Each source segment uses 8 bytes: x1,y1,0,0,x2,y2,0,0. Segments are
  * inclusive. The first record's out-of-board segment is the No maze sentinel.
  * Record counts, pointers, and starts are at 0x326204..0x326263.

@@ -2,7 +2,6 @@
 
 #include <string.h>
 
-/* v05.79 0x2dc980: the game's private generator, not libc rand(). */
 static uint32_t random_next(SnakeGame* game)
 {
     game->rng = (0x3623u + game->rng * 0x625fu) % 0xfff1u;
@@ -58,8 +57,6 @@ static bool bonus_contains(const SnakeGame* game, SnakeCell cell)
            cell.y <= game->bonus.y + (game->bonus_large ? 1 : 0);
 }
 
-/* 0x2739b2 excludes every bonus column AND row on the random path. The
-   fallback 0x27391a scans ordinary occupancy only, including bonus rows. */
 static bool food_candidate(const SnakeGame* game, unsigned x, unsigned y)
 {
     if (blocked(game, x, y))
@@ -92,9 +89,6 @@ static void spawn_food(SnakeGame* game)
     game->food_present = false;
 }
 
-/* 0x273aec: the 2x2 creature additionally needs a nonempty phone player
-   profile (0x11114f), solo mode, and no previous special collection this game.
- */
 static void spawn_bonus(SnakeGame* game)
 {
     bool large = random_next(game) % 50 == 0 && game->special_eligible &&
@@ -150,7 +144,6 @@ bool snake_new_game(SnakeGame* game, unsigned level, unsigned maze,
     uint8_t start_x, start_y;
     if (!snake_maze_start(maze, &start_x, &start_y))
         return false;
-    /* 0x275924 advances seven times then vacates the original cell. */
     for (unsigned i = 1; i <= 7; ++i) {
         uint8_t x = (uint8_t)((start_x + i) % SNAKE_BOARD_WIDTH);
         if (snake_maze_wall(maze, x, start_y))
@@ -214,7 +207,6 @@ void snake_tick(SnakeGame* game)
 {
     if (!game || game->phase == SNAKE_DEAD || game->phase == SNAKE_WON)
         return;
-    /* Handler animates a special creature before the collision check. */
     if (game->bonus_present && game->bonus_large)
         game->bonus_frame ^= 1u;
     game->direction = game->queued_direction;
@@ -227,8 +219,6 @@ void snake_tick(SnakeGame* game)
             break;
         }
     if (snake_maze_wall(game->maze, head.x, head.y) || hits_body) {
-        /* Handler 0x2750e8 rechecks the move after 100ms: a new turn can
-         * rescue it. */
         game->phase =
             game->phase == SNAKE_CRASH_GRACE ? SNAKE_DEAD : SNAKE_CRASH_GRACE;
         return;
@@ -251,12 +241,10 @@ void snake_tick(SnakeGame* game)
         game->body[game->length++] = head;
     }
     ++game->tick;
-    /* 0x27409c runs before replacement food is placed. */
     SnakeCell ahead = advance(head, game->direction);
     game->mouth_open = (game->food_present && same_cell(ahead, game->food)) ||
                        bonus_contains(game, ahead);
     bool eating_bonus = bonus_contains(game, head);
-    /* advance_head clears the creature half ahead before its mouth check. */
     if (eating_bonus)
         game->mouth_open = game->food_present && same_cell(ahead, game->food);
     if (game->bonus_present && !eating_bonus && game->bonus_ticks) {
@@ -268,8 +256,6 @@ void snake_tick(SnakeGame* game)
     bool eating_food = game->food_present && same_cell(head, game->food);
     if (eating_bonus) {
         if (game->bonus_large) {
-            /* 0x274afa records one new digit. Avoid the firmware's unbounded
-               retry if a host supplies an already-complete profile bitset. */
             if (game->collected_digits != 0x3ffu) {
                 unsigned bit;
                 do {
@@ -292,9 +278,6 @@ void snake_tick(SnakeGame* game)
             spawn_bonus(game);
         game->growth_pending = 1;
     }
-    /* A full board hides food but does not itself end the firmware game.
-       Tail-following moves can still be legal. The phone's299-slot ring
-       cannot be exhausted by180 unique physical cells. */
 }
 
 SnakeSnapshot snake_snapshot(const SnakeGame* game)

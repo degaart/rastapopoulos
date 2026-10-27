@@ -5,8 +5,8 @@
 AS := nasm
 CC := i686-elf-gcc
 CFLAGS := -DRASTA -DRASTA_KERNEL \
-		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables \
-		  -march=i386 -O3 -g \
+		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables -fno-builtin \
+		  -march=i386 -O0 -g \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
 		  -I../common -I../third-party \

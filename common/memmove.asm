@@ -1,10 +1,9 @@
-bits 32
 cpu 386
+
+extern memcpy
 
 section .text
 global memmove:function
-extern memcpy
-
 memmove:
     cld
     mov eax, [esp + 4]
@@ -52,4 +51,3 @@ memmove:
 .done:
     ret
 
-section .note.GNU-stack noalloc noexec nowrite progbits

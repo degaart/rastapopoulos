@@ -181,16 +181,14 @@ static void init_entry(void* unused)
 {
     trace("Init thread started");
     while (true) {
-        // int ret = exec("shell.bin", "");
-        int ret = exec("snek2.bin", "");
-        debugexit(1);
-        // if (ret == -1)
-        //     panic("Failed to exec shell");
-        // else if (ret != 0) {
-        //     trace("Shell exited with status %d", ret);
-        //     printf("Shell exited with status %d\n", ret);
-        //     debugexit(1);
-        // }
+        int ret = exec("shell.bin", "");
+        if (ret == -1)
+            panic("Failed to exec shell");
+        else if (ret != 0) {
+            trace("Shell exited with status %d", ret);
+            printf("Shell exited with status %d\n", ret);
+            debugexit(1);
+        }
     }
 }
 

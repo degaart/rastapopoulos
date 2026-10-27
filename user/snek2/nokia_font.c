@@ -1,5 +1,4 @@
-/* Generated from v5.79 FONTfconv at file 0x14041c. See
- * tools/extract_ui_fonts.py. */
+/* At file 0x14041c */
 #include "nokia_font.h"
 static const NokiaGlyph glyphs[4][95] = {
     {

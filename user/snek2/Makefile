@@ -1,7 +1,6 @@
 PROGRAM := build/snek2.bin
 include ../user.mk
 
-
 ifneq ($(SNEK_BENCHMARK),)
 CFLAGS += -DSNEK_BENCHMARK=$(SNEK_BENCHMARK)
 endif
