@@ -12,6 +12,7 @@ typedef enum
     UI_TOP_SCORE,
     UI_INSTRUCTIONS,
     UI_SOUNDS,
+    UI_ZOOM,
     UI_PLAY,
     UI_DYING,
     UI_GAME_OVER
@@ -30,7 +31,7 @@ typedef struct
     SnakeScreen screen;
     unsigned revision;
     SnakeGame game;
-    unsigned level, maze, top_level;
+    unsigned level, maze, top_level, zoom;
     uint32_t top_score, seed;
     bool sounds, has_game, new_record;
     unsigned selection, first_visible, instruction_line;

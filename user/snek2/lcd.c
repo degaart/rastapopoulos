@@ -277,6 +277,13 @@ void lcd_ui(Lcd* lcd, const SnakeUI* ui)
         labels[1] = "Off";
         menu_rows(lcd, labels, 2, ui->selection);
         break;
+    case UI_ZOOM:
+    {
+        static const char* const zooms[] = {"x1", "x2", "x3"};
+        menu_header(lcd, "Zoom", "OK");
+        menu_rows(lcd, zooms, 3, ui->selection);
+        break;
+    }
     case UI_GAME_OVER:
         menu_header(lcd, "Game over!", "OK");
         centered(lcd, 13, ui->new_record ? "TOP SCORE:" : "Your score:",

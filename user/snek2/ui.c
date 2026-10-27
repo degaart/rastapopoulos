@@ -17,6 +17,7 @@ void ui_init(SnakeUI* ui, uint32_t seed)
 {
     memset(ui, 0, sizeof(*ui));
     ui->level = ui->top_level = 1;
+    ui->zoom = 1;
     ui->sounds = true;
     ui->seed = seed;
     enter(ui, UI_TITLE);
@@ -24,19 +25,19 @@ void ui_init(SnakeUI* ui, uint32_t seed)
 
 unsigned ui_menu_count(const SnakeUI* ui)
 {
-    return ui->has_game ? 6 : 5;
+    return ui->has_game ? 7 : 6;
 }
 
 const char* ui_menu_item(const SnakeUI* ui, unsigned index)
 {
-    static const char* const items[] = {"New game", "Level", "Mazes",
-                                        "Top score", "Instructions"};
+    static const char* const items[] = {"New game",  "Level",        "Mazes",
+                                        "Top score", "Instructions", "Zoom"};
     if (ui->has_game) {
         if (index == 0)
             return "Continue";
         --index;
     }
-    return index < 5 ? items[index] : "";
+    return index < 6 ? items[index] : "";
 }
 
 static void new_game(SnakeUI* ui)
@@ -76,6 +77,10 @@ static void select_menu(SnakeUI* ui)
     case 4:
         enter(ui, UI_INSTRUCTIONS);
         ui->instruction_line = 0;
+        break;
+    case 5:
+        enter(ui, UI_ZOOM);
+        ui->selection = ui->zoom - 1;
         break;
     }
 }
@@ -147,6 +152,7 @@ void ui_action(SnakeUI* ui, UiAction action)
     }
     unsigned count = ui->screen == UI_LEVEL  ? 9
                      : ui->screen == UI_MAZE ? 6
+                     : ui->screen == UI_ZOOM ? 3
                                              : 2;
     if (action == UI_UP || action == UI_LEFT)
         ui->selection = (ui->selection + count - 1) % count;
@@ -159,6 +165,8 @@ void ui_action(SnakeUI* ui, UiAction action)
             ui->maze = ui->selection;
         if (ui->screen == UI_SOUNDS)
             ui->sounds = ui->selection == 0;
+        if (ui->screen == UI_ZOOM)
+            ui->zoom = ui->selection + 1;
         enter(ui, UI_MENU);
     }
     if (action == UI_BACK)

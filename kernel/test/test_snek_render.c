@@ -35,8 +35,65 @@ static void check_state(SnakeUI* ui, Lcd* cached, unsigned* revision)
     assert(memcmp(cached->pixels, actual.pixels, sizeof(actual.pixels)) == 0);
 }
 
+static void open_zoom(SnakeUI* ui)
+{
+    assert(ui->screen == UI_MENU);
+    ui_action(ui, UI_UP);
+    assert(strcmp(ui_menu_item(ui, ui->selection), "Zoom") == 0);
+    ui_action(ui, UI_SELECT);
+    assert(ui->screen == UI_ZOOM);
+    assert(ui->selection == ui->zoom - 1);
+}
+
+static void check_zoom(void)
+{
+    SnakeUI ui;
+    ui_init(&ui, 7);
+    assert(ui.zoom == 1);
+    ui_action(&ui, UI_SELECT);
+    assert(ui_menu_count(&ui) == 6);
+    open_zoom(&ui);
+    ui_action(&ui, UI_UP);
+    assert(ui.selection == 2);
+    ui_action(&ui, UI_DOWN);
+    assert(ui.selection == 0);
+    ui_action(&ui, UI_LEFT);
+    assert(ui.selection == 2);
+    ui_action(&ui, UI_RIGHT);
+    assert(ui.selection == 0);
+    ui_action(&ui, UI_DOWN);
+    ui_action(&ui, UI_BACK);
+    assert(ui.zoom == 1);
+    for (unsigned zoom = 1; zoom <= 3; ++zoom) {
+        open_zoom(&ui);
+        for (unsigned i = 0; i < zoom - 1; ++i)
+            ui_action(&ui, UI_DOWN);
+        ui_action(&ui, UI_SELECT);
+        assert(ui.screen == UI_MENU);
+        assert(ui.zoom == zoom);
+        open_zoom(&ui);
+        ui_action(&ui, UI_BACK);
+        ui_action(&ui, UI_SELECT);
+        assert(ui.screen == UI_PLAY);
+        assert(ui.zoom == zoom);
+        ui_action(&ui, UI_BACK);
+        assert(ui_menu_count(&ui) == 7);
+        open_zoom(&ui);
+        ui_action(&ui, UI_DOWN);
+        ui_action(&ui, UI_SELECT);
+        assert(ui.zoom == zoom % 3 + 1);
+        ui_action(&ui, UI_SELECT);
+        assert(ui.screen == UI_PLAY);
+        assert(ui.zoom == zoom % 3 + 1);
+        ui_action(&ui, UI_BACK);
+        ui_init(&ui, 7);
+        ui_action(&ui, UI_SELECT);
+    }
+}
+
 int main(void)
 {
+    check_zoom();
     Lcd before = {0}, next = {0}, reconstructed = {0};
     struct LcdDamage dirty;
     assert(!lcd_update(&before, &next, &dirty));
@@ -83,7 +140,7 @@ int main(void)
             }
         }
     }
-    for (unsigned selection = 0; selection < 5; ++selection) {
+    for (unsigned selection = 0; selection < 6; ++selection) {
         SnakeUI ui;
         ui_init(&ui, 7);
         Lcd cached = {0};
@@ -101,9 +158,7 @@ int main(void)
         ui_action(&ui, UI_BACK);
         check_state(&ui, &cached, &revision);
     }
-    /* Captured from the pre-optimization renderer over the same state
-     * sequence. */
-    assert(reference_hash == 0x02051d103052cc63ull);
+    assert(reference_hash == 0x29b76609b6457284ull);
     puts("Snek LCD pixels, clipping, damage and redraw invalidation checks "
          "passed");
 }

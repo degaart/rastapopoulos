@@ -16,6 +16,31 @@
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 240
 
+static void blit_lcd(Lcd* lcd, const struct LcdDamage* dirty, int zoom)
+{
+    static uint8_t scaled[LCD_WIDTH * LCD_HEIGHT * 9];
+    struct Bitmap bmp = {LCD_WIDTH, LCD_HEIGHT, lcd->pixels};
+    if (zoom > 1) {
+        bmp.width *= zoom;
+        bmp.height *= zoom;
+        bmp.pixels = scaled;
+        for (int y = dirty->y1; y <= dirty->y2; ++y) {
+            uint8_t* row = scaled + y * zoom * bmp.width;
+            for (int x = dirty->x1; x <= dirty->x2; ++x)
+                memset(row + x * zoom, lcd->pixels[y * LCD_WIDTH + x], zoom);
+            for (int dy = 1; dy < zoom; ++dy)
+                memcpy(row + dy * bmp.width + dirty->x1 * zoom,
+                       row + dirty->x1 * zoom,
+                       (dirty->x2 - dirty->x1 + 1) * zoom);
+        }
+    }
+    vga_blit(&bmp, dirty->x1 * zoom, dirty->y1 * zoom, NULL,
+             (SCREEN_WIDTH - bmp.width) / 2 + dirty->x1 * zoom,
+             (SCREEN_HEIGHT - bmp.height) / 2 + dirty->y1 * zoom,
+             (dirty->x2 - dirty->x1 + 1) * zoom,
+             (dirty->y2 - dirty->y1 + 1) * zoom);
+}
+
 static bool translate_key(SnakeUI* ui, uint16_t key)
 {
     switch (key) {
@@ -87,6 +112,7 @@ int main(void)
 
     static Lcd lcd;
     static Lcd displayed;
+    unsigned displayed_zoom = 0;
     unsigned rendered_revision = 0;
     unsigned presents = 0, idle_loops = 0;
     uint32_t idle_clocks = 0;
@@ -156,19 +182,27 @@ int main(void)
         struct LcdDamage dirty = {0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1};
         bool changed =
             SNEK_BENCHMARK == 1 || lcd_update(&displayed, &lcd, &dirty);
-        struct Bitmap bmp = {LCD_WIDTH, LCD_HEIGHT, lcd.pixels};
+        bool zoom_changed = displayed_zoom != ui.zoom;
+        if (zoom_changed) {
+            vga_clear(0);
+            dirty = (struct LcdDamage) {0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1};
+            displayed_zoom = ui.zoom;
+            changed = true;
+        }
         if (changed)
-            vga_blit(&bmp, dirty.x1, dirty.y1, NULL,
-                     (SCREEN_WIDTH - LCD_WIDTH) / 2 + dirty.x1,
-                     (SCREEN_HEIGHT - LCD_HEIGHT) / 2 + dirty.y1,
-                     dirty.x2 - dirty.x1 + 1, dirty.y2 - dirty.y1 + 1);
+            blit_lcd(&lcd, &dirty, ui.zoom);
         uint32_t swap_start = sys_perf_clock();
         blit_clocks += swap_start - blit_start;
         if (changed) {
-            sys_vga_swap_rect((SCREEN_WIDTH - LCD_WIDTH) / 2 + dirty.x1,
-                              (SCREEN_HEIGHT - LCD_HEIGHT) / 2 + dirty.y1,
-                              (SCREEN_WIDTH - LCD_WIDTH) / 2 + dirty.x2,
-                              (SCREEN_HEIGHT - LCD_HEIGHT) / 2 + dirty.y2);
+            int x = (SCREEN_WIDTH - LCD_WIDTH * (int)ui.zoom) / 2;
+            int y = (SCREEN_HEIGHT - LCD_HEIGHT * (int)ui.zoom) / 2;
+            if (zoom_changed)
+                sys_vga_swap();
+            else
+                sys_vga_swap_rect(x + dirty.x1 * ui.zoom,
+                                  y + dirty.y1 * ui.zoom,
+                                  x + (dirty.x2 + 1) * ui.zoom - 1,
+                                  y + (dirty.y2 + 1) * ui.zoom - 1);
             ++presents;
         }
         uint32_t done = sys_perf_clock();
