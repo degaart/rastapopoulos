@@ -1,4 +1,4 @@
-.PHONY: all clean run format bochs 86box
+.PHONY: all clean run format bochs 86box debug
 .SUFFIXES:
 .SECONDARY:
 
@@ -107,21 +107,3 @@ bochs: all
 		--vmname rasta386 \
 		--vmpath "$(HOME)/.local/share/86Box/Virtual Machines/rasta386" > /dev/null 2>&1
 
-
-
-.PHONY: test-vga-host
-test-vga-host: | build
-	$(HOSTCC) -O2 -ffunction-sections -fdata-sections -Wl,--gc-sections \
-		-Wno-pointer-to-int-cast test/test_vga.c ../user/lib/rasta.c -o build/test-vga-host
-	build/test-vga-host
-
-HOSTCC ?= cc
-
-.PHONY: test-snek-render
-test-snek-render: | build
-	$(HOSTCC) -O2 -Wall -Wextra -fsanitize=undefined -I../user/snek2 \
-		test/test_snek_render.c ../user/snek2/lcd.c ../user/snek2/ui.c \
-		../user/snek2/snake.c ../user/snek2/maze.c \
-		../user/snek2/firmware_assets.c ../user/snek2/firmware_ui.c \
-		../user/snek2/nokia_font.c -o build/test-snek-render
-	build/test-snek-render
