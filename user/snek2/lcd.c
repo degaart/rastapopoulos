@@ -300,11 +300,11 @@ bool lcd_update(Lcd* displayed, const Lcd* next, struct LcdDamage* damage)
     for (int y = 0; y < LCD_HEIGHT; ++y) {
         for (int x = 0; x < LCD_WIDTH; x += 4) {
             uint32_t old, value;
-            __builtin_memmove(&old, displayed->pixels + y * LCD_WIDTH + x, 4);
-            __builtin_memmove(&value, next->pixels + y * LCD_WIDTH + x, 4);
+            memcpy(&old, displayed->pixels + y * LCD_WIDTH + x, 4);
+            memcpy(&value, next->pixels + y * LCD_WIDTH + x, 4);
             if (old == value)
                 continue;
-            __builtin_memcpy(displayed->pixels + y * LCD_WIDTH + x, &value, 4);
+            memcpy(displayed->pixels + y * LCD_WIDTH + x, &value, 4);
             if (x < damage->x1)
                 damage->x1 = x;
             if (x + 3 > damage->x2)
