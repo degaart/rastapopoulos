@@ -2,16 +2,9 @@
 #include "../ramdisk.h"
 #include "../tar.h"
 #include "../trace.h"
+#include "test.h"
 #include <stdint.h>
 #include <string.h>
-
-#define CHECK(cond)                                                           \
-    do {                                                                      \
-        if (!(cond)) {                                                        \
-            trace("Assert failed: %s", #cond);                                \
-            debugexit(2);                                                     \
-        }                                                                     \
-    } while (0)
 
 #define MAX_ENTRIES 64
 struct TarEntryList

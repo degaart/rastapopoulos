@@ -242,12 +242,7 @@ void process_exit(uint8_t status)
     struct Thread* thread;
     STAILQ_FOREACH(thread, &proc->threads, processes)
     {
-        struct Event* event = thread->waiting_event;
-        if (event && thread->state == THREAD_BLOCKED) {
-            event->waiter = NULL;
-            thread->waiting_event = NULL;
-            scheduler_enqueue(thread);
-        }
+        thread_cancel_wait(thread);
     }
     leave_critical_section(iflag);
     thread_exit();
@@ -294,7 +289,7 @@ static bool get_input_event(struct KeyEvent* event, bool* overflow, bool block)
     while (block && KeyEventQueue_empty(current_proc->input_queue) &&
            !current_proc->input_queue_overflow &&
            !current_proc->exit_requested) {
-        event_wait(&current_proc->input_event);
+        event_wait(&current_proc->input_event, WAIT_INFINITE);
     }
 
     if (current_proc->exit_requested) {

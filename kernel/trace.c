@@ -1,7 +1,7 @@
 #include "trace.h"
 #include "serial.h"
 #include "vga.h"
-#include <stb/stb_sprintf.h>
+#include <stb_sprintf.h>
 #include <stdarg.h>
 
 static char* serialcb(const char* buf, void* user, int len)

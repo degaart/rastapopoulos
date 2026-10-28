@@ -12,6 +12,8 @@
 
 bool vmm_init(void);
 bool vmm_map(void* frame, void* virtual_address, uint32_t flags);
+/* Map a frame at a free kernel address; VMM_USER is rejected. */
+void* vmm_map_kernel(void* frame, uint32_t flags);
 bool vmm_unmap(void* virtual_address);
 bool vmm_remap(void* virtual_address, uint32_t flags);
 bool vmm_frame(const void* virtual_address, void** frame_out);

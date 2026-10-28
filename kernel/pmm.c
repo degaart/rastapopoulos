@@ -3,7 +3,7 @@
 #include "early_malloc.h"
 #include "kernel.h"
 #include "trace.h"
-#include <freebsd/queue.h>
+#include <queue.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -136,17 +136,27 @@ void pmm_dump(void)
 
 void* pmm_alloc(void)
 {
+    return pmm_alloc_below(PMM_ADDRESS_LIMIT);
+}
+
+void* pmm_alloc_below(uintptr_t limit)
+{
     bool iflag = enter_critical_section();
     struct Region* region;
     void* result = NULL;
     STAILQ_FOREACH(region, &regions, node)
     {
+        if (region_start(region) >= limit)
+            break;
         size_t bit = bitset_find(&region->bitset);
         if (bit == SIZE_MAX)
             continue;
+        uint64_t physical = region_start(region) + (uint64_t)bit * PAGE_SIZE;
+        if (physical + PAGE_SIZE > limit)
+            break;
         if (!bitset_set(&region->bitset, bit))
             panic("Logic error");
-        result = region->start + (bit * PAGE_SIZE);
+        result = (void*)(uintptr_t)physical;
         break;
     }
 

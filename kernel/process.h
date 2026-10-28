@@ -2,7 +2,7 @@
 
 #include "address_space.h"
 #include "kthread.h"
-#include <freebsd/queue.h>
+#include <queue.h>
 
 typedef uint8_t pid_t;
 

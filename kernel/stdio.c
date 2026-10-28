@@ -5,7 +5,7 @@
 
 #define STB_SPRINTF_NOFLOAT
 #define STB_SPRINTF_IMPLEMENTATION
-#include <stb/stb_sprintf.h>
+#include <stb_sprintf.h>
 
 static char* sprintfcb(const char* buf, void* user, int len)
 {

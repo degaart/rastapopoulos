@@ -1,4 +1,4 @@
-#include "../librastaldr/crc32.c"
+#include "../common/crc32.c"
 #include <stdio.h>
 #include <unistd.h>
 

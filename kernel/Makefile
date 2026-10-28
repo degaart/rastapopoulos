@@ -1,15 +1,16 @@
-.PHONY: all clean run format bochs 86box debug dosbox-x
+.PHONY: all clean run format bochs 86box debug dosbox-x test
 .SUFFIXES:
 .SECONDARY:
 
 AS := nasm
 CC := i686-elf-gcc
+HOSTCC := cc
 CFLAGS := -DRASTA -DRASTA_KERNEL \
 		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables -fno-builtin \
 		  -march=i386 -O0 -g \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \
 		  -fno-strict-aliasing \
-		  -I../common -I../third-party \
+		  -I../common -I../third-party/stb -I../third-party/freebsd \
 		  -save-temps=obj -masm=intel \
 		  -Wall -Wno-unused-variable -Wno-unused-but-set-variable
 LDFLAGS := -Tkernel.ld \
@@ -23,7 +24,9 @@ HDRS := $(wildcard *.h) \
 		$(wildcard ../common/*.h)
 SRCS := $(wildcard *.c) \
 		$(wildcard ../common/*.c) \
-		test/test_vga.c
+		test/test_fdc.c \
+		test/test_events.c \
+		test/test_pmm.c
 ASM_HDRS := $(wildcard *.inc) \
 			$(wildcard ../common/*.inc)
 ASM_SRCS := $(wildcard *.asm) \
@@ -75,13 +78,14 @@ run: all
 		-s
 
 test: all
-	../tools/build/wrap-test -r=3 -t=15 -- \
+	../tools/build/wrap-test -r=3 -t=90 -- \
 	qemu-system-i386 \
-		-drive file=$(IMAGE),format=raw,if=floppy \
+		-drive file=$(IMAGE),format=raw,if=floppy,snapshot=on \
 		-boot a \
 		--no-reboot \
 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
 		-serial stdio \
+		-display none \
 		-s
 
 

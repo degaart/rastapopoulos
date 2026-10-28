@@ -3,6 +3,7 @@
 #include "../kmalloc.h"
 #include "../pmm.h"
 #include "../trace.h"
+#include "test.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -11,12 +12,6 @@
 #define RECURSIVE_BASE   0xffc00000
 #define USER_ADDRESS     ((void*)0x40000000)
 #define INACTIVE_ADDRESS ((void*)0x40400000)
-
-#define CHECK(condition)                                                      \
-    do {                                                                      \
-        if (!(condition))                                                     \
-            panic("Address-space test failed: %s", #condition);               \
-    } while (0)
 
 /* Set to 1 or 2 for separate QEMU runs that must panic, never report success.
  */

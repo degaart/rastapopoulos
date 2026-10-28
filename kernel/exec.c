@@ -208,7 +208,7 @@ int exec(const char* filename, const char* args)
         goto cleanup;
     }
 
-    event_wait(&process->termination_event);
+    event_wait(&process->termination_event, WAIT_INFINITE);
 
     int result = -1;
     if (ctx->started)

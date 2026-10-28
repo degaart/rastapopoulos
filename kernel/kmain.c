@@ -1,7 +1,9 @@
 #include "address_space.h"
 #include "bitset.h"
+#include "cmos.h"
 #include "early_malloc.h"
 #include "exec.h"
+#include "fdc.h"
 #include "heap.h"
 #include "idt.h"
 #include "kernel.h"
@@ -177,9 +179,12 @@ static void tss_load(uint16_t tss_seg)
     asm volatile("ltr %0" : : "r"(tss_seg) : "memory");
 }
 
+#ifndef UNIT_TESTS
 static void init_entry(void* unused)
 {
     trace("Init thread started");
+    if (!fdc_init())
+        trace("FDC initialization failed");
     while (true) {
         int ret = exec("shell.bin", "");
         if (ret == -1)
@@ -192,13 +197,25 @@ static void init_entry(void* unused)
     }
 }
 
+#endif
+
 #ifdef UNIT_TESTS
 extern void test_tar(void);
 extern void test_vga(void);
+extern void test_fdc(void);
+extern void test_events(void);
+extern void test_fdc_prepare(void);
+extern void test_pmm(void);
 
-static void unit_tests(void)
+static void unit_tests(void* unused)
 {
-    test_vga();
+    test_pmm();
+    test_fdc_prepare();
+    if (!fdc_init())
+        panic("FDC initialization failed");
+    test_events();
+    test_fdc();
+
     debugexit(1);
 }
 #endif
@@ -301,10 +318,6 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
     process_init();
     thread_init();
 
-#ifdef UNIT_TESTS
-    unit_tests();
-#endif
-
     schedule();
     trace("Scheduler ready: IF=%u, PIC mask=0x%x, IRR=0x%x, ISR=0x%x",
           (read_eflags() & EFLAGS_IF) != 0, inb(0x21), pic_get_irr(),
@@ -313,7 +326,12 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
 
     trace("Idle thread started: ticks=%llu", pit_get_ticks());
 
-    if (!thread_create(process_current(), "init", init_entry, NULL)) {
+#ifdef UNIT_TESTS
+    thread_entry_t entry = unit_tests;
+#else
+    thread_entry_t entry = init_entry;
+#endif
+    if (!thread_create(NULL, "init", entry, NULL)) {
         panic("Failed to create init thread");
     }
 

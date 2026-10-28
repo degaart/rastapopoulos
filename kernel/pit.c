@@ -5,6 +5,7 @@
 #include "process.h"
 #include "trace.h"
 #include "vga.h"
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -41,6 +42,7 @@
 #define PIT_BCD    0x01
 
 volatile uint64_t ticks = 0;
+static uint32_t tick_divisor;
 static uint16_t perf_previous;
 static uint64_t perf_clocks;
 
@@ -90,7 +92,10 @@ static void pit_irq_handler(int irq, struct isr_regs* regs)
 
 void pit_init(uint32_t frequency)
 {
-    uint16_t divisor = PIT_BASE_FREQUENCY / frequency;
+    assert(frequency > 0 && frequency <= PIT_BASE_FREQUENCY);
+    tick_divisor = PIT_BASE_FREQUENCY / frequency;
+    assert(tick_divisor <= UINT16_MAX);
+    uint16_t divisor = tick_divisor;
     outb(0x61, (inb(0x61) & ~3u) | 1u);
     outb(PIT_COMMAND, PIT_CHANNEL2 | PIT_ACCESS_LOHIBYTE | PIT_MODE2);
     outb(PIT_CHANNEL2_DATA, 0);
@@ -119,3 +124,21 @@ uint64_t pit_get_ticks(void)
     return result;
 }
 
+uint64_t pit_ms_to_ticks(uint32_t milliseconds)
+{
+    uint64_t denominator = (uint64_t)tick_divisor * 1000;
+    return ((uint64_t)milliseconds * PIT_BASE_FREQUENCY + denominator - 1) /
+           denominator;
+}
+
+uint64_t pit_ticks_to_ms(uint64_t count)
+{
+    uint64_t multiplier = (uint64_t)tick_divisor * 1000;
+    uint64_t whole = count / PIT_BASE_FREQUENCY;
+    uint64_t tail =
+        (count % PIT_BASE_FREQUENCY * multiplier + PIT_BASE_FREQUENCY - 1) /
+        PIT_BASE_FREQUENCY;
+    if (whole > (UINT64_MAX - tail) / multiplier)
+        return UINT64_MAX;
+    return whole * multiplier + tail;
+}

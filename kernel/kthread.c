@@ -20,6 +20,7 @@ static struct ThreadList sleeping_queue =
 static struct Thread* current_thread;
 static struct Thread* idle_thread;
 static uint64_t scheduler_ticks;
+extern struct Process* kernel_task;
 
 void scheduler_enqueue(struct Thread* thread)
 {
@@ -43,6 +44,27 @@ struct Thread* scheduler_dequeue(void)
     return next;
 }
 
+static void finish_wait(struct Thread* thread, bool signaled)
+{
+    assert(thread->state == THREAD_BLOCKED);
+    STAILQ_REMOVE(&sleeping_queue, thread, Thread, threads);
+    if (thread->waiting_event) {
+        thread->waiting_event->waiter = NULL;
+        thread->waiting_event = NULL;
+    }
+    thread->wait_timed = false;
+    thread->wait_signaled = signaled;
+    scheduler_enqueue(thread);
+}
+
+void thread_cancel_wait(struct Thread* thread)
+{
+    bool flag = enter_critical_section();
+    if (thread->state == THREAD_BLOCKED)
+        finish_wait(thread, false);
+    leave_critical_section(flag);
+}
+
 void schedule(void)
 {
     assert((read_eflags() & EFLAGS_IF) == 0);
@@ -60,11 +82,18 @@ void schedule(void)
     while (thread) {
         struct Thread* next = STAILQ_NEXT(thread, threads);
         if (thread->process->exit_requested ||
-            thread->sleep_deadline <= current_ticks) {
+            (thread->wait_timed &&
+             current_ticks - thread->wait_started >= thread->wait_duration)) {
             if (prev)
                 STAILQ_REMOVE_AFTER(&sleeping_queue, prev, threads);
             else
                 STAILQ_REMOVE_HEAD(&sleeping_queue, threads);
+            if (thread->waiting_event) {
+                thread->waiting_event->waiter = NULL;
+                thread->waiting_event = NULL;
+            }
+            thread->wait_timed = false;
+            thread->wait_signaled = false;
             scheduler_enqueue(thread);
         } else {
             prev = thread;
@@ -115,6 +144,8 @@ static void thread_start(void (*entry)(void*), void* arg)
 struct Thread* thread_create(struct Process* proc, const char* name,
                              thread_entry_t entry, void* arg)
 {
+    if (!proc)
+        proc = kernel_task;
     if (!proc || !name || !entry)
         return false;
     if (proc->state != PROCESS_ALIVE)
@@ -226,7 +257,7 @@ void thread_exit(void)
     panic("Unreachable code");
 }
 
-void thread_sleep(uint32_t ticks)
+static void sleep_ticks(uint64_t ticks)
 {
     assert(current_thread != idle_thread);
 
@@ -243,7 +274,9 @@ void thread_sleep(uint32_t ticks)
         return;
     }
 
-    current_thread->sleep_deadline = pit_get_ticks() + ticks;
+    current_thread->wait_started = pit_get_ticks();
+    current_thread->wait_duration = ticks;
+    current_thread->wait_timed = true;
     current_thread->state = THREAD_BLOCKED;
     STAILQ_INSERT_TAIL(&sleeping_queue, current_thread, threads);
 
@@ -264,6 +297,16 @@ void thread_sleep(uint32_t ticks)
         thread_exit();
 }
 
+void thread_sleep(uint32_t ticks)
+{
+    sleep_ticks(ticks);
+}
+
+void thread_sleep_ms(uint32_t milliseconds)
+{
+    sleep_ticks(pit_ms_to_ticks(milliseconds));
+}
+
 void thread_dump(void)
 {
     struct Thread* first = STAILQ_FIRST(&ready_queue);
@@ -279,7 +322,8 @@ void thread_dump(void)
 struct Event* event_create(void)
 {
     struct Event* event = kmalloc(sizeof(struct Event));
-    memset(event, 0, sizeof(*event));
+    if (event)
+        memset(event, 0, sizeof(*event));
     return event;
 }
 
@@ -288,40 +332,58 @@ void event_free(struct Event* event)
     kfree(event);
 }
 
-void event_wait(struct Event* event)
+bool event_wait(struct Event* event, uint32_t timeout_ms)
 {
     bool iflag = enter_critical_section();
-    while (!current_thread->process->exit_requested && !event->pending) {
-        current_thread->waiting_event = event;
-        event->waiter = current_thread;
-        current_thread->state = THREAD_BLOCKED;
-
-        struct Thread* next = scheduler_dequeue();
-        assert(next != current_thread);
-
-        next->state = THREAD_RUNNING;
-        current_thread = next;
-
-        scheduler_ticks = 0;
-        process_set_current(next->process);
-        tss.esp0 = (uintptr_t)next->stack_top;
-        context_switch(&event->waiter->esp, next->esp);
+    if (current_thread->process->exit_requested) {
+        leave_critical_section(iflag);
+        return false;
     }
-    event->pending = false;
-    event->waiter = NULL;
-    current_thread->waiting_event = NULL;
+    if (event->pending) {
+        event->pending = false;
+        leave_critical_section(iflag);
+        return true;
+    }
+    if (timeout_ms == 0) {
+        leave_critical_section(iflag);
+        return false;
+    }
+    assert(current_thread != idle_thread);
+    assert(event->waiter == NULL);
+    struct Thread* old = current_thread;
+    old->waiting_event = event;
+    old->wait_signaled = false;
+    event->waiter = old;
+    old->wait_started = pit_get_ticks();
+    old->wait_timed = timeout_ms != WAIT_INFINITE;
+    old->wait_duration = old->wait_timed ? pit_ms_to_ticks(timeout_ms) : 0;
+    old->state = THREAD_BLOCKED;
+    STAILQ_INSERT_TAIL(&sleeping_queue, old, threads);
+
+    struct Thread* next = scheduler_dequeue();
+    assert(next != old);
+    next->state = THREAD_RUNNING;
+    current_thread = next;
+    scheduler_ticks = 0;
+    process_set_current(next->process);
+    tss.esp0 = (uintptr_t)next->stack_top;
+    context_switch(&old->esp, next->esp);
+    bool result = old->wait_signaled && !old->process->exit_requested;
     leave_critical_section(iflag);
+    return result;
 }
 
 void event_signal(struct Event* event)
 {
     bool iflag = enter_critical_section();
-    event->pending = true;
-    if (event->waiter != NULL) {
+    if (event->waiter) {
         struct Thread* waiter = event->waiter;
-        assert(waiter->state == THREAD_BLOCKED);
-        event->waiter = NULL;
-        scheduler_enqueue(waiter);
+        bool canceled = waiter->process->exit_requested;
+        finish_wait(waiter, !canceled);
+        if (canceled)
+            event->pending = true;
+    } else {
+        event->pending = true;
     }
     leave_critical_section(iflag);
 }

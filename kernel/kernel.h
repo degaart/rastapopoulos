@@ -53,6 +53,12 @@ static inline __attribute__((always_inline)) void outb(uint16_t port,
     asm volatile("out %1, %0" : : "a"(value), "Nd"(port));
 }
 
+static inline __attribute__((always_inline)) void outw(uint16_t port,
+                                                       uint16_t value)
+{
+    asm volatile("out %1, %0" : : "a"(value), "Nd"(port));
+}
+
 static inline uint32_t read_cr0(void)
 {
     uint32_t value;

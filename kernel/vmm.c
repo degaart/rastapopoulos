@@ -17,6 +17,27 @@ bool vmm_map(void* frame, void* virtual_address, uint32_t flags)
     return address_space_map(as, frame, virtual_address, flags);
 }
 
+void* vmm_map_kernel(void* frame, uint32_t flags)
+{
+    struct AddressSpace* as = address_space_current();
+    if (!as || !IS_ALIGNED(frame, PAGE_SIZE) || (flags & VMM_USER))
+        return NULL;
+
+    bool iflag = enter_critical_section();
+    void* result = NULL;
+    for (uintptr_t address = 0xffc00000u - PAGE_SIZE; address >= KERNEL_OFFSET;
+         address -= PAGE_SIZE) {
+        void* va = (void*)address;
+        if (address_space_query(as, va, NULL, NULL))
+            continue;
+        if (address_space_map(as, frame, va, flags))
+            result = va;
+        break;
+    }
+    leave_critical_section(iflag);
+    return result;
+}
+
 bool vmm_unmap(void* virtual_address)
 {
     struct AddressSpace* as = address_space_current();
