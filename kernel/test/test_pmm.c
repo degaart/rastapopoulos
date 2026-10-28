@@ -9,7 +9,7 @@ static void bounded_allocations(void)
     unsigned capacity = 0x1000000 / PAGE_SIZE;
     void** held = kmalloc(capacity * sizeof(*held));
     CHECK(held);
-    bool flag = enter_critical_section();
+    enter_critical_section();
     size_t before = pmm_info();
     CHECK(!pmm_alloc_below(0));
     CHECK(!pmm_alloc_below(PAGE_SIZE - 1));
@@ -51,7 +51,7 @@ static void bounded_allocations(void)
     CHECK(pmm_info() == before);
     CHECK(pmm_alloc_below(end) == first);
     pmm_free(first);
-    leave_critical_section(flag);
+    leave_critical_section();
     kfree(held);
 }
 

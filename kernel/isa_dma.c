@@ -26,13 +26,13 @@ bool isa_dma_claim(unsigned channel)
 {
     if (!valid_channel(channel))
         return false;
-    bool flag = enter_critical_section();
+    enter_critical_section();
     bool result = !claimed[channel];
     if (result) {
         claimed[channel] = true;
         mask(channel, true);
     }
-    leave_critical_section(flag);
+    leave_critical_section();
     return result;
 }
 
@@ -40,22 +40,22 @@ void isa_dma_stop(unsigned channel)
 {
     if (!valid_channel(channel))
         return;
-    bool flag = enter_critical_section();
+    enter_critical_section();
     if (claimed[channel]) {
         mask(channel, true);
         running[channel] = false;
     }
-    leave_critical_section(flag);
+    leave_critical_section();
 }
 
 void isa_dma_release(unsigned channel)
 {
     if (!valid_channel(channel))
         return;
-    bool flag = enter_critical_section();
+    enter_critical_section();
     isa_dma_stop(channel);
     claimed[channel] = false;
-    leave_critical_section(flag);
+    leave_critical_section();
 }
 
 bool isa_dma_start(unsigned channel, uintptr_t physical, size_t bytes,
@@ -71,9 +71,9 @@ bool isa_dma_start(unsigned channel, uintptr_t physical, size_t bytes,
         ((physical | bytes) & shift))
         return false;
 
-    bool flag = enter_critical_section();
+    enter_critical_section();
     if (!claimed[channel]) {
-        leave_critical_section(flag);
+        leave_critical_section();
         return false;
     }
     mask(channel, true);
@@ -98,7 +98,7 @@ bool isa_dma_start(unsigned channel, uintptr_t physical, size_t bytes,
     automatic[channel] = auto_initialize;
     running[channel] = true;
     mask(channel, false);
-    leave_critical_section(flag);
+    leave_critical_section();
     return true;
 }
 
@@ -106,9 +106,9 @@ size_t isa_dma_remaining(unsigned channel)
 {
     if (!valid_channel(channel))
         return 0;
-    bool flag = enter_critical_section();
+    enter_critical_section();
     if (!claimed[channel]) {
-        leave_critical_section(flag);
+        leave_critical_section();
         return 0;
     }
     mask(channel, true);
@@ -126,6 +126,6 @@ size_t isa_dma_remaining(unsigned channel)
         running[channel] = false;
     if (running[channel])
         mask(channel, false);
-    leave_critical_section(flag);
+    leave_critical_section();
     return result;
 }

@@ -119,10 +119,10 @@ void vga_set_cursor_pos(struct VGAPoint p)
 
 void vga_write(const char* text, int len, uint8_t fg, uint8_t bg)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (locked_process) {
         panic("%s called while screen was locked", __FUNCTION__);
-        leave_critical_section(iflag);
+        leave_critical_section();
         return;
     }
 
@@ -481,14 +481,14 @@ void vga_init(void)
 
 bool vga_lock_screen(void)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (locked_process) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
     shadow_allocation = kmalloc(SHADOW_PAGES * PAGE_SIZE + PAGE_SIZE - 1);
     if (!shadow_allocation) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
     shadow = (uint8_t*)(((uintptr_t)shadow_allocation + PAGE_SIZE - 1) &
@@ -505,7 +505,7 @@ bool vga_lock_screen(void)
             kfree(shadow_allocation);
             shadow_allocation = NULL;
             shadow = NULL;
-            leave_critical_section(iflag);
+            leave_critical_section();
             return false;
         }
     }
@@ -514,15 +514,15 @@ bool vga_lock_screen(void)
     vga_mode_x();
     profile_swaps = profile_bytes = 0;
     profile_convert = profile_upload = profile_max = 0;
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
 void vga_cleanup_process(struct Process* owner)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (locked_process != owner) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return;
     }
     for (unsigned i = 0; i < SHADOW_PAGES; ++i) {
@@ -536,14 +536,14 @@ void vga_cleanup_process(struct Process* owner)
     locked_process = NULL;
     vga_text_mode();
     process_decref(owner);
-    leave_critical_section(iflag);
+    leave_critical_section();
 }
 
 bool vga_unlock_screen(void)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (locked_process != process_current()) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
     trace("VGA perf: swaps=%u bytes=%u convert_clocks=%u upload_clocks=%u "
@@ -551,6 +551,6 @@ bool vga_unlock_screen(void)
           profile_swaps, profile_bytes, (unsigned)profile_convert,
           (unsigned)profile_upload, (unsigned)profile_max);
     vga_cleanup_process(locked_process);
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }

@@ -26,21 +26,21 @@ void scheduler_enqueue(struct Thread* thread)
 {
     assert(thread != idle_thread);
 
-    bool flag = enter_critical_section();
+    enter_critical_section();
     thread->state = THREAD_READY;
     STAILQ_INSERT_TAIL(&ready_queue, thread, threads);
-    leave_critical_section(flag);
+    leave_critical_section();
 }
 
 struct Thread* scheduler_dequeue(void)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     struct Thread* next = STAILQ_FIRST(&ready_queue);
     if (next)
         STAILQ_REMOVE_HEAD(&ready_queue, threads);
     else
         next = idle_thread;
-    leave_critical_section(flag);
+    leave_critical_section();
     return next;
 }
 
@@ -59,10 +59,10 @@ static void finish_wait(struct Thread* thread, bool signaled)
 
 void thread_cancel_wait(struct Thread* thread)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     if (thread->state == THREAD_BLOCKED)
         finish_wait(thread, false);
-    leave_critical_section(flag);
+    leave_critical_section();
 }
 
 void schedule(void)
@@ -151,15 +151,15 @@ struct Thread* thread_create(struct Process* proc, const char* name,
     if (proc->state != PROCESS_ALIVE)
         return false;
 
-    bool const flag = enter_critical_section();
+    enter_critical_section();
     if (proc->state != PROCESS_ALIVE) {
-        leave_critical_section(flag);
+        leave_critical_section();
         return NULL;
     }
 
     struct Thread* thread = kmalloc(sizeof(struct Thread));
     if (!thread) {
-        leave_critical_section(flag);
+        leave_critical_section();
         return NULL;
     }
 
@@ -170,7 +170,7 @@ struct Thread* thread_create(struct Process* proc, const char* name,
     thread->stack = kmalloc(thread->stack_size);
     if (!thread->stack) {
         kfree(thread);
-        leave_critical_section(flag);
+        leave_critical_section();
         return NULL;
     }
     thread->stack_top = thread->stack + thread->stack_size;
@@ -190,13 +190,13 @@ struct Thread* thread_create(struct Process* proc, const char* name,
     process_add_thread(proc, thread);
 
     scheduler_enqueue(thread);
-    leave_critical_section(flag);
+    leave_critical_section();
     return thread;
 }
 
 static void cleanup_terminated(void)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     while (!STAILQ_EMPTY(&terminated_queue)) {
         struct Thread* thread = STAILQ_FIRST(&terminated_queue);
         trace("Destroying thread \"%s\"", thread->name);
@@ -208,12 +208,12 @@ static void cleanup_terminated(void)
         kfree(thread->stack);
         kfree(thread);
     }
-    leave_critical_section(flag);
+    leave_critical_section();
 }
 
 void thread_yield(void)
 {
-    bool const flag = enter_critical_section();
+    enter_critical_section();
     struct Thread* next = scheduler_dequeue();
 
     if (next != current_thread) {
@@ -232,7 +232,7 @@ void thread_yield(void)
     }
 
     cleanup_terminated();
-    leave_critical_section(flag);
+    leave_critical_section();
 }
 
 void thread_exit(void)
@@ -261,14 +261,14 @@ static void sleep_ticks(uint64_t ticks)
 {
     assert(current_thread != idle_thread);
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (ticks == 0) {
         if (!STAILQ_EMPTY(&ready_queue)) {
             /* if another thread is ready, switch to it, otherwise return
              * immediately */
             thread_yield();
         }
-        leave_critical_section(iflag);
+        leave_critical_section();
         if (current_thread->process->exit_requested)
             thread_exit();
         return;
@@ -291,7 +291,7 @@ static void sleep_ticks(uint64_t ticks)
     process_set_current(next->process);
     tss.esp0 = (uintptr_t)next->stack_top;
     context_switch(&old->esp, next->esp);
-    leave_critical_section(iflag);
+    leave_critical_section();
 
     if (current_thread->process->exit_requested)
         thread_exit();
@@ -334,18 +334,18 @@ void event_free(struct Event* event)
 
 bool event_wait(struct Event* event, uint32_t timeout_ms)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (current_thread->process->exit_requested) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
     if (event->pending) {
         event->pending = false;
-        leave_critical_section(iflag);
+        leave_critical_section();
         return true;
     }
     if (timeout_ms == 0) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
     assert(current_thread != idle_thread);
@@ -369,13 +369,13 @@ bool event_wait(struct Event* event, uint32_t timeout_ms)
     tss.esp0 = (uintptr_t)next->stack_top;
     context_switch(&old->esp, next->esp);
     bool result = old->wait_signaled && !old->process->exit_requested;
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result;
 }
 
 void event_signal(struct Event* event)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (event->waiter) {
         struct Thread* waiter = event->waiter;
         bool canceled = waiter->process->exit_requested;
@@ -385,14 +385,14 @@ void event_signal(struct Event* event)
     } else {
         event->pending = true;
     }
-    leave_critical_section(iflag);
+    leave_critical_section();
 }
 
 size_t current_thread_name(char* buf, size_t size)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t result = strlcpy(buf, current_thread->name, size);
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result;
 }
 
@@ -401,10 +401,10 @@ void thread_get_info(char* buffer, size_t len)
     if (!len)
         return;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     snprintf(buffer, len, "CT: %s",
              current_thread ? current_thread->name : "NULL");
-    leave_critical_section(iflag);
+    leave_critical_section();
 }
 
 struct Thread* thread_current(void)

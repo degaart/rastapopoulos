@@ -23,7 +23,7 @@ void* vmm_map_kernel(void* frame, uint32_t flags)
     if (!as || !IS_ALIGNED(frame, PAGE_SIZE) || (flags & VMM_USER))
         return NULL;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     void* result = NULL;
     for (uintptr_t address = KERNEL_RECURSIVE_START - PAGE_SIZE;
          address >= KERNEL_MAPPINGS_START; address -= PAGE_SIZE) {
@@ -34,7 +34,7 @@ void* vmm_map_kernel(void* frame, uint32_t flags)
             result = va;
         break;
     }
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result;
 }
 

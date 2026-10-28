@@ -98,22 +98,22 @@ static struct Request* request_create(size_t length)
 
 static int request_incref(struct Request* request)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     int result = ++request->refcount;
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result;
 }
 
 static int request_decref(struct Request* request)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     int result = --request->refcount;
     if (result) {
         int result = request->refcount;
-        leave_critical_section(iflag);
+        leave_critical_section();
         return result;
     }
-    leave_critical_section(iflag);
+    leave_critical_section();
     kfree(request);
     return result;
 }
@@ -403,26 +403,26 @@ static void worker(void* unused)
     if (!ready)
         return;
     while (true) {
-        bool flag = enter_critical_section();
+        enter_critical_section();
         struct Request* request = TAILQ_FIRST(&queue);
         if (!request) {
             dor &= 0x0f;
             outb(FDC_DOR, dor);
             event_wait(&request_event, WAIT_INFINITE);
-            leave_critical_section(flag);
+            leave_critical_section();
             continue;
         }
         TAILQ_REMOVE(&queue, request, queue);
-        leave_critical_section(flag);
+        leave_critical_section();
 
         while (request->completed < request->length &&
                sector(request, request->lba + request->completed / 512))
             request->completed += 512;
-        flag = enter_critical_section();
+        enter_critical_section();
         request->success = request->completed == request->length;
         event_signal(&request->done);
         request_decref(request);
-        leave_critical_section(flag);
+        leave_critical_section();
     }
 }
 
@@ -498,7 +498,7 @@ static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
         memcpy(request->data, buffer, length);
     request_incref(request);
 
-    bool flag = enter_critical_section();
+    enter_critical_section();
     TAILQ_INSERT_TAIL(&queue, request, queue);
     event_signal(&request_event);
     bool completed = event_wait(&request->done, WAIT_INFINITE);
@@ -508,7 +508,7 @@ static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
     else if (!write)
         memcpy(buffer, request->data, request->completed);
     request_decref(request);
-    leave_critical_section(flag);
+    leave_critical_section();
     return result;
 }
 

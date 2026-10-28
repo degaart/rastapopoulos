@@ -1,5 +1,6 @@
 #pragma once
 
+#include "trace.h"
 #include <stdint.h>
 
 #define CR0_PE 0x1
@@ -152,16 +153,8 @@ static inline bool disable_interrupts(void)
     return (eflags & EFLAGS_IF) != 0;
 }
 
-static inline bool enter_critical_section(void)
-{
-    return disable_interrupts();
-}
-
-static inline void leave_critical_section(bool flag)
-{
-    if (flag)
-        enable_interrupts();
-}
+void enter_critical_section(void);
+void leave_critical_section(void);
 
 static inline void hlt(void)
 {

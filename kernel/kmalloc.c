@@ -20,24 +20,24 @@ bool heap_init(void)
 
 void* kmalloc(size_t size)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     void* result = heap_alloc(size);
-    leave_critical_section(flag);
+    leave_critical_section();
     return result;
 }
 
 void kfree(void* ptr)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     heap_free(ptr);
-    leave_critical_section(flag);
+    leave_critical_section();
 }
 
 void* kmemalign(size_t alignment, size_t size)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     void* result = heap_alloc_aligned(size, alignment);
-    leave_critical_section(flag);
+    leave_critical_section();
     return result;
 }
 

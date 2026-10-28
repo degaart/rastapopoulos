@@ -48,14 +48,14 @@ static uint64_t perf_clocks;
 
 uint64_t pit_perf_clock(void)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     outb(PIT_COMMAND, PIT_CHANNEL2 | PIT_LATCH);
     unsigned low = inb(PIT_CHANNEL2_DATA);
     uint16_t counter = low | ((unsigned)inb(PIT_CHANNEL2_DATA) << 8);
     perf_clocks += (uint16_t)(perf_previous - counter);
     perf_previous = counter;
     uint64_t result = perf_clocks;
-    leave_critical_section(flag);
+    leave_critical_section();
     return result;
 }
 
@@ -118,9 +118,9 @@ void pit_init(uint32_t frequency)
 
 uint64_t pit_get_ticks(void)
 {
-    bool const flag = enter_critical_section();
+    enter_critical_section();
     uint64_t const result = ticks;
-    leave_critical_section(flag);
+    leave_critical_section();
     return result;
 }
 

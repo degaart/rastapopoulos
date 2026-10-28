@@ -156,7 +156,7 @@ static void ps2kbd_isr_handler(int num, struct isr_regs* regs)
 
 void ps2kbd_init(void)
 {
-    bool flag = enter_critical_section();
+    enter_critical_section();
     pic_mask_irq(IRQ_KEYBOARD);
     memset(held, 0, sizeof(held));
     extended = false;
@@ -200,7 +200,7 @@ void ps2kbd_init(void)
     pic_set_irq_handler(IRQ_KEYBOARD, ps2kbd_isr_handler);
     if (!controller_command(0x60) || !write_data(config | 0x01))
         goto failed;
-    leave_critical_section(flag);
+    leave_critical_section();
     trace("PS/2 keyboard initialized (scan code set 1)");
     return;
 

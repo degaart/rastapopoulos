@@ -31,6 +31,8 @@ struct Thread
     struct Process* process;
     struct Event* waiting_event;
     bool wait_signaled;
+    int critical_section_nesting;
+    bool critical_section_flag;
 
     STAILQ_ENTRY(Thread) threads;   /* Queues in kthread.c */
     STAILQ_ENTRY(Thread) processes; /* Process thread list in process.c */

@@ -48,7 +48,7 @@ void test_events(void)
     CHECK(event.waiter == NULL);
     event_signal(&event);
     CHECK(event_wait(&event, 0));
-    bool flag = enter_critical_section();
+    enter_critical_section();
     uint64_t saved_ticks = pit_get_ticks();
     uint64_t near_wrap = UINT64_MAX - 1;
     ticks = near_wrap;
@@ -56,17 +56,17 @@ void test_events(void)
     uint64_t elapsed = pit_get_ticks() - near_wrap;
     CHECK(elapsed >= pit_ms_to_ticks(21));
     ticks = saved_ticks + elapsed;
-    leave_critical_section(flag);
+    leave_critical_section();
     CHECK(pit_ms_to_ticks(1) > 0);
     CHECK(pit_ms_to_ticks(UINT32_MAX) > pit_ms_to_ticks(1000));
     CHECK(pit_ticks_to_ms(UINT64_MAX) == UINT64_MAX);
     for (unsigned i = 0; i < 12; i++) {
         signal_delay = i % 3 == 0 ? 1 : i % 3 == 1 ? 20 : 40;
         CHECK(thread_create(NULL, "event-signal", signal_later, NULL));
-        bool flag = enter_critical_section();
+        enter_critical_section();
         bool result = event_wait(&signal_event, i == 0 ? WAIT_INFINITE : 20);
         CHECK((read_eflags() & EFLAGS_IF) == 0);
-        leave_critical_section(flag);
+        leave_critical_section();
         CHECK(event_wait(&signal_done, 500));
         if (!result)
             CHECK(event_wait(&signal_event, 0));

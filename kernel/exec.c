@@ -66,9 +66,9 @@ cleanup:
 
 static int context_incref(struct Context* ctx)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     int result = ++ctx->refcount;
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result;
 }
 
@@ -77,12 +77,12 @@ static int context_decref(struct Context* ctx)
     if (!ctx)
         panic("context_decref with NULL ctx");
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     if (ctx->refcount <= 0)
         panic("Calling exec_args_decref with refcount=%d", ctx->refcount);
     int result = --ctx->refcount;
     if (ctx->refcount > 0) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return result;
     }
 
@@ -91,7 +91,7 @@ static int context_decref(struct Context* ctx)
     if (ctx->filename)
         kfree(ctx->filename);
     kfree(ctx);
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result;
 }
 

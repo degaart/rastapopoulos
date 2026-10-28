@@ -36,7 +36,6 @@
 static struct AddressSpaceList address_spaces =
     TAILQ_HEAD_INITIALIZER(address_spaces);
 static __attribute__((aligned(PAGE_SIZE))) uint32_t temp_map[1024];
-static bool temp_map_flag;
 static __attribute__((aligned(PAGE_SIZE))) uint32_t initial_pagedir[1024];
 static struct AddressSpace initial_address_space;
 static struct AddressSpace* current_address_space;
@@ -77,23 +76,23 @@ NODISCARD static bool recursive_frame(const void* va, uint32_t* phys)
     if (!phys || !valid_vaddr(addr))
         return false;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t pde_idx = PDE_INDEX(addr);
     uint32_t* pagedir = recursive_pagedir();
     if (!(pagedir[pde_idx] & PDE_PRESENT)) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
     size_t pte_idx = PTE_INDEX(addr);
     uint32_t* pagetable = recursive_pagetable(pde_idx);
     if (!(pagetable[pte_idx] & PTE_PRESENT)) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
     *phys = (uint32_t)(pagetable[pte_idx] & PTE_ADDRESS_MASK);
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
@@ -104,24 +103,24 @@ NODISCARD static bool recursive_remap(void* virtual_address, uint32_t flags)
     if (!valid_vaddr(addr) || !valid_flags(flags))
         return false;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t pde_idx = PDE_INDEX(addr);
     uint32_t* pagedir = recursive_pagedir();
     if (!(pagedir[pde_idx] & PDE_PRESENT)) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
     size_t pte_idx = PTE_INDEX(addr);
     uint32_t* pagetable = recursive_pagetable(pde_idx);
     if (!(pagetable[pte_idx] & PTE_PRESENT)) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
     pagetable[pte_idx] = (pagetable[pte_idx] & PTE_ADDRESS_MASK) | flags;
     flush_tlb();
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 #endif
@@ -132,18 +131,18 @@ NODISCARD static bool recursive_unmap(void* virtual_address)
     if (!valid_vaddr(addr))
         return false;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t pde_idx = PDE_INDEX(addr);
     uint32_t* pagedir = recursive_pagedir();
     if (!(pagedir[pde_idx] & PDE_PRESENT)) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
     size_t pte_idx = PTE_INDEX(addr);
     uint32_t* pagetable = recursive_pagetable(pde_idx);
     if (!(pagetable[pte_idx] & PTE_PRESENT)) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
@@ -164,7 +163,7 @@ NODISCARD static bool recursive_unmap(void* virtual_address)
     }
 
     flush_tlb();
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
@@ -176,7 +175,7 @@ NODISCARD static bool recursive_map(void* frame, void* virtual_address,
     if (!valid_vaddr(vaddr) || !valid_paddr(paddr) || !valid_flags(flags))
         return false;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t pde_idx = PDE_INDEX(vaddr);
     size_t pte_idx = PTE_INDEX(vaddr);
     uint32_t* pagedir = recursive_pagedir();
@@ -184,14 +183,14 @@ NODISCARD static bool recursive_map(void* frame, void* virtual_address,
 
     if ((pagedir[pde_idx] & PDE_PRESENT) &&
         (pagetable[pte_idx] & PTE_PRESENT)) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
     if (!(pagedir[pde_idx] & PDE_PRESENT)) {
         uintptr_t pagetable_phys = (uintptr_t)pmm_alloc();
         if (!pagetable_phys) {
-            leave_critical_section(iflag);
+            leave_critical_section();
             return false;
         }
 
@@ -206,7 +205,7 @@ NODISCARD static bool recursive_map(void* frame, void* virtual_address,
 
     pagetable[pte_idx] = paddr | PTE_PRESENT | flags;
     flush_tlb();
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
@@ -214,7 +213,7 @@ static uint32_t* lock_pagetable(uint32_t pagetable)
 {
     assert(valid_paddr(pagetable));
 
-    temp_map_flag = enter_critical_section();
+    enter_critical_section();
 
     uintptr_t vaddr = (uintptr_t)temp_map;
     uint32_t* pagedir = recursive_pagedir();
@@ -243,7 +242,7 @@ static void unlock_pagetable(uint32_t* pagetable)
     if (frame != current_mapped)
         goto error;
 
-    leave_critical_section(temp_map_flag);
+    leave_critical_section();
     return;
 error:
     panic("Error unlocking pagetable 0x%p", pagetable);
@@ -339,13 +338,13 @@ bool address_space_create(struct AddressSpace* as)
         as->pagedir_phys | PDE_PRESENT | PDE_WRITABLE;
 
     /* Copy current kernel mappings */
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     uint32_t* current_pagedir = (uint32_t*)RECURSIVE_ADDR;
     for (int i = PDE_INDEX(KERNEL_OFFSET); i < RECURSIVE_INDEX; i++) {
         as->pagedir[i] = current_pagedir[i];
     }
     TAILQ_INSERT_TAIL(&address_spaces, as, node);
-    leave_critical_section(iflag);
+    leave_critical_section();
 
     return true;
 }
@@ -357,9 +356,9 @@ void address_space_destroy(struct AddressSpace* as)
     if (read_cr3() == as->pagedir_phys)
         panic("Attempt to destroy current address space");
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     TAILQ_REMOVE(&address_spaces, as, node);
-    leave_critical_section(iflag);
+    leave_critical_section();
 
     /* Free user-space pagetables */
     for (int i = 0; i < PDE_INDEX(KERNEL_OFFSET); i++) {
@@ -382,10 +381,10 @@ void address_space_destroy(struct AddressSpace* as)
 
 void address_space_activate(struct AddressSpace* as)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     current_address_space = as;
     write_cr3(as->pagedir_phys);
-    leave_critical_section(iflag);
+    leave_critical_section();
 }
 
 struct AddressSpace* address_space_current(void)
@@ -404,13 +403,13 @@ bool address_space_map(struct AddressSpace* as, void* pa, void* va,
 
     volatile uint32_t* pagedir = as->pagedir;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t pde_idx = PDE_INDEX(vaddr);
     uint32_t pagetable_phys = (uintptr_t)pagedir[pde_idx] & PDE_ADDRESS_MASK;
     if ((pagedir[pde_idx] & PDE_PRESENT) == 0) {
         pagetable_phys = (uint32_t)pmm_alloc();
         if (!pagetable_phys) {
-            leave_critical_section(iflag);
+            leave_critical_section();
             return false;
         }
 
@@ -444,12 +443,12 @@ bool address_space_map(struct AddressSpace* as, void* pa, void* va,
     uint32_t* pageframe = lock_pagetable(pagetable_phys);
     if (pageframe[pte_idx] & PTE_PRESENT) {
         unlock_pagetable(pageframe);
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
     pageframe[pte_idx] = paddr | PDE_PRESENT | flags;
     unlock_pagetable(pageframe);
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
@@ -460,10 +459,10 @@ bool address_space_unmap(struct AddressSpace* as, void* va)
         return false;
 
     size_t pde_idx = PDE_INDEX(vaddr);
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     volatile uint32_t* pagedir = as->pagedir;
     if ((pagedir[pde_idx] & PDE_PRESENT) == 0) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
@@ -474,7 +473,7 @@ bool address_space_unmap(struct AddressSpace* as, void* va)
     uint32_t pte = pagetable[pte_idx];
     if ((pte & PTE_PRESENT) == 0) {
         unlock_pagetable(pagetable);
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
@@ -514,7 +513,7 @@ bool address_space_unmap(struct AddressSpace* as, void* va)
         pmm_free((void*)pagetable_phys);
     }
 
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
@@ -524,10 +523,10 @@ bool address_space_remap(struct AddressSpace* as, void* va, unsigned flags)
     if (!valid_vaddr(vaddr) || !valid_flags(flags))
         return false;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t pde_idx = PDE_INDEX(vaddr);
     if ((as->pagedir[pde_idx] & PDE_PRESENT) == 0) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
@@ -536,7 +535,7 @@ bool address_space_remap(struct AddressSpace* as, void* va, unsigned flags)
     size_t pte_idx = PTE_INDEX(vaddr);
     if ((pagetable[pte_idx] & PTE_PRESENT) == 0) {
         unlock_pagetable(pagetable);
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
@@ -545,7 +544,7 @@ bool address_space_remap(struct AddressSpace* as, void* va, unsigned flags)
     flush_tlb();
 
     unlock_pagetable(pagetable);
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
@@ -577,15 +576,15 @@ bool address_space_is_valid_userptr(const void* ptr, size_t len,
         return true;
 
     uintptr_t end = addr + len;
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     for (uintptr_t page = addr & PTE_ADDRESS_MASK; page < end;
          page += PAGE_SIZE) {
         if (!user_page_accessible(page, for_write)) {
-            leave_critical_section(iflag);
+            leave_critical_section();
             return false;
         }
     }
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 
@@ -595,20 +594,20 @@ bool address_space_is_valid_userstr(const char* str)
     if (!addr || addr >= KERNEL_OFFSET)
         return false;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     while (addr < KERNEL_OFFSET) {
         if (!user_page_accessible(addr, false)) {
-            leave_critical_section(iflag);
+            leave_critical_section();
             return false;
         }
         uintptr_t end = (addr & PTE_ADDRESS_MASK) + PAGE_SIZE;
         if (memchr((const void*)addr, '\0', end - addr)) {
-            leave_critical_section(iflag);
+            leave_critical_section();
             return true;
         }
         addr = end;
     }
-    leave_critical_section(iflag);
+    leave_critical_section();
     return false;
 }
 
@@ -621,10 +620,10 @@ bool address_space_query(struct AddressSpace* as, const void* va, void** frame,
     if (!valid_vaddr(vaddr))
         return false;
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t pde_idx = PDE_INDEX(vaddr);
     if ((as->pagedir[pde_idx] & PDE_PRESENT) == 0) {
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
@@ -633,7 +632,7 @@ bool address_space_query(struct AddressSpace* as, const void* va, void** frame,
     uint32_t* pagetable = lock_pagetable(pagetable_phys);
     if ((pagetable[pte_idx] & PTE_PRESENT) == 0) {
         unlock_pagetable(pagetable);
-        leave_critical_section(iflag);
+        leave_critical_section();
         return false;
     }
 
@@ -642,7 +641,7 @@ bool address_space_query(struct AddressSpace* as, const void* va, void** frame,
     if (flags)
         *flags = pagetable[pte_idx] & ~PTE_ADDRESS_MASK;
     unlock_pagetable(pagetable);
-    leave_critical_section(iflag);
+    leave_critical_section();
     return true;
 }
 

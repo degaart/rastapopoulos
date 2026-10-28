@@ -141,7 +141,7 @@ void* pmm_alloc(void)
 
 void* pmm_alloc_below(uintptr_t limit)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     struct Region* region;
     void* result = NULL;
     STAILQ_FOREACH(region, &regions, node)
@@ -160,7 +160,7 @@ void* pmm_alloc_below(uintptr_t limit)
         break;
     }
 
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result;
 }
 
@@ -169,7 +169,7 @@ void pmm_free(void* frame)
     if ((uintptr_t)frame & (PAGE_SIZE - 1))
         panic("Invalid frame: 0x%p", frame);
 
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     int found = 0;
     struct Region* region;
     STAILQ_FOREACH(region, &regions, node)
@@ -186,44 +186,44 @@ void pmm_free(void* frame)
         panic("Frame 0x%p was already free", frame);
     else if (found > 1)
         panic("Frame 0x%p was found in multiple regions", frame);
-    leave_critical_section(iflag);
+    leave_critical_section();
 }
 
 size_t pmm_info(void)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     size_t result = 0;
     struct Region* region;
     STAILQ_FOREACH(region, &regions, node)
     {
         result += bitset_count_unset(&region->bitset);
     }
-    leave_critical_section(iflag);
+    leave_critical_section();
     return result * PAGE_SIZE;
 }
 
 bool pmm_reserve(void* frame)
 {
-    bool iflag = enter_critical_section();
+    enter_critical_section();
     struct Region* region;
     STAILQ_FOREACH(region, &regions, node)
     {
         if (frame >= region->start && frame < region->start + region->len) {
             size_t bit = (uintptr_t)(frame - region->start) / PAGE_SIZE;
             if (bitset_test(&region->bitset, bit)) {
-                leave_critical_section(iflag);
+                leave_critical_section();
                 return false;
             }
 
             if (!bitset_set(&region->bitset, bit)) {
-                leave_critical_section(iflag);
+                leave_critical_section();
                 return false;
             }
-            leave_critical_section(iflag);
+            leave_critical_section();
             return true;
         }
     }
-    leave_critical_section(iflag);
+    leave_critical_section();
     return false;
 }
 
