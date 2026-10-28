@@ -1,10 +1,12 @@
 #include "exec.h"
+#include "assert.h"
 #include "kernel.h"
 #include "kmalloc.h"
 #include "pmm.h"
 #include "process.h"
 #include "psp.h"
 #include "ramdisk.h"
+#include "refcount.h"
 #include "tar.h"
 #include "trace.h"
 #include "vga.h"
@@ -34,8 +36,9 @@ struct Context
     char* args;
     const struct Usercode* usercode;
     bool started;
-    int refcount;
+    REFCOUNT();
 };
+REFCOUNT_DECLARE(context, Context);
 
 static struct Context* context_create(const char* filename, const char* args,
                                       const struct Usercode* usercode)
@@ -64,36 +67,14 @@ cleanup:
     return NULL;
 }
 
-static int context_incref(struct Context* ctx)
+static void context_destroy(struct Context* ctx)
 {
-    enter_critical_section();
-    int result = ++ctx->refcount;
-    leave_critical_section();
-    return result;
-}
-
-static int context_decref(struct Context* ctx)
-{
-    if (!ctx)
-        panic("context_decref with NULL ctx");
-
-    enter_critical_section();
-    if (ctx->refcount <= 0)
-        panic("Calling exec_args_decref with refcount=%d", ctx->refcount);
-    int result = --ctx->refcount;
-    if (ctx->refcount > 0) {
-        leave_critical_section();
-        return result;
-    }
-
-    if (ctx->args)
-        kfree(ctx->args);
-    if (ctx->filename)
-        kfree(ctx->filename);
+    kfree(ctx->args);
+    kfree(ctx->filename);
     kfree(ctx);
-    leave_critical_section();
-    return result;
 }
+
+REFCOUNT_IMPLEMENT(context, Context, context_destroy);
 
 static void user_entry(void* param)
 {

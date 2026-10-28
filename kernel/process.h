@@ -2,6 +2,7 @@
 
 #include "address_space.h"
 #include "kthread.h"
+#include "refcount.h"
 #include <queue.h>
 
 typedef uint8_t pid_t;
@@ -32,19 +33,17 @@ struct Process
     bool input_queue_overflow;
     struct Event input_event;
     struct Event termination_event;
-    int refcount;
+    REFCOUNT();
 
     TAILQ_ENTRY(Process) processes;
     TAILQ_ENTRY(Process) exited_processes;
 };
 TAILQ_HEAD(ProcessList, Process);
+REFCOUNT_DECLARE(process, Process);
 
 void process_init(void);
 struct Process* process_current(void);
 struct Process* process_create(const char* name);
-int process_refcount(struct Process* process);
-int process_incref(struct Process* process);
-int process_decref(struct Process* process);
 void process_add_thread(struct Process* proc, struct Thread* thread);
 void process_remove_thread(struct Process* proc, struct Thread* thread);
 void process_set_current(struct Process* proc);

@@ -129,59 +129,37 @@ struct Process* process_create(const char* name)
     return process;
 }
 
-int process_refcount(struct Process* process)
+static void process_destroy(struct Process* process)
 {
-    return process->refcount;
-}
+    trace("Destroying process %s", process->name);
 
-int process_incref(struct Process* process)
-{
-    enter_critical_section();
-    int result = ++process->refcount;
-    leave_critical_section();
-    return result;
-}
-
-int process_decref(struct Process* proc)
-{
-    enter_critical_section();
-    assert(proc->refcount > 0);
-    proc->refcount--;
-    if (proc->refcount) {
-        int result = proc->refcount;
-        leave_critical_section();
-        return result;
-    }
-    leave_critical_section();
-
-    trace("Destroying process %s", proc->name);
-
-    assert(proc != kernel_task);
-    assert(proc != current_proc);
-    assert(proc->state == PROCESS_EXITED);
-    assert(proc->live_threads == 0);
-    assert(STAILQ_EMPTY(&proc->threads));
+    assert(process != kernel_task);
+    assert(process != current_proc);
+    assert(process->state == PROCESS_EXITED);
+    assert(process->live_threads == 0);
+    assert(STAILQ_EMPTY(&process->threads));
 
     enter_critical_section();
-    TAILQ_REMOVE(&processes, proc, processes);
+    TAILQ_REMOVE(&processes, process, processes);
 
     struct Process* p;
     TAILQ_FOREACH(p, &processes, processes)
     {
-        if (p->parent == proc)
-            p->parent = proc->parent;
+        if (p->parent == process)
+            p->parent = process->parent;
     }
     leave_critical_section();
 
-    kfree(proc->input_queue);
+    kfree(process->input_queue);
 
-    address_space_destroy(proc->as);
-    kfree(proc->as);
-    kfree(proc->name);
-    free_pid(proc->pid);
-    kfree(proc);
-    return 0;
+    address_space_destroy(process->as);
+    kfree(process->as);
+    kfree(process->name);
+    free_pid(process->pid);
+    kfree(process);
 }
+
+REFCOUNT_IMPLEMENT(process, Process, process_destroy);
 
 void process_add_thread(struct Process* proc, struct Thread* thread)
 {

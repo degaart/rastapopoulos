@@ -8,6 +8,7 @@
 #include "pit.h"
 #include "pmm.h"
 #include "process.h"
+#include "refcount.h"
 #include "trace.h"
 #include "vmm.h"
 #include <assert.h>
@@ -47,7 +48,6 @@ struct FdcChs
 
 struct Request
 {
-    volatile int refcount;
     struct Event done;
     unsigned drive;
     unsigned lba;
@@ -57,9 +57,11 @@ struct Request
     bool canceled;
     bool success;
     TAILQ_ENTRY(Request) queue;
+    REFCOUNT();
     char data[];
 };
 TAILQ_HEAD(RequestList, Request);
+REFCOUNT_DECLARE(request, Request);
 
 static struct Event request_event;
 static struct Event irq_event;
@@ -96,27 +98,7 @@ static struct Request* request_create(size_t length)
     return request;
 }
 
-static int request_incref(struct Request* request)
-{
-    enter_critical_section();
-    int result = ++request->refcount;
-    leave_critical_section();
-    return result;
-}
-
-static int request_decref(struct Request* request)
-{
-    enter_critical_section();
-    int result = --request->refcount;
-    if (result) {
-        int result = request->refcount;
-        leave_critical_section();
-        return result;
-    }
-    leave_critical_section();
-    kfree(request);
-    return result;
-}
+REFCOUNT_IMPLEMENT(request, Request, kfree);
 
 static void irq6_handler(int irq, struct isr_regs* regs)
 {
