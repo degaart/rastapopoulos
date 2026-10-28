@@ -25,8 +25,8 @@ void* vmm_map_kernel(void* frame, uint32_t flags)
 
     bool iflag = enter_critical_section();
     void* result = NULL;
-    for (uintptr_t address = 0xffc00000u - PAGE_SIZE; address >= KERNEL_OFFSET;
-         address -= PAGE_SIZE) {
+    for (uintptr_t address = KERNEL_RECURSIVE_START - PAGE_SIZE;
+         address >= KERNEL_MAPPINGS_START; address -= PAGE_SIZE) {
         void* va = (void*)address;
         if (address_space_query(as, va, NULL, NULL))
             continue;

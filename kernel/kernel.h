@@ -9,6 +9,16 @@
 #define KERNEL_OFFSET 0xc0000000
 #define PAGE_SIZE     4096
 
+/* Recursive mappings region of virtual address space (4Mb) */
+#define KERNEL_RECURSIVE_START 0xffc00000
+
+/* General mappings region of virtual address space (256Mb) */
+#define KERNEL_MAPPINGS_END   KERNEL_RECURSIVE_START
+#define KERNEL_MAPPINGS_START 0xf0000000
+
+/* Heap region of virtual address space */
+#define KERNEL_HEAP_END KERNEL_MAPPINGS_START
+
 #define EFLAGS_IF (1 << 9)
 
 #define NODISCARD     __attribute__((warn_unused_result))

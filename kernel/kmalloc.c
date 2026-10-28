@@ -64,6 +64,11 @@ void* heap_grow(size_t bytes)
     if (bytes & (PAGE_SIZE - 1))
         return NULL;
 
+    if (heap_tail >= (void*)KERNEL_HEAP_END)
+        return NULL;
+    if (bytes > (KERNEL_HEAP_END - (uintptr_t)heap_tail))
+        return NULL;
+
     void* initial_tail = heap_tail;
     while (bytes) {
         void* frame = pmm_alloc();

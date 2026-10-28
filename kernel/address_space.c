@@ -30,7 +30,7 @@
 #define PTE_INDEX(VA)     (((VA) >> 12) & 0x3ff)
 
 #define RECURSIVE_INDEX 1023
-#define RECURSIVE_BASE  0xffc00000
+#define RECURSIVE_BASE  KERNEL_RECURSIVE_START
 #define RECURSIVE_ADDR  0xfffff000
 
 static struct AddressSpaceList address_spaces =
