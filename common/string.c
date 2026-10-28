@@ -414,3 +414,14 @@ size_t uint64_to_string(uint64_t value, char* buffer, size_t buffer_len)
 }
 #endif
 
+char* ascii_lower(char* str)
+{
+    char* result = str;
+    while (*str) {
+        if (*str >= 'A' && *str <= 'Z')
+            *str = *str - 'A' + 'a';
+        str++;
+    }
+    return result;
+}
+

@@ -7,7 +7,7 @@ all:
 	mkdir -p build/tmp
 	for target in $(TARGETS); do \
 		make -C "$$target"; \
-		cp "$$target/build/$${target}.bin" build/tmp; \
+		[ -f "$$target/build/$${target}.bin" ] && cp "$$target/build/$${target}.bin" build/tmp; \
 	done
 	cp logo.raw build/tmp
 	echo 'ALL YOUR BASE ARE BELONG TO US' > build/tmp/message

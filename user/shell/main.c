@@ -291,6 +291,9 @@ static void help(char* arguments)
         char* period = strchr(str, '.');
         if (!period)
             continue;
+        ascii_lower(period);
+        if (strcmp(period, ".bin"))
+            continue;
         printf("    %.*s\n", (int)(period - str), str);
     }
 }
