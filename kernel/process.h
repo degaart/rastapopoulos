@@ -31,8 +31,8 @@ struct Process
     struct Process* parent;
     struct KeyEventQueue* input_queue;
     bool input_queue_overflow;
-    struct Event* input_event;
-    struct Event* termination_event;
+    struct Event input_event;
+    struct Event termination_event;
     REFCOUNT();
 
     TAILQ_ENTRY(Process) processes;

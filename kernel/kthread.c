@@ -10,13 +10,6 @@
 #include <gdt.h>
 #include <string.h>
 
-struct Event
-{
-    unsigned pending;
-    struct WaitQueue waitqueue;
-    REFCOUNT();
-};
-
 #define SCHEDULER_QUANTUM 10
 #define DEADLINE_INFINITE 0
 
@@ -281,18 +274,17 @@ void thread_dump(void)
           idle_thread);
 }
 
-struct Event* event_create(void)
+void event_init(struct Event* evt)
 {
-    struct Event* event = kmalloc(sizeof(struct Event));
-    if (!event)
-        return NULL;
-    memset(event, 0, sizeof(*event));
-    event->refcount = 1;
-    STAILQ_INIT(&event->waitqueue);
-    return event;
+    memset(evt, 0, sizeof(*evt));
+    STAILQ_INIT(&evt->waitqueue);
 }
 
-REFCOUNT_IMPLEMENT(event, Event, kfree);
+void event_destroy(struct Event* evt)
+{
+    if (!STAILQ_EMPTY(&evt->waitqueue))
+        panic("Destroying an event with a non-empty waitqueue");
+}
 
 bool event_wait(struct Event* event, uint32_t timeout_ms)
 {

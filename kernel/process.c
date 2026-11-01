@@ -71,14 +71,8 @@ static struct Process* create_with_address_space(const char* name,
             goto error;
         KeyEventQueue_init(proc->input_queue);
     }
-    proc->input_event = event_create();
-    if (!proc->input_event)
-        goto error;
-
-    proc->termination_event = event_create();
-    if (!proc->termination_event)
-        goto error;
-
+    event_init(&proc->input_event);
+    event_init(&proc->termination_event);
     proc->refcount = 1;
 
     enter_critical_section();
@@ -89,8 +83,8 @@ static struct Process* create_with_address_space(const char* name,
     return proc;
 
 error:
-    event_decref(proc->termination_event);
-    event_decref(proc->input_event);
+    event_destroy(&proc->termination_event);
+    event_destroy(&proc->input_event);
     kfree(proc->input_queue);
     kfree(proc->name);
     kfree(proc);
@@ -162,8 +156,8 @@ static void process_destroy(struct Process* process)
 
     kfree(process->input_queue);
 
-    event_decref(process->input_event);
-    event_decref(process->termination_event);
+    event_destroy(&process->input_event);
+    event_destroy(&process->termination_event);
 
     address_space_destroy(process->as);
     kfree(process->as);
@@ -201,7 +195,7 @@ void process_remove_thread(struct Process* proc, struct Thread* thread)
         vga_cleanup_process(proc);
         process_deactivate(proc);
         proc->state = PROCESS_EXITED;
-        event_signal(proc->termination_event);
+        event_signal(&proc->termination_event);
         TAILQ_INSERT_TAIL(&exited_processes, proc, exited_processes);
     }
     leave_critical_section();
@@ -265,7 +259,7 @@ void process_push_input_event(const struct KeyEvent* event)
         active_process->input_queue_overflow = true;
         trace("Input queue overflow");
     }
-    event_signal(active_process->input_event);
+    event_signal(&active_process->input_event);
     leave_critical_section();
 }
 
@@ -280,7 +274,7 @@ static bool get_input_event(struct KeyEvent* event, bool* overflow, bool block)
     while (block && KeyEventQueue_empty(current_proc->input_queue) &&
            !current_proc->input_queue_overflow &&
            !current_proc->exit_requested) {
-        event_wait(current_proc->input_event, WAIT_INFINITE);
+        event_wait(&current_proc->input_event, WAIT_INFINITE);
     }
 
     if (current_proc->exit_requested) {

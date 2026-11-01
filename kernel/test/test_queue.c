@@ -7,7 +7,7 @@ static struct WaitQueue queue;
 struct QueueWaiter
 {
     struct Thread* thread;
-    struct Event* done;
+    struct Event done;
     unsigned timeout;
     bool returned;
 };
@@ -22,7 +22,7 @@ static void queue_waiter(void* argument)
     enter_critical_section();
     waiter->returned = true;
     leave_critical_section();
-    event_signal(waiter->done);
+    event_signal(&waiter->done);
 }
 
 static void start_waiter(unsigned index, unsigned timeout)
@@ -30,8 +30,7 @@ static void start_waiter(unsigned index, unsigned timeout)
     struct QueueWaiter* waiter = &waiters[index];
     waiter->timeout = timeout;
     waiter->returned = false;
-    waiter->done = event_create();
-    CHECK(waiter->done);
+    event_init(&waiter->done);
     waiter->thread = thread_create(NULL, "queue-waiter", queue_waiter, waiter);
     CHECK(waiter->thread);
     uint64_t start = pit_get_ticks();
@@ -48,9 +47,9 @@ static void start_waiter(unsigned index, unsigned timeout)
 
 static void finish_waiter(unsigned index)
 {
-    CHECK(event_wait(waiters[index].done, 2000));
+    CHECK(event_wait(&waiters[index].done, 2000));
     CHECK(waiters[index].returned);
-    event_decref(waiters[index].done);
+    event_destroy(&waiters[index].done);
 }
 
 void test_queue(void)

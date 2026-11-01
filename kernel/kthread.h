@@ -42,8 +42,12 @@ STAILQ_HEAD(ThreadList, Thread);
 STAILQ_HEAD(WaitQueue, Thread);
 
 /* Binary auto-reset event with at most one blocked waiter */
-struct Event;
-REFCOUNT_DECLARE(event, Event);
+struct Event
+{
+    unsigned pending;
+    struct WaitQueue waitqueue;
+    REFCOUNT();
+};
 
 typedef void (*thread_entry_t)(void*);
 
@@ -62,7 +66,12 @@ void thread_cancel_wait(struct Thread* thread);
 void schedule(void);
 void scheduler_enqueue(struct Thread* thread);
 void thread_dump(void);
-struct Event* event_create(void);
+size_t current_thread_name(char* buf, size_t size);
+void thread_get_info(char* buffer, size_t len);
+struct Thread* thread_current(void);
+
+void event_init(struct Event* event);
+void event_destroy(struct Event* event);
 
 /*
  * Returns false on timeout/cancellation
@@ -70,11 +79,7 @@ struct Event* event_create(void);
  * If timeout_ms == WAIT_INFINITE, blocks indefinitely
  */
 bool event_wait(struct Event* event, uint32_t timeout_ms);
-
 void event_signal(struct Event* event);
-size_t current_thread_name(char* buf, size_t size);
-void thread_get_info(char* buffer, size_t len);
-struct Thread* thread_current(void);
 
 void queue_wait(struct WaitQueue* queue, unsigned timeout_ms);
 void queue_notify(struct WaitQueue* queue);
