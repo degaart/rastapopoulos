@@ -331,7 +331,7 @@ static void allocation_failures(struct AddressSpace* original)
 void test_address_spaces(void)
 {
     trace("Running address-space tests");
-    bool interrupts = enter_critical_section();
+    enter_critical_section();
     struct AddressSpace* original = address_space_current();
     CHECK(original != NULL);
     CHECK(read_cr3() == original->pagedir_phys);
@@ -352,7 +352,7 @@ void test_address_spaces(void)
     allocation_failures(original);
     lifecycle(original);
     activate(original);
-    leave_critical_section(interrupts);
+    leave_critical_section();
     trace("All %zu address-space checks succeeded", checks);
     debugexit(1);
 }

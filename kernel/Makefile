@@ -24,16 +24,13 @@ HDRS := $(wildcard *.h) \
 		$(wildcard ../common/*.h)
 SRCS := $(wildcard *.c) \
 		$(wildcard ../common/*.c) \
-		test/test_fdc.c \
-		test/test_events.c \
-		test/test_pmm.c
+		$(wildcard test/*.c)
 ASM_HDRS := $(wildcard *.inc) \
 			$(wildcard ../common/*.inc)
 ASM_SRCS := $(wildcard *.asm) \
 			$(wildcard ../common/*.asm)
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
-		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o))) \
-		build/test_tar.o
+		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
 
 all: $(IMAGE) $(BINARY)
 
@@ -87,7 +84,6 @@ test: all
 		-serial stdio \
 		-display none \
 		-s
-
 
 debug: all
 	qemu-system-i386 \
