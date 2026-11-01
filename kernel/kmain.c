@@ -196,10 +196,7 @@ static void init_entry(void* unused)
         }
     }
 }
-
-#endif
-
-#ifdef UNIT_TESTS
+#else
 extern void test_tar(void);
 extern void test_vga(void);
 extern void test_fdc(void);
