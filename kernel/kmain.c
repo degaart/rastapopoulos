@@ -201,6 +201,7 @@ extern void test_tar(void);
 extern void test_vga(void);
 extern void test_fdc(void);
 extern void test_events(void);
+extern void test_queue(void);
 extern void test_fdc_prepare(void);
 extern void test_pmm(void);
 
@@ -210,6 +211,7 @@ static void unit_tests(void* unused)
     printf("Running unit tests\n");
     test_pmm();
     test_events();
+    test_queue();
     test_fdc_prepare();
     if (!fdc_init())
         panic("FDC initialization failed");

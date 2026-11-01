@@ -1,13 +1,12 @@
-#ifdef UNIT_TESTS
-#    include "../cmos.h"
-#    include "../fdc.h"
-#    include "../kmalloc.h"
-#    include "../kthread.h"
-#    include "../pic.h"
-#    include "../pit.h"
-#    include "../process.h"
-#    include "test.h"
-#    include <string.h>
+#include "../cmos.h"
+#include "../fdc.h"
+#include "../kmalloc.h"
+#include "../kthread.h"
+#include "../pic.h"
+#include "../pit.h"
+#include "../process.h"
+#include "test.h"
+#include <string.h>
 
 static char data[4 * 512];
 static char expected[4 * 512];
@@ -247,4 +246,3 @@ static void test_failure_recovery(void)
           "passed");
 }
 
-#endif
