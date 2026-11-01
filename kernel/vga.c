@@ -172,6 +172,7 @@ void vga_write(const char* text, int len, uint8_t fg, uint8_t bg)
             len--;
     }
     vga_set_cursor_pos(cursor);
+    leave_critical_section();
 }
 
 void vga_write_at(int x, int y, char ch, uint8_t fg, uint8_t bg)
