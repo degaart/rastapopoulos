@@ -13,13 +13,13 @@ static char data[4 * 512];
 static char expected[4 * 512];
 static char original[512];
 static char pattern[512];
-static struct Event concurrent_done[2];
+static struct Event* concurrent_done[2];
 
 static void concurrent_reader(void* argument)
 {
     unsigned index = (uintptr_t)argument;
     CHECK(fdc_read(0, index * 18, data + index * 512, 512));
-    event_signal(&concurrent_done[index]);
+    event_signal(concurrent_done[index]);
 }
 
 static void test_secondary(void);
@@ -28,6 +28,8 @@ static void test_failure_recovery(void);
 void test_fdc(void)
 {
     trace("*** FDC tests started");
+    concurrent_done[0] = event_create();
+    concurrent_done[1] = event_create();
     unsigned attempts = fdc_test_attempt_count();
     CHECK(!fdc_read(-1, 0, data, 512));
     CHECK(!fdc_read(2, 0, data, 512));
@@ -59,7 +61,7 @@ void test_fdc(void)
         CHECK(thread_create(NULL, "fdc-test", concurrent_reader,
                             (void*)(uintptr_t)i));
     for (unsigned i = 0; i < 2; i++)
-        CHECK(event_wait(&concurrent_done[i], 10000));
+        CHECK(event_wait(concurrent_done[i], 10000));
     CHECK(fdc_read(0, 2879, original, sizeof(original)));
     for (unsigned i = 0; i < sizeof(pattern); i++)
         pattern[i] = i ^ 0xa5;
@@ -73,6 +75,8 @@ void test_fdc(void)
     CHECK(memcmp(data, original, 512) == 0);
     test_secondary();
     test_failure_recovery();
+    event_decref(concurrent_done[1]);
+    event_decref(concurrent_done[0]);
     trace("*** FDC tests done");
 }
 
@@ -181,22 +185,22 @@ static void test_secondary(void)
           capacity);
 }
 
-static struct Event canceled_started;
-static struct Event canceled_gate;
+static struct Event* canceled_started;
+static struct Event* canceled_gate;
 static bool canceled_returned;
 
 static void canceled_reader(void* unused)
 {
     char* buffer = kmalloc(512 * 36);
     CHECK(buffer);
-    event_signal(&canceled_started);
+    event_signal(canceled_started);
     canceled_returned = !fdc_read(0, 0, buffer, 512 * 36);
     kfree(buffer);
 }
 
 static void cancel_reader_process(void* unused)
 {
-    event_wait(&canceled_gate, WAIT_INFINITE);
+    event_wait(canceled_gate, WAIT_INFINITE);
     process_exit(0);
 }
 
@@ -204,15 +208,19 @@ static void test_failure_recovery(void)
 {
     if (secondary_type != FDC_NONE)
         return;
+
+    canceled_started = event_create();
+    canceled_gate = event_create();
+
     struct Process* child = process_create("fdc-cancel");
     CHECK(child);
     process_incref(child);
     CHECK(thread_create(child, "reader", canceled_reader, NULL));
     CHECK(thread_create(child, "killer", cancel_reader_process, NULL));
-    CHECK(event_wait(&canceled_started, 1000));
+    CHECK(event_wait(canceled_started, 1000));
     thread_sleep_ms(20);
-    event_signal(&canceled_gate);
-    CHECK(event_wait(&child->termination_event, 1000));
+    event_signal(canceled_gate);
+    CHECK(event_wait(child->termination_event, 1000));
     CHECK(canceled_returned);
     process_decref(child);
     char* guard = kmalloc(512 * 36);
@@ -233,6 +241,8 @@ static void test_failure_recovery(void)
     CHECK(fdc_read(0, 0, data, 512));
     CHECK((unsigned char)data[510] == 0x55 &&
           (unsigned char)data[511] == 0xaa);
+    event_decref(canceled_started);
+    event_decref(canceled_gate);
     trace("*** FDC cancellation, missing IRQ, retry exhaustion and recovery "
           "passed");
 }

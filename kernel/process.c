@@ -54,11 +54,8 @@ static struct Process* create_with_address_space(const char* name,
     proc->pid = pid;
 
     proc->name = strdup(name);
-    if (!proc->name) {
-        kfree(proc);
-        free_pid(pid);
-        return NULL;
-    }
+    if (!proc->name)
+        goto error;
 
     proc->as = as;
     proc->state = PROCESS_CONSTRUCTING;
@@ -70,14 +67,18 @@ static struct Process* create_with_address_space(const char* name,
     proc->parent = current_proc;
     if (proc->parent) { /* kernel_task should not have an input queue */
         proc->input_queue = kmalloc(sizeof(*proc->input_queue));
-        if (!proc->input_queue) {
-            kfree(proc->name);
-            kfree(proc);
-            free_pid(pid);
-            return NULL;
-        }
+        if (!proc->input_queue)
+            goto error;
         KeyEventQueue_init(proc->input_queue);
     }
+    proc->input_event = event_create();
+    if (!proc->input_event)
+        goto error;
+
+    proc->termination_event = event_create();
+    if (!proc->termination_event)
+        goto error;
+
     proc->refcount = 1;
 
     enter_critical_section();
@@ -86,6 +87,15 @@ static struct Process* create_with_address_space(const char* name,
 
     active_process = proc;
     return proc;
+
+error:
+    event_decref(proc->termination_event);
+    event_decref(proc->input_event);
+    kfree(proc->input_queue);
+    kfree(proc->name);
+    kfree(proc);
+    free_pid(pid);
+    return NULL;
 }
 
 void process_init(void)
@@ -152,6 +162,9 @@ static void process_destroy(struct Process* process)
 
     kfree(process->input_queue);
 
+    event_decref(process->input_event);
+    event_decref(process->termination_event);
+
     address_space_destroy(process->as);
     kfree(process->as);
     kfree(process->name);
@@ -188,7 +201,7 @@ void process_remove_thread(struct Process* proc, struct Thread* thread)
         vga_cleanup_process(proc);
         process_deactivate(proc);
         proc->state = PROCESS_EXITED;
-        event_signal(&proc->termination_event);
+        event_signal(proc->termination_event);
         TAILQ_INSERT_TAIL(&exited_processes, proc, exited_processes);
     }
     leave_critical_section();
@@ -252,7 +265,7 @@ void process_push_input_event(const struct KeyEvent* event)
         active_process->input_queue_overflow = true;
         trace("Input queue overflow");
     }
-    event_signal(&active_process->input_event);
+    event_signal(active_process->input_event);
     leave_critical_section();
 }
 
@@ -267,7 +280,7 @@ static bool get_input_event(struct KeyEvent* event, bool* overflow, bool block)
     while (block && KeyEventQueue_empty(current_proc->input_queue) &&
            !current_proc->input_queue_overflow &&
            !current_proc->exit_requested) {
-        event_wait(&current_proc->input_event, WAIT_INFINITE);
+        event_wait(current_proc->input_event, WAIT_INFINITE);
     }
 
     if (current_proc->exit_requested) {

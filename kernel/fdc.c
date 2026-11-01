@@ -48,7 +48,7 @@ struct FdcChs
 
 struct Request
 {
-    struct Event done;
+    struct Event* done;
     unsigned drive;
     unsigned lba;
     size_t length;
@@ -63,9 +63,9 @@ struct Request
 TAILQ_HEAD(RequestList, Request);
 REFCOUNT_DECLARE(request, Request);
 
-static struct Event request_event;
-static struct Event irq_event;
-static struct Event init_event;
+static struct Event* request_event;
+static struct Event* irq_event;
+static struct Event* init_event;
 static struct RequestList queue = TAILQ_HEAD_INITIALIZER(queue);
 static unsigned drive_types[2];
 static int cylinders[2] = {-1, -1};
@@ -95,14 +95,25 @@ static struct Request* request_create(size_t length)
         return NULL;
     memset(request, 0, sizeof(*request));
     request->refcount = 1;
+    request->done = event_create();
+    if (!request->done) {
+        kfree(request);
+        return NULL;
+    }
     return request;
 }
 
-REFCOUNT_IMPLEMENT(request, Request, kfree);
+static void request_destroy(struct Request* request)
+{
+    event_decref(request->done);
+    kfree(request);
+}
+
+REFCOUNT_IMPLEMENT(request, Request, request_destroy);
 
 static void irq6_handler(int irq, struct isr_regs* regs)
 {
-    event_signal(&irq_event);
+    event_signal(irq_event);
     pic_eoi(irq);
 }
 
@@ -144,7 +155,7 @@ static bool command(const uint8_t* bytes, size_t count)
 
 static void clear_irq(void)
 {
-    event_wait(&irq_event, 0);
+    event_wait(irq_event, 0);
 }
 
 static bool sense(uint8_t* status, uint8_t* cylinder)
@@ -169,7 +180,7 @@ static bool reset(void)
     thread_sleep_ms(2);
     clear_irq();
     outb(FDC_DOR, dor);
-    if (!event_wait(&irq_event, IRQ_MS))
+    if (!event_wait(irq_event, IRQ_MS))
         return false;
     for (unsigned i = 0; i < 4; i++) {
         uint8_t status, cylinder;
@@ -203,8 +214,7 @@ static bool position(unsigned drive, unsigned head, unsigned cylinder,
 {
     clear_irq();
     uint8_t bytes[] = {recalibrate ? 7 : 15, (head << 2) | drive, cylinder};
-    if (!command(bytes, recalibrate ? 2 : 3) ||
-        !event_wait(&irq_event, IRQ_MS))
+    if (!command(bytes, recalibrate ? 2 : 3) || !event_wait(irq_event, IRQ_MS))
         return false;
     uint8_t status, actual;
     if (!sense(&status, &actual) || (status & 0xfb) != (0x20 | drive) ||
@@ -313,7 +323,7 @@ static bool sector(struct Request* request, unsigned lba)
                            geometry->sectors,
                            geometry->gap,
                            0xff};
-        if (!command(bytes, sizeof(bytes)) || !event_wait(&irq_event, IRQ_MS))
+        if (!command(bytes, sizeof(bytes)) || !event_wait(irq_event, IRQ_MS))
             goto recover;
         isa_dma_stop(2);
         uint8_t result[7];
@@ -381,7 +391,7 @@ static void worker(void* unused)
         isa_dma_release(2);
         free_bounce();
     }
-    event_signal(&init_event);
+    event_signal(init_event);
     if (!ready)
         return;
     while (true) {
@@ -390,7 +400,7 @@ static void worker(void* unused)
         if (!request) {
             dor &= 0x0f;
             outb(FDC_DOR, dor);
-            event_wait(&request_event, WAIT_INFINITE);
+            event_wait(request_event, WAIT_INFINITE);
             leave_critical_section();
             continue;
         }
@@ -402,7 +412,7 @@ static void worker(void* unused)
             request->completed += 512;
         enter_critical_section();
         request->success = request->completed == request->length;
-        event_signal(&request->done);
+        event_signal(request->done);
         request_decref(request);
         leave_critical_section();
     }
@@ -430,14 +440,30 @@ bool fdc_init(void)
         free_bounce();
         return false;
     }
+
+    request_event = event_create();
+    if (!request_event)
+        goto error;
+    irq_event = event_create();
+    if (!irq_event)
+        goto error;
+    init_event = event_create();
+    if (!init_event)
+        goto error;
+
     pic_set_irq_handler(IRQ_FDC, irq6_handler);
-    if (!thread_create(NULL, "fdc", worker, NULL)) {
-        pic_set_irq_handler(IRQ_FDC, NULL);
-        isa_dma_release(2);
-        free_bounce();
-        return false;
-    }
-    return event_wait(&init_event, WAIT_INFINITE) && ready;
+    if (!thread_create(NULL, "fdc", worker, NULL))
+        goto error;
+    return event_wait(init_event, WAIT_INFINITE) && ready;
+
+error:
+    event_decref(request_event);
+    event_decref(irq_event);
+    event_decref(init_event);
+    pic_set_irq_handler(IRQ_FDC, NULL);
+    isa_dma_release(2);
+    free_bounce();
+    return false;
 }
 
 static bool valid_buffer(const void* buffer, size_t length, bool write)
@@ -482,8 +508,8 @@ static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
 
     enter_critical_section();
     TAILQ_INSERT_TAIL(&queue, request, queue);
-    event_signal(&request_event);
-    bool completed = event_wait(&request->done, WAIT_INFINITE);
+    event_signal(request_event);
+    bool completed = event_wait(request->done, WAIT_INFINITE);
     bool result = completed && request->success;
     if (!completed)
         request->canceled = true;

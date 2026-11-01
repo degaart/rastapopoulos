@@ -10,7 +10,15 @@
 #include <gdt.h>
 #include <string.h>
 
+struct Event
+{
+    unsigned pending;
+    struct WaitQueue waitqueue;
+    REFCOUNT();
+};
+
 #define SCHEDULER_QUANTUM 10
+#define DEADLINE_INFINITE 0
 
 static struct ThreadList ready_queue = STAILQ_HEAD_INITIALIZER(ready_queue);
 static struct ThreadList terminated_queue =
@@ -24,7 +32,8 @@ extern struct Process* kernel_task;
 
 void scheduler_enqueue(struct Thread* thread)
 {
-    assert(thread != idle_thread);
+    if (thread == idle_thread)
+        return;
 
     enter_critical_section();
     thread->state = THREAD_READY;
@@ -44,25 +53,21 @@ struct Thread* scheduler_dequeue(void)
     return next;
 }
 
-static void finish_wait(struct Thread* thread, bool signaled)
+static void schedule_next()
 {
-    assert(thread->state == THREAD_BLOCKED);
-    STAILQ_REMOVE(&sleeping_queue, thread, Thread, threads);
-    if (thread->waiting_event) {
-        thread->waiting_event->waiter = NULL;
-        thread->waiting_event = NULL;
-    }
-    thread->wait_timed = false;
-    thread->wait_signaled = signaled;
-    scheduler_enqueue(thread);
-}
+    assert(!(read_eflags() & EFLAGS_IF));
+    struct Thread* next = scheduler_dequeue();
+    next->state = THREAD_RUNNING;
+    if (current_thread == next)
+        return;
 
-void thread_cancel_wait(struct Thread* thread)
-{
-    enter_critical_section();
-    if (thread->state == THREAD_BLOCKED)
-        finish_wait(thread, false);
-    leave_critical_section();
+    struct Thread* old = current_thread;
+    current_thread = next;
+    scheduler_ticks = 0;
+
+    process_set_current(next->process);
+    tss.esp0 = (uintptr_t)next->stack_top;
+    context_switch(&old->esp, next->esp);
 }
 
 void schedule(void)
@@ -82,18 +87,12 @@ void schedule(void)
     while (thread) {
         struct Thread* next = STAILQ_NEXT(thread, threads);
         if (thread->process->exit_requested ||
-            (thread->wait_timed &&
-             current_ticks - thread->wait_started >= thread->wait_duration)) {
+            (thread->sleep_deadline != DEADLINE_INFINITE &&
+             thread->sleep_deadline <= current_ticks)) {
             if (prev)
                 STAILQ_REMOVE_AFTER(&sleeping_queue, prev, threads);
             else
                 STAILQ_REMOVE_HEAD(&sleeping_queue, threads);
-            if (thread->waiting_event) {
-                thread->waiting_event->waiter = NULL;
-                thread->waiting_event = NULL;
-            }
-            thread->wait_timed = false;
-            thread->wait_signaled = false;
             scheduler_enqueue(thread);
         } else {
             prev = thread;
@@ -147,8 +146,6 @@ struct Thread* thread_create(struct Process* proc, const char* name,
     if (!proc)
         proc = kernel_task;
     if (!proc || !name || !entry)
-        return false;
-    if (proc->state != PROCESS_ALIVE)
         return false;
 
     enter_critical_section();
@@ -214,54 +211,29 @@ static void cleanup_terminated(void)
 void thread_yield(void)
 {
     enter_critical_section();
-    struct Thread* next = scheduler_dequeue();
-
-    if (next != current_thread) {
-        next->state = THREAD_RUNNING;
-
-        struct Thread* old = current_thread;
-        current_thread = next;
-
-        if (old != idle_thread)
-            scheduler_enqueue(old);
-        scheduler_ticks = 0;
-
-        process_set_current(next->process);
-        tss.esp0 = (uintptr_t)next->stack_top;
-        context_switch(&old->esp, next->esp);
-    }
-
+    scheduler_enqueue(current_thread);
+    schedule_next();
     cleanup_terminated();
     leave_critical_section();
 }
 
 void thread_exit(void)
 {
+    enter_critical_section();
     if (current_thread == idle_thread)
         panic("Idle thread exited");
 
-    enter_critical_section();
-    struct Thread* next = scheduler_dequeue();
-    assert(next != current_thread);
-
-    next->state = THREAD_RUNNING;
     current_thread->state = THREAD_TERMINATED;
     STAILQ_INSERT_TAIL(&terminated_queue, current_thread, threads);
-    current_thread = next;
-    scheduler_ticks = 0;
-
-    process_set_current(next->process);
-    uint32_t old_esp;
-    tss.esp0 = (uintptr_t)next->stack_top;
-    context_switch(&old_esp, next->esp);
-    panic("Unreachable code");
+    schedule_next();
+    panic("Terminated thread still running");
 }
 
-static void sleep_ticks(uint64_t ticks)
+void thread_sleep(uint32_t ticks)
 {
+    enter_critical_section();
     assert(current_thread != idle_thread);
 
-    enter_critical_section();
     if (ticks == 0) {
         if (!STAILQ_EMPTY(&ready_queue)) {
             /* if another thread is ready, switch to it, otherwise return
@@ -274,37 +246,27 @@ static void sleep_ticks(uint64_t ticks)
         return;
     }
 
-    current_thread->wait_started = pit_get_ticks();
-    current_thread->wait_duration = ticks;
-    current_thread->wait_timed = true;
+    uint64_t now = pit_get_ticks();
+    if (now + ticks < ticks)
+        panic("Tick wraparound");
+
+    current_thread->sleep_deadline = now + ticks;
+    if (current_thread->sleep_deadline == DEADLINE_INFINITE)
+        current_thread->sleep_deadline++;
     current_thread->state = THREAD_BLOCKED;
     STAILQ_INSERT_TAIL(&sleeping_queue, current_thread, threads);
-
-    struct Thread* next = scheduler_dequeue();
-    assert(next != current_thread);
-
-    next->state = THREAD_RUNNING;
-    struct Thread* old = current_thread;
-    current_thread = next;
-
-    scheduler_ticks = 0;
-    process_set_current(next->process);
-    tss.esp0 = (uintptr_t)next->stack_top;
-    context_switch(&old->esp, next->esp);
-    leave_critical_section();
-
+    schedule_next();
     if (current_thread->process->exit_requested)
         thread_exit();
-}
-
-void thread_sleep(uint32_t ticks)
-{
-    sleep_ticks(ticks);
+    leave_critical_section();
 }
 
 void thread_sleep_ms(uint32_t milliseconds)
 {
-    sleep_ticks(pit_ms_to_ticks(milliseconds));
+    uint64_t ticks = pit_ms_to_ticks(milliseconds);
+    if (ticks > UINT32_MAX)
+        ticks = UINT32_MAX;
+    thread_sleep((uint32_t)ticks);
 }
 
 void thread_dump(void)
@@ -322,15 +284,15 @@ void thread_dump(void)
 struct Event* event_create(void)
 {
     struct Event* event = kmalloc(sizeof(struct Event));
-    if (event)
-        memset(event, 0, sizeof(*event));
+    if (!event)
+        return NULL;
+    memset(event, 0, sizeof(*event));
+    event->refcount = 1;
+    STAILQ_INIT(&event->waitqueue);
     return event;
 }
 
-void event_free(struct Event* event)
-{
-    kfree(event);
-}
+REFCOUNT_IMPLEMENT(event, Event, kfree);
 
 bool event_wait(struct Event* event, uint32_t timeout_ms)
 {
@@ -339,36 +301,40 @@ bool event_wait(struct Event* event, uint32_t timeout_ms)
         leave_critical_section();
         return false;
     }
+
     if (event->pending) {
-        event->pending = false;
+        event->pending--;
         leave_critical_section();
         return true;
     }
+
     if (timeout_ms == 0) {
         leave_critical_section();
         return false;
     }
-    assert(current_thread != idle_thread);
-    assert(event->waiter == NULL);
-    struct Thread* old = current_thread;
-    old->waiting_event = event;
-    old->wait_signaled = false;
-    event->waiter = old;
-    old->wait_started = pit_get_ticks();
-    old->wait_timed = timeout_ms != WAIT_INFINITE;
-    old->wait_duration = old->wait_timed ? pit_ms_to_ticks(timeout_ms) : 0;
-    old->state = THREAD_BLOCKED;
-    STAILQ_INSERT_TAIL(&sleeping_queue, old, threads);
 
-    struct Thread* next = scheduler_dequeue();
-    assert(next != old);
-    next->state = THREAD_RUNNING;
-    current_thread = next;
-    scheduler_ticks = 0;
-    process_set_current(next->process);
-    tss.esp0 = (uintptr_t)next->stack_top;
-    context_switch(&old->esp, next->esp);
-    bool result = old->wait_signaled && !old->process->exit_requested;
+    while (true) {
+        uint64_t start = pit_get_ticks();
+        queue_wait(&event->waitqueue, timeout_ms);
+        if (current_thread->process->exit_requested) {
+            leave_critical_section();
+            return false;
+        }
+        if (event->pending)
+            break;
+
+        if (timeout_ms == WAIT_INFINITE)
+            continue;
+
+        uint64_t elapsed = pit_ticks_to_ms(pit_get_ticks() - start);
+        if (timeout_ms <= elapsed)
+            break;
+        timeout_ms = timeout_ms - elapsed;
+    }
+
+    bool result = event->pending != 0;
+    if (event->pending)
+        event->pending--;
     leave_critical_section();
     return result;
 }
@@ -376,15 +342,8 @@ bool event_wait(struct Event* event, uint32_t timeout_ms)
 void event_signal(struct Event* event)
 {
     enter_critical_section();
-    if (event->waiter) {
-        struct Thread* waiter = event->waiter;
-        bool canceled = waiter->process->exit_requested;
-        finish_wait(waiter, !canceled);
-        if (canceled)
-            event->pending = true;
-    } else {
-        event->pending = true;
-    }
+    queue_notify(&event->waitqueue);
+    event->pending++;
     leave_critical_section();
 }
 
@@ -410,5 +369,78 @@ void thread_get_info(char* buffer, size_t len)
 struct Thread* thread_current(void)
 {
     return current_thread;
+}
+
+static void waitqueue_remove_thread(struct WaitQueue* queue,
+                                    struct Thread* thread)
+{
+    enter_critical_section();
+
+    STAILQ_REMOVE(queue, thread, Thread, wait_queue_entry);
+    if (thread->state == THREAD_BLOCKED) {
+        STAILQ_REMOVE(&sleeping_queue, thread, Thread, threads);
+        scheduler_enqueue(thread);
+    }
+    thread->waiting_queue = NULL;
+
+    leave_critical_section();
+}
+
+void queue_wait(struct WaitQueue* queue, unsigned timeout_ms)
+{
+    enter_critical_section();
+
+    if (timeout_ms != WAIT_INFINITE) {
+        uint64_t now = pit_get_ticks();
+        current_thread->sleep_deadline = now + pit_ms_to_ticks(timeout_ms);
+        if (current_thread->sleep_deadline == DEADLINE_INFINITE)
+            current_thread->sleep_deadline++;
+        else if (current_thread->sleep_deadline < now)
+            panic("Tick wraparound");
+    } else
+        current_thread->sleep_deadline = DEADLINE_INFINITE;
+
+    current_thread->state = THREAD_BLOCKED;
+    current_thread->waiting_queue = queue;
+    STAILQ_INSERT_TAIL(&sleeping_queue, current_thread, threads);
+    STAILQ_INSERT_TAIL(queue, current_thread, wait_queue_entry);
+    schedule_next();
+    current_thread->waiting_queue = NULL;
+
+    struct Thread* t;
+    STAILQ_FOREACH(t, queue, wait_queue_entry)
+    {
+        if (t == current_thread)
+            STAILQ_REMOVE(queue, current_thread, Thread, wait_queue_entry);
+    }
+    leave_critical_section();
+}
+
+void queue_notify(struct WaitQueue* queue)
+{
+    enter_critical_section();
+    struct Thread* waiter;
+    while ((waiter = STAILQ_FIRST(queue))) {
+        waitqueue_remove_thread(queue, waiter);
+        if (!waiter->process->exit_requested)
+            break;
+    }
+    leave_critical_section();
+}
+
+void queue_notify_all(struct WaitQueue* queue)
+{
+    enter_critical_section();
+    while (!STAILQ_EMPTY(queue))
+        queue_notify(queue);
+    leave_critical_section();
+}
+
+void thread_cancel_wait(struct Thread* thread)
+{
+    assert(!(read_eflags() & EFLAGS_IF));
+    if (!thread->waiting_queue)
+        return;
+    waitqueue_remove_thread(thread->waiting_queue, thread);
 }
 

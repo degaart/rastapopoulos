@@ -210,10 +210,10 @@ extern void test_pmm(void);
 static void unit_tests(void* unused)
 {
     test_pmm();
+    test_events();
     test_fdc_prepare();
     if (!fdc_init())
         panic("FDC initialization failed");
-    test_events();
     test_fdc();
 
     debugexit(1);
