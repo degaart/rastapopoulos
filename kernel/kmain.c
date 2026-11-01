@@ -209,6 +209,8 @@ extern void test_pmm(void);
 
 static void unit_tests(void* unused)
 {
+    trace("Running unit tests");
+    printf("Running unit tests\n");
     test_pmm();
     test_events();
     test_fdc_prepare();

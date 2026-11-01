@@ -23,12 +23,17 @@ IMAGE := ../bootloader/build/rastapopoulos.img
 HDRS := $(wildcard *.h) \
 		$(wildcard ../common/*.h)
 SRCS := $(wildcard *.c) \
-		$(wildcard ../common/*.c) \
-		$(wildcard test/*.c)
+		$(wildcard ../common/*.c)
 ASM_HDRS := $(wildcard *.inc) \
 			$(wildcard ../common/*.inc)
 ASM_SRCS := $(wildcard *.asm) \
 			$(wildcard ../common/*.asm)
+
+ifeq ($(UNIT_TESTS),1)
+CFLAGS += -DUNIT_TESTS
+SRCS   += $(wildcard test/*.c)
+endif
+
 OBJS := $(addprefix build/,$(notdir $(SRCS:.c=.o))) \
 		$(addprefix build/,$(notdir $(ASM_SRCS:.asm=.o)))
 
