@@ -77,7 +77,8 @@ run: all
 		--no-reboot \
 		-device isa-debug-exit,iobase=0xf4,iosize=0x04 \
 		-serial stdio \
-		-s
+		-s \
+		-monitor unix:/tmp/qemu-monitor.sock,server=on,wait=off
 
 test: all
 	../tools/build/wrap-test -r=3 -t=90 -- \

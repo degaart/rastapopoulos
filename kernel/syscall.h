@@ -27,6 +27,10 @@
 #define SYSCALL_PERF_CLOCK    24
 #define SYSCALL_VGA_SWAP_RECT 25
 
+#define SYSCALL_FDC_CHECK_MEDIA 26
+#define SYSCALL_FDC_READ        27
+#define SYSCALL_FDC_WRITE       28
+
 #ifdef RASTA_KERNEL
 void syscall_init(void);
 #endif

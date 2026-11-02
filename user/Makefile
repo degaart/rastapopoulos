@@ -1,6 +1,6 @@
 .PHONY: all clean
 
-TARGETS := lib snek shell test_vga snek2
+TARGETS := lib snek shell test_vga snek2 test_fdc
 
 all:
 	rm -rf build/tmp

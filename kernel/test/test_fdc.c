@@ -48,6 +48,15 @@ void test_fdc(void)
     CHECK(fdc_read(0, 0, data, 512));
     CHECK((unsigned char)data[510] == 0x55 &&
           (unsigned char)data[511] == 0xaa);
+    unsigned generation = 0;
+    CHECK(fdc_check_media(0, &generation));
+    unsigned previous_generation = generation;
+    CHECK(fdc_check_media(0, &generation));
+    CHECK(generation == previous_generation);
+    CHECK(!fdc_check_media(-1, &generation));
+    CHECK(!fdc_check_media(2, &generation));
+    CHECK(!fdc_check_media(0, NULL));
+    CHECK(generation == previous_generation);
     for (unsigned i = 0; i < 4; i++)
         CHECK(fdc_read(0, 16 + i, expected + i * 512, 512));
     CHECK(fdc_read(0, 16, data, sizeof(data)));

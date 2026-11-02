@@ -15,6 +15,8 @@ enum FloppyType
 };
 
 bool fdc_init(void);
+/* Checks hardware without spin-up; leaves generation unchanged on failure. */
+bool fdc_check_media(int drive, unsigned* generation);
 /* Kernel buffers; byte lengths must be positive multiples of 512.
  * Failures may leave preceding sectors transferred. */
 bool fdc_read(int drive, unsigned lba, char* buffer, size_t buffer_len);

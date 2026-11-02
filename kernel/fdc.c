@@ -15,14 +15,16 @@
 #include <queue.h>
 #include <string.h>
 
-#define FDC_DOR   0x3f2
-#define FDC_MSR   0x3f4
-#define FDC_FIFO  0x3f5
-#define FDC_DIR   0x3f7
-#define READY_MS  500
-#define IRQ_MS    2000
-#define SPIN_MS   500
-#define SETTLE_MS 20
+#define FDC_DOR       0x3f2
+#define FDC_MSR       0x3f4
+#define FDC_FIFO      0x3f5
+#define FDC_DIR       0x3f7
+#define READY_MS      500
+#define IRQ_MS        2000
+#define SPIN_MS       500
+#define SETTLE_MS     20
+#define MOTOR_IDLE_MS 3000
+#define SELECT_MS     1
 
 enum FdcMode
 {
@@ -53,6 +55,8 @@ struct Request
     unsigned lba;
     size_t length;
     size_t completed;
+    bool check_media;
+    unsigned generation;
     bool write;
     bool canceled;
     bool success;
@@ -68,6 +72,7 @@ static struct Event irq_event;
 static struct Event init_event;
 static struct RequestList queue = TAILQ_HEAD_INITIALIZER(queue);
 static unsigned drive_types[2];
+static unsigned media_generation[2];
 static int cylinders[2] = {-1, -1};
 static int heads[2] = {-1, -1};
 static enum FdcMode mode;
@@ -249,6 +254,16 @@ static bool fdc_changed(enum FdcMode mode, uint8_t dir)
     return ((dir & 0x80) != 0) != (mode == FDC_MODE_MODEL30);
 }
 
+static bool observe_media_change(unsigned drive)
+{
+    if (!fdc_changed(mode, inb(FDC_DIR)))
+        return false;
+    media_generation[drive]++;
+    cylinders[drive] = -1;
+    heads[drive] = -1;
+    return true;
+}
+
 static inline const struct FdcGeometry* fdc_geometry(unsigned type)
 {
     static const struct FdcGeometry geometries[] = {
@@ -292,11 +307,10 @@ static bool sector(struct Request* request, unsigned lba)
         motor(drive);
         if (!specify())
             goto recover;
-        if (fdc_changed(mode, inb(FDC_DIR))) {
-            cylinders[drive] = -1;
-            if (!position(drive, 0, 1, false))
+        if (observe_media_change(drive)) {
+            if (!position(drive, 0, 0, true) ||
+                !position(drive, 0, 1, false) || observe_media_change(drive))
                 goto recover;
-            cylinders[drive] = -1;
         }
         if (cylinders[drive] < 0 && !position(drive, 0, 0, true))
             goto recover;
@@ -391,24 +405,59 @@ static void worker(void* unused)
     event_signal(&init_event);
     if (!ready)
         return;
+    bool motor_idle_pending = false;
+    uint64_t motor_idle_start = 0;
     while (true) {
         enter_critical_section();
-        struct Request* request = TAILQ_FIRST(&queue);
-        if (!request) {
+        uint64_t elapsed = pit_get_ticks() - motor_idle_start;
+        uint64_t idle_ticks = pit_ms_to_ticks(MOTOR_IDLE_MS);
+        if (motor_idle_pending && elapsed >= idle_ticks) {
             dor &= 0x0f;
             outb(FDC_DOR, dor);
-            event_wait(&request_event, WAIT_INFINITE);
+            motor_idle_pending = false;
+        }
+        struct Request* request = TAILQ_FIRST(&queue);
+        if (!request) {
+            uint32_t timeout = motor_idle_pending
+                                   ? pit_ticks_to_ms(idle_ticks - elapsed) + 1
+                                   : WAIT_INFINITE;
+            event_wait(&request_event, timeout);
             leave_critical_section();
             continue;
         }
         TAILQ_REMOVE(&queue, request, queue);
         leave_critical_section();
 
-        while (request->completed < request->length &&
-               sector(request, request->lba + request->completed / 512))
-            request->completed += 512;
+        if (request->check_media) {
+            if (!request->canceled && controller_ok) {
+                uint8_t saved_dor = dor;
+                uint8_t check_dor =
+                    (dor & ~3u) | request->drive | (0x10u << request->drive);
+                if (check_dor != saved_dor) {
+                    dor = check_dor;
+                    outb(FDC_DOR, dor);
+                    thread_sleep_ms(SELECT_MS);
+                }
+                if (!request->canceled) {
+                    observe_media_change(request->drive);
+                    request->generation = media_generation[request->drive];
+                    request->success = true;
+                }
+                if (dor != saved_dor) {
+                    dor = saved_dor;
+                    outb(FDC_DOR, dor);
+                }
+            }
+        } else {
+            while (request->completed < request->length &&
+                   sector(request, request->lba + request->completed / 512))
+                request->completed += 512;
+            request->success = request->completed == request->length;
+            motor_idle_pending = (dor & 0xf0) != 0;
+            if (motor_idle_pending)
+                motor_idle_start = pit_get_ticks();
+        }
         enter_critical_section();
-        request->success = request->completed == request->length;
         event_signal(&request->done);
         request_decref(request);
         leave_critical_section();
@@ -420,6 +469,7 @@ bool fdc_init(void)
     assert((read_eflags() & EFLAGS_IF) != 0);
     if (started)
         return ready;
+    media_generation[0] = media_generation[1] = 0;
     started = true;
     uint8_t types = cmos_read(CMOS_FLOPPY_DRIVES);
     drive_types[0] = types >> 4;
@@ -521,4 +571,31 @@ bool fdc_write(int drive, unsigned lba, const char* buffer, size_t buffer_len)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
     return transfer(drive, lba, (void*)buffer, buffer_len, true);
+}
+
+bool fdc_check_media(int drive, unsigned* generation)
+{
+    assert((read_eflags() & EFLAGS_IF) != 0);
+    if (!ready || drive < 0 || drive > 1 ||
+        !fdc_geometry(drive_types[drive]) ||
+        !valid_buffer(generation, sizeof(*generation), true))
+        return false;
+    struct Request* request = request_create(0);
+    if (!request)
+        return false;
+    request->drive = drive;
+    request->check_media = true;
+    request_incref(request);
+    enter_critical_section();
+    TAILQ_INSERT_TAIL(&queue, request, queue);
+    event_signal(&request_event);
+    bool completed = event_wait(&request->done, WAIT_INFINITE);
+    bool result = completed && request->success;
+    if (!completed)
+        request->canceled = true;
+    if (result)
+        *generation = request->generation;
+    request_decref(request);
+    leave_critical_section();
+    return result;
 }
