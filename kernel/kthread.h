@@ -37,6 +37,8 @@ struct Thread
     struct WaitQueue* waiting_queue;
     bool sleep_timed;
     uint64_t sleep_deadline;
+
+    unsigned owned_mutexes;
 };
 STAILQ_HEAD(ThreadList, Thread);
 STAILQ_HEAD(WaitQueue, Thread);

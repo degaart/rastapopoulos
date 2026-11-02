@@ -29,6 +29,7 @@ bool mutex_lock(struct Mutex* mutex)
     }
 
     mutex->owner = thread_current();
+    thread_current()->owned_mutexes++;
     leave_critical_section();
     return true;
 }
@@ -36,11 +37,15 @@ bool mutex_lock(struct Mutex* mutex)
 bool mutex_trylock(struct Mutex* mutex)
 {
     enter_critical_section();
-    if (mutex->owner == thread_current()) {
+    if (thread_current()->process->exit_requested) {
+        leave_critical_section();
+        return false;
+    } else if (mutex->owner == thread_current()) {
         leave_critical_section();
         return false;
     } else if (mutex->owner == NULL) {
         mutex->owner = thread_current();
+        thread_current()->owned_mutexes++;
         leave_critical_section();
         return true;
     }
@@ -53,6 +58,7 @@ void mutex_unlock(struct Mutex* mutex)
     enter_critical_section();
     assert(mutex->owner == thread_current());
     mutex->owner = NULL;
+    thread_current()->owned_mutexes--;
     queue_notify(&mutex->wait_queue);
     leave_critical_section();
 }

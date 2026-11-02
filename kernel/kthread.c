@@ -215,6 +215,9 @@ void thread_exit(void)
     enter_critical_section();
     if (current_thread == idle_thread)
         panic("Idle thread exited");
+    else if (current_thread->owned_mutexes > 0)
+        panic("Thread exited while still owning %u mutexes",
+              current_thread->owned_mutexes);
 
     current_thread->state = THREAD_TERMINATED;
     STAILQ_INSERT_TAIL(&terminated_queue, current_thread, threads);

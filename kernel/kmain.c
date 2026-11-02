@@ -213,10 +213,10 @@ static void unit_tests(void* unused)
     test_pmm();
     test_events();
     test_queue();
-    test_mutex();
     test_fdc_prepare();
     if (!fdc_init())
         panic("FDC initialization failed");
+    test_mutex();
     test_fdc();
 
     debugexit(1);
