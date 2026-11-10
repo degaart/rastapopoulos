@@ -10,20 +10,21 @@
 #include "refcount.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 struct BlockCacheEntry
 {
     int drive;
     unsigned generation;
-    unsigned lba;
+    uint64_t lba;
     unsigned flags;
     REFCOUNT();
     char data[512];
 };
 
 bool block_cache_init(void);
-bool block_cache_read(int drive, unsigned lba, char* buffer,
+bool block_cache_read(int drive, uint64_t lba, char* buffer,
                       size_t buffer_len);
-bool block_cache_write(int drive, unsigned lba, const char* buffer,
+bool block_cache_write(int drive, uint64_t lba, const char* buffer,
                        size_t buffer_len);
 

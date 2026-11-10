@@ -19,8 +19,8 @@ bool fdc_init(void);
 bool fdc_check_media(int drive, unsigned* generation);
 /* Kernel buffers; byte lengths must be positive multiples of 512.
  * Failures may leave preceding sectors transferred. */
-bool fdc_read(int drive, unsigned lba, char* buffer, size_t buffer_len);
-bool fdc_write(int drive, unsigned lba, const char* buffer, size_t buffer_len);
+bool fdc_read(int drive, uint64_t lba, char* buffer, size_t buffer_len);
+bool fdc_write(int drive, uint64_t lba, const char* buffer, size_t buffer_len);
 
 #ifdef UNIT_TESTS
 unsigned fdc_test_attempt_count(void);

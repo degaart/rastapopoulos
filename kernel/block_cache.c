@@ -24,7 +24,7 @@ static struct Mutex metadata_lock;
 
 void block_cache_dump(void)
 {
-    unsigned lbas[CACHE_SIZE];
+    uint64_t lbas[CACHE_SIZE];
     unsigned flags[CACHE_SIZE];
     if (!mutex_lock(&metadata_lock))
         return;
@@ -37,7 +37,7 @@ void block_cache_dump(void)
 
     trace("Hand: %d", saved_hand);
     for (int i = 0; i < CACHE_SIZE; i++) {
-        trace("Entry %d: lba=%u flags=%s%s%s", i, lbas[i],
+        trace("Entry %d: lba=%llu flags=%s%s%s", i, lbas[i],
               flags[i] & ENTRY_ASSIGNED ? "A" : "-",
               flags[i] & ENTRY_VALID ? "V" : "-",
               flags[i] & ENTRY_REFERENCED ? "R" : "-");
@@ -91,7 +91,7 @@ static void invalidate_drive(int drive)
 /*
  * Lookup entry with the specified identity
  */
-static int lookup_entry(int drive, unsigned lba, unsigned generation)
+static int lookup_entry(int drive, uint64_t lba, unsigned generation)
 {
     assert(mutex_is_locked_by_current_thread(&metadata_lock));
     for (int i = 0; i < CACHE_SIZE; i++) {
@@ -108,7 +108,7 @@ static int lookup_entry(int drive, unsigned lba, unsigned generation)
  * Publish the new identity and pins it before returning (while lock is held)
  * If all entries are pinned, return INVALID_INDEX
  */
-static int clock_claim(int drive, unsigned lba, unsigned generation)
+static int clock_claim(int drive, uint64_t lba, unsigned generation)
 {
     assert(mutex_is_locked_by_current_thread(&metadata_lock));
     int result = INVALID_INDEX;
@@ -174,7 +174,7 @@ static bool entry_is_ready(struct BlockCacheEntry* entry)
     return result;
 }
 
-bool block_cache_read(int drive, unsigned lba, char* buffer, size_t buffer_len)
+bool block_cache_read(int drive, uint64_t lba, char* buffer, size_t buffer_len)
 {
     if (buffer_len != BLOCK_SIZE)
         return false;
@@ -227,7 +227,7 @@ bool block_cache_read(int drive, unsigned lba, char* buffer, size_t buffer_len)
     return unpin(&cache[index], success);
 }
 
-bool block_cache_write(int drive, unsigned lba, const char* buffer,
+bool block_cache_write(int drive, uint64_t lba, const char* buffer,
                        size_t buffer_len)
 {
     if (buffer_len != BLOCK_SIZE)

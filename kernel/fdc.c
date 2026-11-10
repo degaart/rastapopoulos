@@ -561,15 +561,19 @@ static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
     return result;
 }
 
-bool fdc_read(int drive, unsigned lba, char* buffer, size_t buffer_len)
+bool fdc_read(int drive, uint64_t lba, char* buffer, size_t buffer_len)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
+    if (lba > UINT32_MAX)
+        return false;
     return transfer(drive, lba, buffer, buffer_len, false);
 }
 
-bool fdc_write(int drive, unsigned lba, const char* buffer, size_t buffer_len)
+bool fdc_write(int drive, uint64_t lba, const char* buffer, size_t buffer_len)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
+    if (lba > UINT32_MAX)
+        return false;
     return transfer(drive, lba, (void*)buffer, buffer_len, true);
 }
 
