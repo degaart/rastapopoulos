@@ -292,5 +292,7 @@ layout src-vars
 set disassembly-flavor intel
 file build/kernel.elf
 target remote localhost:1234
+break __panic
+
 
 

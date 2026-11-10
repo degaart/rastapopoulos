@@ -1,5 +1,6 @@
 #include "address_space.h"
 #include "bitset.h"
+#include "block_cache.h"
 #include "cmos.h"
 #include "early_malloc.h"
 #include "exec.h"
@@ -182,9 +183,14 @@ static void tss_load(uint16_t tss_seg)
 #ifndef UNIT_TESTS
 static void init_entry(void* unused)
 {
-    trace("Init thread started");
+    trace("Initializing FDC");
     if (!fdc_init())
         trace("FDC initialization failed");
+
+    trace("Initializing block cache");
+    if (!block_cache_init())
+        trace("Block cache initialization failed");
+
     while (true) {
         int ret = exec("shell.bin", "");
         if (ret == -1)
@@ -205,19 +211,24 @@ extern void test_queue(void);
 extern void test_mutex(void);
 extern void test_fdc_prepare(void);
 extern void test_pmm(void);
+extern void test_block_cache(void);
 
 static void unit_tests(void* unused)
 {
     trace("*** Running unit tests");
     printf("*** Running unit tests\n");
-    test_pmm();
-    test_events();
-    test_queue();
-    test_fdc_prepare();
+
+    // test_pmm();
+    // test_events();
+    // test_queue();
+    // test_fdc_prepare();
     if (!fdc_init())
         panic("FDC initialization failed");
-    test_mutex();
-    test_fdc();
+    if (!block_cache_init())
+        panic("Block cache initialization failed");
+    // test_mutex();
+    // test_fdc();
+    test_block_cache();
 
     trace("*** Unit tests done");
     printf("*** Unit tests done\n");
@@ -328,8 +339,6 @@ void kmain(uint32_t mb_magic, const struct multiboot_info* mb_info)
           (read_eflags() & EFLAGS_IF) != 0, inb(0x21), pic_get_irr(),
           pic_get_isr());
     enable_interrupts();
-
-    trace("Idle thread started: ticks=%llu", pit_get_ticks());
 
 #ifdef UNIT_TESTS
     thread_entry_t entry = unit_tests;

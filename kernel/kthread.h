@@ -83,6 +83,7 @@ void event_destroy(struct Event* event);
 bool event_wait(struct Event* event, uint32_t timeout_ms);
 void event_signal(struct Event* event);
 
+void queue_init(struct WaitQueue* queue);
 void queue_wait(struct WaitQueue* queue, unsigned timeout_ms);
 void queue_notify(struct WaitQueue* queue);
 void queue_notify_all(struct WaitQueue* queue);

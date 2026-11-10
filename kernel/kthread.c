@@ -381,6 +381,11 @@ static void waitqueue_remove_thread(struct WaitQueue* queue,
     leave_critical_section();
 }
 
+void queue_init(struct WaitQueue* queue)
+{
+    STAILQ_INIT(queue);
+}
+
 void queue_wait(struct WaitQueue* queue, unsigned timeout_ms)
 {
     enter_critical_section();

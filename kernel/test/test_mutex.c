@@ -5,13 +5,14 @@
 #include "test.h"
 
 static struct Mutex mutex;
+static struct Mutex cleanup_mutex;
 static unsigned completed;
 static unsigned active;
 static struct Event cancel_gate;
 static bool cancel_returned;
 static char io_data[512];
 
-/* Run separately: the non-owner unlock must panic instead of returning. */
+/* Run separately: 1 tests non-owner unlock, 2 tests recursive lock. */
 #ifndef MUTEX_NEGATIVE_CASE
 #    define MUTEX_NEGATIVE_CASE 0
 #endif
@@ -84,6 +85,11 @@ static void canceled_waiter(void* unused)
     CHECK(thread_current()->owned_mutexes == owned);
     CHECK(mutex.owner != thread_current());
     CHECK(thread_current()->waiting_queue == NULL);
+    mutex_lock_uninterruptible(&cleanup_mutex);
+    CHECK(cleanup_mutex.owner == thread_current());
+    CHECK(thread_current()->owned_mutexes == owned + 1);
+    mutex_unlock(&cleanup_mutex);
+    CHECK(thread_current()->owned_mutexes == owned);
 }
 
 static void cancel_process(void* unused)
@@ -92,7 +98,7 @@ static void cancel_process(void* unused)
     process_exit(0);
 }
 
-#if MUTEX_NEGATIVE_CASE
+#if MUTEX_NEGATIVE_CASE == 1
 static void nonowner_unlock(void* unused)
 {
     CHECK(mutex.owner != thread_current());
@@ -106,6 +112,7 @@ void test_mutex(void)
 {
     trace("*** Mutex tests started");
     mutex_init(&mutex);
+    mutex_init(&cleanup_mutex);
     CHECK(mutex.owner == NULL);
     CHECK(STAILQ_EMPTY(&mutex.wait_queue));
 
@@ -113,7 +120,6 @@ void test_mutex(void)
     int nesting = thread_current()->critical_section_nesting;
     CHECK(mutex_lock(&mutex));
     CHECK(mutex.owner == thread_current());
-    CHECK(!mutex_lock(&mutex));
     CHECK(!mutex_trylock(&mutex));
     CHECK(mutex.owner == thread_current());
     CHECK(STAILQ_EMPTY(&mutex.wait_queue));
@@ -126,10 +132,15 @@ void test_mutex(void)
     CHECK(!(read_eflags() & EFLAGS_IF));
     leave_critical_section();
 
-#if MUTEX_NEGATIVE_CASE
+#if MUTEX_NEGATIVE_CASE == 1
     CHECK(mutex_lock(&mutex));
     CHECK(thread_create(NULL, "mutex-nonowner", nonowner_unlock, NULL));
     thread_sleep_ms(1000);
+    CHECK(false);
+#elif MUTEX_NEGATIVE_CASE == 2
+    CHECK(mutex_lock(&mutex));
+    trace("Expect panic: recursive mutex lock");
+    mutex_lock(&mutex);
     CHECK(false);
 #endif
 
