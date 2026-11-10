@@ -744,18 +744,3 @@ int sys_vga_swap_rect(int x1, int y1, int x2, int y2)
     return syscall(SYSCALL_VGA_SWAP_RECT, x1, y1, x2, y2, 0);
 }
 
-int sys_fdc_check_media(int drive, unsigned* generation)
-{
-    return syscall(SYSCALL_FDC_CHECK_MEDIA, drive, (uintptr_t)generation, 0, 0,
-                   0);
-}
-
-int sys_fdc_read(int drive, unsigned lba, void* buffer)
-{
-    return syscall(SYSCALL_FDC_READ, drive, lba, (uintptr_t)buffer, 0, 0);
-}
-
-int sys_fdc_write(int drive, unsigned lba, const void* buffer)
-{
-    return syscall(SYSCALL_FDC_WRITE, drive, lba, (uintptr_t)buffer, 0, 0);
-}

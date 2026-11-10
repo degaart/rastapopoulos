@@ -23,13 +23,8 @@
 #define SYSCALL_VGA_LOAD_BITMAP    21
 #define SYSCALL_VGA_DESTROY_BITMAP 22
 #define SYSCALL_VGA_SET_PALETTE    23
-
-#define SYSCALL_PERF_CLOCK    24
-#define SYSCALL_VGA_SWAP_RECT 25
-
-#define SYSCALL_FDC_CHECK_MEDIA 26
-#define SYSCALL_FDC_READ        27
-#define SYSCALL_FDC_WRITE       28
+#define SYSCALL_PERF_CLOCK         24
+#define SYSCALL_VGA_SWAP_RECT      25
 
 #ifdef RASTA_KERNEL
 void syscall_init(void);

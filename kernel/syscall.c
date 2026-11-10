@@ -165,33 +165,6 @@ static void syscall_vga_set_palette(uint8_t index, uint8_t red, uint8_t green,
     vga_set_palette(index, red, green, blue);
 }
 
-static int32_t syscall_fdc_check_media(int drive, unsigned* generation)
-{
-    if (!vmm_is_valid_userptr(generation, sizeof(*generation), true))
-        return -1;
-    unsigned value;
-    if (!fdc_check_media(drive, &value))
-        return -1;
-    *generation = value;
-    return 0;
-}
-
-static int32_t syscall_fdc_transfer(int drive, unsigned lba, void* buffer,
-                                    bool write)
-{
-    if (!vmm_is_valid_userptr(buffer, 512, !write))
-        return -1;
-    char data[512];
-    if (write) {
-        memcpy(data, buffer, sizeof(data));
-        return fdc_write(drive, lba, data, sizeof(data)) ? 0 : -1;
-    }
-    if (!fdc_read(drive, lba, data, sizeof(data)))
-        return -1;
-    memcpy(buffer, data, sizeof(data));
-    return 0;
-}
-
 /*
  * Syscall ABI:
  *  eax: function
@@ -216,24 +189,6 @@ void syscall_handler(int, struct isr_regs* regs)
         regs->edx = hi;
         break;
     }
-    case SYSCALL_FDC_CHECK_MEDIA:
-        enable_interrupts();
-        regs->eax =
-            syscall_fdc_check_media((int)regs->ebx, (unsigned*)regs->ecx);
-        disable_interrupts();
-        break;
-    case SYSCALL_FDC_READ:
-        enable_interrupts();
-        regs->eax = syscall_fdc_transfer((int)regs->ebx, regs->ecx,
-                                         (void*)regs->edx, false);
-        disable_interrupts();
-        break;
-    case SYSCALL_FDC_WRITE:
-        enable_interrupts();
-        regs->eax = syscall_fdc_transfer((int)regs->ebx, regs->ecx,
-                                         (void*)regs->edx, true);
-        disable_interrupts();
-        break;
     case SYSCALL_SLEEP:
         regs->eax = syscall_sleep(regs->ebx);
         break;

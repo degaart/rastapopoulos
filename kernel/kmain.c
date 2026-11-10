@@ -218,16 +218,16 @@ static void unit_tests(void* unused)
     trace("*** Running unit tests");
     printf("*** Running unit tests\n");
 
-    // test_pmm();
-    // test_events();
-    // test_queue();
-    // test_fdc_prepare();
+    test_pmm();
+    test_events();
+    test_queue();
+    test_fdc_prepare();
     if (!fdc_init())
         panic("FDC initialization failed");
     if (!block_cache_init())
         panic("Block cache initialization failed");
-    // test_mutex();
-    // test_fdc();
+    test_mutex();
+    test_fdc();
     test_block_cache();
 
     trace("*** Unit tests done");

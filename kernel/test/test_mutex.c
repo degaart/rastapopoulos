@@ -171,7 +171,7 @@ void test_mutex(void)
         leave_critical_section();
     }
     CHECK(read_eflags() & EFLAGS_IF);
-    CHECK(fdc_read(0, 0, io_data, sizeof(io_data)));
+    CHECK(fdc_read(fdc_drive(0), 0, io_data, sizeof(io_data)));
     CHECK((unsigned char)io_data[510] == 0x55);
     CHECK((unsigned char)io_data[511] == 0xaa);
     CHECK(read_eflags() & EFLAGS_IF);

@@ -1,6 +1,5 @@
 #include "block_cache.h"
 #include "assert.h"
-#include "fdc.h"
 #include "kmalloc.h"
 #include "kthread.h"
 #include "mutex.h"
@@ -16,33 +15,18 @@
 #define ENTRY_REFERENCED 4 /* Referenced bit for CLOCK algorithm */
 #define ENTRY_PINNED     8 /* I/O in progress for entry, do not evict */
 
+struct Generation
+{
+    struct BlockDevice* dev;
+    unsigned generation;
+};
+
 static struct BlockCacheEntry* cache;
 static int hand;
-static unsigned drive_generations[2];
+static struct Generation* dev_generations;
+static int dev_generation_count;
 static struct WaitQueue availability_queue;
 static struct Mutex metadata_lock;
-
-void block_cache_dump(void)
-{
-    uint64_t lbas[CACHE_SIZE];
-    unsigned flags[CACHE_SIZE];
-    if (!mutex_lock(&metadata_lock))
-        return;
-    int saved_hand = hand;
-    for (int i = 0; i < CACHE_SIZE; i++) {
-        lbas[i] = cache[i].lba;
-        flags[i] = cache[i].flags;
-    }
-    mutex_unlock(&metadata_lock);
-
-    trace("Hand: %d", saved_hand);
-    for (int i = 0; i < CACHE_SIZE; i++) {
-        trace("Entry %d: lba=%llu flags=%s%s%s", i, lbas[i],
-              flags[i] & ENTRY_ASSIGNED ? "A" : "-",
-              flags[i] & ENTRY_VALID ? "V" : "-",
-              flags[i] & ENTRY_REFERENCED ? "R" : "-");
-    }
-}
 
 static void move_hand(void)
 {
@@ -79,11 +63,11 @@ bool block_cache_init(void)
     return true;
 }
 
-static void invalidate_drive(int drive)
+static void invalidate_dev(struct BlockDevice* dev)
 {
     assert(mutex_is_locked_by_current_thread(&metadata_lock));
     for (int i = 0; i < CACHE_SIZE; i++) {
-        if (cache[i].drive == drive)
+        if (cache[i].dev == dev)
             cache[i].flags &= ~ENTRY_ASSIGNED;
     }
 }
@@ -91,11 +75,12 @@ static void invalidate_drive(int drive)
 /*
  * Lookup entry with the specified identity
  */
-static int lookup_entry(int drive, uint64_t lba, unsigned generation)
+static int lookup_entry(struct BlockDevice* dev, uint64_t lba,
+                        unsigned generation)
 {
     assert(mutex_is_locked_by_current_thread(&metadata_lock));
     for (int i = 0; i < CACHE_SIZE; i++) {
-        if ((cache[i].flags & ENTRY_ASSIGNED) && cache[i].drive == drive &&
+        if ((cache[i].flags & ENTRY_ASSIGNED) && cache[i].dev == dev &&
             cache[i].generation == generation && cache[i].lba == lba) {
             return i;
         }
@@ -108,7 +93,8 @@ static int lookup_entry(int drive, uint64_t lba, unsigned generation)
  * Publish the new identity and pins it before returning (while lock is held)
  * If all entries are pinned, return INVALID_INDEX
  */
-static int clock_claim(int drive, uint64_t lba, unsigned generation)
+static int clock_claim(struct BlockDevice* dev, uint64_t lba,
+                       unsigned generation)
 {
     assert(mutex_is_locked_by_current_thread(&metadata_lock));
     int result = INVALID_INDEX;
@@ -119,14 +105,14 @@ static int clock_claim(int drive, uint64_t lba, unsigned generation)
             if (!(cache[hand].flags & ENTRY_ASSIGNED)) {
                 cache[hand].flags =
                     ENTRY_ASSIGNED | ENTRY_REFERENCED | ENTRY_PINNED;
-                cache[hand].drive = drive;
+                cache[hand].dev = dev;
                 cache[hand].lba = lba;
                 cache[hand].generation = generation;
                 result = hand;
             } else if (!(cache[hand].flags & ENTRY_REFERENCED)) {
                 cache[hand].flags =
                     ENTRY_ASSIGNED | ENTRY_REFERENCED | ENTRY_PINNED;
-                cache[hand].drive = drive;
+                cache[hand].dev = dev;
                 cache[hand].lba = lba;
                 cache[hand].generation = generation;
                 result = hand;
@@ -174,16 +160,59 @@ static bool entry_is_ready(struct BlockCacheEntry* entry)
     return result;
 }
 
-bool block_cache_read(int drive, uint64_t lba, char* buffer, size_t buffer_len)
+static void update_generation(struct BlockDevice* dev, unsigned generation)
+{
+    assert(mutex_is_locked_by_current_thread(&metadata_lock));
+    int index = INVALID_INDEX;
+    for (int i = 0; i < dev_generation_count; i++) {
+        if (dev_generations[i].dev == dev) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == INVALID_INDEX) {
+        struct Generation* new_gen =
+            kmalloc(sizeof(struct Generation) * (dev_generation_count + 1));
+        if (!new_gen) {
+            kfree(dev_generations);
+            dev_generations = NULL;
+            dev_generation_count = 0;
+            invalidate_dev(dev);
+            return;
+        }
+
+        if (dev_generations)
+            memcpy(new_gen, dev_generations,
+                   sizeof(struct Generation) * dev_generation_count);
+
+        index = dev_generation_count++;
+
+        kfree(dev_generations);
+        dev_generations = new_gen;
+        dev_generations[index].dev = dev;
+        dev_generations[index].generation = generation;
+    }
+
+    if (dev_generations[index].generation != generation) {
+        dev_generations[index].generation = generation;
+        invalidate_dev(dev);
+    }
+}
+
+bool block_cache_read(struct BlockDevice* dev, uint64_t lba, char* buffer,
+                      size_t buffer_len)
 {
     if (buffer_len != BLOCK_SIZE)
         return false;
+    if (!dev)
+        return false;
 
     unsigned generation;
-    if (!fdc_check_media(drive, &generation)) {
+    if (!dev->check_media(dev, &generation)) {
         if (!mutex_lock(&metadata_lock))
             return false;
-        invalidate_drive(drive);
+        invalidate_dev(dev);
         mutex_unlock(&metadata_lock);
         return false;
     }
@@ -191,19 +220,16 @@ bool block_cache_read(int drive, uint64_t lba, char* buffer, size_t buffer_len)
     if (!mutex_lock(&metadata_lock))
         return false;
 
-    if (generation != drive_generations[drive]) {
-        drive_generations[drive] = generation;
-        invalidate_drive(drive);
-    }
+    update_generation(dev, generation);
 
     int index = INVALID_INDEX;
     while (true) {
-        index = lookup_entry(drive, lba, generation);
+        index = lookup_entry(dev, lba, generation);
         if (index != INVALID_INDEX) {
             if (entry_is_ready(&cache[index]))
                 break;
         } else {
-            index = clock_claim(drive, lba, generation);
+            index = clock_claim(dev, lba, generation);
             if (index != INVALID_INDEX)
                 break;
         }
@@ -221,23 +247,25 @@ bool block_cache_read(int drive, uint64_t lba, char* buffer, size_t buffer_len)
     }
 
     /* Now we can read entry at our own pace */
-    bool success = fdc_read(drive, lba, cache[index].data, BLOCK_SIZE);
+    bool success = dev->read(dev, lba, cache[index].data, BLOCK_SIZE);
     if (success)
         memcpy(buffer, cache[index].data, BLOCK_SIZE);
     return unpin(&cache[index], success);
 }
 
-bool block_cache_write(int drive, uint64_t lba, const char* buffer,
-                       size_t buffer_len)
+bool block_cache_write(struct BlockDevice* dev, uint64_t lba,
+                       const char* buffer, size_t buffer_len)
 {
     if (buffer_len != BLOCK_SIZE)
         return false;
+    if (!dev)
+        return false;
 
     unsigned generation;
-    if (!fdc_check_media(drive, &generation)) {
+    if (!dev->check_media(dev, &generation)) {
         if (!mutex_lock(&metadata_lock))
             return false;
-        invalidate_drive(drive);
+        invalidate_dev(dev);
         mutex_unlock(&metadata_lock);
         return false;
     }
@@ -245,19 +273,16 @@ bool block_cache_write(int drive, uint64_t lba, const char* buffer,
     if (!mutex_lock(&metadata_lock))
         return false;
 
-    if (generation != drive_generations[drive]) {
-        drive_generations[drive] = generation;
-        invalidate_drive(drive);
-    }
+    update_generation(dev, generation);
 
     int index = INVALID_INDEX;
     while (true) {
-        index = lookup_entry(drive, lba, generation);
+        index = lookup_entry(dev, lba, generation);
         if (index != INVALID_INDEX) {
             if (entry_is_ready(&cache[index]))
                 break;
         } else {
-            index = clock_claim(drive, lba, generation);
+            index = clock_claim(dev, lba, generation);
             if (index != INVALID_INDEX)
                 break;
         }
@@ -269,7 +294,7 @@ bool block_cache_write(int drive, uint64_t lba, const char* buffer,
     if (index == INVALID_INDEX)
         return false;
 
-    bool result = fdc_write(drive, lba, buffer, buffer_len);
+    bool result = dev->write(dev, lba, buffer, buffer_len);
     if (result)
         memcpy(&cache[index].data, buffer, BLOCK_SIZE);
     return unpin(&cache[index], result);

@@ -88,7 +88,3 @@ void vga_roundrect(int x1, int y1, int x2, int y2, int radius, uint8_t color);
 void vga_blit(struct Bitmap* src, int x1, int y1, struct Bitmap* dst, int x2,
               int y2, int width, int height);
 
-int sys_fdc_check_media(int drive, unsigned* generation);
-/* Transfers exactly one 512-byte sector at a zero-based LBA. */
-int sys_fdc_read(int drive, unsigned lba, void* buffer);
-int sys_fdc_write(int drive, unsigned lba, const void* buffer);

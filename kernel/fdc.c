@@ -26,6 +26,14 @@
 #define MOTOR_IDLE_MS 3000
 #define SELECT_MS     1
 
+struct FDCBlockDevice
+{
+    struct BlockDevice blockdev;
+    int drive;
+};
+struct FDCBlockDevice drive0;
+struct FDCBlockDevice drive1;
+
 enum FdcMode
 {
     FDC_MODE_AT,
@@ -397,14 +405,11 @@ static void worker(void* unused)
           : mode == FDC_MODE_MODEL30 ? "Model 30"
                                      : "PC-AT",
           ready ? "ready" : "failed");
-    if (!ready) {
-        pic_set_irq_handler(IRQ_FDC, NULL);
-        isa_dma_release(2);
-        free_bounce();
-    }
+
     event_signal(&init_event);
     if (!ready)
         return;
+
     bool motor_idle_pending = false;
     uint64_t motor_idle_start = 0;
     while (true) {
@@ -416,6 +421,7 @@ static void worker(void* unused)
             outb(FDC_DOR, dor);
             motor_idle_pending = false;
         }
+
         struct Request* request = TAILQ_FIRST(&queue);
         if (!request) {
             uint32_t timeout = motor_idle_pending
@@ -464,49 +470,6 @@ static void worker(void* unused)
     }
 }
 
-bool fdc_init(void)
-{
-    assert((read_eflags() & EFLAGS_IF) != 0);
-    if (started)
-        return ready;
-    media_generation[0] = media_generation[1] = 0;
-    started = true;
-    uint8_t types = cmos_read(CMOS_FLOPPY_DRIVES);
-    drive_types[0] = types >> 4;
-    drive_types[1] = types & 15;
-    void* physical = pmm_alloc_below(0x1000000);
-    if (!physical)
-        return false;
-    bounce = vmm_map_kernel(physical, VMM_WRITABLE);
-    if (!bounce) {
-        pmm_free(physical);
-        return false;
-    }
-    bounce_physical = (uintptr_t)physical;
-    if (!isa_dma_claim(2)) {
-        free_bounce();
-        return false;
-    }
-
-    event_init(&request_event);
-    event_init(&irq_event);
-    event_init(&init_event);
-
-    pic_set_irq_handler(IRQ_FDC, irq6_handler);
-    if (!thread_create(NULL, "fdc", worker, NULL))
-        goto error;
-    return event_wait(&init_event, WAIT_INFINITE) && ready;
-
-error:
-    event_destroy(&request_event);
-    event_destroy(&irq_event);
-    event_destroy(&init_event);
-    pic_set_irq_handler(IRQ_FDC, NULL);
-    isa_dma_release(2);
-    free_bounce();
-    return false;
-}
-
 static bool valid_buffer(const void* buffer, size_t length, bool write)
 {
     uintptr_t start = (uintptr_t)buffer;
@@ -539,6 +502,7 @@ static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
     struct Request* request = request_create(length);
     if (!request)
         return false;
+
     request->drive = drive;
     request->lba = lba;
     request->length = length;
@@ -550,56 +514,150 @@ static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
     enter_critical_section();
     TAILQ_INSERT_TAIL(&queue, request, queue);
     event_signal(&request_event);
+
     bool completed = event_wait(&request->done, WAIT_INFINITE);
     bool result = completed && request->success;
     if (!completed)
         request->canceled = true;
     else if (!write)
         memcpy(buffer, request->data, request->completed);
+
     request_decref(request);
     leave_critical_section();
+
     return result;
 }
 
-bool fdc_read(int drive, uint64_t lba, char* buffer, size_t buffer_len)
+bool fdc_read(struct BlockDevice* device, uint64_t lba, char* buffer,
+              size_t buffer_len)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
     if (lba > UINT32_MAX)
         return false;
-    return transfer(drive, lba, buffer, buffer_len, false);
+    if (!device)
+        return false;
+
+    struct FDCBlockDevice* fdc_dev = (struct FDCBlockDevice*)device;
+    return transfer(fdc_dev->drive, lba, buffer, buffer_len, false);
 }
 
-bool fdc_write(int drive, uint64_t lba, const char* buffer, size_t buffer_len)
+bool fdc_write(struct BlockDevice* device, uint64_t lba, const char* buffer,
+               size_t buffer_len)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
     if (lba > UINT32_MAX)
         return false;
-    return transfer(drive, lba, (void*)buffer, buffer_len, true);
+    if (!device)
+        return false;
+
+    struct FDCBlockDevice* fdc_dev = (struct FDCBlockDevice*)device;
+    return transfer(fdc_dev->drive, lba, (void*)buffer, buffer_len, true);
 }
 
-bool fdc_check_media(int drive, unsigned* generation)
+bool fdc_check_media(struct BlockDevice* device, unsigned* generation)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
-    if (!ready || drive < 0 || drive > 1 ||
-        !fdc_geometry(drive_types[drive]) ||
+
+    struct FDCBlockDevice* fdc_dev = (struct FDCBlockDevice*)device;
+    if (!fdc_dev || !ready || fdc_dev->drive < 0 || fdc_dev->drive > 1 ||
+        !fdc_geometry(drive_types[fdc_dev->drive]) ||
         !valid_buffer(generation, sizeof(*generation), true))
         return false;
+
     struct Request* request = request_create(0);
     if (!request)
         return false;
-    request->drive = drive;
+
+    request->drive = fdc_dev->drive;
     request->check_media = true;
     request_incref(request);
+
     enter_critical_section();
     TAILQ_INSERT_TAIL(&queue, request, queue);
     event_signal(&request_event);
+
     bool completed = event_wait(&request->done, WAIT_INFINITE);
     bool result = completed && request->success;
     if (!completed)
         request->canceled = true;
+
     if (result)
         *generation = request->generation;
+
     request_decref(request);
     leave_critical_section();
+
     return result;
 }
+
+struct BlockDevice* fdc_drive(int drive)
+{
+    switch (drive) {
+    case 0:
+        return (struct BlockDevice*)&drive0;
+    case 1:
+        return (struct BlockDevice*)&drive1;
+    default:
+        return NULL;
+    }
+}
+
+bool fdc_init(void)
+{
+    assert((read_eflags() & EFLAGS_IF) != 0);
+    if (started)
+        return ready;
+
+    media_generation[0] = media_generation[1] = 0;
+    started = true;
+    uint8_t types = cmos_read(CMOS_FLOPPY_DRIVES);
+    drive_types[0] = types >> 4;
+    drive_types[1] = types & 15;
+    void* physical = pmm_alloc_below(0x1000000);
+    if (!physical)
+        return false;
+
+    bounce = vmm_map_kernel(physical, VMM_WRITABLE);
+    if (!bounce) {
+        pmm_free(physical);
+        return false;
+    }
+
+    bounce_physical = (uintptr_t)physical;
+    if (!isa_dma_claim(2)) {
+        free_bounce();
+        return false;
+    }
+
+    event_init(&request_event);
+    event_init(&irq_event);
+    event_init(&init_event);
+
+    pic_set_irq_handler(IRQ_FDC, irq6_handler);
+    if (!thread_create(NULL, "fdc", worker, NULL))
+        goto error;
+
+    if (!event_wait(&init_event, WAIT_INFINITE) || !ready)
+        goto error;
+
+    drive0.blockdev.check_media = fdc_check_media;
+    drive0.blockdev.read = fdc_read;
+    drive0.blockdev.write = fdc_write;
+    drive0.drive = 0;
+
+    drive1.blockdev.check_media = fdc_check_media;
+    drive1.blockdev.read = fdc_read;
+    drive1.blockdev.write = fdc_write;
+    drive1.drive = 1;
+
+    return true;
+error:
+    event_destroy(&request_event);
+    event_destroy(&irq_event);
+    event_destroy(&init_event);
+    pic_set_irq_handler(IRQ_FDC, NULL);
+    isa_dma_release(2);
+    free_bounce();
+    return false;
+}
+

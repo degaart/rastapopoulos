@@ -5,15 +5,13 @@
 #include "test.h"
 #include <string.h>
 
-#define DRIVE           0
+#define DRIVE           fdc_drive(0)
 #define SCRATCH_SECTOR1 2876
 #define SCRATCH_SECTOR2 2877
 #define SCRATCH_SECTOR3 2878
 #define SCRATCH_SECTOR4 2879
 
 static char buffer[512];
-
-extern void block_cache_dump(void);
 
 static struct Event concurrent_start;
 static struct Event concurrent_done[3];
