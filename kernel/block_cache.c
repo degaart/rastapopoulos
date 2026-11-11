@@ -203,9 +203,7 @@ static void update_generation(struct BlockDevice* dev, unsigned generation)
 bool block_cache_read(struct BlockDevice* dev, uint64_t lba, char* buffer,
                       size_t buffer_len)
 {
-    if (buffer_len != BLOCK_SIZE)
-        return false;
-    if (!dev)
+    if (buffer_len != BLOCK_SIZE || !dev || !buffer)
         return false;
 
     unsigned generation;
@@ -256,9 +254,7 @@ bool block_cache_read(struct BlockDevice* dev, uint64_t lba, char* buffer,
 bool block_cache_write(struct BlockDevice* dev, uint64_t lba,
                        const char* buffer, size_t buffer_len)
 {
-    if (buffer_len != BLOCK_SIZE)
-        return false;
-    if (!dev)
+    if (buffer_len != BLOCK_SIZE || !dev || !buffer)
         return false;
 
     unsigned generation;

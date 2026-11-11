@@ -20,8 +20,12 @@ bool fdc_init(void);
 /* Checks hardware without spin-up; leaves generation unchanged on failure. */
 bool fdc_check_media(struct BlockDevice* device, unsigned* generation);
 
-/* Kernel buffers; byte lengths must be positive multiples of 512.
- * Failures may leave preceding sectors transferred. */
+/*
+ * Kernel buffers
+ * Supports multiple sectors
+ * Byte lengths must be positive multiples of 512
+ * Failures may leave preceding sectors transferred
+ */
 bool fdc_read(struct BlockDevice* device, uint64_t lba, char* buffer,
               size_t buffer_len);
 bool fdc_write(struct BlockDevice* device, uint64_t lba, const char* buffer,

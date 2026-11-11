@@ -470,23 +470,6 @@ static void worker(void* unused)
     }
 }
 
-static bool valid_buffer(const void* buffer, size_t length, bool write)
-{
-    uintptr_t start = (uintptr_t)buffer;
-    if (start < KERNEL_OFFSET || length > UINTPTR_MAX - start)
-        return false;
-    for (uintptr_t page = ALIGN_DOWN(start, PAGE_SIZE);
-         page <= ALIGN_DOWN(start + length - 1, PAGE_SIZE);
-         page += PAGE_SIZE) {
-        unsigned flags;
-        if (!address_space_query(address_space_current(), (void*)page, NULL,
-                                 &flags) ||
-            (flags & PAGE_USER) || (write && !(flags & PAGE_WRITABLE)))
-            return false;
-    }
-    return true;
-}
-
 static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
                      bool write)
 {
@@ -496,7 +479,7 @@ static bool transfer(int drive, unsigned lba, void* buffer, size_t length,
     const struct FdcGeometry* geometry = fdc_geometry(drive_types[drive]);
     unsigned capacity = geometry->cylinders * 2 * geometry->sectors;
     if (lba >= capacity || length / 512 > capacity - lba ||
-        !valid_buffer(buffer, length, !write))
+        !vmm_is_valid_ptr(buffer, length, !write))
         return false;
 
     struct Request* request = request_create(length);
@@ -532,9 +515,7 @@ bool fdc_read(struct BlockDevice* device, uint64_t lba, char* buffer,
               size_t buffer_len)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
-    if (lba > UINT32_MAX)
-        return false;
-    if (!device)
+    if (lba > UINT32_MAX || !device || !buffer || (buffer_len % 512))
         return false;
 
     struct FDCBlockDevice* fdc_dev = (struct FDCBlockDevice*)device;
@@ -545,9 +526,7 @@ bool fdc_write(struct BlockDevice* device, uint64_t lba, const char* buffer,
                size_t buffer_len)
 {
     assert((read_eflags() & EFLAGS_IF) != 0);
-    if (lba > UINT32_MAX)
-        return false;
-    if (!device)
+    if (lba > UINT32_MAX || !device || !buffer || (buffer_len % 512))
         return false;
 
     struct FDCBlockDevice* fdc_dev = (struct FDCBlockDevice*)device;
@@ -561,7 +540,7 @@ bool fdc_check_media(struct BlockDevice* device, unsigned* generation)
     struct FDCBlockDevice* fdc_dev = (struct FDCBlockDevice*)device;
     if (!fdc_dev || !ready || fdc_dev->drive < 0 || fdc_dev->drive > 1 ||
         !fdc_geometry(drive_types[fdc_dev->drive]) ||
-        !valid_buffer(generation, sizeof(*generation), true))
+        !vmm_is_valid_ptr(generation, sizeof(*generation), true))
         return false;
 
     struct Request* request = request_create(0);

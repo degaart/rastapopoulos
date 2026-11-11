@@ -63,6 +63,22 @@ bool vmm_frame(const void* virtual_address, void** frame_out)
     return address_space_query(as, vaddr, frame_out, NULL);
 }
 
+bool vmm_is_valid_ptr(const void* ptr, size_t len, bool for_write)
+{
+    uintptr_t start = (uintptr_t)ptr;
+    if (start < KERNEL_OFFSET || len > UINTPTR_MAX - start)
+        return false;
+    for (uintptr_t page = ALIGN_DOWN(start, PAGE_SIZE);
+         page <= ALIGN_DOWN(start + len - 1, PAGE_SIZE); page += PAGE_SIZE) {
+        unsigned flags;
+        if (!address_space_query(address_space_current(), (void*)page, NULL,
+                                 &flags) ||
+            (flags & PAGE_USER) || (for_write && !(flags & PAGE_WRITABLE)))
+            return false;
+    }
+    return true;
+}
+
 bool vmm_is_valid_userptr(const void* ptr, size_t len, bool for_write)
 {
     return address_space_is_valid_userptr(ptr, len, for_write);
