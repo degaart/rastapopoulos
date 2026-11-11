@@ -65,16 +65,20 @@ bool vfs_path_parse(const struct StringSlice* path,
         result.drive = drive;
         begin = 2;
     }
+
     for (size_t i = begin; i < end; i++) {
         if (path->buf[i] == ':')
             return false;
     }
+
     result.start_at_root = begin < end && path->buf[begin] == '\\';
     result.trailing_separator = path->buf[end - 1] == '\\';
     while (begin < end && path->buf[begin] == '\\')
         begin++;
+
     while (end > begin && path->buf[end - 1] == '\\')
         end--;
+
     result.components.buf = path->buf + begin;
     result.components.len = end - begin;
     *parsed_path = result;
@@ -84,6 +88,28 @@ bool vfs_path_parse(const struct StringSlice* path,
 struct StringSlice vfs_path_iterate(struct StringSlice* buf)
 {
     struct StringSlice result = {.buf = NULL, .len = 0};
+    if (!buf || !buf->buf)
+        return result;
+
+    size_t start = 0;
+    while (start < buf->len && buf->buf[start] == '\\')
+        start++;
+
+    size_t end = start;
+    while (end < buf->len && buf->buf[end] != '\\')
+        end++;
+
+    if (end > start) {
+        result.buf = buf->buf + start;
+        result.len = end - start;
+    }
+
+    size_t next = end;
+    while (next < buf->len && buf->buf[next] == '\\')
+        next++;
+
+    buf->buf += next;
+    buf->len -= next;
     return result;
 }
 

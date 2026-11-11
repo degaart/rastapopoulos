@@ -35,7 +35,8 @@ bool vfs_path_parse(const struct StringSlice* path,
 /*
  * Iterate the components of a ParsedPath::components.
  * Returns an empty StringSlice when at the end of the components
- * May modify StringSlice
+ * Advances the slice past the component and following backslashes.
+ * NULL inputs return an empty slice unchanged. Exhaustion is stable.
  */
 struct StringSlice vfs_path_iterate(struct StringSlice* buf);
 

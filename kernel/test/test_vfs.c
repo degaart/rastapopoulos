@@ -67,6 +67,16 @@ static void test_utf8_validation(void)
 static void test_path_parsing(void)
 {
     trace("Testing path parsing");
+    CHECK(vfs_path_iterate(NULL).len == 0);
+    struct StringSlice absent = {NULL, 1};
+    CHECK(vfs_path_iterate(&absent).len == 0);
+    CHECK(absent.buf == NULL && absent.len == 1);
+    char raw[] = {'X', 0, 'Y', '\\'};
+    struct StringSlice cursor = {raw, sizeof(raw)};
+    struct StringSlice part = vfs_path_iterate(&cursor);
+    CHECK(part.buf == raw && part.len == 3);
+    CHECK(cursor.buf == raw + sizeof(raw) && cursor.len == 0);
+    CHECK(vfs_path_iterate(&cursor).len == 0);
 
     struct ParsedPath sentinel = {'Q', true, {"sentinel", 8}, true};
     struct ParsedPath output = sentinel;
