@@ -19,6 +19,9 @@ typedef struct StringSlice
         .buf = (s), .len = strlen(s)                                          \
     }
 
+/* Create an empty string slice */
+#define NULLSLICE (StringSlice) {.buf = NULL, .len = 0}
+
 /* Compare two StringSlices */
 int string_slice_compare(StringSlice s0, StringSlice s1);
 bool string_slice_equals(StringSlice s0, StringSlice s1);

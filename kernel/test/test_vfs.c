@@ -24,8 +24,8 @@ static void test_utf8_validation(void)
         "caf\xc3\xa9\\\xe6\x96\x87\xf0\x9f\x98\x80",
     };
     for (size_t i = 0; i < sizeof(valid) / sizeof(valid[0]); i++) {
-        struct StringSlice slice = {valid[i], strlen(valid[i])};
-        CHECK(utf8_validate(&slice));
+        StringSlice slice = SLICEPTR(valid[i]);
+        CHECK(utf8_validate(slice));
     }
     const char* invalid[] = {
         "\x80",
@@ -48,56 +48,56 @@ static void test_utf8_validation(void)
         "A",
     };
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
-        struct StringSlice slice = {invalid[i], strlen(invalid[i])};
-        CHECK(!utf8_validate(&slice));
+        StringSlice slice = SLICEPTR(invalid[i]);
+        CHECK(!utf8_validate(slice));
     }
-    CHECK(!utf8_validate(NULL));
-    struct StringSlice slice = {NULL, 0};
-    CHECK(utf8_validate(&slice));
+    CHECK(utf8_validate(NULLSLICE));
+    StringSlice slice = {0};
+    CHECK(utf8_validate(slice));
     slice.len = 1;
-    CHECK(!utf8_validate(&slice));
+    CHECK(!utf8_validate(slice));
     char bytes[] = {'A', 0, 'B', '\xff'};
     slice.buf = bytes;
     slice.len = 1;
-    CHECK(utf8_validate(&slice));
+    CHECK(utf8_validate(slice));
     slice.len = 3;
-    CHECK(!utf8_validate(&slice));
+    CHECK(!utf8_validate(slice));
     slice.buf = bytes + 1;
     slice.len = 1;
-    CHECK(!utf8_validate(&slice));
+    CHECK(!utf8_validate(slice));
 }
 
 static void test_path_parsing(void)
 {
     trace("Testing path parsing");
     CHECK(vfs_path_iterate(NULL).len == 0);
-    struct StringSlice absent = {NULL, 1};
+    StringSlice absent = {NULL, 1};
     CHECK(vfs_path_iterate(&absent).len == 0);
     CHECK(absent.buf == NULL && absent.len == 1);
     char raw[] = {'X', 0, 'Y', '\\'};
-    struct StringSlice cursor = {raw, sizeof(raw)};
-    struct StringSlice part = vfs_path_iterate(&cursor);
+    StringSlice cursor = {raw, sizeof(raw)};
+    StringSlice part = vfs_path_iterate(&cursor);
     CHECK(part.buf == raw && part.len == 3);
     CHECK(cursor.buf == raw + sizeof(raw) && cursor.len == 0);
     CHECK(vfs_path_iterate(&cursor).len == 0);
 
     struct ParsedPath sentinel = {'Q', true, {"sentinel", 8}, true};
     struct ParsedPath output = sentinel;
-    struct StringSlice empty = {NULL, 0};
-    CHECK(!vfs_path_parse(NULL, &output));
-    CHECK(!vfs_path_parse(&empty, &output));
-    CHECK(!vfs_path_parse(&empty, NULL));
+    StringSlice empty = {0};
+    CHECK(!vfs_path_parse(NULLSLICE, &output));
+    CHECK(!vfs_path_parse(empty, &output));
+    CHECK(!vfs_path_parse(empty, NULL));
     char embedded_nul[] = {'A', 0, 'B'};
-    struct StringSlice invalid_slice = {embedded_nul, sizeof(embedded_nul)};
-    CHECK(!vfs_path_parse(&invalid_slice, &output));
+    StringSlice invalid_slice = {embedded_nul, sizeof(embedded_nul)};
+    CHECK(!vfs_path_parse(invalid_slice, &output));
     CHECK(output.drive == sentinel.drive);
     CHECK(output.start_at_root == sentinel.start_at_root);
     CHECK(output.components.buf == sentinel.components.buf);
     CHECK(output.components.len == sentinel.components.len);
     CHECK(output.trailing_separator == sentinel.trailing_separator);
-    struct StringSlice exact = {"a:\\\\ONE\\\\TWO\\\\", 0};
+    StringSlice exact = {"a:\\\\ONE\\\\TWO\\\\", 0};
     exact.len = strlen(exact.buf);
-    CHECK(vfs_path_parse(&exact, &output));
+    CHECK(vfs_path_parse(exact, &output));
     CHECK(output.components.len == strlen("ONE\\\\TWO"));
     CHECK(!memcmp(output.components.buf, "ONE\\\\TWO", output.components.len));
 
@@ -139,10 +139,10 @@ static void test_path_parsing(void)
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         trace("Path parsing case %u", (unsigned)i);
-        struct StringSlice input = {cases[i].input, strlen(cases[i].input)};
+        StringSlice input = SLICEPTR(cases[i].input);
         struct ParsedPath parsed;
-        CHECK(utf8_validate(&input));
-        CHECK(vfs_path_parse(&input, &parsed));
+        CHECK(utf8_validate(input));
+        CHECK(vfs_path_parse(input, &parsed));
         CHECK(parsed.drive == cases[i].drive);
         CHECK(parsed.start_at_root == cases[i].rooted);
         CHECK(parsed.trailing_separator == cases[i].trailing);
@@ -155,9 +155,9 @@ static void test_path_parsing(void)
             CHECK(parsed.components.buf[parsed.components.len - 1] != '\\');
         }
 
-        struct StringSlice remaining = parsed.components;
+        StringSlice remaining = parsed.components;
         for (size_t j = 0; cases[i].components[j]; j++) {
-            struct StringSlice component = vfs_path_iterate(&remaining);
+            StringSlice component = vfs_path_iterate(&remaining);
             size_t expected_len = strlen(cases[i].components[j]);
             CHECK(component.len == expected_len);
             CHECK(component.buf != NULL);
@@ -187,16 +187,16 @@ static void test_path_parsing(void)
         "A:\\DOCS\\\xff",
     };
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
-        struct StringSlice input = {invalid[i], strlen(invalid[i])};
+        StringSlice input = SLICEPTR(invalid[i]);
         struct ParsedPath parsed;
-        CHECK(!vfs_path_parse(&input, &parsed));
+        CHECK(!vfs_path_parse(input, &parsed));
     }
 
     char bounded[] = {'c', ':', '\\', 'X', '\\', 'Y', '\xff'};
-    struct StringSlice input = {bounded, 6};
+    StringSlice input = {bounded, 6};
     struct ParsedPath parsed;
-    CHECK(utf8_validate(&input));
-    CHECK(vfs_path_parse(&input, &parsed));
+    CHECK(utf8_validate(input));
+    CHECK(vfs_path_parse(input, &parsed));
     CHECK(parsed.drive == 'C');
     CHECK(parsed.start_at_root);
     CHECK(!parsed.trailing_separator);
@@ -319,7 +319,7 @@ static void tar_node_destroy(struct VFSNode* vfsnode)
 
 static struct VFSNode* tar_lookup(struct VFSMount* vfsmount,
                                   const struct VFSNode* vfsparent,
-                                  const struct StringSlice* path)
+                                  StringSlice path)
 {
     struct TarVFSMount* mount = (struct TarVFSMount*)vfsmount;
     if (!mount)
@@ -333,7 +333,7 @@ static struct VFSNode* tar_lookup(struct VFSMount* vfsmount,
         parent_path = parent->path;
     }
 
-    if (!path || !path->buf || !path->len) {
+    if (!path.buf || !path.len) {
         if (parent)
             return NULL;
 
@@ -352,13 +352,13 @@ static struct VFSNode* tar_lookup(struct VFSMount* vfsmount,
         return (struct VFSNode*)node;
     }
 
-    size_t namebuf_len = strlen(parent_path) + 1 + path->len + 1;
+    size_t namebuf_len = strlen(parent_path) + 1 + path.len + 1;
     char* namebuf = kmalloc(namebuf_len);
     if (*parent_path)
-        snprintf(namebuf, namebuf_len, "%s/%.*s", parent_path, (int)path->len,
-                 path->buf);
+        snprintf(namebuf, namebuf_len, "%s/%.*s", parent_path, (int)path.len,
+                 path.buf);
     else
-        snprintf(namebuf, namebuf_len, "%.*s", (int)path->len, path->buf);
+        snprintf(namebuf, namebuf_len, "%.*s", (int)path.len, path.buf);
 
     struct TarEntry entry;
     if (!lookup_entry(&mount->tar, namebuf, &entry)) {
@@ -452,41 +452,35 @@ static void test_mount(void)
 
     CHECK(vfs_mount('C', (struct FS*)&tarfs, (struct BlockDevice*)&memdev));
 
-    struct StringSlice path = {.buf = "\\", 1};
-    struct VFSNode* root = vfs_lookup('C', &current_dirs, &path);
+    struct VFSNode* root = vfs_lookup('C', &current_dirs, SLICE("\\"));
     CHECK(root != NULL);
 
-    path = SLICE("\\arf\\gouda\\seiche");
-    struct VFSNode* seiche = vfs_lookup('C', &current_dirs, &path);
+    struct VFSNode* seiche =
+        vfs_lookup('C', &current_dirs, SLICE("\\arf\\gouda\\seiche"));
     CHECK(seiche != NULL);
     vfs_node_destroy(seiche);
 
-    path = SLICE("gouda\\seiche");
-    seiche = vfs_lookup('C', &current_dirs, &path);
+    seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
     CHECK(seiche != NULL);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf\\";
-    path = SLICE("gouda\\seiche");
-    seiche = vfs_lookup('C', &current_dirs, &path);
+    seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
     CHECK(seiche != NULL);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf";
-    path = SLICE("gouda\\seiche");
-    seiche = vfs_lookup('C', &current_dirs, &path);
+    seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
     CHECK(seiche != NULL);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf\\gouda";
-    path = SLICE("seiche");
-    seiche = vfs_lookup('C', &current_dirs, &path);
+    seiche = vfs_lookup('C', &current_dirs, SLICE("seiche"));
     CHECK(seiche != NULL);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "";
-    path = SLICE("arf\\gouda\\seiche");
-    seiche = vfs_lookup('C', &current_dirs, &path);
+    seiche = vfs_lookup('C', &current_dirs, SLICE("arf\\gouda\\seiche"));
     CHECK(seiche != NULL);
     vfs_node_destroy(seiche);
 

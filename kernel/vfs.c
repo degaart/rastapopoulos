@@ -8,14 +8,14 @@
 static struct VFSMount* mounts[26];
 static struct Mutex lock;
 
-bool utf8_validate(const struct StringSlice* path)
+bool utf8_validate(StringSlice path)
 {
-    if (!path || (!path->buf && path->len))
+    if (!path.buf && path.len)
         return false;
 
-    const unsigned char* bytes = (const unsigned char*)path->buf;
+    const unsigned char* bytes = (const unsigned char*)path.buf;
     size_t i = 0;
-    while (i < path->len) {
+    while (i < path.len) {
         unsigned char first = bytes[i++];
         if (!first)
             return false;
@@ -42,7 +42,7 @@ bool utf8_validate(const struct StringSlice* path)
         } else {
             return false;
         }
-        if (extra > path->len - i)
+        if (extra > path.len - i)
             return false;
         if (bytes[i] < minimum || bytes[i] > maximum)
             return false;
@@ -55,17 +55,16 @@ bool utf8_validate(const struct StringSlice* path)
     return true;
 }
 
-bool vfs_path_parse(const struct StringSlice* path,
-                    struct ParsedPath* parsed_path)
+bool vfs_path_parse(StringSlice path, struct ParsedPath* parsed_path)
 {
-    if (!parsed_path || !path || !path->len || !utf8_validate(path))
+    if (!parsed_path || !path.len || !utf8_validate(path))
         return false;
 
     struct ParsedPath result = {0};
     size_t begin = 0;
-    size_t end = path->len;
-    if (end >= 2 && path->buf[1] == ':') {
-        char drive = path->buf[0];
+    size_t end = path.len;
+    if (end >= 2 && path.buf[1] == ':') {
+        char drive = path.buf[0];
         if (drive >= 'a' && drive <= 'z')
             drive -= 'a' - 'A';
         if (drive < 'A' || drive > 'Z')
@@ -75,27 +74,27 @@ bool vfs_path_parse(const struct StringSlice* path,
     }
 
     for (size_t i = begin; i < end; i++) {
-        if (path->buf[i] == ':')
+        if (path.buf[i] == ':')
             return false;
     }
 
-    result.start_at_root = begin < end && path->buf[begin] == '\\';
-    result.trailing_separator = path->buf[end - 1] == '\\';
-    while (begin < end && path->buf[begin] == '\\')
+    result.start_at_root = begin < end && path.buf[begin] == '\\';
+    result.trailing_separator = path.buf[end - 1] == '\\';
+    while (begin < end && path.buf[begin] == '\\')
         begin++;
 
-    while (end > begin && path->buf[end - 1] == '\\')
+    while (end > begin && path.buf[end - 1] == '\\')
         end--;
 
-    result.components.buf = path->buf + begin;
+    result.components.buf = path.buf + begin;
     result.components.len = end - begin;
     *parsed_path = result;
     return true;
 }
 
-struct StringSlice vfs_path_iterate(struct StringSlice* buf)
+StringSlice vfs_path_iterate(StringSlice* buf)
 {
-    struct StringSlice result = {.buf = NULL, .len = 0};
+    struct StringSlice result = {0};
     if (!buf || !buf->buf)
         return result;
 
@@ -186,30 +185,29 @@ bool vfs_unmount(char drive)
 }
 
 static struct VFSNode* lookup(struct VFSMount* mount,
-                              const struct VFSNode* parent,
-                              const struct StringSlice* path)
+                              const struct VFSNode* parent, StringSlice path)
 {
     if (!mount)
         return NULL;
 
     struct VFSNode* node;
     if (!parent) {
-        node = mount->lookup(mount, NULL, NULL); /* root dir */
+        node = mount->lookup(mount, NULL, NULLSLICE); /* root dir */
         if (!node)
             return NULL;
     } else {
         node = (struct VFSNode*)parent;
     }
 
-    if (!path || !path->buf || !path->len)
+    if (!path.buf || !path.len)
         return node;
 
-    struct StringSlice cookie = *path;
+    StringSlice cookie = path;
     while (true) {
-        struct StringSlice name = vfs_path_iterate(&cookie);
+        StringSlice name = vfs_path_iterate(&cookie);
         if (!name.len)
             break;
-        struct VFSNode* child = mount->lookup(mount, node, &name);
+        struct VFSNode* child = mount->lookup(mount, node, name);
         if (node != parent)
             node->destroy(node);
 
@@ -223,7 +221,7 @@ static struct VFSNode* lookup(struct VFSMount* mount,
 
 struct VFSNode* vfs_lookup(char current_drive,
                            struct VFSCurrentDirectories* current_dirs,
-                           struct StringSlice* path)
+                           StringSlice path)
 {
     struct ParsedPath parsed_path;
     if (!vfs_path_parse(path, &parsed_path))
@@ -245,13 +243,11 @@ struct VFSNode* vfs_lookup(char current_drive,
     if (!parsed_path.start_at_root) { /* relative path */
         if (current_dirs->current_dirs[parsed_path.drive -
                                        'A']) { /* drive has current dir */
-            struct StringSlice parent_slice = {
-                .buf = current_dirs->current_dirs[parsed_path.drive - 'A'],
-                .len = strlen(
-                    current_dirs->current_dirs[parsed_path.drive - 'A'])};
-            parent = lookup(mount, NULL, &parent_slice);
+            StringSlice parent_slice =
+                SLICEPTR(current_dirs->current_dirs[parsed_path.drive - 'A']);
+            parent = lookup(mount, NULL, parent_slice);
         } else { /* start lookup at root */
-            parent = lookup(mount, NULL, NULL);
+            parent = lookup(mount, NULL, NULLSLICE);
         }
 
         if (!parent) {
@@ -260,7 +256,7 @@ struct VFSNode* vfs_lookup(char current_drive,
         }
     }
 
-    struct VFSNode* node = lookup(mount, parent, &parsed_path.components);
+    struct VFSNode* node = lookup(mount, parent, parsed_path.components);
     vfs_node_destroy(parent);
     mutex_unlock(&lock);
     return node;
