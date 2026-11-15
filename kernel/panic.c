@@ -12,6 +12,7 @@ void __panic(const char* file, int line, const char* fmt, ...)
     va_start(args, fmt);
     serial_vprintf(fmt, args);
     va_end(args);
+    serial_printf("\n");
 
     printf("[%s:%d] KERNEL PANIC -- ", file, line);
     va_start(args, fmt);

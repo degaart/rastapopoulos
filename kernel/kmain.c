@@ -19,6 +19,7 @@
 #include "serial.h"
 #include "syscall.h"
 #include "trace.h"
+#include "vfs.h"
 #include "vga.h"
 #include "vmm.h"
 #include <assert.h>
@@ -189,7 +190,11 @@ static void init_entry(void* unused)
 
     trace("Initializing block cache");
     if (!block_cache_init())
-        trace("Block cache initialization failed");
+        panic("Block cache initialization failed");
+
+    trace("Initializing VFS");
+    if (!vfs_init())
+        panic("VFS initialization failed");
 
     while (true) {
         int ret = exec("shell.bin", "");
@@ -203,6 +208,7 @@ static void init_entry(void* unused)
     }
 }
 #else
+extern void test_heap(void);
 extern void test_tar(void);
 extern void test_vga(void);
 extern void test_fdc(void);
@@ -219,6 +225,7 @@ static void unit_tests(void* unused)
     trace("*** Running unit tests");
     printf("*** Running unit tests\n");
 
+    test_heap();
     // test_pmm();
     // test_events();
     // test_queue();
@@ -227,6 +234,8 @@ static void unit_tests(void* unused)
     //     panic("FDC initialization failed");
     // if (!block_cache_init())
     //     panic("Block cache initialization failed");
+    if (!vfs_init())
+        panic("VFS initialization failed");
     // test_mutex();
     // test_fdc();
     // test_block_cache();

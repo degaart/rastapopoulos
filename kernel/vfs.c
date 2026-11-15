@@ -1,4 +1,12 @@
 #include "vfs.h"
+#include "kernel.h"
+#include "kmalloc.h"
+#include "mutex.h"
+#include "trace.h"
+#include <string.h>
+
+static struct VFSMount* mounts[26];
+static struct Mutex lock;
 
 bool utf8_validate(const struct StringSlice* path)
 {
@@ -111,5 +119,157 @@ struct StringSlice vfs_path_iterate(struct StringSlice* buf)
     buf->buf += next;
     buf->len -= next;
     return result;
+}
+
+bool vfs_init(void)
+{
+    mutex_init(&lock);
+    return true;
+}
+
+bool vfs_mount(char drive, struct FS* fs, struct BlockDevice* dev)
+{
+    if (drive < 'A' || drive > 'Z' || !fs || !dev)
+        return false;
+    if (!mutex_lock(&lock))
+        return false;
+    if (!fs->mount)
+        return false;
+
+    int idx = drive - 'A';
+    if (mounts[idx]) {
+        mutex_unlock(&lock);
+        return false;
+    }
+    mounts[idx] = fs->mount(fs, dev);
+    if (!mounts[idx]->fs)
+        panic("Invalid mount returned from fs %s", fs->name);
+    bool result = mounts[idx] != NULL;
+    mutex_unlock(&lock);
+
+    if (result)
+        trace("Mounted drive %c: (%s)", drive, fs->name);
+    else
+        trace("Failed to mount drive %c: (%s)", drive, fs->name);
+    return result;
+}
+
+bool vfs_unmount(char drive)
+{
+    if (drive < 'A' || drive > 'Z')
+        return false;
+    if (!mutex_lock(&lock))
+        return false;
+
+    int idx = drive - 'A';
+    if (!mounts[idx]) {
+        mutex_unlock(&lock);
+        return false;
+    }
+    if (!mounts[idx]->fs)
+        panic("Drive %c: has invalid fs pointer", drive);
+    if (!mounts[idx]->fs->unmount) {
+        mutex_unlock(&lock);
+        return false;
+    }
+
+    bool result = mounts[idx]->fs->unmount(mounts[idx]->fs, mounts[idx]);
+    if (result)
+        mounts[idx] = NULL;
+    mutex_unlock(&lock);
+
+    if (result)
+        trace("Unmounted drive %c:", drive);
+    else
+        trace("Failed to unmount drive %c:", drive);
+    return result;
+}
+
+static struct VFSNode* lookup(struct VFSMount* mount,
+                              const struct VFSNode* parent,
+                              const struct StringSlice* path)
+{
+    if (!mount)
+        return NULL;
+
+    struct VFSNode* node;
+    if (!parent) {
+        node = mount->lookup(mount, NULL, NULL); /* root dir */
+        if (!node)
+            return NULL;
+    } else {
+        node = (struct VFSNode*)parent;
+    }
+
+    if (!path || !path->buf || !path->len)
+        return node;
+
+    struct StringSlice cookie = *path;
+    while (true) {
+        struct StringSlice name = vfs_path_iterate(&cookie);
+        if (!name.len)
+            break;
+        struct VFSNode* child = mount->lookup(mount, node, &name);
+        if (node != parent)
+            node->destroy(node);
+
+        node = child;
+        if (!node)
+            break;
+    }
+
+    return node;
+}
+
+struct VFSNode* vfs_lookup(char current_drive,
+                           struct VFSCurrentDirectories* current_dirs,
+                           struct StringSlice* path)
+{
+    struct ParsedPath parsed_path;
+    if (!vfs_path_parse(path, &parsed_path))
+        return NULL;
+
+    if (!parsed_path.drive) /* resolve drive */
+        parsed_path.drive = current_drive;
+
+    if (!mutex_lock(&lock))
+        return NULL;
+
+    struct VFSMount* mount = mounts[parsed_path.drive - 'A'];
+    if (!mount) {
+        mutex_unlock(&lock);
+        return NULL;
+    }
+
+    struct VFSNode* parent = NULL;
+    if (!parsed_path.start_at_root) { /* relative path */
+        if (current_dirs->current_dirs[parsed_path.drive -
+                                       'A']) { /* drive has current dir */
+            struct StringSlice parent_slice = {
+                .buf = current_dirs->current_dirs[parsed_path.drive - 'A'],
+                .len = strlen(
+                    current_dirs->current_dirs[parsed_path.drive - 'A'])};
+            parent = lookup(mount, NULL, &parent_slice);
+        } else { /* start lookup at root */
+            parent = lookup(mount, NULL, NULL);
+        }
+
+        if (!parent) {
+            mutex_unlock(&lock);
+            return NULL;
+        }
+    }
+
+    struct VFSNode* node = lookup(mount, parent, &parsed_path.components);
+    vfs_node_destroy(parent);
+    mutex_unlock(&lock);
+    return node;
+}
+
+void vfs_node_destroy(struct VFSNode* node)
+{
+    if (!node)
+        return;
+    node->destroy(node);
 }
 

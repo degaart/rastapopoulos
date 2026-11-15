@@ -1,3 +1,6 @@
+#include "../kmalloc.h"
+#include "../ramdisk.h"
+#include "../tar.h"
 #include "../vfs.h"
 #include "test.h"
 #include <string.h>
@@ -201,11 +204,303 @@ static void test_path_parsing(void)
     CHECK(!memcmp(parsed.components.buf, "X\\Y", 3));
 }
 
+struct MemBlockDevice
+{
+    struct BlockDevice dev;
+    const void* buf;
+    size_t len;
+};
+
+bool mem_check_media(struct BlockDevice* dev, unsigned* generation)
+{
+    *generation = 0;
+    return true;
+}
+
+bool mem_read(struct BlockDevice* dev, uint64_t lba, char* buffer,
+              size_t buffer_len)
+{
+    if (!dev || !buffer || buffer_len != 512)
+        return false;
+
+    struct MemBlockDevice* memdev = (struct MemBlockDevice*)dev;
+    if (lba * 512 >= memdev->len)
+        return false;
+
+    if ((lba * 512) + buffer_len > memdev->len)
+        buffer_len = memdev->len - (lba * 512);
+    memcpy(buffer, memdev->buf + (lba * 512), buffer_len);
+    return true;
+}
+
+bool mem_write(struct BlockDevice* dev, uint64_t lba, const char* buffer,
+               size_t buffer_len)
+{
+    return false;
+}
+
+struct TarFS
+{
+    struct FS fs;
+};
+
+struct TarVFSMount
+{
+    struct VFSMount mount;
+    struct Tar tar;
+};
+
+struct TarVFSNode
+{
+    struct VFSNode node;
+    struct Tar* tar;
+    char* path;
+    struct TarEntry entry;
+};
+
+struct LookupContext
+{
+    const char* path;
+    struct TarEntry entry;
+    bool found;
+};
+
+/* Strips leading and trailing separators */
+static void strip(StringSlice* s, char separator)
+{
+    while (s->len && (*s->buf == '.' || *s->buf == separator))
+        s->buf++;
+    while (s->len && (s->buf[s->len - 1] == separator))
+        s->len--;
+}
+
+static void lookup_callback(const struct TarEntry* entry, void* lookupctx)
+{
+    struct LookupContext* ctx = lookupctx;
+
+    StringSlice entryname = SLICEPTR(entry->name);
+    strip(&entryname, '/');
+
+    StringSlice path = SLICEPTR(ctx->path);
+    strip(&path, '\\');
+
+    if (string_slice_equals(path, entryname)) {
+        ctx->found = true;
+        ctx->entry = *entry;
+    }
+}
+
+static bool lookup_entry(struct Tar* tar, const char* path,
+                         struct TarEntry* entry)
+{
+    if (!tar || !entry)
+        return false;
+
+    struct LookupContext ctx = {
+        .path = path,
+        .found = false,
+    };
+    if (!tar_list(tar, lookup_callback, &ctx))
+        return false;
+    if (!ctx.found)
+        return false;
+    *entry = ctx.entry;
+    return true;
+}
+
+static void tar_node_destroy(struct VFSNode* vfsnode)
+{
+    struct TarVFSNode* node = (struct TarVFSNode*)vfsnode;
+    if (!node)
+        return;
+    kfree(node->path);
+    kfree(node);
+}
+
+static struct VFSNode* tar_lookup(struct VFSMount* vfsmount,
+                                  const struct VFSNode* vfsparent,
+                                  const struct StringSlice* path)
+{
+    struct TarVFSMount* mount = (struct TarVFSMount*)vfsmount;
+    if (!mount)
+        return NULL;
+
+    const char* parent_path = "";
+    struct TarVFSNode* parent = (struct TarVFSNode*)vfsparent;
+    if (parent) {
+        if (!parent->entry.is_dir)
+            return NULL;
+        parent_path = parent->path;
+    }
+
+    if (!path || !path->buf || !path->len) {
+        if (parent)
+            return NULL;
+
+        struct TarEntry entry;
+        if (!lookup_entry(&mount->tar, "", &entry))
+            return NULL;
+
+        struct TarVFSNode* node = knew(struct TarVFSNode);
+        if (!node)
+            return NULL;
+        node->node.fs = mount->mount.fs;
+        node->node.destroy = tar_node_destroy;
+        node->tar = &mount->tar;
+        node->path = strdup("");
+        node->entry = entry;
+        return (struct VFSNode*)node;
+    }
+
+    size_t namebuf_len = strlen(parent_path) + 1 + path->len + 1;
+    char* namebuf = kmalloc(namebuf_len);
+    if (*parent_path)
+        snprintf(namebuf, namebuf_len, "%s/%.*s", parent_path, (int)path->len,
+                 path->buf);
+    else
+        snprintf(namebuf, namebuf_len, "%.*s", (int)path->len, path->buf);
+
+    struct TarEntry entry;
+    if (!lookup_entry(&mount->tar, namebuf, &entry)) {
+        kfree(namebuf);
+        return NULL;
+    }
+
+    struct TarVFSNode* node = knew(struct TarVFSNode);
+    if (!node) {
+        kfree(namebuf);
+        return NULL;
+    }
+    node->node.fs = mount->mount.fs;
+    node->node.destroy = tar_node_destroy;
+    node->tar = &mount->tar;
+    node->path = namebuf;
+    node->entry = entry;
+    return (struct VFSNode*)node;
+}
+
+static struct VFSMount* tar_mount(struct FS* fs, struct BlockDevice* dev)
+{
+    struct MemBlockDevice* memdev = (struct MemBlockDevice*)dev;
+
+    struct Tar tar;
+    if (!tar_open(&tar, memdev->buf, memdev->len))
+        return NULL;
+
+    struct TarVFSMount* result = kmalloc(sizeof(struct TarVFSMount));
+    if (!result)
+        return NULL;
+    memset(result, 0, sizeof(*result));
+    result->mount.fs = fs;
+    result->mount.lookup = tar_lookup;
+    result->tar = tar;
+    return (struct VFSMount*)result;
+}
+
+static bool tar_unmount(struct FS* fs, struct VFSMount* mount)
+{
+    if (!fs || !mount)
+        return false;
+    kfree(mount);
+    return true;
+}
+
+static void test_lookup_entry(void)
+{
+    trace("Testing lookup_entry");
+
+    struct Tar tar;
+    CHECK(tar_open(&tar, ramdisk_start, ramdisk_end - ramdisk_start));
+
+    struct TarEntry entry;
+    CHECK(lookup_entry(&tar, "", &entry));
+    trace("entry: name=%s, isdir=%s, size=%zu", entry.name,
+          entry.is_dir ? "true" : "false", entry.size);
+}
+
+static void test_mount(void)
+{
+    trace("Testing vfs_mount");
+
+    struct MemBlockDevice memdev;
+    memdev.dev.check_media = mem_check_media;
+    memdev.dev.read = mem_read;
+    memdev.dev.write = mem_write;
+    memdev.buf = ramdisk_start;
+    memdev.len = ramdisk_end - ramdisk_start;
+
+    struct TarFS tarfs;
+    memset(&tarfs, 0, sizeof(tarfs));
+    strlcpy(tarfs.fs.name, "TAR", sizeof(tarfs.fs.name));
+    tarfs.fs.mount = tar_mount;
+    tarfs.fs.unmount = tar_unmount;
+
+    CHECK(!vfs_mount('a', (struct FS*)&tarfs, (struct BlockDevice*)&memdev));
+    CHECK(!vfs_mount('A', NULL, (struct BlockDevice*)&memdev));
+    CHECK(!vfs_mount('A', (struct FS*)&tarfs, NULL));
+
+    CHECK(vfs_mount('A', (struct FS*)&tarfs, (struct BlockDevice*)&memdev));
+    CHECK(vfs_unmount('A'));
+
+    CHECK(vfs_mount('A', (struct FS*)&tarfs, (struct BlockDevice*)&memdev));
+    CHECK(!vfs_mount('A', (struct FS*)&tarfs, (struct BlockDevice*)&memdev));
+    CHECK(vfs_unmount('A'));
+
+    struct VFSCurrentDirectories current_dirs;
+    memset(&current_dirs, 0, sizeof(current_dirs));
+    current_dirs.current_dirs[2] = "\\arf";
+
+    CHECK(vfs_mount('C', (struct FS*)&tarfs, (struct BlockDevice*)&memdev));
+
+    struct StringSlice path = {.buf = "\\", 1};
+    struct VFSNode* root = vfs_lookup('C', &current_dirs, &path);
+    CHECK(root != NULL);
+
+    path = SLICE("\\arf\\gouda\\seiche");
+    struct VFSNode* seiche = vfs_lookup('C', &current_dirs, &path);
+    CHECK(seiche != NULL);
+    vfs_node_destroy(seiche);
+
+    path = SLICE("gouda\\seiche");
+    seiche = vfs_lookup('C', &current_dirs, &path);
+    CHECK(seiche != NULL);
+    vfs_node_destroy(seiche);
+
+    current_dirs.current_dirs[2] = "arf\\";
+    path = SLICE("gouda\\seiche");
+    seiche = vfs_lookup('C', &current_dirs, &path);
+    CHECK(seiche != NULL);
+    vfs_node_destroy(seiche);
+
+    current_dirs.current_dirs[2] = "arf";
+    path = SLICE("gouda\\seiche");
+    seiche = vfs_lookup('C', &current_dirs, &path);
+    CHECK(seiche != NULL);
+    vfs_node_destroy(seiche);
+
+    current_dirs.current_dirs[2] = "arf\\gouda";
+    path = SLICE("seiche");
+    seiche = vfs_lookup('C', &current_dirs, &path);
+    CHECK(seiche != NULL);
+    vfs_node_destroy(seiche);
+
+    current_dirs.current_dirs[2] = "";
+    path = SLICE("arf\\gouda\\seiche");
+    seiche = vfs_lookup('C', &current_dirs, &path);
+    CHECK(seiche != NULL);
+    vfs_node_destroy(seiche);
+
+    vfs_node_destroy(root);
+    CHECK(vfs_unmount('C'));
+}
+
 void test_vfs(void)
 {
     trace("*** VFS tests started");
     test_utf8_validation();
     test_path_parsing();
+    test_lookup_entry();
+    test_mount();
     trace("*** VFS tests done");
 }
 

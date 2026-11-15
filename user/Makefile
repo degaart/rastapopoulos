@@ -11,6 +11,10 @@ all:
 	done
 	cp logo.raw build/tmp
 	echo 'ALL YOUR BASE ARE BELONG TO US' > build/tmp/message
+	mkdir -p build/tmp/arf/gouda
+	echo 'SEICHE' > build/tmp/arf/gouda/seiche
+	mkdir -p build/tmp/a/b/c/d/e/f/g/h/i/j
+	echo 'k' > build/tmp/a/b/c/d/e/f/g/h/i/j/k
 	cd build
 	tar cvf build/user.tar -C build/tmp .
 

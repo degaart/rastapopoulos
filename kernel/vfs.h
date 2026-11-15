@@ -1,13 +1,9 @@
 #pragma once
 
+#include "block_device.h"
+#include "string_slice.h"
 #include <stdbool.h>
 #include <stddef.h>
-
-struct StringSlice
-{
-    const char* buf;
-    size_t len;
-};
 
 struct ParsedPath
 {
@@ -29,6 +25,7 @@ struct ParsedPath
 };
 
 bool utf8_validate(const struct StringSlice* path);
+bool vfs_init(void);
 bool vfs_path_parse(const struct StringSlice* path,
                     struct ParsedPath* parsed_path);
 
@@ -39,4 +36,41 @@ bool vfs_path_parse(const struct StringSlice* path,
  * NULL inputs return an empty slice unchanged. Exhaustion is stable.
  */
 struct StringSlice vfs_path_iterate(struct StringSlice* buf);
+
+struct VFSNode;
+
+struct VFSMount
+{
+    struct FS* fs;
+    struct VFSNode* (*lookup)(struct VFSMount*, const struct VFSNode*,
+                              const struct StringSlice*);
+};
+
+struct VFSNode
+{
+    struct FS* fs;
+    void (*destroy)(struct VFSNode*);
+};
+
+struct FS
+{
+    char name[16];
+    struct VFSMount* (*mount)(struct FS*, struct BlockDevice*);
+    bool (*unmount)(struct FS*, struct VFSMount*);
+};
+
+struct VFSCurrentDirectories
+{
+    char* current_dirs[26];
+};
+
+/*
+ * drive: 'A' to 'Z'
+ */
+bool vfs_mount(char drive, struct FS* fs, struct BlockDevice* dev);
+bool vfs_unmount(char drive);
+struct VFSNode* vfs_lookup(char current_drive,
+                           struct VFSCurrentDirectories* current_dirs,
+                           struct StringSlice* path);
+void vfs_node_destroy(struct VFSNode* node);
 
