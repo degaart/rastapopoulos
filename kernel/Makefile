@@ -5,7 +5,7 @@
 AS := nasm
 CC := i686-elf-gcc
 HOSTCC := cc
-CFLAGS := -DRASTA -DRASTA_KERNEL \
+CFLAGS := -DRASTA -DRASTA_KERNEL -DHEAP_DEBUG \
 		  -ffreestanding -fno-pic -fno-asynchronous-unwind-tables -fno-builtin \
 		  -march=i386 -O0 -g \
 		  -mincoming-stack-boundary=2 -mpreferred-stack-boundary=2 \

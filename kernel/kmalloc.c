@@ -6,6 +6,7 @@
 #include "trace.h"
 #include "vmm.h"
 #include <stdio.h>
+#include <string.h>
 
 #define HEAP_GROW_LIMIT 0x4000000
 
@@ -109,5 +110,16 @@ void heap_shrink(size_t bytes)
     }
 
     heap_tail = new_tail;
+}
+
+void* __knew(size_t size, size_t count)
+{
+    if (!size || !count)
+        return NULL;
+    void* result = kmalloc(size * count);
+    if (!result)
+        return NULL;
+    memset(result, 0, size * count);
+    return result;
 }
 

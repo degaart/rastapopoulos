@@ -18,3 +18,19 @@ struct HeapInfo
 
 struct HeapInfo heap_info(void);
 
+#if defined(UNIT_TESTS) && defined(HEAP_DEBUG)
+const char* heap_test_validate(void* ptr);
+#endif
+
+struct HeapBlock
+{
+    size_t size; /* Payload bytes, excluding this header */
+    struct HeapBlock* prev;
+    struct HeapBlock* next;
+    unsigned free;
+#ifdef HEAP_DEBUG
+    void* returned;
+    size_t requested;
+#endif
+};
+
