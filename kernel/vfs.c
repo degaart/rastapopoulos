@@ -264,7 +264,7 @@ struct VFSNode* vfs_lookup(char current_drive,
         if (current_dirs->current_dirs[parsed_path.drive -
                                        'A']) { /* drive has current dir */
             StringSlice parent_slice =
-                SLICEPTR(current_dirs->current_dirs[parsed_path.drive - 'A']);
+                SPTR(current_dirs->current_dirs[parsed_path.drive - 'A']);
             parent = lookup(mount, NULL, parent_slice);
         } else { /* start lookup at root */
             parent = lookup(mount, NULL, NULLSLICE);

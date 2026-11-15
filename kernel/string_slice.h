@@ -10,10 +10,10 @@ typedef struct StringSlice
 } StringSlice;
 
 /* Create a StringSlice from a string literal */
-#define SLICE(s) (StringSlice) {.buf = (s), .len = sizeof(s) - 1}
+#define S(s) (StringSlice) {.buf = (s), .len = sizeof(s) - 1}
 
 /* Create a StringSlice from a char pointer */
-#define SLICEPTR(s)                                                           \
+#define SPTR(s)                                                               \
     (StringSlice)                                                             \
     {                                                                         \
         .buf = (s), .len = strlen(s)                                          \

@@ -24,7 +24,7 @@ static void test_utf8_validation(void)
         "caf\xc3\xa9\\\xe6\x96\x87\xf0\x9f\x98\x80",
     };
     for (size_t i = 0; i < sizeof(valid) / sizeof(valid[0]); i++) {
-        StringSlice slice = SLICEPTR(valid[i]);
+        StringSlice slice = SPTR(valid[i]);
         CHECK(utf8_validate(slice));
     }
     const char* invalid[] = {
@@ -48,7 +48,7 @@ static void test_utf8_validation(void)
         "A",
     };
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
-        StringSlice slice = SLICEPTR(invalid[i]);
+        StringSlice slice = SPTR(invalid[i]);
         CHECK(!utf8_validate(slice));
     }
     CHECK(utf8_validate(NULLSLICE));
@@ -139,7 +139,7 @@ static void test_path_parsing(void)
 
     for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         trace("Path parsing case %u", (unsigned)i);
-        StringSlice input = SLICEPTR(cases[i].input);
+        StringSlice input = SPTR(cases[i].input);
         struct ParsedPath parsed;
         CHECK(utf8_validate(input));
         CHECK(vfs_path_parse(input, &parsed));
@@ -187,7 +187,7 @@ static void test_path_parsing(void)
         "A:\\DOCS\\\xff",
     };
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
-        StringSlice input = SLICEPTR(invalid[i]);
+        StringSlice input = SPTR(invalid[i]);
         struct ParsedPath parsed;
         CHECK(!vfs_path_parse(input, &parsed));
     }
@@ -278,10 +278,10 @@ static void lookup_callback(const struct TarEntry* entry, void* lookupctx)
 {
     struct LookupContext* ctx = lookupctx;
 
-    StringSlice entryname = SLICEPTR(entry->name);
+    StringSlice entryname = SPTR(entry->name);
     strip(&entryname, '/');
 
-    StringSlice path = SLICEPTR(ctx->path);
+    StringSlice path = SPTR(ctx->path);
     strip(&path, '\\');
 
     if (string_slice_equals(path, entryname)) {
@@ -394,7 +394,7 @@ static struct VFSNode* tar_lookup(struct VFSMount* vfsmount,
         if (tmp[i] == '/')
             tmp[i] = '\\';
     }
-    StringSlice base = path_basename(SLICEPTR(tmp));
+    StringSlice base = path_basename(SPTR(tmp));
     if (base.len && base.buf) {
         ((char*)base.buf)[base.len] = '\0';
         const char* tmp2 = strstr(namebuf, base.buf);
@@ -487,59 +487,67 @@ static void test_mount(void)
 
     CHECK(vfs_mount('C', (struct FS*)&tarfs, (struct BlockDevice*)&memdev));
 
-    struct VFSNode* root = vfs_lookup('C', &current_dirs, SLICE("\\"));
+    struct VFSNode* root = vfs_lookup('C', &current_dirs, S("\\"));
     CHECK(root != NULL);
     CHECK(root->is_dir == true);
     CHECK(string_slice_equals(root->name, NULLSLICE));
+    vfs_node_destroy(root);
+    root = NULL;
+
+    struct VFSNode* gouda = vfs_lookup('C', &current_dirs, S("gouda"));
+    CHECK(gouda != NULL);
+    CHECK(gouda->is_dir == true);
+    CHECK(string_slice_equals(gouda->name, S("gouda")));
+    CHECK(gouda->size == 0);
+    vfs_node_destroy(gouda);
 
     struct VFSNode* seiche =
-        vfs_lookup('C', &current_dirs, SLICE("\\arf\\gouda\\seiche"));
+        vfs_lookup('C', &current_dirs, S("\\arf\\gouda\\seiche"));
     CHECK(seiche != NULL);
     CHECK(seiche->is_dir == false);
-    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(string_slice_equals(seiche->name, S("seiche")));
     CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
-    seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
+    seiche = vfs_lookup('C', &current_dirs, S("gouda\\seiche"));
     CHECK(seiche != NULL);
     CHECK(seiche->is_dir == false);
-    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(string_slice_equals(seiche->name, S("seiche")));
     CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf\\";
-    seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
+    seiche = vfs_lookup('C', &current_dirs, S("gouda\\seiche"));
     CHECK(seiche != NULL);
     CHECK(seiche->is_dir == false);
-    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(string_slice_equals(seiche->name, S("seiche")));
     CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf";
-    seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
+    seiche = vfs_lookup('C', &current_dirs, S("gouda\\seiche"));
     CHECK(seiche != NULL);
     CHECK(seiche->is_dir == false);
-    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(string_slice_equals(seiche->name, S("seiche")));
     CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf\\gouda";
-    seiche = vfs_lookup('C', &current_dirs, SLICE("seiche"));
+    seiche = vfs_lookup('C', &current_dirs, S("seiche"));
     CHECK(seiche != NULL);
     CHECK(seiche->is_dir == false);
-    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(string_slice_equals(seiche->name, S("seiche")));
     CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "";
-    seiche = vfs_lookup('C', &current_dirs, SLICE("arf\\gouda\\seiche"));
+    seiche = vfs_lookup('C', &current_dirs, S("arf\\gouda\\seiche"));
     CHECK(seiche != NULL);
     CHECK(seiche->is_dir == false);
-    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(string_slice_equals(seiche->name, S("seiche")));
     CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
-    vfs_node_destroy(root);
     CHECK(vfs_unmount('C'));
 }
 
