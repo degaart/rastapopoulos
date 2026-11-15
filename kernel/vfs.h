@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#define MAX_PATH 4096
+
 struct ParsedPath
 {
     /* 0: invalid/absent drive, else, an uppercase char 'A' - 'Z' identifying
@@ -25,8 +27,10 @@ struct ParsedPath
 };
 
 bool utf8_validate(StringSlice path);
+
 bool vfs_init(void);
 bool vfs_path_parse(StringSlice path, struct ParsedPath* parsed_path);
+StringSlice vfs_path_basename(StringSlice path);
 
 /*
  * Iterate the components of a ParsedPath::components.
@@ -62,8 +66,9 @@ struct FS
     bool (*unmount)(struct FS*, struct VFSMount*);
 };
 
-struct VFSCurrentDirectories
+struct VFSData
 {
+    char current_drive;
     char* current_dirs[26];
 };
 
@@ -72,9 +77,17 @@ struct VFSCurrentDirectories
  */
 bool vfs_mount(char drive, struct FS* fs, struct BlockDevice* dev);
 bool vfs_unmount(char drive);
-struct VFSNode* vfs_lookup(char current_drive,
-                           struct VFSCurrentDirectories* current_dirs,
-                           StringSlice path);
+struct VFSNode* vfs_lookup(const struct VFSData* vfs_data, StringSlice path);
 void vfs_node_destroy(struct VFSNode* node);
-StringSlice path_basename(StringSlice path);
+
+struct FindData
+{
+    const char* filename;
+    uint64_t size;
+    bool is_dir;
+};
+
+void* vfs_find_first(StringSlice path, struct FindData* find_data);
+bool vfs_find_next(void* handle, struct FindData* find_data);
+void vfs_find_close(void* handle);
 

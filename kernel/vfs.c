@@ -8,7 +8,7 @@
 static struct VFSMount* mounts[26];
 static struct Mutex lock;
 
-StringSlice path_basename(StringSlice path)
+StringSlice vfs_path_basename(StringSlice path)
 {
     size_t start = 0;
     if (path.len >= 2 && path.buf[1] == ':' &&
@@ -239,16 +239,14 @@ static struct VFSNode* lookup(struct VFSMount* mount,
     return node;
 }
 
-struct VFSNode* vfs_lookup(char current_drive,
-                           struct VFSCurrentDirectories* current_dirs,
-                           StringSlice path)
+struct VFSNode* vfs_lookup(const struct VFSData* vfs_data, StringSlice path)
 {
     struct ParsedPath parsed_path;
     if (!vfs_path_parse(path, &parsed_path))
         return NULL;
 
     if (!parsed_path.drive) /* resolve drive */
-        parsed_path.drive = current_drive;
+        parsed_path.drive = vfs_data->current_drive;
 
     if (!mutex_lock(&lock))
         return NULL;
@@ -261,10 +259,10 @@ struct VFSNode* vfs_lookup(char current_drive,
 
     struct VFSNode* parent = NULL;
     if (!parsed_path.start_at_root) { /* relative path */
-        if (current_dirs->current_dirs[parsed_path.drive -
-                                       'A']) { /* drive has current dir */
+        if (vfs_data->current_dirs[parsed_path.drive -
+                                   'A']) { /* drive has current dir */
             StringSlice parent_slice =
-                SPTR(current_dirs->current_dirs[parsed_path.drive - 'A']);
+                SPTR(vfs_data->current_dirs[parsed_path.drive - 'A']);
             parent = lookup(mount, NULL, parent_slice);
         } else { /* start lookup at root */
             parent = lookup(mount, NULL, NULLSLICE);
