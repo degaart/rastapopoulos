@@ -345,6 +345,9 @@ static struct VFSNode* tar_lookup(struct VFSMount* vfsmount,
         if (!node)
             return NULL;
         node->node.fs = mount->mount.fs;
+        node->node.is_dir = entry.is_dir;
+        node->node.name = NULLSLICE;
+        node->node.size = entry.is_dir ? 0 : entry.size;
         node->node.destroy = tar_node_destroy;
         node->tar = &mount->tar;
         node->path = strdup("");
@@ -372,6 +375,38 @@ static struct VFSNode* tar_lookup(struct VFSMount* vfsmount,
         return NULL;
     }
     node->node.fs = mount->mount.fs;
+    node->node.is_dir = entry.is_dir;
+
+    /*
+     * namebuf is in unix format, but we need the basename
+     * So, we first copy namebuf, convert it to DOS format
+     * Then get the basename from that
+     * And then, we findstr the basename in namebuf
+     */
+    char* tmp = strdup(namebuf);
+    if (!tmp) {
+        kfree(namebuf);
+        kfree(node);
+        return NULL;
+    }
+
+    for (int i = 0; tmp[i]; i++) {
+        if (tmp[i] == '/')
+            tmp[i] = '\\';
+    }
+    StringSlice base = path_basename(SLICEPTR(tmp));
+    if (base.len && base.buf) {
+        ((char*)base.buf)[base.len] = '\0';
+        const char* tmp2 = strstr(namebuf, base.buf);
+        if (!tmp2)
+            panic("Logic error");
+        node->node.name = (StringSlice) {.buf = tmp2, base.len};
+    } else {
+        node->node.name = NULLSLICE;
+    }
+    kfree(tmp);
+
+    node->node.size = entry.is_dir ? 0 : entry.size;
     node->node.destroy = tar_node_destroy;
     node->tar = &mount->tar;
     node->path = namebuf;
@@ -454,34 +489,54 @@ static void test_mount(void)
 
     struct VFSNode* root = vfs_lookup('C', &current_dirs, SLICE("\\"));
     CHECK(root != NULL);
+    CHECK(root->is_dir == true);
+    CHECK(string_slice_equals(root->name, NULLSLICE));
 
     struct VFSNode* seiche =
         vfs_lookup('C', &current_dirs, SLICE("\\arf\\gouda\\seiche"));
     CHECK(seiche != NULL);
+    CHECK(seiche->is_dir == false);
+    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
     CHECK(seiche != NULL);
+    CHECK(seiche->is_dir == false);
+    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf\\";
     seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
     CHECK(seiche != NULL);
+    CHECK(seiche->is_dir == false);
+    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf";
     seiche = vfs_lookup('C', &current_dirs, SLICE("gouda\\seiche"));
     CHECK(seiche != NULL);
+    CHECK(seiche->is_dir == false);
+    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "arf\\gouda";
     seiche = vfs_lookup('C', &current_dirs, SLICE("seiche"));
     CHECK(seiche != NULL);
+    CHECK(seiche->is_dir == false);
+    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     current_dirs.current_dirs[2] = "";
     seiche = vfs_lookup('C', &current_dirs, SLICE("arf\\gouda\\seiche"));
     CHECK(seiche != NULL);
+    CHECK(seiche->is_dir == false);
+    CHECK(string_slice_equals(seiche->name, SLICE("seiche")));
+    CHECK(seiche->size == 7);
     vfs_node_destroy(seiche);
 
     vfs_node_destroy(root);

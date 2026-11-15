@@ -8,6 +8,26 @@
 static struct VFSMount* mounts[26];
 static struct Mutex lock;
 
+StringSlice path_basename(StringSlice path)
+{
+    size_t start = 0;
+    if (path.len >= 2 && path.buf[1] == ':' &&
+        ((path.buf[0] >= 'A' && path.buf[0] <= 'Z') ||
+         (path.buf[0] >= 'a' && path.buf[0] <= 'z')))
+        start = 2;
+
+    for (size_t i = start; i < path.len; i++) {
+        if (path.buf[i] == '\\')
+            start = i + 1;
+    }
+
+    if (start) {
+        path.buf += start;
+        path.len -= start;
+    }
+    return path;
+}
+
 bool utf8_validate(StringSlice path)
 {
     if (!path.buf && path.len)

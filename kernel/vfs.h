@@ -48,6 +48,10 @@ struct VFSMount
 struct VFSNode
 {
     struct FS* fs;
+    bool is_dir;
+    StringSlice name;
+    uint64_t size;
+
     void (*destroy)(struct VFSNode*);
 };
 
@@ -72,4 +76,5 @@ struct VFSNode* vfs_lookup(char current_drive,
                            struct VFSCurrentDirectories* current_dirs,
                            StringSlice path);
 void vfs_node_destroy(struct VFSNode* node);
+StringSlice path_basename(StringSlice path);
 
